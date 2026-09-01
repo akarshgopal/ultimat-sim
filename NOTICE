@@ -1,0 +1,15 @@
+ultimat-sim (Ultimate Material Abundance Simulator)
+https://github.com/akarshgopal/ultimat-sim
+
+This repository is derived from Ben Schrauwen's unofficial MIT-licensed
+terraform-simulator:
+
+  https://github.com/benschrauwen/terraform-simulator
+  https://terraform-simulator.com/
+
+Copyright (c) 2026 benschrauwen
+Copyright (c) 2026 Akarsh Gopal (water-systems loop and ultimat-sim packaging)
+
+It is not a GitHub fork of that project (this repo was created empty and the
+source was copied locally), and it is not affiliated with Terraform Industries.
+The MIT license and Ben Schrauwen's copyright notice are retained as required.

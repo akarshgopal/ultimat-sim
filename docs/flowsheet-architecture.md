@@ -271,9 +271,6 @@ Sabatier water is an edge `sabatier.water → electrolyzer.water`. Torn recycle.
 5. **Typed streams with ion vectors and heat T in v1.** That is the whole point of the water work.
 6. **Environment is units.** Makeup, offtake, reinject are edges you can see.
 7. **Small catalog.** Three cases + Sabatier recycle, then more units.
-
-## Open questions (actual ones)
-
-- Electrical bus default: `priority` (desal before H₂) vs `user-share`? I am on priority with a visible order.
-- Do we want a preview Pages URL on this branch (`/flowsheet/`) or keep Pages on `main` only until cutover?
-- Reagent library for mining: one generic `purchase` unit with a price, or named reagents (NaOH, acid) in v1?
+8. **Electrical bus default is priority.** RO/MED pumps above the electrolyzer. User shares are an override.
+9. **Named reagents in v1.** Lime, HCl, NaOH, soda ash as purchase units with stoich, plus required disposal/reinject edges. No lump reagents $/m³ slider.
+10. **Pages stays on `main` until the engine is clickable.** No `/flowsheet/` preview until there is a diagram to poke.

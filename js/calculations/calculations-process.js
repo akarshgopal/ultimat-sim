@@ -1,70 +1,209 @@
 /* Electrolyzer, DAC, products */
 
 Object.assign(Calc, {
+  getDesalRecoveryFraction(state = {}) {
+    const raw = Number(state.desalRecovery);
+    return raw > 1
+      ? this.clampNumber(raw, 20, 80, 45) / 100
+      : this.clampNumber(raw, 0.2, 0.8, 0.45);
+  },
+
   calculateWaterSystems(state, context = {}) {
-    const { desalModule, miningModule, dailyKWh = 0, peakDailyKWh = dailyKWh,
-      electrolyzerHeatKWh = 0, aiHeatKWh = 0, sabatierHeatKWh = 0, miningDailyKWh = 0, cyclesPerYear = 365 } = context;
-    const zero = { enabled: false, dailyM3: 0, annualM3: 0, brineDailyM3: 0, brineAnnualM3: 0, freshWaterDailyM3: 0,
-      waterCreditDailyM3: 0, waterSaleDailyM3: 0, feedDailyM3: 0, ionVector: {}, heat: { suppliedKWhth: 0, usedKWhth: 0, dumpedKWhth: 0, unmetKWhth: 0 },
-      saltProducts: {}, mining: null };
-    if (!desalModule?.enabled || !desalModule.routeConfig) return zero;
-    const route = desalModule.routeConfig;
-    const recovery = this.clampNumber(state.desalRecovery, 0.2, 0.8, 0.45);
-    const cycleDamage = this.clampNumber(state.desalCyclingFactor, 1, 2, 1);
-    const elevation = Math.max(0, Number(state.desalElevationM) || 0);
-    const pumpKwh = 3.1 * elevation / 1000;
-    const electricSEC = (route.electricityKwhPerUnit || 0) + pumpKwh;
-    const heatSEC = route.thermalKwhPerUnit || 0;
-    const electricLimited = electricSEC > 0 ? dailyKWh / (electricSEC * cycleDamage) : Infinity;
+    const {
+      desalModule,
+      miningModule,
+      dailyKWh = 0,
+      reservedDailyKWh = dailyKWh,
+      targetDailyM3 = null,
+      waterDemandDailyM3 = 0,
+      electrolyzerHeatKWh = 0,
+      aiHeatKWh = 0,
+      sabatierHeatKWh = 0,
+      miningDailyKWh = 0,
+      cyclesPerYear = 365,
+    } = context;
+    const demand = Math.max(0, Number(waterDemandDailyM3) || 0);
+    const makeupEnabled = state.makeupWaterEnabled !== false;
     const heatBands = {
-      Heat_HT: Math.max(0, sabatierHeatKWh),
+      Heat_HT: Math.max(0, Number(sabatierHeatKWh) || 0),
       Heat_MT: 0,
-      Heat_LT: Math.max(0, electrolyzerHeatKWh + aiHeatKWh + (sabatierHeatKWh * 0.9)),
+      Heat_LT: Math.max(0, (Number(electrolyzerHeatKWh) || 0) + (Number(aiHeatKWh) || 0) + ((Number(sabatierHeatKWh) || 0) * 0.9)),
     };
     const heatAvailable = heatBands.Heat_LT;
+    const zero = {
+      enabled: false,
+      route: null,
+      dailyM3: 0,
+      annualM3: 0,
+      brineDailyM3: 0,
+      brineAnnualM3: 0,
+      freshWaterDailyM3: 0,
+      waterDemandDailyM3: demand,
+      makeupDailyM3: makeupEnabled ? demand : 0,
+      waterCreditDailyM3: 0,
+      waterSaleDailyM3: 0,
+      h2CurtailedDailyKg: makeupEnabled ? 0 : demand * 1000 / CHEMISTRY.electrolysis.waterPerKgH2,
+      feedDailyM3: 0,
+      ionVector: {},
+      feedIonVector: {},
+      heat: {
+        ...heatBands,
+        suppliedKWhth: heatAvailable,
+        usedKWhth: 0,
+        dumpedKWhth: heatAvailable,
+        unmetKWhth: 0,
+        cascadeEfficiency: 0.9,
+        limitingFactor: 'not applicable',
+      },
+      Heat_HT: heatBands.Heat_HT,
+      Heat_MT: heatBands.Heat_MT,
+      Heat_LT: heatBands.Heat_LT,
+      saltProducts: {},
+      mining: null,
+    };
+    if (!desalModule?.enabled || !desalModule.routeConfig) return zero;
+
+    const route = desalModule.routeConfig;
+    const recovery = this.getDesalRecoveryFraction(state);
+    const cycleDamage = this.clampNumber(state.desalCyclingFactor, 1, 2, 1);
+    const elevation = Math.max(0, Number(state.desalElevationM) || 0);
+    // Elevation pumping is charged on the feed volume, because every m³ of
+    // permeate requires feedDailyM3 = permeate / recovery to be lifted.
+    const pumpKwh = 3.1 * elevation / 1000;
+    const electricProductSEC = Math.max(0, Number(route.electricityKwhPerUnit) || 0) * cycleDamage;
+    const electricCostPerM3 = electricProductSEC + pumpKwh / recovery;
+    const heatSEC = Math.max(0, Number(route.thermalKwhPerUnit) || 0);
+    const electricLimited = electricCostPerM3 > 0
+      ? Math.max(0, Number(reservedDailyKWh) || 0) / electricCostPerM3
+      : Infinity;
     const heatLimited = heatSEC > 0 ? heatAvailable / heatSEC : Infinity;
-    const dailyM3 = Math.max(0, Math.min(electricLimited, heatLimited));
+    const requested = Number.isFinite(targetDailyM3)
+      ? Math.max(0, Number(targetDailyM3) || 0)
+      : Infinity;
+    const dailyM3 = Math.max(0, Math.min(requested, electricLimited, heatLimited));
     const feedDailyM3 = dailyM3 / recovery;
     const brineDailyM3 = Math.max(0, feedDailyM3 - dailyM3);
-    const presets = {
-      seawater: { Na: 10.8, Cl: 19.4, Mg: 1.29, Ca: 0.41, K: 0.39, SO4: 2.7, Br: 0.067, Li: 0.00017, B: 0.0045, TDS: 35, T: 25 },
-      'salton-surface': { Na: 18, Cl: 32, Mg: 1.5, Ca: 1, K: 0.8, SO4: 5, Br: 0.1, Li: 0, B: 0.1, TDS: 60, T: 30 },
-      'salton-geothermal': { Na: 60, Cl: 110, Mg: 5, Ca: 20, K: 5, SO4: 1, Br: 0.5, Li: 0.2, B: 0.5, TDS: 200, T: 80 },
-    };
-    const feed = presets[state.waterFeedPreset] || presets.seawater;
-    const ionVector = Object.fromEntries(Object.entries(feed).map(([key, value]) => [key, value * (1 / (1 - recovery))]));
+    const feed = WATER_FEED_PRESETS[state.waterFeedPreset] || WATER_FEED_PRESETS.seawater;
+    const concentrationFactor = 1 / (1 - recovery);
+    const ionVector = Object.fromEntries(
+      Object.entries(feed).map(([key, value]) => [key, value * concentrationFactor])
+    );
     const heatUsedKWhth = Math.min(heatAvailable, dailyM3 * heatSEC);
+    const targetHeatKWhth = Number.isFinite(requested) ? requested * heatSEC : dailyM3 * heatSEC;
+    const powerIsLimiting = electricLimited <= heatLimited && electricLimited <= requested;
+    const heatIsLimiting = heatSEC > 0 && heatLimited < electricLimited && heatLimited < requested;
+    const limitingFactor = heatIsLimiting ? 'heat-limited' : powerIsLimiting ? 'power-limited' : 'target-limited';
     const mining = miningModule?.enabled && miningModule.routeConfig
-      ? this.calculateBrineMining(state, miningModule.route, brineDailyM3, ionVector, miningDailyKWh, cyclesPerYear)
+      ? this.calculateBrineMining(
+          state,
+          miningModule.route,
+          brineDailyM3,
+          ionVector,
+          miningDailyKWh,
+          cyclesPerYear,
+          feed
+        )
       : null;
     const saltProducts = mining?.products || {};
+    const waterCreditDailyM3 = Math.min(dailyM3, demand);
+    const waterSaleDailyM3 = Math.max(0, dailyM3 - waterCreditDailyM3);
+    const makeupDailyM3 = makeupEnabled ? Math.max(0, demand - waterCreditDailyM3) : 0;
     return {
-      enabled: true, route: desalModule.route, dailyM3, annualM3: dailyM3 * cyclesPerYear,
-      freshWaterDailyM3: dailyM3, feedDailyM3, brineDailyM3, brineAnnualM3: brineDailyM3 * cyclesPerYear,
-      waterCreditDailyM3: 0, waterSaleDailyM3: dailyM3, ionVector,
-      heat: { ...heatBands, suppliedKWhth: heatAvailable, usedKWhth: heatUsedKWhth, dumpedKWhth: Math.max(0, heatAvailable - heatUsedKWhth), unmetKWhth: Math.max(0, dailyM3 * heatSEC - heatAvailable), cascadeEfficiency: 0.9 },
-      Heat_HT: heatBands.Heat_HT, Heat_MT: heatBands.Heat_MT, Heat_LT: heatBands.Heat_LT,
-      saltProducts, mining,
+      enabled: true,
+      route: desalModule.route,
+      dailyM3,
+      annualM3: dailyM3 * cyclesPerYear,
+      freshWaterDailyM3: dailyM3,
+      waterDemandDailyM3: demand,
+      makeupDailyM3,
+      waterCreditDailyM3,
+      waterSaleDailyM3,
+      h2CurtailedDailyKg: makeupEnabled
+        ? 0
+        : Math.max(0, demand - waterCreditDailyM3) * 1000 / CHEMISTRY.electrolysis.waterPerKgH2,
+      feedDailyM3,
+      brineDailyM3,
+      brineAnnualM3: brineDailyM3 * cyclesPerYear,
+      ionVector,
+      feedIonVector: feed,
+      electricDailyKWh: dailyM3 * electricProductSEC + feedDailyM3 * pumpKwh,
+      heat: {
+        ...heatBands,
+        suppliedKWhth: heatAvailable,
+        usedKWhth: heatUsedKWhth,
+        dumpedKWhth: Math.max(0, heatAvailable - heatUsedKWhth),
+        unmetKWhth: Math.max(0, targetHeatKWhth - heatAvailable),
+        cascadeEfficiency: 0.9,
+        limitingFactor,
+      },
+      Heat_HT: heatBands.Heat_HT,
+      Heat_MT: heatBands.Heat_MT,
+      Heat_LT: heatBands.Heat_LT,
+      saltProducts,
+      mining,
     };
   },
 
-  calculateBrineMining(state, routeId, brineDailyM3, ionVector, dailyKWh = 0, cyclesPerYear = 365) {
+  calculateBrineMining(state, routeId, brineDailyM3, ionVector, dailyKWh = 0, cyclesPerYear = 365, feedIonVector = null) {
     const route = this.getModuleRouteConfig('brineMining', routeId);
-    if (!route || brineDailyM3 <= 0) return { enabled: true, route: routeId, brineConsumedDailyM3: 0, products: {}, grossRevenue: 0, marketCappedRevenue: 0, netRevenue: 0 };
+    const empty = {
+      enabled: true,
+      route: routeId,
+      brineConsumedDailyM3: 0,
+      brineConsumedAnnualM3: 0,
+      products: {},
+      grossRevenue: 0,
+      marketCappedRevenue: 0,
+      netRevenue: 0,
+      reinjectionRequired: Boolean(route?.reinjectionRequired),
+      netRevenueBasis: 'market-capped; reagent and disposal OPEX not modeled',
+    };
+    if (!route || brineDailyM3 <= 0) return empty;
     const powerLimitedM3 = route.electricityKwhPerUnit > 0 ? dailyKWh / route.electricityKwhPerUnit : brineDailyM3;
     const consumed = Math.max(0, Math.min(brineDailyM3, powerLimitedM3));
-    const kg = {
-      NaCl: consumed * 34, gypsum: consumed * 2.7, 'Mg(OH)2': consumed * 5.1, Br2: consumed * 0.1,
+    const brine = ionVector || {};
+    const feed = feedIonVector
+      || WATER_FEED_PRESETS[state.waterFeedPreset]
+      || brine;
+    const recovery = {
+      NaCl: 0.70,
+      gypsum: 0.85,
+      'Mg(OH)2': 0.90,
+      Br2: 0.80,
+      Li2CO3: 0.85,
     };
-    if (routeId === 'salton-geothermal-li') {
-      kg.NaCl = 0; kg.gypsum = 0; kg['Mg(OH)2'] = 0; kg.Br2 = 0;
-      kg.Li2CO3 = ionVector.Li >= 0.05 ? consumed * 0.9 : 0;
-    }
+    const kgPerM3 = {
+      // g/L is kg/m³.  NaCl is limited by the smaller Na/Cl mole balance.
+      NaCl: Math.min(
+        (Number(brine.Na) || 0) / 22.989769,
+        (Number(brine.Cl) || 0) / 35.453
+      ) * 58.44277 * recovery.NaCl,
+      gypsum: ((Number(brine.Ca) || 0) / 40.078) * 172.171 * recovery.gypsum,
+      'Mg(OH)2': ((Number(brine.Mg) || 0) / 24.305) * 58.3197 * recovery['Mg(OH)2'],
+      // The v1 check is expressed as recoverable elemental Br per m³ reject.
+      Br2: (Number(brine.Br) || 0) * recovery.Br2,
+    };
+    const isLithiumAnalog = routeId === 'salton-geothermal-li' || route.lithiumAnalog;
+    const kg = isLithiumAnalog
+      ? {
+          // Li₂CO₃ equivalent uses the Li-to-Li₂CO₃ molecular mass ratio and
+          // the feed concentration gate, not the concentrated reject value.
+          Li2CO3: (Number(feed.Li) || 0) >= 0.05
+            ? (Number(feed.Li) || 0) * (73.891 / (2 * 6.941)) * recovery.Li2CO3 * consumed
+            : 0,
+        }
+      : Object.fromEntries(Object.entries(kgPerM3).map(([product, value]) => [product, consumed * value]));
     const prices = { NaCl: 40, gypsum: 20, 'Mg(OH)2': 500, Br2: 4000, Li2CO3: 8750 };
-    const caps = { NaCl: 100000, gypsum: 10000, 'Mg(OH)2': 100000, Br2: 10000, Li2CO3: 100000 };
+    // Caps are annual market absorption, not a physical yield or LME value.
+    // They are loose at 1 MW but begin to matter in the 10–50 MW range for
+    // this exploratory block's deliberately conservative throughput.
+    const caps = { NaCl: 50, gypsum: 5, 'Mg(OH)2': 8, Br2: 0.1, Li2CO3: 1 };
     const grossRevenue = Object.entries(kg).reduce((sum, [product, value]) => sum + (value / 1000) * (prices[product] || 0) * cyclesPerYear, 0);
     const marketCappedRevenue = Object.entries(kg).reduce((sum, [product, value]) => sum + Math.min(value * cyclesPerYear / 1000, caps[product] || Infinity) * (prices[product] || 0), 0);
     return { enabled: true, route: routeId, brineConsumedDailyM3: consumed, brineConsumedAnnualM3: consumed * cyclesPerYear,
+      feedLiGPerL: Number(feed.Li) || 0,
+      reinjectionRequired: Boolean(route.reinjectionRequired || state.brineReinjectionEnabled || state.reinject),
+      netRevenueBasis: 'market-capped; reagent and disposal OPEX not modeled',
       products: Object.fromEntries(Object.entries(kg).map(([product, value]) => [product, { dailyTons: value / 1000, annualTons: value * cyclesPerYear / 1000, price: prices[product], grossRevenue: value * cyclesPerYear / 1000 * prices[product], marketCappedRevenue: Math.min(value * cyclesPerYear / 1000, caps[product]) * prices[product] }])),
       grossRevenue, marketCappedRevenue, netRevenue: marketCappedRevenue };
   },
@@ -291,6 +430,82 @@ Object.assign(Calc, {
     };
   },
 
+  buildWaterReservedAllocationPlan(state, dailyKWh, fullPlan = null) {
+    const selectedPlan = fullPlan || this.buildProcessAllocationPlan(state);
+    const desalModule = selectedPlan.exploratoryModules?.find(module => module.id === 'desalination');
+    if (!desalModule?.enabled || !desalModule.routeConfig || !state.electrolyzerEnabled) return selectedPlan;
+
+    // Remove desal from the old shared proxy first.  Water is then reserved
+    // from the whole process pool, while the remaining modules retain their
+    // existing relative shares and methane/methanol feed balancing.
+    const basePlan = this.buildProcessAllocationPlan({ ...state, desalinationEnabled: false });
+    const energy = Math.max(0, Number(dailyKWh) || 0);
+    const efficiency = Math.max(1, Number(state.electrolyzerEfficiency) || 1);
+    const baseH2Share = Math.max(0, Number(basePlan.powerShares?.electrolyzer) || 0);
+    const wouldBeH2DailyKg = energy * baseH2Share / efficiency;
+    if (wouldBeH2DailyKg <= 0 || energy <= 0) return selectedPlan;
+
+    const recovery = this.getDesalRecoveryFraction(state);
+    const cycleDamage = this.clampNumber(state.desalCyclingFactor, 1, 2, 1);
+    const elevation = Math.max(0, Number(state.desalElevationM) || 0);
+    const pumpKwh = 3.1 * elevation / 1000;
+    const productSEC = Math.max(0, Number(desalModule.routeConfig.electricityKwhPerUnit) || 0) * cycleDamage;
+    const electricCostPerM3 = productSEC + pumpKwh / recovery;
+    const oversizeFactor = this.clampNumber(state.desalOversizeFactor, 1, 5, 1);
+    const waterM3PerKgH2 = CHEMISTRY.electrolysis.waterPerKgH2 / 1000;
+    // Solve the tiny circularity introduced by reserving desal power: less
+    // power for electrolysis means proportionally less H2 water demand.
+    const reserveCoefficient = energy > 0
+      ? (waterM3PerKgH2 * oversizeFactor * electricCostPerM3 / energy)
+      : 0;
+    const reservedH2DailyKg = wouldBeH2DailyKg / (1 + wouldBeH2DailyKg * reserveCoefficient);
+    const targetDailyM3 = reservedH2DailyKg * waterM3PerKgH2 * oversizeFactor;
+    const reservedWaterKWh = targetDailyM3 * electricCostPerM3;
+    const waterShare = Math.max(0, Math.min(1, energy > 0 ? reservedWaterKWh / energy : 0));
+    const baseScale = Math.max(0, 1 - waterShare);
+    const baseExploratory = basePlan.powerShares?.exploratory || {};
+    const exploratory = selectedPlan.exploratoryModules.reduce((shares, module) => {
+      shares[module.id] = (baseExploratory[module.id] || 0) * baseScale;
+      return shares;
+    }, {});
+    exploratory.desalination = waterShare;
+
+    return {
+      ...selectedPlan,
+      waterReservation: {
+        targetDailyM3,
+        reservedDailyKWh: reservedWaterKWh,
+        reservedPowerShare: waterShare,
+        wouldBeH2DailyKg,
+      },
+      powerShares: {
+        ...basePlan.powerShares,
+        electrolyzer: basePlan.powerShares.electrolyzer * baseScale,
+        dac: basePlan.powerShares.dac * baseScale,
+        exploratory,
+      },
+    };
+  },
+
+  constrainElectrolyzerToWater(electrolyzer, availableWaterDailyM3, cyclesPerYear) {
+    if (!electrolyzer?.enabled) return electrolyzer;
+    const originalH2DailyKg = Math.max(0, Number(electrolyzer.h2DailyKg) || 0);
+    const maxH2DailyKg = Math.max(0, Number(availableWaterDailyM3) || 0) * 1000 / CHEMISTRY.electrolysis.waterPerKgH2;
+    const h2DailyKg = Math.min(originalH2DailyKg, maxH2DailyKg);
+    const curtailed = Math.max(0, originalH2DailyKg - h2DailyKg);
+    const factor = originalH2DailyKg > 0 ? h2DailyKg / originalH2DailyKg : 0;
+    electrolyzer.h2DailyKg = h2DailyKg;
+    electrolyzer.h2AnnualKg = h2DailyKg * cyclesPerYear;
+    electrolyzer.h2AnnualTons = electrolyzer.h2AnnualKg / 1000;
+    electrolyzer.waterDailyKg = h2DailyKg * CHEMISTRY.electrolysis.waterPerKgH2;
+    electrolyzer.oxygenDailyKg = h2DailyKg * 8;
+    electrolyzer.oxygenAnnualKg = electrolyzer.h2AnnualKg * 8;
+    electrolyzer.dailyKWh *= factor;
+    electrolyzer.h2CurtailedDailyKg = curtailed;
+    electrolyzer.waterLimited = curtailed > 1e-9;
+    return electrolyzer;
+  },
+
   getBalancedAllocation(state) {
     const allocationPlan = this.buildProcessAllocationPlan(state);
     return {
@@ -316,6 +531,8 @@ Object.assign(Calc, {
         h2AnnualKg: 0,
         h2AnnualTons: 0,
         waterDailyKg: 0,
+        h2CurtailedDailyKg: 0,
+        waterLimited: false,
         oxygenDailyKg: 0,
         oxygenAnnualKg: 0,
         lhvEfficiency: 0,
@@ -337,6 +554,8 @@ Object.assign(Calc, {
       h2AnnualKg,
       h2AnnualTons: h2AnnualKg / 1000,
       waterDailyKg: h2DailyKg * CHEMISTRY.electrolysis.waterPerKgH2,
+      h2CurtailedDailyKg: 0,
+      waterLimited: false,
       oxygenDailyKg: h2DailyKg * 8,
       oxygenAnnualKg: h2AnnualKg * 8,
       lhvEfficiency: (CHEMISTRY.electrolysis.h2EnergyContent / state.electrolyzerEfficiency) * 100,

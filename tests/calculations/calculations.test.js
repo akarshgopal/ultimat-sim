@@ -87,6 +87,41 @@ test('water loop makes permeate, brine, ion concentration, and electrolyzer wate
   assert.equal(water.waterSaleDailyM3, 0, 'Default-scale permeate should not be credited as both water sale and process water.');
 });
 
+test('electrolyzer buys makeup water when desalination is off', () => {
+  const result = runScenario({ desalinationEnabled: false, makeupWaterEnabled: true });
+  const water = result.waterSystems;
+
+  assert.ok(result.electrolyzer.h2DailyKg > 0, 'Makeup water should keep the no-desal hydrogen case running.');
+  assert.ok(water.waterDemandDailyM3 > 0, 'Electrolyzer water demand should be explicit without desalination.');
+  assert.ok(water.makeupDailyM3 > 0, 'No-desal hydrogen should require purchased makeup water.');
+  assert.ok(result.economics.makeupWaterOpex > 0, 'Purchased makeup water should be charged as OPEX.');
+  assert.ok(
+    Math.abs(result.economics.makeupWaterOpex - (water.makeupDailyM3 * 365 * result.state.makeupWaterPrice)) <= 1e-9,
+    'Makeup OPEX should equal daily makeup volume × price × annual cycles.'
+  );
+});
+
+test('disabling makeup water curtails hydrogen instead of inventing a source', () => {
+  const result = runScenario({ desalinationEnabled: false, makeupWaterEnabled: false });
+
+  assert.ok(result.electrolyzer.h2DailyKg <= 1e-9, 'Hydrogen should fall to zero without desalination or makeup water.');
+  assert.ok(result.waterSystems.h2CurtailedDailyKg > 0, 'Water-limited H₂ curtailment should be exposed.');
+  assert.equal(result.waterSystems.makeupDailyM3, 0, 'Disabled makeup water must not be silently purchased.');
+});
+
+test('desalination reserves electricity for process water demand', () => {
+  const result = runScenario({ desalinationEnabled: true, makeupWaterEnabled: true });
+  const water = result.waterSystems;
+  const electrolyzerWaterM3 = result.electrolyzer.waterDailyKg / 1000;
+
+  assert.ok(water.freshWaterDailyM3 > 0.25, 'A 1 MW desal case should produce process-water scale permeate.');
+  assert.ok(water.freshWaterDailyM3 < 2, 'Default desal should not become an arbitrary large water plant.');
+  assert.ok(Math.abs(water.freshWaterDailyM3 - electrolyzerWaterM3) < 0.01, 'Default desal should be sized near electrolyzer demand.');
+  assert.equal(water.waterCreditDailyM3, water.freshWaterDailyM3, 'Permeate should credit electrolyzer water first.');
+  assert.equal(water.waterSaleDailyM3, 0, 'Default-sized desal should have no water sale.');
+  assert.ok(water.makeupDailyM3 <= 1e-9, 'Demand-sized desal should eliminate makeup purchases.');
+});
+
 test('brine mining is feed-limited and hard-gates lithium from seawater', () => {
   const salts = runScenario({ desalinationEnabled: true, brineMiningEnabled: true });
   assert.ok(salts.waterSystems.mining.marketCappedRevenue >= 0, 'Mining should expose market-capped revenue.');
@@ -100,11 +135,74 @@ test('brine mining is feed-limited and hard-gates lithium from seawater', () => 
   assert.equal(lithium.waterSystems.mining.products.Li2CO3.annualTons, 0, 'Seawater lithium must remain off below the feed concentration gate.');
 });
 
+test('brine product yields follow the feed ion vector', () => {
+  const seawater = runScenario({ desalinationEnabled: true, brineMiningEnabled: true, waterFeedPreset: 'seawater' });
+  const surface = runScenario({ desalinationEnabled: true, brineMiningEnabled: true, waterFeedPreset: 'salton-surface' });
+
+  assert.notEqual(
+    seawater.waterSystems.mining.products.NaCl.annualTons,
+    surface.waterSystems.mining.products.NaCl.annualTons,
+    'Different feed sodium/chloride vectors should change salt output.'
+  );
+  assert.notEqual(
+    seawater.waterSystems.mining.products['Mg(OH)2'].annualTons,
+    surface.waterSystems.mining.products['Mg(OH)2'].annualTons,
+    'Different feed magnesium vectors should change magnesium output.'
+  );
+  assert.ok(surface.waterSystems.mining.products.NaCl.annualTons > 1.5 * seawater.waterSystems.mining.products.NaCl.annualTons, 'The higher-Na surface feed should not use a fixed 34 kg/m³ yield.');
+
+  const large = runScenario({ systemSizeMW: 100, desalinationEnabled: true, brineMiningEnabled: true });
+  assert.ok(large.waterSystems.mining.grossRevenue > large.waterSystems.mining.marketCappedRevenue, 'Bulk brine revenue should expose a market-cap haircut at larger scale.');
+  assert.equal(large.waterSystems.mining.netRevenue, large.waterSystems.mining.marketCappedRevenue, 'Net revenue should be labeled as capped when reagent/disposal costs are not modeled.');
+});
+
+test('geothermal lithium uses the feed gate and requires reinjection', () => {
+  const seawater = runScenario({
+    desalinationEnabled: true,
+    brineMiningEnabled: true,
+    brineMiningRoute: 'salton-geothermal-li',
+    waterFeedPreset: 'seawater',
+  });
+  const geothermal = runScenario({
+    desalinationEnabled: true,
+    brineMiningEnabled: true,
+    brineMiningRoute: 'salton-geothermal-li',
+    waterFeedPreset: 'salton-geothermal',
+  });
+
+  assert.equal(seawater.waterSystems.mining.products.Li2CO3.annualTons, 0, 'Seawater lithium must fail the 50 mg/L feed gate.');
+  assert.ok(geothermal.waterSystems.mining.products.Li2CO3.annualTons > 0, 'Geothermal feed above the lithium gate should produce Li₂CO₃.');
+  assert.equal(geothermal.waterSystems.mining.reinjectionRequired, true, 'The geothermal analog must surface reinjection.');
+});
+
 test('thermal desalination uses the heat bus and leaves lime DAC electric-only', () => {
   const result = runScenario({ desalinationEnabled: true, desalinationRoute: 'thermal' });
   assert.ok(result.waterSystems.heat.suppliedKWhth > 0, 'Low-temperature heat should be exposed.');
   assert.ok(result.waterSystems.heat.usedKWhth > 0, 'MED should consume low-temperature heat.');
   assert.equal(result.dac.heatCreditKWhth || 0, 0, 'DAC should not receive waste-heat credit in v1.');
+  ['suppliedKWhth', 'usedKWhth', 'dumpedKWhth', 'unmetKWhth'].forEach(key => {
+    assert.ok(Number.isFinite(result.waterSystems.heat[key]), `Heat ${key} should remain finite.`);
+  });
+});
+
+test('built-in plant cases set reproducible water-loop experiments', () => {
+  const mojave = Calc.applyPlantCase(createState(), 'mojave-swro');
+  assert.equal(mojave.latitude, 35.05);
+  assert.equal(mojave.longitude, -117.60);
+  assert.equal(mojave.desalinationRoute, 'reverse-osmosis');
+  assert.equal(mojave.waterFeedPreset, 'seawater');
+  assert.equal(mojave.batteryEnabled, true);
+
+  const coastal = Calc.applyPlantCase(createState(), 'coastal-waste-heat-med');
+  assert.equal(coastal.desalinationRoute, 'thermal');
+  assert.equal(coastal.batteryEnabled, false);
+  assert.equal(coastal.electrolyzerEfficiency, 55);
+
+  const salton = Calc.applyPlantCase(createState(), 'salton-geothermal-li');
+  assert.equal(salton.waterFeedPreset, 'salton-geothermal');
+  assert.equal(salton.brineMiningRoute, 'salton-geothermal-li');
+  assert.equal(salton.brineReinjectionEnabled, true);
+  assert.ok(Calc.calculateAll(salton).waterSystems.mining.products.Li2CO3.annualTons > 0);
 });
 
 test('supported module presets map paired config values and detect custom mixes', () => {
@@ -361,12 +459,12 @@ test('headline IRR stays on the discount-rate root when replacement cycles creat
     ].join(' ')
   );
   assert.ok(
-    Math.abs(higherConversionResult.economics.irr - 9.343476546909224) <= 1e-6,
-    `Expected the 85% Sabatier regression case to stay near a 9.343477% headline IRR, got ${higherConversionResult.economics.irr}.`
+    Math.abs(higherConversionResult.economics.irr - 9.09252509113242) <= 1e-6,
+    `Expected the 85% Sabatier v2 regression case to stay near a 9.092525% headline IRR, got ${higherConversionResult.economics.irr}.`
   );
   assert.ok(
-    Math.abs(lowerConversionResult.economics.irr - 9.172778734473585) <= 1e-6,
-    `Expected the 84% Sabatier regression case to stay near a 9.172779% headline IRR, got ${lowerConversionResult.economics.irr}.`
+    Math.abs(lowerConversionResult.economics.irr - 8.917618796832006) <= 1e-6,
+    `Expected the 84% Sabatier v2 regression case to stay near a 8.917619% headline IRR, got ${lowerConversionResult.economics.irr}.`
   );
   assert.ok(
     Math.abs(lowerConversionResult.economics.irr - leanLowerConversionIrr) <= 1e-9,
@@ -412,12 +510,12 @@ test('equity IRR stays on the positive branch when longer debt terms add another
     ].join(' ')
   );
   assert.ok(
-    Math.abs(twentyYearDebtResult.economics.equityIrr - 31.034426174126008) <= 1e-6,
-    `Expected the 20-year debt regression case to stay near a 31.034426% equity IRR, got ${twentyYearDebtResult.economics.equityIrr}.`
+    Math.abs(twentyYearDebtResult.economics.equityIrr - 30.48691566018552) <= 1e-6,
+    `Expected the 20-year debt v2 regression case to stay near a 30.486916% equity IRR, got ${twentyYearDebtResult.economics.equityIrr}.`
   );
   assert.ok(
-    Math.abs(twentyOneYearDebtResult.economics.equityIrr - 31.733603550541922) <= 1e-6,
-    `Expected the 21-year debt regression case to stay near a 31.733604% equity IRR, got ${twentyOneYearDebtResult.economics.equityIrr}.`
+    Math.abs(twentyOneYearDebtResult.economics.equityIrr - 31.195303151972997) <= 1e-6,
+    `Expected the 21-year debt v2 regression case to stay near a 31.195303% equity IRR, got ${twentyOneYearDebtResult.economics.equityIrr}.`
   );
   assert.ok(
     Math.abs(twentyOneYearDebtResult.economics.equityIrr - leanTwentyOneYearEquityIrr) <= 1e-9,
@@ -528,16 +626,16 @@ test('30-year financed equity IRR stays on the upper branch until no real root r
     ].join(' ')
   );
   assert.ok(
-    Math.abs(ninePointFivePercent.equityIrr - 31.000077689350793) <= 1e-6,
-    `Expected the 9.5% debt-interest regression case to stay near a 31.000078% equity IRR, got ${ninePointFivePercent.equityIrr}.`
+    Math.abs(ninePointFivePercent.equityIrr - 30.43892894764776) <= 1e-6,
+    `Expected the 9.5% debt-interest v2 regression case to stay near a 30.438929% equity IRR, got ${ninePointFivePercent.equityIrr}.`
   );
   assert.ok(
-    Math.abs(ninePointSeventyFivePercent.equityIrr - 30.215313636780284) <= 1e-6,
-    `Expected the 9.75% debt-interest regression case to stay near a 30.215314% equity IRR, got ${ninePointSeventyFivePercent.equityIrr}.`
+    Math.abs(ninePointSeventyFivePercent.equityIrr - 29.637377221141847) <= 1e-6,
+    `Expected the 9.75% debt-interest v2 regression case to stay near a 29.637377% equity IRR, got ${ninePointSeventyFivePercent.equityIrr}.`
   );
   assert.ok(
-    Math.abs(tenPointFivePercent.equityIrr - 27.668819939303756) <= 1e-6,
-    `Expected the 10.5% debt-interest regression case to stay near a 27.668820% equity IRR, got ${tenPointFivePercent.equityIrr}.`
+    Math.abs(tenPointFivePercent.equityIrr - 27.018641085042784) <= 1e-6,
+    `Expected the 10.5% debt-interest v2 regression case to stay near a 27.018641% equity IRR, got ${tenPointFivePercent.equityIrr}.`
   );
   assert.ok(
     !Number.isFinite(twelvePointFivePercent.equityIrr),

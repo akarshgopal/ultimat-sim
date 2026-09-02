@@ -167,6 +167,117 @@ const CHEMISTRY = {
   },
 };
 
+// Concentrations are g/L, numerically equal to kg/m³ of feed.  These are
+// intentionally feed values; the process model applies the recovery factor
+// when it creates the concentrated reject ion vector.
+const WATER_FEED_PRESETS = Object.freeze({
+  seawater: Object.freeze({ Na: 10.8, Cl: 19.4, Mg: 1.29, Ca: 0.41, K: 0.39, SO4: 2.7, Br: 0.067, Li: 0.00017, B: 0.0045, TDS: 35, T: 25 }),
+  'salton-surface': Object.freeze({ Na: 18, Cl: 32, Mg: 1.5, Ca: 1, K: 0.8, SO4: 5, Br: 0.1, Li: 0, B: 0.1, TDS: 60, T: 30 }),
+  'salton-geothermal': Object.freeze({ Na: 60, Cl: 110, Mg: 5, Ca: 20, K: 5, SO4: 1, Br: 0.5, Li: 0.2, B: 0.5, TDS: 200, T: 80 }),
+});
+
+// Plant cases are deliberately separate from LOCATION_PRESETS and
+// SavedSitePresets: these are reproducible process experiments, not saved
+// locations.  Values are applied as a state patch by PlantCases.apply().
+const PLANT_CASES = Object.freeze({
+  'mojave-swro': Object.freeze({
+    id: 'mojave-swro',
+    label: 'Mojave SWRO + batteries',
+    description: 'Desert SWRO with battery-backed TI-style electrolysis.',
+    values: Object.freeze({
+      body: 'earth',
+      solarProfileModel: 'earth',
+      latitude: 35.05,
+      longitude: -117.60,
+      siteYieldMwhPerMwdcYear: 2050,
+      siteYieldSource: 'preset',
+      locationPresetIsCustom: false,
+      customSiteLabel: '',
+      batteryCapacityMWh: 8,
+      desalinationEnabled: true,
+      desalinationRoute: 'reverse-osmosis',
+      desalRecovery: 45,
+      desalElevationM: 0,
+      waterFeedPreset: 'seawater',
+      electrolyzerEfficiency: 79,
+      makeupWaterEnabled: true,
+      brineMiningEnabled: false,
+      brineReinjectionEnabled: false,
+    }),
+  }),
+  'coastal-waste-heat-med': Object.freeze({
+    id: 'coastal-waste-heat-med',
+    label: 'Coastal waste-heat MED',
+    description: 'Coastal MED experiment with a deliberately low-efficiency electrolyzer.',
+    values: Object.freeze({
+      body: 'earth',
+      solarProfileModel: 'earth',
+      latitude: 25.76,
+      longitude: -80.19,
+      siteYieldMwhPerMwdcYear: 1475,
+      siteYieldSource: 'preset',
+      locationPresetIsCustom: false,
+      customSiteLabel: '',
+      batteryCapacityMWh: 0,
+      desalinationEnabled: true,
+      desalinationRoute: 'thermal',
+      desalRecovery: 35,
+      desalElevationM: 0,
+      waterFeedPreset: 'seawater',
+      electrolyzerEfficiency: 55,
+      makeupWaterEnabled: true,
+      brineMiningEnabled: false,
+      brineReinjectionEnabled: false,
+    }),
+  }),
+  'salton-geothermal-li': Object.freeze({
+    id: 'salton-geothermal-li',
+    label: 'Salton geothermal lithium',
+    description: 'Geothermal brine lithium analog with reinjection and no seawater salt-suite claim.',
+    values: Object.freeze({
+      body: 'earth',
+      solarProfileModel: 'earth',
+      latitude: 33.30,
+      longitude: -115.80,
+      siteYieldMwhPerMwdcYear: 2000,
+      siteYieldSource: 'estimated',
+      locationPresetIsCustom: false,
+      customSiteLabel: '',
+      batteryCapacityMWh: 0,
+      desalinationEnabled: true,
+      desalinationRoute: 'reverse-osmosis',
+      desalRecovery: 45,
+      desalElevationM: 0,
+      waterFeedPreset: 'salton-geothermal',
+      brineMiningEnabled: true,
+      brineMiningRoute: 'salton-geothermal-li',
+      brineReinjectionEnabled: true,
+      reinject: true,
+      electrolyzerEfficiency: 79,
+      makeupWaterEnabled: true,
+    }),
+  }),
+});
+
+const PlantCases = Object.freeze({
+  getAll() {
+    return Object.values(PLANT_CASES);
+  },
+
+  get(id) {
+    return PLANT_CASES[id] || null;
+  },
+
+  apply(state = {}, id) {
+    const plantCase = this.get(id);
+    return plantCase ? { ...state, ...plantCase.values, plantCaseId: plantCase.id } : { ...state };
+  },
+});
+
+function applyPlantCase(state = {}, id) {
+  return PlantCases.apply(state, id);
+}
+
 const METHANE_MARKET_PRESETS = {
   terraform_commodity: {
     label: 'Commodity gas / whitepaper-style case',

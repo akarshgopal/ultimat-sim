@@ -219,8 +219,20 @@ window.AppRendererMethods = {
       rows.push(this.prodItem('fuel', '🧪', 'Methanol Export', `${FormatNumbers.fixed(r.methanol.dailyLiters, 1)}`, `L/${cycleUnit}`));
     }
     if (r.waterSystems?.enabled) {
-      rows.push(this.prodItem('water', '🚰', 'Fresh water', `${FormatNumbers.fixed(r.waterSystems.waterSaleDailyM3 || 0, 2)}`, `m³ sold/${cycleUnit}`));
+      rows.push(this.prodItem('water', '🚰', 'Fresh water produced', `${FormatNumbers.fixed(r.waterSystems.freshWaterDailyM3 || 0, 2)}`, `m³/${cycleUnit}`));
+      rows.push(this.prodItem('water', '💧', 'Water credit', `${FormatNumbers.fixed(r.waterSystems.waterCreditDailyM3 || 0, 2)}`, `m³/${cycleUnit}`));
+      rows.push(this.prodItem('water', '🛒', 'Makeup water', `${FormatNumbers.fixed(r.waterSystems.makeupDailyM3 || 0, 2)}`, `m³ purchased/${cycleUnit}`));
+      rows.push(this.prodItem('water', '💰', 'Water sales', `${FormatNumbers.fixed(r.waterSystems.waterSaleDailyM3 || 0, 2)}`, `m³/${cycleUnit}`));
       rows.push(this.prodItem('brine', '🧂', 'Brine', `${FormatNumbers.fixed(r.waterSystems.brineDailyM3 || 0, 2)}`, `m³/${cycleUnit}`));
+      if ((r.waterSystems.h2CurtailedDailyKg || 0) > 0.001) {
+        rows.push(this.prodItem('h2', '⏸️', 'H₂ water curtailment', `${FormatNumbers.fixed(r.waterSystems.h2CurtailedDailyKg, 1)}`, `kg/${cycleUnit}`));
+      }
+      const heat = r.waterSystems.heat || {};
+      rows.push(this.prodItem('heat', '♨️', 'Heat used', `${FormatNumbers.fixed(heat.usedKWhth || 0, 1)}`, `kWhth/${cycleUnit}`));
+      rows.push(this.prodItem('heat', '🌡️', 'Heat dumped', `${FormatNumbers.fixed(heat.dumpedKWhth || 0, 1)}`, `kWhth/${cycleUnit}`));
+      rows.push(this.prodItem('heat', '⚠️', 'Unmet MED heat', `${FormatNumbers.fixed(heat.unmetKWhth || 0, 1)}`, `kWhth/${cycleUnit}`));
+      const waterRouteLabel = r.waterSystems.route === 'thermal' ? 'MED' : 'SWRO';
+      rows.push(this.prodItem('heat', '↔️', `${waterRouteLabel} limiting factor`, heat.limitingFactor || 'not applicable', ''));
       if (r.waterSystems.mining?.products) {
         Object.entries(r.waterSystems.mining.products).forEach(([name, product]) => {
           rows.push(this.prodItem(`salt-${name}`, '🧪', name, `${FormatNumbers.fixed(product.dailyTons || 0, 3)}`, `t/${cycleUnit}`));
@@ -434,6 +446,14 @@ window.AppRendererMethods = {
       this.econRow('Total O&M', this.formatMoney(e.annualOM), 'negative'),
       this.econRow('Total levelized annual cost', this.formatMoney(e.annualCost), 'total')
     );
+    if ((e.makeupWaterOpex || 0) > 0) {
+      costRows.splice(costRows.length - 2, 0, this.econRow(
+        `Makeup water OPEX @ $${FormatNumbers.fixed(e.makeupWaterPrice || 0, 2)}/m³`,
+        this.formatMoney(e.makeupWaterOpex),
+        'negative',
+        'Purchased water used to satisfy electrolyzer demand after desalination permeate credit.'
+      ));
+    }
 
     costRows.push(
       this.econRow('Installed CAPEX', '', 'header'),
@@ -490,6 +510,20 @@ window.AppRendererMethods = {
         )
       );
     });
+    if ((e.revenue.waterCredit || 0) > 0) {
+      revenueRows.push(this.econRow('Water credit', this.formatMoney(e.revenue.waterCredit), 'positive', 'Economic value assigned to desalination permeate used as process water.'));
+    }
+    if ((e.revenue.water || 0) > 0) {
+      revenueRows.push(this.econRow('Water sales', this.formatMoney(e.revenue.water), 'positive'));
+    }
+    const brineSummary = e.brineMiningSummary;
+    if (brineSummary) {
+      revenueRows.push(
+        this.econRow('Brine gross revenue', this.formatMoney(brineSummary.grossRevenue), 'positive'),
+        this.econRow('Brine market-capped revenue', this.formatMoney(brineSummary.marketCappedRevenue), 'positive'),
+        this.econRow('Brine net revenue', this.formatMoney(brineSummary.netRevenue), 'positive', brineSummary.netRevenueBasis)
+      );
+    }
     if (Math.abs(e.revenue.policyCredits || 0) > 1e-9) {
       revenueRows.push(
         this.econRow(

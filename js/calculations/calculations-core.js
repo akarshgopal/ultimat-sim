@@ -3,6 +3,13 @@
 const Calc = {};
 
 Object.assign(Calc, {
+  applyPlantCase(state = {}, id) {
+    const applied = typeof PlantCases !== 'undefined'
+      ? PlantCases.apply(state, id)
+      : { ...state };
+    return this.normalizeState(applied);
+  },
+
   hasBatteryStorage(state) {
     const batteryCapacityMWh = Number(state?.batteryCapacityMWh);
     return Number.isFinite(batteryCapacityMWh) && batteryCapacityMWh > 1e-9;

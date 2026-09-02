@@ -110,6 +110,37 @@ test('production summary omits disabled process rows', () => {
   assert.equal(productionGrid.innerHTML.includes('AI Tokens'), false);
 });
 
+test('production summary exposes the honest water and heat loop', () => {
+  const { methods, productionGrid, app } = createHarness();
+  const result = {
+    solar: { annualMWh: 4200, cycleUnitCompact: 'day' },
+    ai: { enabled: false },
+    electrolyzer: { enabled: true, h2DailyKg: 40, oxygenDailyKg: 320 },
+    dac: { enabled: false },
+    sabatier: { enabled: false },
+    methanol: { enabled: false },
+    waterSystems: {
+      enabled: true,
+      freshWaterDailyM3: 0.36,
+      waterCreditDailyM3: 0.35,
+      makeupDailyM3: 0.01,
+      waterSaleDailyM3: 0,
+      brineDailyM3: 0.44,
+      h2CurtailedDailyKg: 0.5,
+      route: 'thermal',
+      heat: { usedKWhth: 18, dumpedKWhth: 7, unmetKWhth: 2, limitingFactor: 'heat-limited' },
+    },
+    h2Surplus: 0,
+    co2Surplus: 0,
+  };
+
+  app.getCycleRateUnit = result => result.solar.cycleUnitCompact;
+  methods.updateProduction.call(app, result);
+
+  ['Fresh water produced', 'Water credit', 'Makeup water', 'H₂ water curtailment', 'Heat used', 'Heat dumped', 'Unmet MED heat', 'MED limiting factor', 'heat-limited']
+    .forEach(label => assert.ok(productionGrid.innerHTML.includes(label), `Expected production panel to include ${label}.`));
+});
+
 test('economics renderer uses custom tooltip attributes on labels', () => {
   const { methods } = createHarness();
 

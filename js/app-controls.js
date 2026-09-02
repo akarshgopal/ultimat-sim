@@ -28,6 +28,7 @@ const AppControlMethods = {
 
     AppControlMethods.on.call(this, 'locationPreset', 'change', value => {
       this.skipInitialSavedSitePersist = false;
+      this.state.plantCaseId = 'custom';
       if (value === 'custom') {
         this.state.locationPresetIsCustom = true;
         this.state.customSiteLabel = '';
@@ -76,6 +77,20 @@ const AppControlMethods = {
       AppControlMethods.syncStateToControls.call(this);
     });
 
+    AppControlMethods.on.call(this, 'plantCase', 'change', value => {
+      if (value === 'custom') {
+        this.state.plantCaseId = 'custom';
+        return;
+      }
+      if (typeof Calc !== 'undefined' && Calc.applyPlantCase) {
+        this.state = Calc.applyPlantCase(this.state, value);
+        this.syncBatteryEnabledState();
+        AppControlMethods.syncStateToControls.call(this);
+        this.syncDynamicVisibility();
+        this.syncDerivedFeedControls();
+      }
+    });
+
     AppControlMethods.bindNumber.call(this, 'latitude', 'latitude', () => AppControlMethods.handleLocationEdited.call(this));
     AppControlMethods.bindNumber.call(this, 'longitude', 'longitude', () => AppControlMethods.handleLocationEdited.call(this));
     AppControlMethods.bindNumber.call(this, 'siteYield', 'siteYieldMwhPerMwdcYear', () => {
@@ -106,6 +121,15 @@ const AppControlMethods = {
     AppControlMethods.bindRange.call(this, 'batteryEfficiency', 'batteryEfficiency', value => `${FormatNumbers.fixed(parseInt(value, 10), 0)}%`);
     AppControlMethods.bindRange.call(this, 'batteryCycles', 'batteryCycles', value => parseInt(value, 10).toLocaleString());
     AppControlMethods.bindRange.call(this, 'chemicalSizingPercent', 'chemicalSizingPercent', value => this.formatChemicalSizingPercent(value));
+
+    AppControlMethods.on.call(this, 'makeupWaterEnabled', 'change', (_, el) => {
+      this.state.makeupWaterEnabled = el.checked;
+    });
+    AppControlMethods.bindRange.call(this, 'makeupWaterPrice', 'makeupWaterPrice', value => `$${FormatNumbers.fixed(parseFloat(value), 2)}/m³`);
+    AppControlMethods.on.call(this, 'waterFeedPreset', 'change', value => {
+      this.state.waterFeedPreset = value;
+      this.state.plantCaseId = 'custom';
+    });
 
     AppControlMethods.on.call(this, 'aiComputeEnabled', 'change', (_, el) => {
       this.state.aiComputeEnabled = el.checked;

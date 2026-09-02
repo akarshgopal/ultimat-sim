@@ -739,6 +739,7 @@ const MODULE_CATALOG = Object.freeze([
         feedstockSummary: 'Consumes SWRO brine; market-capped salt suite',
         outputLabel: 'Salt suite',
         outputUnit: 't',
+        saltSuite: true,
         diagramInputs: { brine: true },
       },
       'salton-geothermal-li': {
@@ -751,6 +752,8 @@ const MODULE_CATALOG = Object.freeze([
         feedstockSummary: 'Geothermal feed only; reinjection required',
         outputLabel: 'Li₂CO₃ equivalent',
         outputUnit: 't',
+        lithiumAnalog: true,
+        reinjectionRequired: true,
         diagramInputs: { brine: true },
       },
     },
@@ -769,6 +772,7 @@ const MODULE_CATALOG = Object.freeze([
       { key: 'desalRecovery', label: 'Recovery (%)', type: 'range', min: 20, max: 80, step: 1, unit: '%', defaultValue: 45 },
       { key: 'desalElevationM', label: 'Lift (m)', type: 'range', min: 0, max: 3000, step: 10, unit: 'm', defaultValue: 0 },
       { key: 'desalCyclingFactor', label: 'Cycling damage', type: 'range', min: 1, max: 2, step: 0.01, unit: 'x', defaultValue: 1 },
+      { key: 'desalOversizeFactor', label: 'Water oversize', type: 'range', min: 1, max: 5, step: 0.05, unit: 'x', defaultValue: 1 },
     ],
     market: {
       min: 0.25,

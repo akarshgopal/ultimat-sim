@@ -80,6 +80,7 @@ class App {
 
   populatePresets() {
     this.populateLocationPresetSelect();
+    this.populatePlantCaseSelect();
 
     const mountSel = document.getElementById('mountingType');
     mountSel.innerHTML = Object.entries(MOUNTING_TYPES).map(([key, value]) =>
@@ -105,6 +106,15 @@ class App {
         return `<optgroup label="${group.label}">${optionsHtml}</optgroup>`;
       }).join('');
     }
+  }
+
+  populatePlantCaseSelect() {
+    const select = document.getElementById('plantCase');
+    if (!select || typeof PlantCases === 'undefined') return;
+    select.innerHTML = [
+      '<option value="custom">Custom process configuration</option>',
+      ...PlantCases.getAll().map(plantCase => `<option value="${plantCase.id}">${plantCase.label}</option>`),
+    ].join('');
   }
 
   populateLocationPresetSelect() {
@@ -1078,9 +1088,19 @@ class App {
         ...r.waterSystems,
         dailyM3: scaleMetric(r.waterSystems.dailyM3),
         freshWaterDailyM3: scaleMetric(r.waterSystems.freshWaterDailyM3),
+        waterDemandDailyM3: scaleMetric(r.waterSystems.waterDemandDailyM3),
+        makeupDailyM3: scaleMetric(r.waterSystems.makeupDailyM3),
         waterCreditDailyM3: scaleMetric(r.waterSystems.waterCreditDailyM3),
         waterSaleDailyM3: scaleMetric(r.waterSystems.waterSaleDailyM3),
+        h2CurtailedDailyKg: scaleMetric(r.waterSystems.h2CurtailedDailyKg),
         brineDailyM3: scaleMetric(r.waterSystems.brineDailyM3),
+        heat: r.waterSystems.heat ? {
+          ...r.waterSystems.heat,
+          suppliedKWhth: scaleMetric(r.waterSystems.heat.suppliedKWhth),
+          usedKWhth: scaleMetric(r.waterSystems.heat.usedKWhth),
+          dumpedKWhth: scaleMetric(r.waterSystems.heat.dumpedKWhth),
+          unmetKWhth: scaleMetric(r.waterSystems.heat.unmetKWhth),
+        } : r.waterSystems.heat,
       } : r.waterSystems,
       supportedModules: (r.supportedModules || []).map(scaleSupportedModule),
       exploratoryModules: (r.exploratoryModules || []).map(scaleExploratoryModule),

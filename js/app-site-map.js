@@ -174,6 +174,8 @@ window.AppSiteMapMethods = {
       dac: '#a066ff',
       sabatier: '#29c36b',
       methanol: '#ff8d32',
+      desalination: '#55b6c9',
+      brineMining: '#9b7653',
     };
     return colorMap[id] || '#93a3b5';
   },

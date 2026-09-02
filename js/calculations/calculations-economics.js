@@ -152,6 +152,9 @@ Object.assign(Calc, {
         const priceKey = `${module.id}Price`;
         const unitPrice = state[priceKey] ?? marketConfig.defaultValue ?? 0;
         const assetLifeYears = module.routeConfig?.assetLifeYears || 10;
+        const annualRevenue = module.id === 'desalination'
+          ? 0
+          : (module.annualOutputUnits || 0) * unitPrice;
         return {
           id: module.id,
           label: module.label,
@@ -167,15 +170,19 @@ Object.assign(Calc, {
           annualOutputUnits: module.annualOutputUnits || 0,
           outputUnit: module.outputUnit || 't',
           unitPrice,
-          annualRevenue: (module.annualOutputUnits || 0) * unitPrice,
+          annualRevenue,
         };
       });
     const exploratoryCapex = exploratoryDetails.reduce((sum, module) => sum + module.capex, 0);
     const exploratoryAnnualOM = exploratoryDetails.reduce((sum, module) => sum + module.annualOM, 0);
     const exploratoryRevenue = exploratoryDetails.reduce((sum, module) => sum + module.annualRevenue, 0);
+    const cyclesPerYear = this.getBodyConfig(state.body || 'earth').cyclesPerEarthYear;
     const waterAnnualM3 = waterSystems?.annualM3 || 0;
-    const waterCreditAnnualM3 = (waterSystems?.waterCreditDailyM3 || 0) * (this.getBodyConfig(state.body || 'earth').cyclesPerEarthYear);
-    const waterMarketRevenue = ((waterSystems?.waterSaleDailyM3 || 0) * (this.getBodyConfig(state.body || 'earth').cyclesPerEarthYear)) * (state.desalinationPrice || 0);
+    const waterCreditAnnualM3 = (waterSystems?.waterCreditDailyM3 || 0) * cyclesPerYear;
+    const makeupWaterAnnualM3 = (waterSystems?.makeupDailyM3 || 0) * cyclesPerYear;
+    const makeupWaterPrice = Math.max(0, Number(state.makeupWaterPrice) || 0);
+    const makeupWaterOpex = makeupWaterAnnualM3 * makeupWaterPrice;
+    const waterMarketRevenue = ((waterSystems?.waterSaleDailyM3 || 0) * cyclesPerYear) * (state.desalinationPrice || 0);
     const brineMining = waterSystems?.mining;
 
     const capex = {
@@ -263,7 +270,8 @@ Object.assign(Calc, {
       (storage.capex * batteryOmFrac) +
       (ai.annualOM || 0) +
       ((electrolyzer.capex + dac.capex + sabatier.capex + methanol.capex) * processOmFrac) +
-      exploratoryAnnualOM;
+      exploratoryAnnualOM +
+      makeupWaterOpex;
 
     const methaneSalePrice = this.getMethaneSalePrice(state);
     const revenue = {
@@ -485,6 +493,19 @@ Object.assign(Calc, {
       irr,
       yearlyCashFlows,
       cashFlowTimeline,
+      waterAnnualM3,
+      waterCreditAnnualM3,
+      makeupWaterAnnualM3,
+      makeupWaterPrice,
+      makeupWaterOpex,
+      brineMiningSummary: brineMining
+        ? {
+            grossRevenue: brineMining.grossRevenue || 0,
+            marketCappedRevenue: brineMining.marketCappedRevenue || 0,
+            netRevenue: brineMining.netRevenue || 0,
+            netRevenueBasis: brineMining.netRevenueBasis || 'market-capped',
+          }
+        : null,
       aiCoreAnnualCost,
       bufferedElectricityAnnualCost,
       bufferedElectricityAnnualDeliveredMWh,
@@ -626,7 +647,12 @@ Object.assign(Calc, {
     const opHours = ai.enabled
       ? ai.chemicalDailyOpHours
       : chemicalSupply.dailyOpHours;
-    const allocationPlan = this.buildProcessAllocationPlan(normalizedState);
+    const unreservedAllocationPlan = this.buildProcessAllocationPlan(normalizedState);
+    const allocationPlan = this.buildWaterReservedAllocationPlan(
+      normalizedState,
+      effectiveDailyKWh,
+      unreservedAllocationPlan
+    );
     const allocation = {
       source: 'auto',
       label: allocationPlan.label,
@@ -641,7 +667,7 @@ Object.assign(Calc, {
     const electrolyzer = this.calculateElectrolyzer(normalizedState, effectivePeakKW, effectiveDailyKWh, allocation);
     const dac = this.calculateDAC(normalizedState, effectivePeakKW, effectiveDailyKWh, allocation);
 
-    const productFlow = this.calculateSupportedProducts(
+    const calculateProductFlow = () => this.calculateSupportedProducts(
       normalizedState,
       {
         h2DailyKg: electrolyzer.h2DailyKg || 0,
@@ -660,32 +686,75 @@ Object.assign(Calc, {
       { includeSupportedModules }
     );
 
-    const sabatier = productFlow.outputs.sabatier || this.calculateSabatier({ ...normalizedState, sabatierEnabled: false }, 0, 0, opHours);
-    const methanol = productFlow.outputs.methanol || this.calculateMethanol({ ...normalizedState, methanolEnabled: false }, 0, 0, opHours);
+    let productFlow = calculateProductFlow();
+    let sabatier = productFlow.outputs.sabatier || this.calculateSabatier({ ...normalizedState, sabatierEnabled: false }, 0, 0, opHours);
+    let methanol = productFlow.outputs.methanol || this.calculateMethanol({ ...normalizedState, methanolEnabled: false }, 0, 0, opHours);
     const desalModuleConfig = allocationPlan.exploratoryModules.find(module => module.id === 'desalination');
     const miningModuleConfig = allocationPlan.exploratoryModules.find(module => module.id === 'brineMining');
-    const electrolyzerHeatKWh = normalizedState.electrolyzerEnabled
-      ? (electrolyzer.h2DailyKg || 0) * (10 + ((100 - normalizedState.electrolyzerEfficiency) * 30 / 61))
-      : 0;
-    const aiHeatKWh = ai.enabled ? Math.max(0, ai.designLoadKW || 0) * Math.max(0, opHours || 0) : 0;
-    const sabatierHeatKWh = (sabatier.ch4DailyKg || 0) * 2.86;
-    const waterSystems = this.calculateWaterSystems(normalizedState, {
-      desalModule: desalModuleConfig,
-      miningModule: miningModuleConfig,
-      dailyKWh: effectiveDailyKWh * (allocationPlan.powerShares.exploratory?.desalination || 0),
-      miningDailyKWh: effectiveDailyKWh * (allocationPlan.powerShares.exploratory?.brineMining || 0),
-      peakDailyKWh: peakChemicalDailyKWh,
-      electrolyzerHeatKWh,
-      aiHeatKWh,
-      sabatierHeatKWh,
-      cyclesPerYear,
-    });
-    const waterCreditDailyM3 = Math.min(
-      waterSystems.freshWaterDailyM3 || 0,
-      (electrolyzer.waterDailyKg || 0) / 1000
+    const waterReservation = allocationPlan.waterReservation || {};
+    const reservedWaterDailyKWh = Math.max(
+      0,
+      Number(waterReservation.reservedDailyKWh)
+        || (effectiveDailyKWh * (allocationPlan.powerShares.exploratory?.desalination || 0))
     );
+    let waterSystems;
+    let waterCurtailedDailyKg = 0;
+    // Re-run the small coupled loop when makeup is disabled.  MED heat comes
+    // from the process outputs, so throttling H₂ can also reduce its heat.
+    for (let iteration = 0; iteration < 3; iteration += 1) {
+      const waterDemandDailyM3 = (electrolyzer.waterDailyKg || 0) / 1000;
+      waterSystems = this.calculateWaterSystems(normalizedState, {
+        desalModule: desalModuleConfig,
+        miningModule: miningModuleConfig,
+        dailyKWh: reservedWaterDailyKWh,
+        reservedDailyKWh: reservedWaterDailyKWh,
+        targetDailyM3: desalModuleConfig?.enabled
+          ? waterDemandDailyM3 * this.clampNumber(normalizedState.desalOversizeFactor, 1, 5, 1)
+          : 0,
+        waterDemandDailyM3,
+        miningDailyKWh: effectiveDailyKWh * (allocationPlan.powerShares.exploratory?.brineMining || 0),
+        peakDailyKWh: peakChemicalDailyKWh,
+        electrolyzerHeatKWh: normalizedState.electrolyzerEnabled
+          ? (electrolyzer.h2DailyKg || 0) * (10 + ((100 - normalizedState.electrolyzerEfficiency) * 30 / 61))
+          : 0,
+        aiHeatKWh: ai.enabled ? Math.max(0, ai.designLoadKW || 0) * Math.max(0, opHours || 0) : 0,
+        sabatierHeatKWh: (sabatier.ch4DailyKg || 0) * 2.86,
+        cyclesPerYear,
+      });
+
+      if (!normalizedState.makeupWaterEnabled) {
+        this.constrainElectrolyzerToWater(
+          electrolyzer,
+          waterSystems.freshWaterDailyM3 || 0,
+          cyclesPerYear
+        );
+        waterCurtailedDailyKg = Math.max(waterCurtailedDailyKg, electrolyzer.h2CurtailedDailyKg || 0);
+        productFlow = calculateProductFlow();
+        sabatier = productFlow.outputs.sabatier || this.calculateSabatier({ ...normalizedState, sabatierEnabled: false }, 0, 0, opHours);
+        methanol = productFlow.outputs.methanol || this.calculateMethanol({ ...normalizedState, methanolEnabled: false }, 0, 0, opHours);
+        continue;
+      }
+      break;
+    }
+
+    const finalWaterDemandDailyM3 = (electrolyzer.waterDailyKg || 0) / 1000;
+    const waterCreditDailyM3 = waterSystems.enabled
+      ? Math.min(waterSystems.freshWaterDailyM3 || 0, finalWaterDemandDailyM3)
+      : 0;
+    const oversizeFactor = this.clampNumber(normalizedState.desalOversizeFactor, 1, 5, 1);
+    waterSystems.waterDemandDailyM3 = finalWaterDemandDailyM3;
     waterSystems.waterCreditDailyM3 = waterCreditDailyM3;
-    waterSystems.waterSaleDailyM3 = Math.max(0, (waterSystems.freshWaterDailyM3 || 0) - waterCreditDailyM3);
+    // At the default 1.0x sizing, the reserved slice is process water, not a
+    // sale product.  This also avoids a floating-point sliver being reported
+    // as a sale when the reserve and demand are mathematically identical.
+    waterSystems.waterSaleDailyM3 = oversizeFactor <= 1 + 1e-9
+      ? 0
+      : Math.max(0, (waterSystems.freshWaterDailyM3 || 0) - waterCreditDailyM3);
+    waterSystems.makeupDailyM3 = normalizedState.makeupWaterEnabled
+      ? Math.max(0, finalWaterDemandDailyM3 - waterCreditDailyM3)
+      : 0;
+    waterSystems.h2CurtailedDailyKg = waterCurtailedDailyKg;
+    waterSystems.h2WaterLimited = waterCurtailedDailyKg > 1e-9;
     const exploratoryModules = includeExploratoryModules
       ? this.calculateExploratoryModules(normalizedState, {
           allocationPlan,
@@ -743,6 +812,7 @@ Object.assign(Calc, {
       h2Surplus,
       co2Surplus,
       exploratoryModules,
+      waterSystems,
     });
     const environmental = includeEnvironmental
       ? this.calculateEnvironmental(solar, dac, sabatier, methanol, electrolyzer)

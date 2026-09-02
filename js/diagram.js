@@ -222,7 +222,9 @@ const Diagram = {
       value: module.outputDailyUnits > 0
         ? this.formatExploratoryPeakOutput(module, r)
         : (module.routeLabel || module.routeOptions.find(option => option.value === module.route)?.label || module.route),
-      subtitle: module.feedstockSummary || 'Needs power',
+      subtitle: module.id === 'desalination' && r.waterSystems?.heat
+        ? `LT used ${FormatNumbers.fixed(r.waterSystems.heat.usedKWhth || 0, 1)} · dump ${FormatNumbers.fixed(r.waterSystems.heat.dumpedKWhth || 0, 1)} · unmet ${FormatNumbers.fixed(r.waterSystems.heat.unmetKWhth || 0, 1)} kWhth/${r.solar.cycleUnitCompact}`
+        : module.feedstockSummary || 'Needs power',
       color: this.colors.exploratory,
       active: true,
     });
@@ -643,8 +645,8 @@ const Diagram = {
       }
 
       if (module.id === 'desalination' && node) {
-        const heatLabel = r.waterSystems?.Heat_LT > 0
-          ? this.formatAveragePowerFromCycleKWh(r.waterSystems.Heat_LT, cycleHours)
+        const heatLabel = r.waterSystems?.heat?.usedKWhth > 0
+          ? this.formatAveragePowerFromCycleKWh(r.waterSystems.heat.usedKWhth, cycleHours)
           : '';
         if (electrolyzer) connections.push(this.conn(electrolyzer, node, this.colors.heat, heatLabel, true, { width: 1.2, route: 'vertical' }));
         if (ai) connections.push(this.conn(ai, node, this.colors.heat, '', true, { width: 1.2, route: 'vertical' }));

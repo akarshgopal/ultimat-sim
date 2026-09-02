@@ -110,6 +110,10 @@
           <label>Preset Site
             <select id="locationPreset"></select>
           </label>
+          <label>Built-in Plant Case
+            <select id="plantCase"></select>
+          </label>
+          <p class="field-note compact-note">Plant cases set a reproducible site + process configuration. Saved sites below remain location-only.</p>
           <div class="saved-site-actions" id="saveSitePresetWrap" hidden>
             <input type="text" id="saveSitePresetName" maxlength="80" placeholder="Name this site" autocomplete="off" aria-label="Name for saved site">
             <button type="button" id="saveSitePresetButton" class="saved-site-save-btn">Save</button>
@@ -296,6 +300,25 @@
             </div>
             <div class="field-note compact-note">
               Lower values build less peak chemical capacity and allow solar clipping on the highest-output hours.
+            </div>
+            <div class="process-card water-loop-card">
+              <div class="module-note-title">Honest water loop</div>
+              <label class="toggle-label">
+                <input type="checkbox" id="makeupWaterEnabled" checked>
+                <span>Buy makeup water when desalination is short</span>
+              </label>
+              <label>Makeup water price ($/m³)
+                <input type="range" id="makeupWaterPrice" min="0" max="20" step="0.25" value="3">
+                <span class="range-value" id="makeupWaterPriceValue">$3.00/m³</span>
+              </label>
+              <label>Water feed
+                <select id="waterFeedPreset">
+                  <option value="seawater">Seawater</option>
+                  <option value="salton-surface">Salton surface brine</option>
+                  <option value="salton-geothermal">Salton geothermal brine</option>
+                </select>
+              </label>
+              <div class="field-note compact-note">Electrolysis consumes 9 kg water per kg H₂. Desalination reserves energy for that demand before other exploratory loads.</div>
             </div>
             <div class="module-group">
               <div class="module-group-title">Supported modules</div>

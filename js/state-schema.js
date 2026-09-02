@@ -89,19 +89,29 @@ const CORE_STATE_FIELDS = [
   { key: 'processOmPercent', type: 'number', min: 0, max: 100, defaultValue: 3 },
   { key: 'batteryOmPercent', type: 'number', min: 0, max: 100, defaultValue: 1.5 },
   { key: 'waterFeedPreset', type: 'enum', options: ['seawater', 'salton-surface', 'salton-geothermal'], defaultValue: 'seawater' },
+  { key: 'makeupWaterEnabled', type: 'boolean', defaultValue: true },
+  { key: 'makeupWaterPrice', type: 'number', min: 0, max: 100, defaultValue: 3 },
+  { key: 'brineReinjectionEnabled', type: 'boolean', defaultValue: false },
+  { key: 'reinject', type: 'boolean', defaultValue: false },
+  { key: 'plantCaseId', type: 'enum', options: ['custom', ...Object.keys(PLANT_CASES)], defaultValue: 'custom' },
 ];
 
 const APP_CONTROL_SYNC_FIELDS = {
   checkboxes: [
     { id: 'aiComputeEnabled' },
     { id: 'financingEnabled' },
+    { id: 'makeupWaterEnabled' },
+    { id: 'brineReinjectionEnabled' },
   ],
   selects: [
     { id: 'mountingType' },
     { id: 'policyMode' },
     { id: 'methaneMarketPreset' },
     { id: 'aiReliabilityTarget' },
+    { id: 'waterFeedPreset' },
+    { id: 'plantCase', stateKey: 'plantCaseId' },
   ],
+
   numbers: [
     { id: 'latitude' },
     { id: 'longitude' },

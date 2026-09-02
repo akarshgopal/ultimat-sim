@@ -11,7 +11,7 @@ const BUILD_ID = getBuildId();
 const BUILD_TOKEN = '__APP_BUILD_ID__';
 const EXTRA_COPY_FILES = ['node_modules/lz-string/libs/lz-string.min.js'];
 
-const EXCLUDED_PATH_PREFIXES = ['.git', 'dist', 'node_modules', 'scripts', 'tests'];
+const EXCLUDED_PATH_PREFIXES = ['.git', 'dist', 'node_modules', 'scripts', 'tests', '.github'];
 const EXCLUDED_ROOT_FILES = new Set(['.gitignore', 'package.json', 'package-lock.json', 'vercel.json']);
 const TEXT_FILE_EXTENSIONS = new Set(['.css', '.html', '.js', '.json', '.md', '.svg', '.txt']);
 

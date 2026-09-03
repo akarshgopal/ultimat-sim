@@ -8,7 +8,8 @@
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
     "preview": "node scripts/dev.mjs dist",
-    "test": "node --test tests/calculations/calculations.test.js tests/renderers/diagram.test.js tests/renderers/production.test.js tests/share-state/share-state.test.js tests/saved-site-presets/saved-site-presets.test.js",
+    "test": "node --test tests/flowsheet.test.js tests/electrolysis-flowsheet.test.js tests/dac-flowsheet.test.js tests/sabatier-flowsheet.test.js tests/flowsheet-browser.test.js tests/flowsheet-ui.test.js tests/calculations/calculations.test.js tests/renderers/diagram.test.js tests/renderers/production.test.js tests/share-state/share-state.test.js tests/saved-site-presets/saved-site-presets.test.js",
+    "flowsheet": "node scripts/flowsheet-demo.js",
     "deploy": "node scripts/deploy-pages.mjs"
   },
   "dependencies": {

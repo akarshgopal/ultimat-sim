@@ -37,6 +37,19 @@ test('integrated DAC + SWRO/electrolysis + Sabatier closes stoichiometry and bal
   assertClosed(solved);
 });
 
+test('Sabatier product water recycles into electrolysis and reduces desalination demand', () => {
+  const baseline = solveOperation(createSabatierCase());
+  const solved = solveOperation(createSabatierCase({ recycleWater: true }));
+  const recycle = solved.streams.find(stream => stream.recycle);
+
+  assert.equal(solved.convergence.converged, true);
+  assert.ok(solved.convergence.iterations > 1);
+  assert.ok(Math.abs(solved.nodes.sabatier.activity - 5) < 1e-8);
+  assert.ok(solved.nodes.swro.activity < baseline.nodes.swro.activity);
+  assert.ok(Math.abs(streamMassKg(recycle.stream) - streamMassKg(solved.nodes.sabatier.outlets.water)) < 1e-8);
+  assertClosed(solved);
+});
+
 test('Sabatier reports CO2 as the limiting feed without inventing methane', () => {
   const capturedCo2Kg = 200 * SUBSTANCES.CO2.molarMassG / 1000 * 0.9;
   const solved = solveOperation(createSabatierCase({

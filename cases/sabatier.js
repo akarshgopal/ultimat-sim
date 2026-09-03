@@ -1,11 +1,14 @@
 (function exposeSabatierCase(root, factory) {
-  const api = factory();
-  if (typeof module === 'object' && module.exports) module.exports = api;
+  const commonJs = typeof module === 'object' && module.exports;
+  const api = factory(commonJs ? require('../engine/model') : root.FlowsheetModel);
+  if (commonJs) module.exports = api;
   else root.SabatierCase = api;
-})(globalThis, () => {
+})(globalThis, model => {
+const { streamMassKg } = model;
 const H2O_KG_PER_KG_H2 = 18.01528 / 2.01588;
 const H2_KG_PER_KG_CH4 = 4 * 2.01588 / 16.04246;
 const CO2_KG_PER_KG_CH4 = 44.0095 / 16.04246;
+const H2O_RECOVERED_PER_KG_CH4 = 2 * 18.01528 / 16.04246;
 
 const GAS_PRESETS = {
   ambient: { co2Ppm: 428, oxygenShare: 0.2115 },
@@ -54,13 +57,8 @@ const DEFAULT_PARAMS = {
   sabatier: { electricityKWhPerKgCH4: 1 },
 };
 
-function massKg(stream) {
-  const molarMass = { H2O: 18.01528, CO2: 44.0095, O2: 31.9988, N2: 28.0134, 'Na+': 22.989769, 'Cl-': 35.45 };
-  return Object.entries(stream.mol).reduce((sum, [substance, mol]) => sum + mol * molarMass[substance] / 1000, 0);
-}
-
 function scaleMaterial(stream, targetKg) {
-  const factor = targetKg / massKg(stream);
+  const factor = targetKg / streamMassKg(stream);
   return { ...stream, mol: Object.fromEntries(Object.entries(stream.mol).map(([id, mol]) => [id, mol * factor])) };
 }
 
@@ -89,9 +87,10 @@ function createSabatierCase(overrides = {}) {
   const heatKWh = overrides.heatKWh ?? 30;
   const heatT_C = overrides.heatT_C ?? 100;
   const enforceSiteConstraints = Boolean(overrides.enforceSiteConstraints);
+  const recycleWater = Boolean(overrides.recycleWater);
   const productWaterKgPerKgCH4 = H2_KG_PER_KG_CH4 * H2O_KG_PER_KG_H2;
   const brineKgPerKgCH4 = productWaterKgPerKgCH4 / params.swro.recovery - productWaterKgPerKgCH4;
-  const airMassKg = massKg(air);
+  const airMassKg = streamMassKg(air);
   const airCo2MassFraction = airMassKg ? air.mol.CO2 * 44.0095 / 1000 / airMassKg : 0;
   const airKgPerKgCH4 = airCo2MassFraction
     ? CO2_KG_PER_KG_CH4 / params.dac.captureFraction / airCo2MassFraction
@@ -105,7 +104,7 @@ function createSabatierCase(overrides = {}) {
   const heatKWhPerKgCH4 = CO2_KG_PER_KG_CH4 * params.dac.heatKWhPerKgCO2;
   const boundaryLimits = enforceSiteConstraints ? {
     'air intake': airMassKg / airKgPerKgCH4,
-    'seawater intake': massKg(seawater) * params.swro.recovery / productWaterKgPerKgCH4,
+    'seawater intake': streamMassKg(seawater) * params.swro.recovery / productWaterKgPerKgCH4,
     electricity: electricityKWh / electricityKWhPerKgCH4,
     'DAC heat': heatT_C < params.dac.minHeatT_C ? 0 : heatKWh / heatKWhPerKgCH4,
     'brine disposal': brineCapacityKg / brineKgPerKgCH4,
@@ -115,7 +114,8 @@ function createSabatierCase(overrides = {}) {
   const upstreamTarget = Math.min(sabatierRequested, sabatierCapacity, boundaryTarget);
   const h2Requested = overrides.h2Requested ?? upstreamTarget * H2_KG_PER_KG_CH4;
   const roRequested = overrides.roRequested
-    ?? h2Requested * H2O_KG_PER_KG_H2 / 1000;
+    ?? Math.max(0, h2Requested * H2O_KG_PER_KG_H2
+      - (recycleWater ? upstreamTarget * H2O_RECOVERED_PER_KG_CH4 : 0)) / 1000;
 
   const boundaryLimitedBy = [];
   if (boundaryTarget < Math.min(sabatierRequested, sabatierCapacity)) {
@@ -128,7 +128,7 @@ function createSabatierCase(overrides = {}) {
     constraints: [
       { id: 'electricity', label: 'Electricity', node: 'electricity', side: 'source', capacity: electricityKWh, unit: 'kWh/day', detail: `${solarElectricityKWh.toFixed(1)} solar + ${gridElectricityKWh.toFixed(1)} grid` },
       { id: 'heat', label: 'DAC heat', node: 'heat', side: 'source', capacity: heatKWh, unit: 'kWh/day' },
-      { id: 'seawater', label: 'Seawater intake', node: 'seawater', side: 'source', capacity: massKg(seawater), unit: 'kg/day' },
+      { id: 'seawater', label: 'Seawater intake', node: 'seawater', side: 'source', capacity: streamMassKg(seawater), unit: 'kg/day' },
       { id: 'air', label: 'Feed gas intake', node: 'air', side: 'source', capacity: airMassKg, unit: 'kg/day', detail: `${co2Ppm.toLocaleString('en-US')} ppm CO2` },
       { id: 'brine', label: 'Brine disposal', node: 'brine', side: 'sink', capacity: brineCapacityKg, unit: 'kg/day' },
       { id: 'depleted-air', label: 'Off-gas discharge', node: 'depleted-air', side: 'sink', capacity: offgasCapacityKg, unit: 'kg/day' },
@@ -173,7 +173,9 @@ function createSabatierCase(overrides = {}) {
         { id: 'oxygen', unit: 'material-sink' },
         { id: 'water-reject', unit: 'material-sink' },
         { id: 'methane', unit: 'material-sink' },
-        { id: 'sabatier-water', unit: 'material-sink' },
+        ...(recycleWater
+          ? [{ id: 'water-mixer', unit: 'material-mixer' }]
+          : [{ id: 'sabatier-water', unit: 'material-sink' }]),
       ],
       edges: [
         { from: { node: 'air', port: 'out' }, to: { node: 'dac', port: 'air' } },
@@ -188,13 +190,27 @@ function createSabatierCase(overrides = {}) {
         { from: { node: 'dac', port: 'capturedCo2' }, to: { node: 'sabatier', port: 'co2' } },
         { from: { node: 'dac', port: 'depletedAir' }, to: { node: 'depleted-air', port: 'in' } },
         { from: { node: 'dac', port: 'wasteHeat' }, to: { node: 'waste-heat', port: 'in' } },
-        { from: { node: 'swro', port: 'product' }, to: { node: 'electrolyzer', port: 'water' } },
+        ...(recycleWater ? [
+          { from: { node: 'swro', port: 'product' }, to: { node: 'water-mixer', port: 'in' } },
+          {
+            from: { node: 'sabatier', port: 'water' },
+            to: { node: 'water-mixer', port: 'in' },
+            recycle: true,
+            label: 'Recovered process water',
+            initialStream: { kind: 'material', mol: { H2O: 0 }, phase: 'liquid', T_C: 25, P_bar: 1 },
+          },
+          { from: { node: 'water-mixer', port: 'out' }, to: { node: 'electrolyzer', port: 'water' } },
+        ] : [
+          { from: { node: 'swro', port: 'product' }, to: { node: 'electrolyzer', port: 'water' } },
+        ]),
         { from: { node: 'swro', port: 'brine' }, to: { node: 'brine', port: 'in' } },
         { from: { node: 'electrolyzer', port: 'hydrogen' }, to: { node: 'sabatier', port: 'hydrogen' } },
         { from: { node: 'electrolyzer', port: 'oxygen' }, to: { node: 'oxygen', port: 'in' } },
         { from: { node: 'electrolyzer', port: 'waterReject' }, to: { node: 'water-reject', port: 'in' } },
         { from: { node: 'sabatier', port: 'methane' }, to: { node: 'methane', port: 'in' } },
-        { from: { node: 'sabatier', port: 'water' }, to: { node: 'sabatier-water', port: 'in' } },
+        ...(!recycleWater ? [
+          { from: { node: 'sabatier', port: 'water' }, to: { node: 'sabatier-water', port: 'in' } },
+        ] : []),
       ],
     },
     operation: {

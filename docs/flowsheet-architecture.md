@@ -1,6 +1,6 @@
 # Flowsheet engine
 
-Status: Stage 4 implemented: SWRO, electrolysis, DAC, and once-through methane synthesis.
+Status: Stage 5 started: SWRO, electrolysis, DAC, methane synthesis, and explicitly marked material recycle.
 
 `main` remains the live TEA. The replacement engine solves material and energy flows first; the existing economics becomes a consumer of the solved flowsheet. Site, solar, DCF, policy, charts, maps, and shareable URLs are reused where they still fit.
 
@@ -107,6 +107,22 @@ v1 guarantees:
 
 v1 does not claim full thermodynamic first-law closure. Chemical enthalpy, phase equilibrium, pressure work, and property packages are added only when a unit needs them. The balance report must label this limitation rather than imply Aspen-level rigor.
 
+### Literature-backed process assumptions
+
+Process presets are editable starting points, not universal performance claims. The flowsheet exposes the assumptions that materially change coupling behavior: recovery, electric and thermal specific energy, minimum heat temperature, capture fraction, consumable makeup, and reject-heat temperature.
+
+| Process family | Initial candidates | Parameter basis |
+| --- | --- | --- |
+| Seawater desalination | SWRO, MED, MSF | [Elimelech & Phillip (2011)](https://doi.org/10.1126/science.1200488); [Ghaffour et al. (2013)](https://doi.org/10.1016/j.apenergy.2012.12.073) |
+| Low-temperature electrolysis | alkaline, PEM | [Buttler & Spliethoff (2018)](https://doi.org/10.1016/j.rser.2017.09.003) |
+| Direct air capture | solid sorbent, KOH/calcium looping, electro-swing | [Keith et al. (2018)](https://doi.org/10.1016/j.joule.2018.05.006); [Voskian & Hatton (2019)](https://doi.org/10.1039/C9EE02412C) |
+| Electricity | solar PV, grid imports, Radiant/Valar/generic advanced nuclear | [NREL ATB: PV](https://atb.nrel.gov/electricity/2024/utility-scale_pv); [NRC: Kaleidos](https://www.nrc.gov/reactors/new-reactors/advanced/who-were-working-with/pre-application-activities/kaleidos); [Valar Atomics](https://www.valaratomics.com/) |
+| Energy storage and process heat | battery, solar thermal, thermal storage | [NREL ATB: battery storage](https://atb.nrel.gov/electricity/2024/2023/utility-scale_battery_storage); [DOE: solar process heat](https://www.energy.gov/cmei/systems/solar-industrial-processes); [DOE: thermal storage](https://www.energy.gov/cmei/systems/solar-thermal-energy-storage-and-heat-transfer-media) |
+
+SOEC and enhanced rock weathering are separate future units because their steam/mineral feeds and products do not match the existing electrolyzer or DAC port contracts.
+
+Energy CAPEX, O&M, tariffs, capacity factors, and simple levelized costs are editable scenario assumptions. Radiant and Valar do not publish comparable commercial overnight-cost schedules, so their presets describe configuration and scale while using visibly labeled user-editable cost assumptions rather than vendor quotes.
+
 ## Unit contract
 
 Every converter declares one activity basis:
@@ -203,7 +219,7 @@ are deferred rather than hidden inside the first unit.
 
 ### Stage 5: recycle
 
-Add torn-edge fixed-point iteration only when fuel synthesis introduces the first recycle:
+The first recycle tears the Sabatier product-water edge and iterates it back through a water mixer into electrolysis:
 
 ```text
 guess torn stream
@@ -213,9 +229,9 @@ update torn stream
 stop when all component flows converge
 ```
 
-Convergence failure is a solved result with diagnostics, not a silent last iterate.
+Recycle edges are explicit, carry an initial material stream, and are the only edges omitted from dependency ordering. Unmarked cycles remain invalid. Convergence failure is a solved result with diagnostics, not a silent last iterate.
 
-Not initially implemented: Newton methods, LP/MILP dispatch, pinch analysis, dynamic inventories, or 8760-hour simulation.
+Battery and thermal-storage blocks apply conversion loss to a user-set representative-day transfer. State of charge, charging windows, degradation, Newton methods, LP/MILP dispatch, pinch analysis, dynamic inventories, and 8760-hour simulation remain outside this solver.
 
 ## Validation and balance report
 
@@ -306,7 +322,7 @@ Render the solved graph and stream table first, then bind existing TEA panels to
 
 ## Deferred catalog
 
-MED, batteries, salt mining, geothermal lithium, reagent networks, ammonia, steel, and lime products wait until the four-step core chain works. They must use the same ports and unit contract when added; they do not justify speculative v1 hooks.
+Salt mining, geothermal lithium, reagent networks, ammonia, steel, and lime products wait until a concrete coupling case needs them. They must use the same ports and unit contract when added; they do not justify speculative hooks.
 
 ## Initial layout
 
@@ -336,8 +352,7 @@ Cases can remain JavaScript fixtures until serialization or a shareable URL requ
 - automatic plant sizing or economic optimization
 - full thermodynamic properties or phase equilibrium
 - heat-exchanger-network synthesis
-- storage and hourly dynamics
-- drag-and-drop editing
+- hourly storage dynamics and optimized dispatch
 - broad product catalog
 - replacing Leaflet, Chart.js, or the existing policy/DCF implementation
 

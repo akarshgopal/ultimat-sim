@@ -216,16 +216,17 @@
 
 .stage-heading {
   display: flex;
-  align-items: end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 18px;
 }
 
-.stage-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
-.snapshot-controls { display: flex; gap: 6px; }
+.stage-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.snapshot-controls { display: grid; gap: 6px; }
 .snapshot-controls select { min-width: 120px; }
-.stage-actions button {
+.stage-actions button,
+.save-menu summary {
   padding: 7px 10px;
   color: var(--text-secondary);
   border: 1px solid var(--border);
@@ -233,8 +234,26 @@
   background: var(--bg-card);
   cursor: pointer;
 }
+.stage-actions .primary-action { color: var(--electric); border-color: rgba(95, 127, 184, 0.65); }
 .stage-actions button:hover,
-.stage-actions button:focus-visible { color: var(--electric); border-color: var(--electric); }
+.stage-actions button:focus-visible,
+.save-menu summary:hover,
+.save-menu summary:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
+.save-menu { position: relative; }
+.save-menu summary { list-style: none; }
+.save-menu summary::-webkit-details-marker { display: none; }
+.save-menu[open] .snapshot-controls {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 190px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow);
+}
 
 .flowsheet-canvas {
   min-width: 980px;
@@ -243,7 +262,7 @@
   border-radius: 14px;
   background: rgba(19, 23, 27, 0.92);
   box-shadow: var(--shadow);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .flowsheet-canvas.empty {
@@ -258,6 +277,7 @@
 
 .flowsheet-canvas svg { display: block; width: 100%; height: auto; }
 .flow-edge { fill: none; stroke-width: 2; opacity: 0.68; }
+.flow-edge.recycle { stroke-dasharray: 7 5; opacity: 1; }
 .flow-edge.material { stroke: var(--co2); }
 .flow-edge.electricity { stroke: var(--electric); }
 .flow-edge.heat { stroke: #df8b52; }
@@ -272,7 +292,7 @@
 .flow-node .node-kind { fill: var(--text-muted); font-size: 11px; text-transform: uppercase; }
 .flow-node .node-label { fill: var(--text-primary); font-size: 15px; font-weight: 650; }
 .flow-node .node-value { fill: var(--text-secondary); font-size: 12px; }
-.edge-label { fill: var(--text-muted); font-size: 11px; }
+.edge-label { fill: var(--text-muted); stroke: var(--bg-card); stroke-width: 5px; paint-order: stroke; font-size: 11px; }
 .flow-edge.consumable { stroke: var(--warning); }
 .flow-edge.bottleneck { stroke: var(--danger); stroke-width: 5; opacity: 1; }
 .edge-label.bottleneck { fill: var(--danger); font-weight: 700; }
@@ -329,6 +349,10 @@
 .port-row span { color: var(--electric); font-size: 0.65rem; text-transform: uppercase; }
 .port-row strong { color: var(--text-secondary); }
 .port-row small { color: var(--text-muted); font-size: 0.72rem; }
+.port-connection { margin-top: 6px; }
+.port-connection button { margin-top: 4px; }
+.branch-weight { display: grid; grid-template-columns: auto 90px; align-items: center; gap: 6px; color: var(--text-muted); font-size: 0.7rem; }
+.branch-weight input { margin: 0; }
 .port-row button,
 .delete-node {
   padding: 6px 8px;
@@ -341,6 +365,8 @@
 .port-row button:hover,
 .port-row button:focus-visible { color: var(--electric); border-color: var(--electric); }
 .delete-node { width: 100%; margin-top: 8px; color: var(--danger); }
+.literature-links { margin-top: 10px; color: var(--text-muted); font-size: 0.7rem; line-height: 1.45; }
+.literature-links a { color: var(--electric); }
 
 .recipe-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .recipe-group {
@@ -372,6 +398,10 @@
 .constraint-meter span { display: block; height: 100%; background: var(--success); }
 .constraint-row.tight .constraint-meter span { background: var(--warning); }
 .constraint-row.over .constraint-meter span { background: var(--danger); }
+
+.flowsheet-page.canvas-focus .flowsheet-workspace { grid-template-columns: minmax(0, 1fr); }
+.flowsheet-page.canvas-focus .flowsheet-sidebar { display: none; }
+.flowsheet-page.canvas-focus .flowsheet-stage { padding: 16px; }
 
 @media (max-width: 1050px) {
   .flowsheet-workspace { grid-template-columns: 280px minmax(420px, 1fr); overflow: auto; }

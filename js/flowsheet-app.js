@@ -8,24 +8,177 @@
   const storage = (() => { try { return window.localStorage; } catch { return null; } })();
   const AUTOSAVE_KEY = 'molecular-foundry.autosave.v1';
   const SAVES_KEY = 'molecular-foundry.saves.v1';
+  const NODE_WIDTH = 220;
+  const COLUMN_GAP = 120;
   let selectedNodeId = null;
   let pendingPort = null;
   let result = null;
   let solveError = '';
   let dragging = null;
   let suppressClick = false;
+  let canvasFocused = false;
 
   const catalog = {
-    swro: { label: 'SWRO', capacity: 100, rate: 40, activityUnit: 'm³ water/day', params: { recovery: 0.45, secKWhPerM3: 3.5, feedDensityKgM3: 1025, productDensityKgM3: 1000, ionRejection: 0.99 } },
-    electrolyzer: { label: 'Electrolyzer', capacity: 100, rate: 10, activityUnit: 'kg H₂/day', params: { secKWhPerKgH2: 50 } },
-    dac: { label: 'DAC', capacity: 100, rate: 10, activityUnit: 'kg CO₂/day', params: { captureFraction: 0.9, electricityKWhPerKgCO2: 0.5, heatKWhPerKgCO2: 1.5, minHeatT_C: 80, consumablesPerKgCO2: 0.02 } },
-    sabatier: { label: 'Sabatier', capacity: 100, rate: 5, activityUnit: 'kg CH₄/day', params: { electricityKWhPerKgCH4: 1 } },
-    'material-source': { label: 'Material source' },
-    'electricity-source': { label: 'Electricity source' },
-    'heat-source': { label: 'Heat source' },
-    'consumable-source': { label: 'Consumables' },
-    'material-sink': { label: 'Material sink' },
-    'heat-sink': { label: 'Heat sink' },
+    swro: {
+      label: 'SWRO', capacity: 100, rate: 40, activityUnit: 'm³ water/day',
+      palette: { section: 'building', order: 1, glyph: 'RO', tone: 'water', description: 'Seawater → fresh water' },
+      params: { recovery: 0.45, secKWhPerM3: 3.5, feedDensityKgM3: 1025, productDensityKgM3: 1000, ionRejection: 0.99 },
+      presets: {
+        modern: { label: 'Modern SWRO', params: { recovery: 0.45, secKWhPerM3: 3.5, ionRejection: 0.99 } },
+        highRecovery: { label: 'High-recovery SWRO', params: { recovery: 0.55, secKWhPerM3: 4.5, ionRejection: 0.99 } },
+      },
+      controls: [
+        { key: 'recovery', label: 'Water recovery', min: 0.2, max: 0.6, step: 0.01 },
+        { key: 'secKWhPerM3', label: 'Electricity', min: 2, max: 8, step: 0.1, unit: 'kWh/m³' },
+        { key: 'ionRejection', label: 'Ion rejection', min: 0.95, max: 1, step: 0.001 },
+      ],
+      references: [{ label: 'Elimelech & Phillip 2011', url: 'https://doi.org/10.1126/science.1200488' }],
+    },
+    med: {
+      label: 'MED', capacity: 100, rate: 40, activityUnit: 'm³ water/day',
+      palette: { section: 'building', order: 2, glyph: 'MED', tone: 'water', title: 'Multi-effect distillation', description: 'Low-grade heat + seawater → water' },
+      params: { recovery: 0.35, electricityKWhPerM3: 2, heatKWhPerM3: 60, minHeatT_C: 70, ionRejection: 0.995, feedDensityKgM3: 1025, productDensityKgM3: 1000, wasteHeatT_C: 40 },
+      controls: [
+        { key: 'recovery', label: 'Water recovery', min: 0.2, max: 0.5, step: 0.01 },
+        { key: 'electricityKWhPerM3', label: 'Electricity', min: 0.5, max: 5, step: 0.1, unit: 'kWh/m³' },
+        { key: 'heatKWhPerM3', label: 'Thermal duty', min: 35, max: 100, step: 1, unit: 'kWhₜₕ/m³' },
+        { key: 'minHeatT_C', label: 'Minimum heat', min: 50, max: 100, step: 1, unit: '°C' },
+        { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 80, step: 1, unit: '°C' },
+      ],
+      references: [{ label: 'Ghaffour et al. 2013', url: 'https://doi.org/10.1016/j.apenergy.2012.12.073' }],
+    },
+    msf: {
+      label: 'MSF', capacity: 100, rate: 40, activityUnit: 'm³ water/day',
+      palette: { section: 'building', order: 3, glyph: 'MSF', tone: 'water', title: 'Multi-stage flash', description: 'Steam + seawater → water' },
+      params: { recovery: 0.25, electricityKWhPerM3: 3.5, heatKWhPerM3: 80, minHeatT_C: 90, ionRejection: 0.995, feedDensityKgM3: 1025, productDensityKgM3: 1000, wasteHeatT_C: 45 },
+      controls: [
+        { key: 'recovery', label: 'Water recovery', min: 0.15, max: 0.4, step: 0.01 },
+        { key: 'electricityKWhPerM3', label: 'Electricity', min: 1, max: 7, step: 0.1, unit: 'kWh/m³' },
+        { key: 'heatKWhPerM3', label: 'Thermal duty', min: 55, max: 130, step: 1, unit: 'kWhₜₕ/m³' },
+        { key: 'minHeatT_C', label: 'Minimum heat', min: 75, max: 130, step: 1, unit: '°C' },
+        { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 100, step: 1, unit: '°C' },
+      ],
+      references: [{ label: 'Ghaffour et al. 2013', url: 'https://doi.org/10.1016/j.apenergy.2012.12.073' }],
+    },
+    electrolyzer: {
+      label: 'Electrolyzer', capacity: 100, rate: 10, activityUnit: 'kg H₂/day', params: { secKWhPerKgH2: 52 },
+      palette: { section: 'building', order: 4, glyph: 'H₂', tone: 'hydrogen', description: 'Water + power → H₂' },
+      presets: {
+        alkaline: { label: 'Alkaline', params: { secKWhPerKgH2: 52 } },
+        pem: { label: 'PEM', params: { secKWhPerKgH2: 55 } },
+      },
+      controls: [{ key: 'secKWhPerKgH2', label: 'Electricity', min: 39, max: 80, step: 0.5, unit: 'kWh/kg H₂' }],
+      references: [{ label: 'Buttler & Spliethoff 2018', url: 'https://doi.org/10.1016/j.rser.2017.09.003' }],
+    },
+    dac: {
+      label: 'DAC', capacity: 100, rate: 10, activityUnit: 'kg CO₂/day',
+      palette: { section: 'building', order: 5, glyph: 'CO₂', tone: 'carbon', description: 'Gas + power + heat + consumables' },
+      params: { captureFraction: 0.9, electricityKWhPerKgCO2: 0.5, heatKWhPerKgCO2: 1.5, minHeatT_C: 80, consumablesPerKgCO2: 0.02, wasteHeatT_C: 40 },
+      presets: {
+        solid: { label: 'Solid sorbent', params: { captureFraction: 0.9, electricityKWhPerKgCO2: 0.5, heatKWhPerKgCO2: 1.5, minHeatT_C: 80, consumablesPerKgCO2: 0.02, wasteHeatT_C: 40 } },
+        koh: { label: 'KOH + calcium looping', params: { captureFraction: 0.75, electricityKWhPerKgCO2: 0.366, heatKWhPerKgCO2: 2.45, minHeatT_C: 900, consumablesPerKgCO2: 0.01, wasteHeatT_C: 100 } },
+        electroSwing: { label: 'Electro-swing adsorption', params: { captureFraction: 0.5, electricityKWhPerKgCO2: 0.45, heatKWhPerKgCO2: 0, minHeatT_C: 20, consumablesPerKgCO2: 0.005, wasteHeatT_C: 30 } },
+      },
+      controls: [
+        { key: 'captureFraction', label: 'Single-pass capture', min: 0.1, max: 0.95, step: 0.01 },
+        { key: 'electricityKWhPerKgCO2', label: 'Electricity', min: 0.05, max: 1.5, step: 0.01, unit: 'kWh/kg CO₂' },
+        { key: 'heatKWhPerKgCO2', label: 'Thermal duty', min: 0, max: 3.5, step: 0.05, unit: 'kWhₜₕ/kg CO₂' },
+        { key: 'minHeatT_C', label: 'Minimum heat', min: 20, max: 1000, step: 5, unit: '°C' },
+        { key: 'consumablesPerKgCO2', label: 'Consumables', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
+        { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
+      ],
+      references: [
+        { label: 'Keith et al. 2018', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
+        { label: 'Voskian & Hatton 2019', url: 'https://doi.org/10.1039/C9EE02412C' },
+      ],
+    },
+    sabatier: { label: 'Sabatier', capacity: 100, rate: 5, activityUnit: 'kg CH₄/day', palette: { section: 'building', order: 6, glyph: 'CH₄', tone: 'methane', description: 'CO₂ + H₂ → methane' }, params: { electricityKWhPerKgCH4: 1 } },
+    'solar-pv': {
+      label: 'Solar PV', sourceUnit: 'kWh/day',
+      palette: { section: 'building', order: 7, glyph: 'PV', description: 'Capacity × resource → electricity' },
+      params: { capacityKW: 1000, capacityFactor: 0.24, capexPerKW: 1560, fixedOMPerKWYear: 20, variableCostPerMWh: 0, discountRate: 0.07, lifeYears: 30 },
+      controls: [
+        { key: 'capacityKW', label: 'AC capacity', min: 10, max: 10000, step: 10, unit: 'kW' },
+        { key: 'capacityFactor', label: 'Capacity factor', min: 0.05, max: 0.4, step: 0.01 },
+        { key: 'capexPerKW', label: 'Installed CAPEX', min: 300, max: 3000, step: 10, unit: '$/kW' },
+        { key: 'fixedOMPerKWYear', label: 'Fixed O&M', min: 0, max: 100, step: 1, unit: '$/kW-y' },
+      ],
+      references: [{ label: 'NREL 2024 ATB', url: 'https://atb.nrel.gov/electricity/2024/utility-scale_pv' }],
+    },
+    'grid-electricity': {
+      label: 'Grid electricity', sourceUnit: 'kWh/day', manualRateMax: 100000,
+      palette: { section: 'utility', order: 6, glyph: 'G', description: 'Import limit + tariff' },
+      params: { pricePerMWh: 100, kgCO2PerMWh: 400 },
+      controls: [
+        { key: 'pricePerMWh', label: 'Tariff', min: -100, max: 500, step: 1, unit: '$/MWh' },
+        { key: 'kgCO2PerMWh', label: 'Grid emissions', min: 0, max: 1200, step: 10, unit: 'kg CO₂/MWh' },
+      ],
+    },
+    'nuclear-electricity': {
+      label: 'Advanced nuclear', sourceUnit: 'kWh/day', economicsNote: 'Costs are editable assumptions, not vendor quotes.',
+      palette: { section: 'building', order: 8, glyph: 'N', tone: 'carbon', description: 'Radiant, Valar, generic SMR' },
+      params: { capacityKW: 1000, capacityFactor: 0.9, capexPerKW: 10717, fixedOMPerKWYear: 300, variableCostPerMWh: 15, discountRate: 0.07, lifeYears: 30 },
+      presets: {
+        radiant: { label: 'Radiant Kaleidos · 1 MWe', params: { capacityKW: 1000, capacityFactor: 0.9, capexPerKW: 10717 } },
+        valar: { label: 'Valar industrial HTGR · 30 MW assumption', params: { capacityKW: 30000, capacityFactor: 0.9, capexPerKW: 10717 } },
+        smr: { label: 'Generic nth-of-a-kind SMR', params: { capacityKW: 300000, capacityFactor: 0.9, capexPerKW: 5882 } },
+      },
+      controls: [
+        { key: 'capacityKW', label: 'Net capacity', min: 100, max: 500000, step: 100, unit: 'kW' },
+        { key: 'capacityFactor', label: 'Capacity factor', min: 0.4, max: 1, step: 0.01 },
+        { key: 'capexPerKW', label: 'Overnight CAPEX', min: 1000, max: 50000, step: 100, unit: '$/kW' },
+        { key: 'fixedOMPerKWYear', label: 'Fixed O&M', min: 0, max: 1000, step: 10, unit: '$/kW-y' },
+        { key: 'variableCostPerMWh', label: 'Fuel + variable O&M', min: 0, max: 200, step: 1, unit: '$/MWh' },
+      ],
+      references: [
+        { label: 'NRC: Kaleidos', url: 'https://www.nrc.gov/reactors/new-reactors/advanced/who-were-working-with/pre-application-activities/kaleidos' },
+        { label: 'Valar: industrial model', url: 'https://www.valaratomics.com/' },
+        { label: 'DOE advanced nuclear costs', url: 'https://www.energy.gov/ne/downloads/small-modular-reactors-key-future-nuclear-power-generation-us' },
+      ],
+    },
+    battery: {
+      label: 'Battery', capacity: 4000, rate: 1000, activityUnit: 'kWh/day',
+      palette: { section: 'building', order: 9, glyph: 'B', description: 'Electricity in → shifted electricity' },
+      params: { efficiency: 0.95, capexPerKWh: 400 },
+      controls: [
+        { key: 'efficiency', label: 'One-way efficiency', min: 0.7, max: 1, step: 0.01 },
+        { key: 'capexPerKWh', label: 'Installed CAPEX', min: 50, max: 1000, step: 10, unit: '$/kWh' },
+      ],
+      references: [{ label: 'NREL 2024 ATB', url: 'https://atb.nrel.gov/electricity/2024/2023/utility-scale_battery_storage' }],
+    },
+    'solar-thermal': {
+      label: 'Solar thermal', sourceUnit: 'kWhₜₕ/day',
+      palette: { section: 'building', order: 10, glyph: 'ST', tone: 'carbon', description: 'Sun → temperature-graded heat' },
+      params: { capacityKW: 1000, sunHours: 6, temperatureC: 150, capexPerKW: 1000, fixedOMPerKWYear: 20, variableCostPerMWh: 0, discountRate: 0.07, lifeYears: 25 },
+      controls: [
+        { key: 'capacityKW', label: 'Thermal capacity', min: 10, max: 10000, step: 10, unit: 'kWₜₕ' },
+        { key: 'sunHours', label: 'Equivalent sun', min: 1, max: 12, step: 0.1, unit: 'h/day' },
+        { key: 'temperatureC', label: 'Delivery temperature', min: 40, max: 1000, step: 5, unit: '°C' },
+        { key: 'capexPerKW', label: 'Installed CAPEX', min: 100, max: 5000, step: 25, unit: '$/kWₜₕ' },
+      ],
+      references: [{ label: 'DOE solar process heat', url: 'https://www.energy.gov/cmei/systems/solar-industrial-processes' }],
+    },
+    'thermal-storage': {
+      label: 'Thermal storage', capacity: 10000, rate: 1000, activityUnit: 'kWhₜₕ/day',
+      palette: { section: 'building', order: 11, glyph: 'TS', tone: 'carbon', description: 'Heat in → shifted process heat' },
+      params: { efficiency: 0.95, temperatureLossC: 5, capexPerKWh: 30 },
+      controls: [
+        { key: 'efficiency', label: 'Discharge efficiency', min: 0.5, max: 1, step: 0.01 },
+        { key: 'temperatureLossC', label: 'Temperature loss', min: 0, max: 200, step: 1, unit: '°C' },
+        { key: 'capexPerKWh', label: 'Installed CAPEX', min: 1, max: 300, step: 1, unit: '$/kWhₜₕ' },
+      ],
+      references: [{ label: 'DOE thermal storage', url: 'https://www.energy.gov/cmei/systems/solar-thermal-energy-storage-and-heat-transfer-media' }],
+    },
+    'material-source': { label: 'Material source', palette: { section: 'utility', order: 4, glyph: 'M', tone: 'water', description: 'Air, water, CO₂, H₂…' } },
+    'electricity-source': { label: 'Electricity source', palette: { section: 'utility', order: 5, glyph: '⚡', description: 'Set available kWh/day' } },
+    'heat-source': { label: 'Heat source', palette: { section: 'utility', order: 7, glyph: 'H', tone: 'carbon', description: 'Set energy and temperature' } },
+    'consumable-source': { label: 'Consumables', palette: { section: 'utility', order: 8, glyph: 'C', tone: 'methane', description: 'Sorbent or reagent makeup' } },
+    'electrical-bus': { label: 'Electricity bus', palette: { section: 'utility', order: 1, glyph: '⚡↗', description: 'One supply → many blocks' } },
+    'material-splitter': { label: 'Material splitter', palette: { section: 'utility', order: 2, glyph: 'M↗', tone: 'water', description: 'One stream → many branches' } },
+    'material-mixer': { label: 'Material mixer', palette: { section: 'utility', order: 3, glyph: '↘M', tone: 'water', description: 'Many streams → one output' } },
+    'material-sink': { label: 'Material sink', palette: { section: 'utility', order: 9, glyph: '↓', description: 'Capture, store, sell, or discard' } },
+    'heat-sink': { label: 'Heat sink', palette: { section: 'utility', order: 10, glyph: '↓H', tone: 'carbon', description: 'Reject or recover process heat' } },
+    'electricity-sink': { label: 'Electricity sink', palette: { section: 'utility', order: 11, glyph: '↓⚡', description: 'Export or curtail electricity' } },
   };
   const portNames = {
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
@@ -43,11 +196,26 @@
     oxygen: { label: 'Oxygen', phase: 'gas', mol: { O2: 1000 } },
   };
 
+  function renderPalettes() {
+    for (const [id, section] of [['buildingPalette', 'building'], ['utilityPalette', 'utility']]) {
+      document.getElementById(id).innerHTML = Object.entries(catalog)
+        .filter(([, definition]) => definition.palette?.section === section)
+        .sort(([, left], [, right]) => left.palette.order - right.palette.order)
+        .map(([unit, definition]) => {
+          const { glyph, tone, title, description } = definition.palette;
+          return `<button type="button" class="building-card" data-unit="${unit}"><span class="building-glyph${tone ? ` ${tone}` : ''}">${glyph}</span><span><strong>${title || definition.label}</strong><small>${description}</small></span><b>Add</b></button>`;
+        }).join('');
+    }
+  }
+
+  renderPalettes();
   document.getElementById('buildingPalette').addEventListener('click', addFromPalette);
   document.getElementById('utilityPalette').addEventListener('click', addFromPalette);
   document.getElementById('clearFactory').addEventListener('click', clearFactory);
   document.getElementById('autoArrange').addEventListener('click', autoArrange);
+  document.getElementById('focusCanvas').addEventListener('click', toggleCanvasFocus);
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
+  document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
   document.getElementById('saveFactory').addEventListener('click', () => {
     const name = window.prompt('Name this factory save:')?.trim();
     if (name) saveNamed(name);
@@ -91,6 +259,10 @@
       capacity: definition.capacity, params: { ...(definition.params || {}) },
       position: positionFor(kind, sameKindCount),
     };
+    if (definition.presets) {
+      current.processPreset = Object.keys(definition.presets)[0];
+      Object.assign(current.params, definition.presets[current.processPreset].params);
+    }
     if (kind === 'source') configureNewSource(current, options.preset);
     if (kind === 'converter') setpoints[id] = definition.rate;
     graph.nodes.push(current);
@@ -106,8 +278,9 @@
     if (current.unit === 'material-source') {
       current.sourcePreset = preset || 'air';
       current.rate = current.sourcePreset === 'air' ? 25000 : 100;
-    } else if (current.unit === 'electricity-source') current.rate = 1000;
+    } else if (current.unit === 'electricity-source' || current.unit === 'grid-electricity') current.rate = 1000;
     else if (current.unit === 'heat-source') { current.rate = 100; current.temperature = 100; }
+    else if (current.unit === 'solar-pv' || current.unit === 'nuclear-electricity' || current.unit === 'solar-thermal') current.rate = 0;
     else current.rate = 10;
     updateSourceStream(current);
   }
@@ -121,7 +294,16 @@
   function updateSourceStream(current) {
     if (current.unit === 'material-source') current.params.stream = materialStream(current.sourcePreset, current.rate);
     if (current.unit === 'electricity-source') current.params.stream = { kind: 'electricity', kWh: current.rate };
+    if (current.unit === 'grid-electricity') current.params.stream = { kind: 'electricity', kWh: current.rate };
+    if (current.unit === 'solar-pv' || current.unit === 'nuclear-electricity') {
+      current.rate = current.params.capacityKW * 24 * current.params.capacityFactor;
+      current.params.stream = { kind: 'electricity', kWh: current.rate };
+    }
     if (current.unit === 'heat-source') current.params.stream = { kind: 'heat', kWh: current.rate, T_C: current.temperature };
+    if (current.unit === 'solar-thermal') {
+      current.rate = current.params.capacityKW * current.params.sunHours;
+      current.params.stream = { kind: 'heat', kWh: current.rate, T_C: current.params.temperatureC };
+    }
     if (current.unit === 'consumable-source') current.params.stream = { kind: 'consumable', amount: current.rate, unit: 'kg/day', label: 'Sorbent makeup' };
   }
 
@@ -139,6 +321,37 @@
     Object.keys(counts).forEach(key => delete counts[key]);
     selectedNodeId = null;
     pendingPort = null;
+    solveAndRender();
+  }
+
+  function loadMethaneRecycle() {
+    const definition = SabatierCase.createSabatierCase({ recycleWater: true });
+    graph.nodes.length = 0;
+    graph.edges.length = 0;
+    Object.keys(setpoints).forEach(key => delete setpoints[key]);
+    Object.keys(counts).forEach(key => delete counts[key]);
+    for (const saved of definition.graph.nodes) {
+      counts[saved.unit] = (counts[saved.unit] || 0) + 1;
+      const kind = units[saved.unit].kind;
+      const stream = saved.params?.stream;
+      graph.nodes.push({
+        ...saved,
+        label: saved.id.split('-').map(word => word[0].toUpperCase() + word.slice(1)).join(' '),
+        position: positionFor(kind, graph.nodes.filter(current => units[current.unit].kind === kind).length),
+        ...(kind === 'converter' && catalog[saved.unit].presets ? { processPreset: 'custom' } : {}),
+        ...(kind === 'source' ? {
+          rate: stream?.kind === 'material' ? FlowsheetModel.streamMassKg(stream)
+            : stream?.kind === 'consumable' ? stream.amount : stream?.kWh,
+          ...(saved.id === 'air' ? { sourcePreset: 'air' } : saved.id === 'seawater' ? { sourcePreset: 'seawater' } : {}),
+          ...(stream?.kind === 'heat' ? { temperature: stream.T_C } : {}),
+        } : {}),
+      });
+    }
+    graph.edges.push(...definition.graph.edges.map(edge => ({ ...edge })));
+    Object.assign(setpoints, definition.operation.setpoints);
+    selectedNodeId = 'sabatier';
+    pendingPort = null;
+    autoArrange();
     solveAndRender();
   }
 
@@ -236,7 +449,7 @@
     if (!dragging || event.pointerId !== dragging.pointerId) return;
     const point = graphPoint(event);
     const current = node(dragging.nodeId);
-    const x = Math.max(10, Math.min(1170, point.x - dragging.dx));
+    const x = Math.max(10, point.x - dragging.dx);
     const y = Math.max(10, point.y - dragging.dy);
     dragging.moved ||= Math.abs(x - current.position.x) > 2 || Math.abs(y - current.position.y) > 2;
     current.position = { x, y };
@@ -256,7 +469,7 @@
     const svg = canvas.querySelector('svg');
     const bounds = svg.getBoundingClientRect();
     return {
-      x: (event.clientX - bounds.left) * 1400 / bounds.width,
+      x: (event.clientX - bounds.left) * svg.viewBox.baseVal.width / bounds.width,
       y: (event.clientY - bounds.top) * svg.viewBox.baseVal.height / bounds.height,
     };
   }
@@ -265,7 +478,7 @@
     const depths = new Map(graph.nodes.map(current => [current.id, units[current.unit].kind === 'source' ? 0 : units[current.unit].kind === 'sink' ? 2 : 1]));
     const outgoing = new Map(graph.nodes.map(current => [current.id, []]));
     const indegree = new Map(graph.nodes.map(current => [current.id, 0]));
-    for (const edge of graph.edges) {
+    for (const edge of graph.edges.filter(candidate => !candidate.recycle)) {
       outgoing.get(edge.from.node).push(edge.to.node);
       indegree.set(edge.to.node, indegree.get(edge.to.node) + 1);
     }
@@ -284,10 +497,16 @@
       if (!layers.has(depth)) layers.set(depth, []);
       layers.get(depth).push(current);
     }
-    const maxDepth = Math.max(0, ...layers.keys());
-    const xStep = maxDepth ? Math.min(300, 1080 / maxDepth) : 0;
+    const xStep = NODE_WIDTH + COLUMN_GAP;
+    const layerHeights = [...layers.values()].map(layer => layer.reduce(
+      (sum, current) => sum + nodeHeight(current), Math.max(0, layer.length - 1) * 40
+    ));
+    const tallestLayer = Math.max(0, ...layerHeights);
     for (const [depth, layer] of layers) {
-      let y = 40;
+      const layerHeight = layer.reduce(
+        (sum, current) => sum + nodeHeight(current), Math.max(0, layer.length - 1) * 40
+      );
+      let y = 40 + (tallestLayer - layerHeight) / 2;
       for (const current of layer) {
         current.position = { x: 40 + depth * xStep, y };
         y += nodeHeight(current) + 40;
@@ -295,6 +514,14 @@
     }
     persistAutosave();
     renderGraph();
+  }
+
+  function toggleCanvasFocus() {
+    canvasFocused = !canvasFocused;
+    document.body.classList[canvasFocused ? 'add' : 'remove']('canvas-focus');
+    const button = document.getElementById('focusCanvas');
+    button.textContent = canvasFocused ? 'Show panels' : 'Focus canvas';
+    button.setAttribute('aria-pressed', String(canvasFocused));
   }
 
   function handleCanvasClick(event) {
@@ -319,8 +546,9 @@
     solveError = '';
     if (from.direction !== 'out' || to.direction !== 'in') solveError = 'Connect an output port to an input port.';
     else if (fromDeclaration.kind !== toDeclaration.kind) solveError = `Cannot connect ${fromDeclaration.kind} to ${toDeclaration.kind}.`;
-    else if (edgeAt(from) >= 0 || edgeAt(to) >= 0) solveError = 'That port is already connected. Disconnect it first.';
-    else graph.edges.push({ from: { node: from.node, port: from.port }, to: { node: to.node, port: to.port } });
+    else if ((edgeAt(from) >= 0 && !['junction', 'splitter'].includes(units[node(from.node).unit].kind))
+      || (edgeAt(to) >= 0 && units[node(to.node).unit].kind !== 'mixer')) solveError = 'That port is already connected. Disconnect it first.';
+    else graph.edges.push({ from: { node: from.node, port: from.port }, to: { node: to.node, port: to.port }, ...(units[node(from.node).unit].kind === 'splitter' ? { weight: 1 } : {}) });
     pendingPort = null;
     solveAndRender();
   }
@@ -341,7 +569,7 @@
   function completeBoundaries() {
     const selection = selectedNodeId;
     const targets = graph.nodes
-      .filter(current => units[current.unit].kind === 'converter')
+      .filter(current => !['source', 'sink'].includes(units[current.unit].kind))
       .flatMap(current => Object.entries(units[current.unit].ports)
         .filter(([port, declaration]) => declaration.required
           && edgeAt({ node: current.id, port, direction: declaration.direction }) < 0
@@ -357,9 +585,24 @@
     const current = node(selectedNodeId);
     if (!current) return;
     if (event.target.name === 'requestedRate') setpoints[current.id] = Number(event.target.value);
+    if (event.target.name === 'processPreset') {
+      current.processPreset = event.target.value;
+      if (current.processPreset !== 'custom') Object.assign(current.params, catalog[current.unit].presets[current.processPreset].params);
+      if (units[current.unit].kind === 'source') updateSourceStream(current);
+    }
+    if (event.target.name === 'processParameter') {
+      current.processPreset = 'custom';
+      current.params[event.target.dataset.param] = Number(event.target.value);
+    }
+    if (event.target.name === 'sourceParameter') {
+      current.processPreset = 'custom';
+      current.params[event.target.dataset.param] = Number(event.target.value);
+      updateSourceStream(current);
+    }
     if (event.target.name === 'sourceRate') { current.rate = Number(event.target.value); updateSourceStream(current); }
     if (event.target.name === 'sourcePreset') { current.sourcePreset = event.target.value; updateSourceStream(current); }
     if (event.target.name === 'heatTemperature') { current.temperature = Number(event.target.value); updateSourceStream(current); }
+    if (event.target.name === 'branchWeight') graph.edges[Number(event.target.dataset.edge)].weight = Number(event.target.value);
     solveAndRender();
   }
 
@@ -391,7 +634,7 @@
   }
 
   function suggestedPreset(unit, port) {
-    return { 'dac.air': 'air', 'swro.feed': 'seawater', 'electrolyzer.water': 'water', 'sabatier.co2': 'co2', 'sabatier.hydrogen': 'hydrogen' }[`${unit}.${port}`] || 'water';
+    return { 'dac.air': 'air', 'swro.feed': 'seawater', 'med.feed': 'seawater', 'msf.feed': 'seawater', 'electrolyzer.water': 'water', 'sabatier.co2': 'co2', 'sabatier.hydrogen': 'hydrogen' }[`${unit}.${port}`] || 'water';
   }
 
   function solveAndRender() {
@@ -417,9 +660,13 @@
   }
 
   function edgeAt(endpoint) {
-    return graph.edges.findIndex(edge => endpoint.direction === 'out'
+    return edgeIndexesAt(endpoint)[0] ?? -1;
+  }
+
+  function edgeIndexesAt(endpoint) {
+    return graph.edges.map((edge, index) => ({ edge, index })).filter(({ edge }) => endpoint.direction === 'out'
       ? edge.from.node === endpoint.node && edge.from.port === endpoint.port
-      : edge.to.node === endpoint.node && edge.to.port === endpoint.port);
+      : edge.to.node === endpoint.node && edge.to.port === endpoint.port).map(({ index }) => index);
   }
 
   function node(id) { return graph.nodes.find(candidate => candidate.id === id); }
@@ -434,17 +681,26 @@
       return;
     }
     canvas.classList.remove('empty');
-    const height = Math.max(620, ...graph.nodes.map(current => current.position.y + nodeHeight(current) + 40));
-    const edges = graph.edges.map(edge => {
+    const hasRecycle = graph.edges.some(edge => edge.recycle);
+    const width = Math.max(1400, ...graph.nodes.map(current => current.position.x + NODE_WIDTH + 40));
+    const height = Math.max(620, ...graph.nodes.map(current => current.position.y + nodeHeight(current) + (hasRecycle ? 120 : 40)));
+    const recycleY = height - 45;
+    const edges = graph.edges.map((edge, edgeIndex) => {
       const start = portPoint(edge.from.node, edge.from.port, 'out');
       const end = portPoint(edge.to.node, edge.to.port, 'in');
-      const mid = (start.x + end.x) / 2;
+      const sibling = graph.edges.slice(0, edgeIndex).filter(candidate => candidate.from.node === edge.from.node && candidate.from.port === edge.from.port).length;
+      const mid = (start.x + end.x) / 2 + sibling * 12;
       const stream = result?.streams.find(candidate => candidate.from.node === edge.from.node && candidate.from.port === edge.from.port)?.stream;
       const kind = units[node(edge.from.node).unit].ports[edge.from.port].kind;
       const constrained = bottlenecksFor(edge.to.node).some(limit => limitingPort(node(edge.to.node), limit) === edge.to.port);
-      return `<path class="flow-edge ${kind}${constrained ? ' bottleneck' : ''}" d="M${start.x} ${start.y} C${mid} ${start.y},${mid} ${end.y},${end.x} ${end.y}"/><text class="edge-label${constrained ? ' bottleneck' : ''}" x="${mid}" y="${(start.y + end.y) / 2 - 7}" text-anchor="middle">${stream ? formatStream(stream) : ''}</text>`;
+      const path = edge.recycle
+        ? `M${start.x} ${start.y} C${start.x + 70} ${start.y},${start.x + 70} ${recycleY},${start.x} ${recycleY} L${end.x} ${recycleY} C${end.x - 70} ${recycleY},${end.x - 70} ${end.y},${end.x} ${end.y}`
+        : `M${start.x} ${start.y} C${mid} ${start.y},${mid} ${end.y},${end.x} ${end.y}`;
+      const labelX = edge.recycle ? (start.x + end.x) / 2 : mid;
+      const labelY = edge.recycle ? recycleY - 8 : (start.y + end.y) / 2 - 7;
+      return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${constrained ? ' bottleneck' : ''}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}" x="${labelX}" y="${labelY}" text-anchor="middle">${stream ? `${edge.recycle ? '↻ ' : ''}${formatStream(stream)}` : ''}</text>`;
     }).join('');
-    canvas.innerHTML = `<svg viewBox="0 0 1400 ${height}" aria-label="Editable factory flowsheet">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
+    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="min-width:${width}px" aria-label="Editable factory flowsheet">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
   }
 
   function renderNode(current) {
@@ -458,15 +714,19 @@
     const value = nodeResult?.activity !== undefined ? `${formatNumber(nodeResult.activity)} ${catalog[current.unit].activityUnit}` : nodeResult ? formatStream(nodeResult.supplied || nodeResult.received || nodeResult.available) : 'Not running';
     const portMarkup = (list, direction) => list.map(([port, declaration], index) => {
       const cy = y + 66 + index * 24;
-      const cx = direction === 'in' ? x : x + 220;
+      const cx = direction === 'in' ? x : x + NODE_WIDTH;
       const selected = pendingPort?.node === current.id && pendingPort.port === port;
       return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 13 : cx - 13}" y="${cy + 4}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port)}</text></g>`;
     }).join('');
-    return `<g class="flow-node${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}" data-node="${current.id}" tabindex="0">${bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : ''}<rect x="${x}" y="${y}" width="220" height="${height}" rx="10"/><text class="node-kind" x="${x + 16}" y="${y + 20}">${units[current.unit].kind}</text><text class="node-label" x="${x + 16}" y="${y + 42}">${current.label}</text><text class="node-value" x="${x + 16}" y="${y + height - 12}">${value}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
+    return `<g class="flow-node${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}" data-node="${current.id}" tabindex="0">${bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : ''}<rect x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="10"/><text class="node-kind" x="${x + 16}" y="${y + 20}">${units[current.unit].kind}</text><text class="node-label" x="${x + 16}" y="${y + 42}">${current.label}</text><text class="node-value" x="${x + 16}" y="${y + height - 12}">${value}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
   }
 
   function bottlenecksFor(nodeId) { return result?.nodes[nodeId]?.limitedBy || []; }
-  function limitingPort(current, limit) { return current.unit === 'dac' && limit === 'feed' ? 'air' : limit; }
+  function limitingPort(current, limit) {
+    if (current.unit === 'dac' && limit === 'feed') return 'air';
+    if (['battery', 'thermal-storage'].includes(current.unit) && ['electricity', 'heat'].includes(limit)) return 'in';
+    return limit;
+  }
 
   function nodeHeight(current) {
     const ports = Object.values(units[current.unit].ports);
@@ -476,7 +736,7 @@
   function portPoint(nodeId, port, direction) {
     const current = node(nodeId);
     const ports = Object.entries(units[current.unit].ports).filter(([, declaration]) => declaration.direction === direction);
-    return { x: current.position.x + (direction === 'out' ? 220 : 0), y: current.position.y + 66 + ports.findIndex(([name]) => name === port) * 24 };
+    return { x: current.position.x + (direction === 'out' ? NODE_WIDTH : 0), y: current.position.y + 66 + ports.findIndex(([name]) => name === port) * 24 };
   }
 
   function renderStatus() {
@@ -504,6 +764,7 @@
       document.getElementById('inspectorMetrics').innerHTML = '';
       document.getElementById('streamList').innerHTML = '<p class="status-meta">No ports yet.</p>';
       document.getElementById('recipeList').innerHTML = '';
+      document.getElementById('exchangeList').innerHTML = '';
       document.getElementById('balanceList').innerHTML = '';
       return;
     }
@@ -511,38 +772,66 @@
     document.getElementById('inspectorKind').textContent = `${units[current.unit].kind} · ${current.unit}`;
     document.getElementById('nodeControls').innerHTML = controlsFor(current);
     const nodeResult = result?.nodes[current.id];
-    document.getElementById('inspectorMetrics').innerHTML = nodeResult?.activity !== undefined ? metricRows([
+    const metrics = nodeResult?.activity !== undefined ? [
       ['Achieved', `${formatNumber(nodeResult.activity)} ${catalog[current.unit].activityUnit}`],
       ['Requested', `${formatNumber(setpoints[current.id])} ${catalog[current.unit].activityUnit}`],
       ['Limited by', nodeResult.limitedBy.join(', ') || 'Nothing'],
-    ]) : '';
+    ] : [];
+    document.getElementById('inspectorMetrics').innerHTML = metricRows([...metrics, ...economicsRows(current)]);
     document.getElementById('streamList').innerHTML = Object.entries(units[current.unit].ports).map(([port, declaration]) => renderInspectorPort(current, port, declaration)).join('');
     document.getElementById('recipeList').innerHTML = nodeResult?.requestedInputs ? `${recipeGroup('INFLOW', nodeResult.requestedInputs)}${recipeGroup('OUTFLOW', nodeResult.outlets)}` : '<p class="status-meta">Complete the graph to calculate flows.</p>';
+    const exchanges = result?.streams.filter(stream => stream.recycle) || [];
+    document.getElementById('exchangeList').innerHTML = exchanges.length
+      ? exchanges.map(stream => `<div class="recipe-flow"><strong>${stream.label || 'Recovered stream'}</strong><span class="species">${node(stream.from.node).label} → ${node(stream.to.node).label} · ${formatStream(stream.stream)}</span></div>`).join('')
+      : '<p class="status-meta">No circular exchanges.</p>';
     document.getElementById('balanceList').innerHTML = result ? metricRows([
       ...Object.entries(result.balances.elements).map(([element, value]) => [element, `${formatNumber(value)} mol`]),
       ['Electricity', `${formatNumber(result.balances.electricityKWh)} kWh`], ['Heat', `${formatNumber(result.balances.heatKWh)} kWh`],
+      ['Recycle solve', result.convergence.converged ? `${result.convergence.iterations} iterations` : 'Did not converge'],
     ]) : '';
   }
 
   function controlsFor(current) {
     const kind = units[current.unit].kind;
-    if (kind === 'converter') return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${catalog[current.unit].activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset><button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
-    if (kind === 'source') {
-      const max = current.unit === 'material-source' ? 100000 : current.unit === 'electricity-source' ? 10000 : current.unit === 'heat-source' ? 1000 : 100;
-      const unit = current.unit === 'material-source' || current.unit === 'consumable-source' ? 'kg/day' : 'kWh/day';
-      const preset = current.unit === 'material-source' ? `<label>Material</label><select name="sourcePreset">${Object.entries(materialPresets).map(([id, item]) => `<option value="${id}"${id === current.sourcePreset ? ' selected' : ''}>${item.label}</option>`).join('')}</select>` : '';
-      const temperature = current.unit === 'heat-source' ? `<label>Temperature <output>${current.temperature} °C</output></label><input name="heatTemperature" type="range" min="20" max="200" step="5" value="${current.temperature}">` : '';
-      return `<fieldset><legend>Source settings</legend>${preset}<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100}" value="${current.rate}">${temperature}</fieldset><button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
+    if (kind === 'converter') {
+      const definition = catalog[current.unit];
+      const preset = definition.presets ? `<label>Process type</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
+      const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="processParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
+      const references = (definition.references || []).map(reference => `<a href="${reference.url}" target="_blank" rel="noreferrer">${reference.label}</a>`).join(' · ');
+      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${preset || parameters ? `<fieldset><legend>Process assumptions</legend>${preset}${parameters}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset>` : ''}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
     }
-    return '<button class="delete-node" id="deleteNode" type="button">Delete sink</button>';
+    if (kind === 'source') {
+      const definition = catalog[current.unit];
+      const max = definition.manualRateMax || (current.unit === 'material-source' ? 100000 : current.unit === 'electricity-source' ? 10000 : current.unit === 'heat-source' ? 1000 : 100);
+      const unit = definition.sourceUnit || (current.unit === 'material-source' || current.unit === 'consumable-source' ? 'kg/day' : 'kWh/day');
+      const preset = current.unit === 'material-source' ? `<label>Material</label><select name="sourcePreset">${Object.entries(materialPresets).map(([id, item]) => `<option value="${id}"${id === current.sourcePreset ? ' selected' : ''}>${item.label}</option>`).join('')}</select>` : '';
+      const temperature = current.unit === 'heat-source' ? `<label>Temperature <output>${current.temperature} °C</output></label><input name="heatTemperature" type="range" min="20" max="1000" step="5" value="${current.temperature}">` : '';
+      const processPreset = definition.presets ? `<label>Technology</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
+      const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="sourceParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
+      const references = (definition.references || []).map(reference => `<a href="${reference.url}" target="_blank" rel="noreferrer">${reference.label}</a>`).join(' · ');
+      const rate = definition.controls && !definition.manualRateMax
+        ? `<p class="status-meta">Available: ${formatNumber(current.rate)} ${unit}</p>`
+        : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100}" value="${current.rate}">`;
+      return `<fieldset><legend>Source settings</legend>${preset}${processPreset}${rate}${temperature}${parameters}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset><button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
+    }
+    return `<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }
 
   function renderInspectorPort(current, port, declaration) {
-    const edgeIndex = edgeAt({ node: current.id, port, direction: declaration.direction });
-    const edge = graph.edges[edgeIndex];
-    const peerId = edge && (declaration.direction === 'in' ? edge.from.node : edge.to.node);
-    const boundaryAllowed = edgeIndex < 0 && (declaration.direction === 'in' || catalog[`${declaration.kind}-sink`]);
-    return `<div class="port-row"><div><span>${declaration.direction === 'in' ? 'IN' : 'OUT'} · ${declaration.kind}</span><strong>${portName(port)}</strong><small>${peerId ? `Connected to ${node(peerId).label}` : 'Not connected'}</small></div>${edgeIndex >= 0 ? `<button type="button" data-disconnect="${edgeIndex}">Disconnect</button>` : boundaryAllowed ? `<button type="button" data-boundary-port="${port}" data-direction="${declaration.direction}">${declaration.direction === 'in' ? 'Add source' : 'Send to sink'}</button>` : ''}</div>`;
+    const edgeIndexes = edgeIndexesAt({ node: current.id, port, direction: declaration.direction });
+    const multi = declaration.direction === 'in' ? units[current.unit].kind === 'mixer' : ['junction', 'splitter'].includes(units[current.unit].kind);
+    const boundaryAllowed = declaration.direction === 'in'
+      ? (edgeIndexes.length === 0 || multi)
+      : Boolean(catalog[`${declaration.kind}-sink`]) && (edgeIndexes.length === 0 || multi);
+    const connections = edgeIndexes.map(index => {
+      const edge = graph.edges[index];
+      const peerId = declaration.direction === 'in' ? edge.from.node : edge.to.node;
+      const weight = units[current.unit].kind === 'splitter' && declaration.direction === 'out'
+        ? `<label class="branch-weight">Share <input name="branchWeight" data-edge="${index}" type="range" min="0.1" max="10" step="0.1" value="${edge.weight ?? 1}"></label>`
+        : '';
+      return `<div class="port-connection"><small>Connected to ${node(peerId).label}</small>${weight}<button type="button" data-disconnect="${index}">Disconnect</button></div>`;
+    }).join('') || '<small>Not connected</small>';
+    return `<div class="port-row"><div><span>${declaration.direction === 'in' ? 'IN' : 'OUT'} · ${declaration.kind}</span><strong>${portName(port)}</strong>${connections}</div>${boundaryAllowed ? `<button type="button" data-boundary-port="${port}" data-direction="${declaration.direction}">${declaration.direction === 'in' ? 'Add source' : 'Add sink branch'}</button>` : ''}</div>`;
   }
 
   function recipeGroup(title, streams) {
@@ -557,9 +846,34 @@
   }
 
   function formatNumber(value) { return Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+  function economicsRows(current) {
+    const params = current.params || {};
+    if (current.unit === 'grid-electricity') return [
+      ['Electricity price', `$${formatNumber(params.pricePerMWh)}/MWh`],
+      ['Annual energy bill', formatMoney(current.rate * 365 / 1000 * params.pricePerMWh)],
+      ['Annual operational CO₂', `${formatNumber(current.rate * 365 / 1000 * params.kgCO2PerMWh)} kg`],
+    ];
+    if (['battery', 'thermal-storage'].includes(current.unit)) return [
+      ['Installed storage CAPEX', formatMoney(current.capacity * params.capexPerKWh)],
+      ['Conversion loss', `${formatNumber((1 - params.efficiency) * 100)}%`],
+    ];
+    if (!Number.isFinite(params.capacityKW) || !Number.isFinite(params.capexPerKW)) return [];
+    const annualEnergy = current.rate * 365;
+    const rate = Number(params.discountRate ?? 0.07);
+    const years = Number(params.lifeYears ?? 30);
+    const crf = rate === 0 ? 1 / years : rate * (1 + rate) ** years / ((1 + rate) ** years - 1);
+    const capex = params.capacityKW * params.capexPerKW;
+    const annualCost = capex * crf + params.capacityKW * Number(params.fixedOMPerKWYear || 0);
+    const levelized = annualEnergy ? annualCost / (annualEnergy / 1000) + Number(params.variableCostPerMWh || 0) : 0;
+    return [
+      ['Installed CAPEX', formatMoney(capex)],
+      [current.unit === 'solar-thermal' ? 'Simple LCOH' : 'Simple LCOE', `$${formatNumber(levelized)}/MWh`],
+    ];
+  }
+  function formatMoney(value) { return `$${formatNumber(value)}`; }
   function metricRows(rows) { return rows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join(''); }
 
-  window.__FLOWSHEET_APP__ = { graph, setpoints, addNode, choosePort, clearFactory, autoArrange, completeBoundaries, saveNamed, loadNamed, solve: solveAndRender, get result() { return result; } };
+  window.__FLOWSHEET_APP__ = { graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus, completeBoundaries, loadMethaneRecycle, saveNamed, loadNamed, solve: solveAndRender, get result() { return result; } };
   refreshSaveOptions();
   if (restoreSnapshot(readJson(AUTOSAVE_KEY))) solveAndRender();
   else render();

@@ -12,6 +12,10 @@ const {
   validateStream,
 } = model;
 
+function reached(activity, requested) {
+  return requested - activity <= Math.max(1, requested) * 1e-12;
+}
+
 function swro({ inlets, requestedActivity, capacity, params = {} }) {
   const feed = validateStream(inlets.feed, 'material');
   const electricity = validateStream(inlets.electricity, 'electricity');
@@ -62,7 +66,7 @@ function swro({ inlets, requestedActivity, capacity, params = {} }) {
     ])
   );
   const limitingValue = Math.min(limits.capacity, limits.feed, limits.electricity);
-  const limitedBy = activity >= requested
+  const limitedBy = reached(activity, requested)
     ? []
     : Object.entries(limits)
       .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
@@ -81,6 +85,64 @@ function swro({ inlets, requestedActivity, capacity, params = {} }) {
     outlets: {
       product: { ...cloneStream(consumedFeed), mol: productMol },
       brine: { ...cloneStream(consumedFeed), mol: brineMol },
+    },
+    limitedBy,
+  };
+}
+
+function thermalDesalination({ inlets, requestedActivity, capacity, params = {} }) {
+  const feed = validateStream(inlets.feed, 'material');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const heat = validateStream(inlets.heat, 'heat');
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const recovery = Number(params.recovery ?? 0.35);
+  const electricitySEC = nonnegative(Number(params.electricityKWhPerM3 ?? 2), 'electricityKWhPerM3');
+  const heatSEC = nonnegative(Number(params.heatKWhPerM3 ?? 60), 'heatKWhPerM3');
+  const density = nonnegative(Number(params.feedDensityKgM3 ?? 1025), 'feedDensityKgM3');
+  const minHeatT_C = Number(params.minHeatT_C ?? 70);
+  if (recovery <= 0 || recovery >= 1) throw new Error('recovery must be between 0 and 1');
+  if (!Number.isFinite(minHeatT_C)) throw new Error('minHeatT_C must be finite');
+
+  const limits = {
+    capacity: installed,
+    feed: streamMassKg(feed) / density * recovery,
+    electricity: electricitySEC === 0 ? Infinity : electricity.kWh / electricitySEC,
+    heat: heatSEC === 0 ? Infinity : heat.kWh / heatSEC,
+    heatTemperature: heatSEC === 0 || heat.T_C >= minHeatT_C ? Infinity : 0,
+  };
+  const planned = Math.min(requested, installed);
+  const activity = Math.min(requested, ...Object.values(limits));
+  const separationParams = {
+    recovery,
+    secKWhPerM3: electricitySEC,
+    feedDensityKgM3: density,
+    productDensityKgM3: params.productDensityKgM3 ?? 1000,
+    ionRejection: params.ionRejection ?? 0.995,
+  };
+  const actual = swro({ inlets: { feed, electricity }, requestedActivity: activity, capacity: installed, params: separationParams });
+  const requestedFlow = swro({ inlets: { feed, electricity }, requestedActivity: requested, capacity: installed, params: separationParams });
+  const limitingValue = Math.min(...Object.values(limits));
+  const limitedBy = reached(activity, requested) ? [] : Object.entries(limits)
+    .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+    .map(([name]) => name);
+
+  return {
+    ...actual,
+    activity,
+    requestedInputs: {
+      feed: requestedFlow.requestedInputs.feed,
+      electricity: { kind: 'electricity', kWh: planned * electricitySEC },
+      heat: { kind: 'heat', kWh: planned * heatSEC, T_C: heat.T_C },
+    },
+    consumed: {
+      ...actual.consumed,
+      electricity: { kind: 'electricity', kWh: activity * electricitySEC },
+      heat: { kind: 'heat', kWh: activity * heatSEC, T_C: heat.T_C },
+    },
+    outlets: {
+      ...actual.outlets,
+      wasteHeat: { kind: 'heat', kWh: activity * heatSEC, T_C: Number(params.wasteHeatT_C ?? 40) },
     },
     limitedBy,
   };
@@ -113,7 +175,7 @@ function electrolyzer({ inlets, requestedActivity, capacity, params = {} }) {
     H2O: water.mol.H2O - waterMol,
   };
   const limitingValue = Math.min(limits.capacity, limits.water, limits.electricity);
-  const limitedBy = activity >= requested
+  const limitedBy = reached(activity, requested)
     ? []
     : Object.entries(limits)
       .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
@@ -187,7 +249,7 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
     CO2: Math.max(0, acceptedAir.mol.CO2 - capturedMol),
   };
   const limitingValue = Math.min(...Object.values(limits));
-  const limitedBy = activity >= requested
+  const limitedBy = reached(activity, requested)
     ? []
     : Object.entries(limits)
       .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
@@ -267,7 +329,7 @@ function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
   const outputT_C = co2.T_C;
   const outputP_bar = co2.P_bar;
   const limitingValue = Math.min(...Object.values(limits));
-  const limitedBy = activity >= requested
+  const limitedBy = reached(activity, requested)
     ? []
     : installed <= Math.min(limits.co2, limits.hydrogen, limits.electricity)
       ? ['capacity']
@@ -308,6 +370,35 @@ function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
   };
 }
 
+function energyStorage(kind) {
+  return ({ inlets, requestedActivity, capacity, params = {} }) => {
+    const input = validateStream(inlets.in, kind);
+    const requested = nonnegative(requestedActivity, 'requestedActivity');
+    const installed = nonnegative(capacity, 'capacity');
+    const efficiency = Number(params.efficiency ?? 0.95);
+    if (!Number.isFinite(efficiency) || efficiency <= 0 || efficiency > 1) {
+      throw new Error('efficiency must be greater than 0 and at most 1');
+    }
+    const planned = Math.min(requested, installed);
+    const activity = Math.min(planned, input.kWh * efficiency);
+    const inputKWh = activity / efficiency;
+    const limitedBy = reached(activity, requested) ? [] : [
+      ...(installed <= input.kWh * efficiency ? ['capacity'] : []),
+      ...(input.kWh * efficiency <= installed ? [kind] : []),
+    ];
+    const stream = kWh => kind === 'heat'
+      ? { kind, kWh, T_C: Math.max(20, input.T_C - Number(params.temperatureLossC ?? 0)) }
+      : { kind, kWh };
+    return {
+      activity,
+      requestedInputs: { in: kind === 'heat' ? { kind, kWh: planned / efficiency, T_C: input.T_C } : stream(planned / efficiency) },
+      consumed: { in: { ...cloneStream(input), kWh: inputKWh } },
+      outlets: { out: stream(activity) },
+      limitedBy,
+    };
+  };
+}
+
 const UNITS = Object.freeze({
   'material-source': {
     kind: 'source',
@@ -317,7 +408,23 @@ const UNITS = Object.freeze({
     kind: 'source',
     ports: { out: { direction: 'out', kind: 'electricity', required: true } },
   },
+  'solar-pv': {
+    kind: 'source',
+    ports: { out: { direction: 'out', kind: 'electricity', required: true } },
+  },
+  'grid-electricity': {
+    kind: 'source',
+    ports: { out: { direction: 'out', kind: 'electricity', required: true } },
+  },
+  'nuclear-electricity': {
+    kind: 'source',
+    ports: { out: { direction: 'out', kind: 'electricity', required: true } },
+  },
   'heat-source': {
+    kind: 'source',
+    ports: { out: { direction: 'out', kind: 'heat', required: true } },
+  },
+  'solar-thermal': {
     kind: 'source',
     ports: { out: { direction: 'out', kind: 'heat', required: true } },
   },
@@ -332,6 +439,20 @@ const UNITS = Object.freeze({
       out: { direction: 'out', kind: 'electricity', required: true },
     },
   },
+  'material-splitter': {
+    kind: 'splitter',
+    ports: {
+      in: { direction: 'in', kind: 'material', required: true },
+      out: { direction: 'out', kind: 'material', required: true },
+    },
+  },
+  'material-mixer': {
+    kind: 'mixer',
+    ports: {
+      in: { direction: 'in', kind: 'material', required: true },
+      out: { direction: 'out', kind: 'material', required: true },
+    },
+  },
   'material-sink': {
     kind: 'sink',
     ports: { in: { direction: 'in', kind: 'material', required: true } },
@@ -339,6 +460,26 @@ const UNITS = Object.freeze({
   'heat-sink': {
     kind: 'sink',
     ports: { in: { direction: 'in', kind: 'heat', required: true } },
+  },
+  'electricity-sink': {
+    kind: 'sink',
+    ports: { in: { direction: 'in', kind: 'electricity', required: true } },
+  },
+  battery: {
+    kind: 'converter',
+    ports: {
+      in: { direction: 'in', kind: 'electricity', required: true },
+      out: { direction: 'out', kind: 'electricity', required: true },
+    },
+    evaluate: energyStorage('electricity'),
+  },
+  'thermal-storage': {
+    kind: 'converter',
+    ports: {
+      in: { direction: 'in', kind: 'heat', required: true },
+      out: { direction: 'out', kind: 'heat', required: true },
+    },
+    evaluate: energyStorage('heat'),
   },
   swro: {
     kind: 'converter',
@@ -349,6 +490,30 @@ const UNITS = Object.freeze({
       brine: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: swro,
+  },
+  med: {
+    kind: 'converter',
+    ports: {
+      feed: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      heat: { direction: 'in', kind: 'heat', required: true },
+      product: { direction: 'out', kind: 'material', required: true },
+      brine: { direction: 'out', kind: 'material', required: true },
+      wasteHeat: { direction: 'out', kind: 'heat', required: true },
+    },
+    evaluate: thermalDesalination,
+  },
+  msf: {
+    kind: 'converter',
+    ports: {
+      feed: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      heat: { direction: 'in', kind: 'heat', required: true },
+      product: { direction: 'out', kind: 'material', required: true },
+      brine: { direction: 'out', kind: 'material', required: true },
+      wasteHeat: { direction: 'out', kind: 'heat', required: true },
+    },
+    evaluate: thermalDesalination,
   },
   electrolyzer: {
     kind: 'converter',

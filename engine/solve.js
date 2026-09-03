@@ -11,6 +11,7 @@ const {
   cloneStream,
   elementAmounts,
   nonnegative,
+  scaleStream,
   validateStream,
 } = model;
 const { UNITS } = units;
@@ -19,9 +20,23 @@ function solveOperation(caseDefinition) {
   const { nodes, edges } = caseDefinition.graph;
   validateGraph(nodes, edges);
   const buses = nodes.filter(node => node.unit === 'electrical-bus');
-  const plan = buses.length ? evaluateGraph(caseDefinition) : null;
-  const allocations = plan ? allocateElectricity(caseDefinition, plan) : null;
-  const solved = evaluateGraph(caseDefinition, allocations);
+  const recycleEdges = edges.filter(edge => edge.recycle);
+  let recycleStreams = new Map(recycleEdges.map(edge => [edge, cloneStream(edge.initialStream)]));
+  let solved;
+  let recycleResidual = 0;
+  let converged = false;
+  let iterations = 0;
+  for (; iterations < 100; iterations += 1) {
+    const plan = buses.length ? evaluateGraph(caseDefinition, null, recycleStreams) : null;
+    const allocations = plan ? allocateElectricity(caseDefinition, plan) : null;
+    solved = evaluateGraph(caseDefinition, allocations, recycleStreams);
+    recycleResidual = Math.max(0, ...recycleEdges.map(edge => streamResidual(
+      recycleStreams.get(edge), solved.edgeStreams.get(edge)
+    )));
+    if (recycleResidual < 1e-12) { converged = true; break; }
+    recycleStreams = new Map(recycleEdges.map(edge => [edge, cloneStream(solved.edgeStreams.get(edge))]));
+  }
+  iterations = Math.min(iterations + 1, 100);
 
   for (const bus of buses) {
     const incoming = edges.find(edge => edge.to.node === bus.id);
@@ -45,6 +60,7 @@ function solveOperation(caseDefinition) {
   for (const limit of caseDefinition.operation?.boundaryLimitedBy || []) {
     warnings.push(`plant limited by ${limit}`);
   }
+  if (!converged) warnings.push('recycle did not converge');
   return {
     streams,
     nodes: solved.nodeResults,
@@ -52,16 +68,16 @@ function solveOperation(caseDefinition) {
     constraints: caseDefinition.constraints || [],
     warnings,
     convergence: {
-      converged: true,
-      iterations: buses.length ? 2 : 1,
-      largestResidual: balances.maxAbsResidual,
+      converged,
+      iterations: recycleEdges.length ? iterations : (buses.length ? 2 : 1),
+      largestResidual: Math.max(balances.maxAbsResidual, recycleResidual),
     },
   };
 }
 
-function evaluateGraph(caseDefinition, allocations) {
+function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map()) {
   const { nodes, edges } = caseDefinition.graph;
-  const edgeStreams = new Map();
+  const edgeStreams = new Map([...recycleStreams].map(([edge, stream]) => [edge, cloneStream(stream)]));
   const nodeResults = {};
   for (const node of topologicalOrder(nodes, edges)) {
     const unit = UNITS[node.unit];
@@ -79,6 +95,21 @@ function evaluateGraph(caseDefinition, allocations) {
       for (const edge of outgoing) {
         edgeStreams.set(edge, allocations?.get(edge) || cloneStream(available));
       }
+      continue;
+    }
+    if (unit.kind === 'splitter') {
+      const available = cloneStream(edgeStreams.get(incoming[0]));
+      const weights = outgoing.map(edge => nonnegative(Number(edge.weight ?? 1), 'split weight'));
+      const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+      if (totalWeight === 0) throw new Error(`${node.id} split weights cannot all be zero`);
+      nodeResults[node.id] = { available };
+      outgoing.forEach((edge, index) => edgeStreams.set(edge, scaleStream(available, weights[index] / totalWeight)));
+      continue;
+    }
+    if (unit.kind === 'mixer') {
+      const available = mixMaterial(incoming.map(edge => edgeStreams.get(edge)));
+      nodeResults[node.id] = { available };
+      edgeStreams.set(outgoing[0], available);
       continue;
     }
     const inlets = Object.fromEntries(
@@ -151,13 +182,17 @@ function validateGraph(nodes, edges) {
     if (!from || from.direction !== 'out') throw new Error(`Invalid output port: ${edge.from.node}.${edge.from.port}`);
     if (!to || to.direction !== 'in') throw new Error(`Invalid input port: ${edge.to.node}.${edge.to.port}`);
     if (from.kind !== to.kind) throw new Error(`Incompatible stream kinds on ${edge.from.node} -> ${edge.to.node}`);
+    if (edge.recycle) {
+      if (from.kind !== 'material') throw new Error('Only material recycle edges are supported');
+      validateStream(edge.initialStream, 'material');
+    }
 
     const outputEndpoint = `out:${edge.from.node}:${edge.from.port}`;
     const inputEndpoint = `in:${edge.to.node}:${edge.to.port}`;
-    if (connections.has(inputEndpoint)) {
+    if (connections.has(inputEndpoint) && UNITS[toNode.unit].kind !== 'mixer') {
       throw new Error(`Port has multiple connections: ${inputEndpoint.split(':').slice(1).join('.')}`);
     }
-    if (connections.has(outputEndpoint) && UNITS[fromNode.unit].kind !== 'junction') {
+    if (connections.has(outputEndpoint) && !['junction', 'splitter'].includes(UNITS[fromNode.unit].kind)) {
       throw new Error(`Port has multiple connections: ${outputEndpoint.split(':').slice(1).join('.')}`);
     }
     connections.set(outputEndpoint, true);
@@ -178,7 +213,7 @@ function validateGraph(nodes, edges) {
 function topologicalOrder(nodes, edges) {
   const indegree = new Map(nodes.map(node => [node.id, 0]));
   const outgoing = new Map(nodes.map(node => [node.id, []]));
-  for (const edge of edges) {
+  for (const edge of edges.filter(candidate => !candidate.recycle)) {
     indegree.set(edge.to.node, indegree.get(edge.to.node) + 1);
     outgoing.get(edge.from.node).push(edge.to.node);
   }
@@ -193,8 +228,22 @@ function topologicalOrder(nodes, edges) {
       if (indegree.get(target) === 0) queue.push(nodes.find(candidate => candidate.id === target));
     }
   }
-  if (sorted.length !== nodes.length) throw new Error('Recycle edges are not supported yet');
+  if (sorted.length !== nodes.length) throw new Error('Cycles require a marked recycle edge');
   return sorted;
+}
+
+function streamResidual(previous, current) {
+  if (current.kind === 'material') {
+    return Math.max(0, ...[...new Set([...Object.keys(previous.mol), ...Object.keys(current.mol)])]
+      .map(substance => {
+        const before = previous.mol[substance] || 0;
+        const after = current.mol[substance] || 0;
+        return Math.abs(after - before) / Math.max(1, Math.abs(after));
+      }));
+  }
+  const before = current.kind === 'consumable' ? previous.amount : previous.kWh;
+  const after = current.kind === 'consumable' ? current.amount : current.kWh;
+  return Math.abs(after - before) / Math.max(1, Math.abs(after));
 }
 
 function calculateBalances(nodes, edges, edgeStreams, nodeResults) {
@@ -228,6 +277,12 @@ function calculateBalances(nodes, edges, edgeStreams, nodeResults) {
       if (stream.kind === 'electricity') electricityConsumed += stream.kWh;
       if (stream.kind === 'heat') heatConsumed += stream.kWh;
     }
+    for (const stream of Object.values(result.outlets || {})) {
+      if (stream.kind === 'electricity') electricityConsumed -= stream.kWh;
+      if (stream.kind === 'heat') heatConsumed -= stream.kWh;
+    }
+    if (result.received?.kind === 'electricity') electricityConsumed += result.received.kWh;
+    if (result.received?.kind === 'heat') heatConsumed += result.received.kWh;
   }
 
   const elements = {};
@@ -249,6 +304,21 @@ function calculateBalances(nodes, edges, edgeStreams, nodeResults) {
 
 function add(target, values) {
   for (const [key, value] of Object.entries(values)) target[key] = (target[key] || 0) + value;
+}
+
+function mixMaterial(streams) {
+  const validated = streams.map(stream => validateStream(stream, 'material'));
+  const phase = validated[0].phase;
+  if (validated.some(stream => stream.phase !== phase)) throw new Error('Mixer inputs must have the same phase');
+  const amount = stream => Object.values(stream.mol).reduce((sum, mol) => sum + mol, 0);
+  const totalMol = validated.reduce((sum, stream) => sum + amount(stream), 0);
+  const mol = {};
+  for (const stream of validated) add(mol, stream.mol);
+  return {
+    kind: 'material', mol, phase,
+    T_C: totalMol ? validated.reduce((sum, stream) => sum + stream.T_C * amount(stream), 0) / totalMol : validated[0].T_C,
+    P_bar: Math.min(...validated.map(stream => stream.P_bar)),
+  };
 }
 
 return { solveOperation, validateGraph };

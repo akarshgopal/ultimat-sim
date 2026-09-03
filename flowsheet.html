@@ -29,27 +29,9 @@
       </div>
 
       <div class="building-palette" id="buildingPalette">
-        <button type="button" class="building-card" data-unit="swro">
-          <span class="building-glyph water">RO</span><span><strong>SWRO</strong><small>Seawater → fresh water</small></span><b>Add</b>
-        </button>
-        <button type="button" class="building-card" data-unit="electrolyzer">
-          <span class="building-glyph hydrogen">H₂</span><span><strong>Electrolyzer</strong><small>Water + power → H₂</small></span><b>Add</b>
-        </button>
-        <button type="button" class="building-card" data-unit="dac">
-          <span class="building-glyph carbon">CO₂</span><span><strong>DAC</strong><small>Gas + power + heat + consumables</small></span><b>Add</b>
-        </button>
-        <button type="button" class="building-card" data-unit="sabatier">
-          <span class="building-glyph methane">CH₄</span><span><strong>Sabatier</strong><small>CO₂ + H₂ → methane</small></span><b>Add</b>
-        </button>
       </div>
       <h3 class="palette-heading">Sources and destinations</h3>
       <div class="building-palette" id="utilityPalette">
-        <button type="button" class="building-card" data-unit="material-source"><span class="building-glyph water">M</span><span><strong>Material source</strong><small>Air, water, CO₂, H₂…</small></span><b>Add</b></button>
-        <button type="button" class="building-card" data-unit="electricity-source"><span class="building-glyph">⚡</span><span><strong>Electricity source</strong><small>Set available kWh/day</small></span><b>Add</b></button>
-        <button type="button" class="building-card" data-unit="heat-source"><span class="building-glyph carbon">H</span><span><strong>Heat source</strong><small>Set energy and temperature</small></span><b>Add</b></button>
-        <button type="button" class="building-card" data-unit="consumable-source"><span class="building-glyph methane">C</span><span><strong>Consumables</strong><small>Sorbent or reagent makeup</small></span><b>Add</b></button>
-        <button type="button" class="building-card" data-unit="material-sink"><span class="building-glyph">↓</span><span><strong>Material sink</strong><small>Capture, store, sell, or discard</small></span><b>Add</b></button>
-        <button type="button" class="building-card" data-unit="heat-sink"><span class="building-glyph carbon">↓H</span><span><strong>Heat sink</strong><small>Reject or recover process heat</small></span><b>Add</b></button>
       </div>
       <button type="button" class="clear-factory" id="clearFactory">Clear canvas</button>
 
@@ -64,16 +46,21 @@
         <div>
           <span class="eyebrow">Factory floor</span>
           <h2 id="diagramTitle">Blank factory</h2>
+          <p id="flowSummary">0 blocks · 0 connections</p>
         </div>
         <div class="stage-actions">
-          <p id="flowSummary">0 blocks · 0 connections</p>
-          <div class="snapshot-controls">
-            <select id="factorySaves" aria-label="Saved factories"><option value="">Autosave</option></select>
-            <button type="button" id="saveFactory">Save as…</button>
-            <button type="button" id="deleteFactorySave">Delete save</button>
-          </div>
+          <button type="button" class="primary-action" id="loadMethaneRecycle">Load methane + water recycle</button>
           <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
-          <button type="button" id="autoArrange">Auto arrange</button>
+          <button type="button" id="autoArrange">Arrange</button>
+          <button type="button" id="focusCanvas" aria-pressed="false">Focus canvas</button>
+          <details class="save-menu">
+            <summary>Saved factories</summary>
+            <div class="snapshot-controls">
+              <select id="factorySaves" aria-label="Saved factories"><option value="">Autosave</option></select>
+              <button type="button" id="saveFactory">Save as…</button>
+              <button type="button" id="deleteFactorySave">Delete save</button>
+            </div>
+          </details>
         </div>
       </div>
       <div class="flowsheet-canvas empty" id="flowsheetCanvas"><p class="empty-canvas">Add a process block or source to begin.</p></div>
@@ -100,13 +87,17 @@
       </section>
 
       <section class="inspector-section">
+        <h3>Circular exchanges</h3>
+        <div id="exchangeList" class="recipe-list"></div>
+      </section>
+
+      <section class="inspector-section">
         <h3>Balance residuals</h3>
         <dl class="balance-list" id="balanceList"></dl>
       </section>
     </aside>
   </main>
 
-  <script src="js/format-numbers.js"></script>
   <script src="engine/model.js"></script>
   <script src="engine/units.js"></script>
   <script src="engine/solve.js"></script>

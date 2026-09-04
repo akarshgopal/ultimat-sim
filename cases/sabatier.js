@@ -125,6 +125,7 @@ function createSabatierCase(overrides = {}) {
   }
 
   return {
+    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     constraints: [
       { id: 'electricity', label: 'Electricity', node: 'electricity', side: 'source', capacity: electricityKWh, unit: 'kWh/day', detail: `${solarElectricityKWh.toFixed(1)} solar + ${gridElectricityKWh.toFixed(1)} grid` },
       { id: 'heat', label: 'DAC heat', node: 'heat', side: 'source', capacity: heatKWh, unit: 'kWh/day' },
@@ -135,47 +136,52 @@ function createSabatierCase(overrides = {}) {
     ],
     graph: {
       nodes: [
-        { id: 'air', unit: 'material-source', params: { stream: air } },
-        { id: 'seawater', unit: 'material-source', params: { stream: seawater } },
+        { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
+        { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { unitCost: 0.001 } },
         {
           id: 'electricity',
           unit: 'electricity-source',
           params: { stream: { kind: 'electricity', kWh: electricityKWh } },
+          economics: { unitCost: 0.03 },
         },
         {
           id: 'heat',
           unit: 'heat-source',
           params: { stream: { kind: 'heat', kWh: heatKWh, T_C: heatT_C } },
+          economics: { unitCost: 0.01 },
         },
         {
           id: 'consumables',
           unit: 'consumable-source',
           params: { stream: { kind: 'consumable', amount: 100, unit: 'kg/day', label: 'Sorbent makeup' } },
+          economics: { unitCost: 2 },
         },
-        { id: 'dac', unit: 'dac', capacity: 100, params: params.dac },
-        { id: 'swro', unit: 'swro', capacity: 10, params: params.swro },
+        { id: 'dac', unit: 'dac', capacity: 100, params: params.dac, economics: { installedCapex: 16425, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 } },
+        { id: 'swro', unit: 'swro', capacity: 10, params: params.swro, economics: { installedCapex: 1000, fixedOMPercent: 3, variableOM: 0, assetLifeYears: 20 } },
         { id: 'electrical-bus', unit: 'electrical-bus' },
         {
           id: 'electrolyzer',
           unit: 'electrolyzer',
           capacity: 100,
           params: params.electrolyzer,
+          economics: { installedCapex: 21000, fixedOMPercent: 3, variableOM: 0.03, assetLifeYears: 10 },
         },
         {
           id: 'sabatier',
           unit: 'sabatier',
           capacity: sabatierCapacity,
           params: params.sabatier,
+          economics: { installedCapex: 14000, fixedOMPercent: 3, variableOM: 0.02, assetLifeYears: 20 },
         },
-        { id: 'depleted-air', unit: 'material-sink' },
-        { id: 'waste-heat', unit: 'heat-sink' },
-        { id: 'brine', unit: 'material-sink' },
-        { id: 'oxygen', unit: 'material-sink' },
-        { id: 'water-reject', unit: 'material-sink' },
-        { id: 'methane', unit: 'material-sink' },
+        { id: 'depleted-air', unit: 'material-sink', economics: { disposition: 'vent' } },
+        { id: 'waste-heat', unit: 'heat-sink', economics: { disposition: 'vent' } },
+        { id: 'brine', unit: 'material-sink', economics: { disposition: 'disposal', disposalCost: 0.02 } },
+        { id: 'oxygen', unit: 'material-sink', economics: { disposition: 'vent' } },
+        { id: 'water-reject', unit: 'material-sink', economics: { disposition: 'disposal', disposalCost: 0.001 } },
+        { id: 'methane', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 1, annualDemandLimit: 1e12 } },
         ...(recycleWater
           ? [{ id: 'water-mixer', unit: 'material-mixer' }]
-          : [{ id: 'sabatier-water', unit: 'material-sink' }]),
+          : [{ id: 'sabatier-water', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.001, annualDemandLimit: 1e12 } }]),
       ],
       edges: [
         { from: { node: 'air', port: 'out' }, to: { node: 'dac', port: 'air' } },

@@ -4,7 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-function loadApp(localStorage) {
+function loadApp(localStorage, economics) {
   const elements = new Map();
   const makeElement = () => ({
     listeners: {},
@@ -25,8 +25,9 @@ function loadApp(localStorage) {
   };
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
+  if (economics) context.FlowsheetEconomics = economics;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'cases/sabatier.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', ...(economics ? [] : ['engine/economics.js']), 'cases/sabatier.js', 'cases/abundance.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -57,15 +58,19 @@ test('catalog renders ordered palettes and palette clicks add the selected block
   const building = context.__elements.get('buildingPalette').innerHTML;
   const utility = context.__elements.get('utilityPalette').innerHTML;
   const units = markup => [...markup.matchAll(/data-unit="([^"]+)"/g)].map(match => match[1]);
-  const html = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
 
-  assert.deepEqual(units(building), ['swro', 'med', 'msf', 'electrolyzer', 'dac', 'sabatier', 'solar-pv', 'nuclear-electricity', 'battery', 'solar-thermal', 'thermal-storage']);
+  assert.deepEqual(units(building), ['swro', 'med', 'msf', 'electrolyzer', 'dac', 'sabatier', 'asu', 'ammonia', 'brine-minerals', 'chlor-alkali', 'bromine-recovery', 'aluminium-smelter', 'hydrogen-dri', 'titanium-kroll', 'solar-pv', 'nuclear-electricity', 'battery', 'solar-thermal', 'thermal-storage']);
   assert.deepEqual(units(utility), ['electrical-bus', 'material-splitter', 'material-mixer', 'material-source', 'electricity-source', 'grid-electricity', 'heat-source', 'consumable-source', 'material-sink', 'heat-sink', 'electricity-sink']);
   assert.match(building, /Multi-effect distillation.*Low-grade heat \+ seawater → water/);
   assert.match(utility, /class="building-glyph carbon">↓H/);
   assert.match(html, /<div class="building-palette" id="buildingPalette">\s*<\/div>/);
   assert.match(html, /<div class="building-palette" id="utilityPalette">\s*<\/div>/);
   assert.doesNotMatch(html, /js\/format-numbers\.js/);
+  assert.match(html, /id="canvasZoom"/);
+  assert.match(css, /zoom: 0\.75/);
+  assert.doesNotMatch(css, /width: 133\.333%/);
 
   context.__elements.get('buildingPalette').listeners.click({ target: { closest: () => ({ dataset: { unit: 'dac' } }) } });
   context.__elements.get('utilityPalette').listeners.click({ target: { closest: () => ({ dataset: { unit: 'electrical-bus' } }) } });
@@ -232,6 +237,24 @@ test('methane recycle example loads a converged circular water exchange', () => 
   assert.match(context.__elements.get('exchangeList').innerHTML, /Recovered process water/);
   assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /flow-edge material recycle/);
   assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /L\d+ (\d+(\.\d+)?) C/);
+  assert.equal(app.economics.installedCapex, 52425);
+  assert.ok(Number.isFinite(app.economics.npv));
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Installed CAPEX/);
+  assert.match(context.__elements.get('economicsMetrics').innerHTML, /Levelized delivered cost/);
+});
+
+test('abundance hub loads coupled brine, chlor-alkali, ASU, bromine, and ammonia routes', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadAbundanceHub();
+
+  assert.equal(app.result.convergence.converged, true);
+  assert.equal(app.graph.nodes.length, 23);
+  assert.ok(app.result.nodes.ammonia.activity > 0);
+  assert.ok(app.result.nodes['bromine-recovery'].activity > 0);
+  assert.ok(app.result.nodes.minerals.outlets.lithium.mol.LiCl > 0);
+  assert.ok(app.economics.annualRevenue > 0);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Lithium recovery/);
 });
 
 test('focus mode gives the graph the full workspace', () => {
@@ -241,4 +264,55 @@ test('focus mode gives the graph the full workspace', () => {
   app.toggleCanvasFocus();
   assert.equal(context.__elements.get('focusCanvas').textContent, 'Show panels');
   assert.equal(context.__elements.get('focusCanvas')['aria-pressed'], 'true');
+});
+
+test('canvas zoom rescales the SVG and clamps to a usable range', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.addNode('material-source');
+
+  app.setCanvasZoom(0.5);
+  assert.equal(app.canvasZoom, 0.5);
+  assert.equal(context.__elements.get('canvasZoomValue').textContent, '50%');
+  assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /style="width:700px;height:310px;max-width:none"/);
+
+  app.setCanvasZoom(10);
+  assert.equal(app.canvasZoom, 2);
+});
+
+test('baseline comparison clones the graph and renders economics deltas plus synergies', () => {
+  const economics = {
+    evaluateEconomics(graphCase) {
+      const battery = graphCase.graph.nodes.find(node => node.unit === 'battery');
+      const capex = battery ? battery.params.capexPerKWh * battery.capacity : 0;
+      return {
+        economics: {
+          totalCapex: capex,
+          totalAnnualRevenue: 100,
+          annualCost: capex / 10,
+          annualNetCash: 90 - capex / 10,
+          npv: 1000 - capex,
+          irr: 0.1,
+          sourcePurchases: { total: 10 },
+          disposal: { total: 5 },
+          revenue: { products: 100 },
+        },
+      };
+    },
+  };
+  const context = loadApp(undefined, economics);
+  const app = context.__FLOWSHEET_APP__;
+  app.addNode('battery');
+  app.completeBoundaries();
+  app.captureBaseline();
+  const baselineCapex = app.baseline.graphCase.graph.nodes[0].params.capexPerKWh;
+
+  app.graph.nodes[0].params.capexPerKWh = 200;
+  app.solve();
+
+  assert.equal(baselineCapex, 400);
+  assert.equal(app.baseline.graphCase.graph.nodes[0].params.capexPerKWh, 400);
+  assert.match(context.__elements.get('comparisonMetrics').innerHTML, /CAPEX/);
+  assert.match(context.__elements.get('comparisonMetrics').innerHTML, /NPV/);
+  assert.match(context.__elements.get('synergyLedger').innerHTML, /Avoided source purchases/);
 });

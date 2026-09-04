@@ -370,6 +370,163 @@ function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
   };
 }
 
+function reaction(specification) {
+  return ({ inlets, requestedActivity, capacity, params = {} }) => {
+    const requested = nonnegative(requestedActivity, 'requestedActivity');
+    const installed = nonnegative(capacity, 'capacity');
+    const electricitySEC = nonnegative(Number(params.electricityKWhPerKg ?? specification.electricityKWhPerKg), 'electricityKWhPerKg');
+    const electricity = validateStream(inlets.electricity, 'electricity');
+    const feeds = Object.fromEntries(Object.entries(specification.inputs).map(([port, input]) => {
+      const stream = validateStream(inlets[port], 'material');
+      if (!Object.hasOwn(stream.mol, input.substance)) throw new Error(`${port} must contain ${input.substance}`);
+      if (Object.entries(stream.mol).some(([substance, mol]) => substance !== input.substance && mol > 1e-12)) throw new Error(`${port} must be pure ${input.substance}`);
+      return [port, stream];
+    }));
+    const productMolPerKg = 1000 / SUBSTANCES[specification.product].molarMassG;
+    const limits = { capacity: installed };
+    for (const [port, input] of Object.entries(specification.inputs)) {
+      limits[port] = feeds[port].mol[input.substance] / input.molPerProductMol / productMolPerKg;
+    }
+    limits.electricity = electricitySEC === 0 ? Infinity : electricity.kWh / electricitySEC;
+    const planned = Math.min(requested, installed);
+    const activity = Math.min(planned, ...Object.values(limits));
+    const productMol = activity * productMolPerKg;
+    const requestedMol = planned * productMolPerKg;
+    const stream = (substance, mol, phase = 'solid') => ({
+      kind: 'material', mol: { [substance]: mol }, phase,
+      T_C: Object.values(feeds)[0].T_C, P_bar: Object.values(feeds)[0].P_bar,
+    });
+    const materialInputs = Object.fromEntries(Object.entries(specification.inputs).map(([port, input]) => [
+      port, stream(input.substance, requestedMol * input.molPerProductMol, feeds[port].phase),
+    ]));
+    const consumed = Object.fromEntries(Object.entries(specification.inputs).map(([port, input]) => [
+      port, stream(input.substance, productMol * input.molPerProductMol, feeds[port].phase),
+    ]));
+    const limitingValue = Math.min(...Object.values(limits));
+    return {
+      activity,
+      requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * electricitySEC } },
+      consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * electricitySEC } },
+      outlets: Object.fromEntries(Object.entries(specification.outputs).map(([port, output]) => [
+        port, stream(output.substance, productMol * output.molPerProductMol, output.phase),
+      ])),
+      limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+        .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+        .map(([name]) => name),
+    };
+  };
+}
+
+function airSeparation({ inlets, requestedActivity, capacity, params = {} }) {
+  const air = validateStream(inlets.air, 'material');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const nitrogenRecovery = Number(params.nitrogenRecovery ?? 0.98);
+  const oxygenRecovery = Number(params.oxygenRecovery ?? 0.95);
+  const sec = nonnegative(Number(params.electricityKWhPerKgN2 ?? 0.25), 'electricityKWhPerKgN2');
+  if (air.phase !== 'gas' || !Object.hasOwn(air.mol, 'N2')) throw new Error('ASU air feed must contain gaseous N2');
+  if (![nitrogenRecovery, oxygenRecovery].every(value => Number.isFinite(value) && value >= 0 && value <= 1)) throw new Error('ASU recoveries must be between 0 and 1');
+  const availableN2Kg = air.mol.N2 * SUBSTANCES.N2.molarMassG / 1000;
+  const planned = Math.min(requested, installed);
+  const limits = { capacity: installed, air: availableN2Kg * nitrogenRecovery, electricity: sec === 0 ? Infinity : electricity.kWh / sec };
+  const activity = Math.min(planned, ...Object.values(limits));
+  const accepted = scaleStream(air, availableN2Kg && nitrogenRecovery ? activity / (availableN2Kg * nitrogenRecovery) : 0);
+  const nitrogenMol = activity * 1000 / SUBSTANCES.N2.molarMassG;
+  const oxygenMol = (accepted.mol.O2 || 0) * oxygenRecovery;
+  const offgasMol = { ...accepted.mol, N2: (accepted.mol.N2 || 0) - nitrogenMol, O2: (accepted.mol.O2 || 0) - oxygenMol };
+  const limitingValue = Math.min(...Object.values(limits));
+  return {
+    activity,
+    requestedInputs: {
+      air: scaleStream(air, availableN2Kg && nitrogenRecovery ? planned / (availableN2Kg * nitrogenRecovery) : 0),
+      electricity: { kind: 'electricity', kWh: planned * sec },
+    },
+    consumed: { air: accepted, electricity: { kind: 'electricity', kWh: activity * sec } },
+    outlets: {
+      nitrogen: { kind: 'material', mol: { N2: nitrogenMol }, phase: 'gas', T_C: air.T_C, P_bar: air.P_bar },
+      oxygen: { kind: 'material', mol: { O2: oxygenMol }, phase: 'gas', T_C: air.T_C, P_bar: air.P_bar },
+      offgas: { ...cloneStream(accepted), mol: offgasMol },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
+function brineMinerals({ inlets, requestedActivity, capacity, params = {} }) {
+  const feed = validateStream(inlets.brine, 'material');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const sec = nonnegative(Number(params.electricityKWhPerKgBrine ?? 0.05), 'electricityKWhPerKgBrine');
+  const feedKg = streamMassKg(feed);
+  const planned = Math.min(requested, installed);
+  const limits = { capacity: installed, brine: feedKg, electricity: sec === 0 ? Infinity : electricity.kWh / sec };
+  const activity = Math.min(planned, ...Object.values(limits));
+  const processed = scaleStream(feed, feedKg ? activity / feedKg : 0);
+  const residual = { ...processed.mol };
+  const recover = (product, cation, cationCount, anion, anionCount, recovery) => {
+    const fraction = Number(recovery);
+    if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) throw new Error(`${product} recovery must be between 0 and 1`);
+    const mol = Math.min((residual[cation] || 0) / cationCount, (residual[anion] || 0) / anionCount) * fraction;
+    residual[cation] = (residual[cation] || 0) - mol * cationCount;
+    residual[anion] = (residual[anion] || 0) - mol * anionCount;
+    return { kind: 'material', mol: { [product]: mol }, phase: 'solid', T_C: feed.T_C, P_bar: feed.P_bar };
+  };
+  const lithium = recover('LiCl', 'Li+', 1, 'Cl-', 1, params.lithiumRecovery ?? 0.9);
+  const bromide = recover('NaBr', 'Na+', 1, 'Br-', 1, params.bromideRecovery ?? 0.9);
+  const magnesium = recover('MgCl2', 'Mg+2', 1, 'Cl-', 2, params.magnesiumRecovery ?? 0.5);
+  const potash = recover('KCl', 'K+', 1, 'Cl-', 1, params.potashRecovery ?? 0.7);
+  const gypsum = recover('CaSO4', 'Ca+2', 1, 'SO4-2', 1, params.gypsumRecovery ?? 0.7);
+  const salt = recover('NaCl', 'Na+', 1, 'Cl-', 1, params.saltRecovery ?? 0.5);
+  const limitingValue = Math.min(...Object.values(limits));
+  return {
+    activity,
+    requestedInputs: { brine: scaleStream(feed, feedKg ? planned / feedKg : 0), electricity: { kind: 'electricity', kWh: planned * sec } },
+    consumed: { brine: processed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    outlets: { lithium, bromide, magnesium, potash, gypsum, salt, raffinate: { ...cloneStream(processed), mol: residual } },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
+const ammonia = reaction({
+  product: 'NH3', electricityKWhPerKg: 0.6,
+  inputs: { nitrogen: { substance: 'N2', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
+  outputs: { ammonia: { substance: 'NH3', molPerProductMol: 1, phase: 'liquid' } },
+});
+const chlorAlkali = reaction({
+  product: 'NaOH', electricityKWhPerKg: 2.5,
+  inputs: { salt: { substance: 'NaCl', molPerProductMol: 1 }, water: { substance: 'H2O', molPerProductMol: 1 } },
+  outputs: {
+    caustic: { substance: 'NaOH', molPerProductMol: 1, phase: 'liquid' },
+    chlorine: { substance: 'Cl2', molPerProductMol: 0.5, phase: 'gas' },
+    hydrogen: { substance: 'H2', molPerProductMol: 0.5, phase: 'gas' },
+  },
+});
+const bromineRecovery = reaction({
+  product: 'Br2', electricityKWhPerKg: 0.2,
+  inputs: { bromide: { substance: 'NaBr', molPerProductMol: 2 }, chlorine: { substance: 'Cl2', molPerProductMol: 1 } },
+  outputs: { bromine: { substance: 'Br2', molPerProductMol: 1, phase: 'liquid' }, salt: { substance: 'NaCl', molPerProductMol: 2, phase: 'solid' } },
+});
+const aluminiumSmelter = reaction({
+  product: 'Al', electricityKWhPerKg: 14,
+  inputs: { alumina: { substance: 'Al2O3', molPerProductMol: 0.5 }, carbon: { substance: 'C', molPerProductMol: 0.75 } },
+  outputs: { aluminium: { substance: 'Al', molPerProductMol: 1, phase: 'solid' }, carbonDioxide: { substance: 'CO2', molPerProductMol: 0.75, phase: 'gas' } },
+});
+const hydrogenDri = reaction({
+  product: 'Fe', electricityKWhPerKg: 0.7,
+  inputs: { ironOre: { substance: 'Fe2O3', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
+  outputs: { steel: { substance: 'Fe', molPerProductMol: 1, phase: 'solid' }, water: { substance: 'H2O', molPerProductMol: 1.5, phase: 'liquid' } },
+});
+const titaniumKroll = reaction({
+  product: 'Ti', electricityKWhPerKg: 8,
+  inputs: { titaniumTetrachloride: { substance: 'TiCl4', molPerProductMol: 1 }, magnesium: { substance: 'Mg', molPerProductMol: 2 } },
+  outputs: { titanium: { substance: 'Ti', molPerProductMol: 1, phase: 'solid' }, magnesiumChloride: { substance: 'MgCl2', molPerProductMol: 2, phase: 'solid' } },
+});
+
 function energyStorage(kind) {
   return ({ inlets, requestedActivity, capacity, params = {} }) => {
     const input = validateStream(inlets.in, kind);
@@ -549,6 +706,71 @@ const UNITS = Object.freeze({
       water: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: sabatier,
+  },
+  asu: {
+    kind: 'converter',
+    ports: {
+      air: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      nitrogen: { direction: 'out', kind: 'material', required: true }, oxygen: { direction: 'out', kind: 'material', required: true }, offgas: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: airSeparation,
+  },
+  ammonia: {
+    kind: 'converter',
+    ports: {
+      nitrogen: { direction: 'in', kind: 'material', required: true }, hydrogen: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      ammonia: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: ammonia,
+  },
+  'brine-minerals': {
+    kind: 'converter',
+    ports: {
+      brine: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      lithium: { direction: 'out', kind: 'material', required: true }, bromide: { direction: 'out', kind: 'material', required: true }, magnesium: { direction: 'out', kind: 'material', required: true },
+      potash: { direction: 'out', kind: 'material', required: true }, gypsum: { direction: 'out', kind: 'material', required: true }, salt: { direction: 'out', kind: 'material', required: true }, raffinate: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: brineMinerals,
+  },
+  'chlor-alkali': {
+    kind: 'converter',
+    ports: {
+      salt: { direction: 'in', kind: 'material', required: true }, water: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      caustic: { direction: 'out', kind: 'material', required: true }, chlorine: { direction: 'out', kind: 'material', required: true }, hydrogen: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: chlorAlkali,
+  },
+  'bromine-recovery': {
+    kind: 'converter',
+    ports: {
+      bromide: { direction: 'in', kind: 'material', required: true }, chlorine: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      bromine: { direction: 'out', kind: 'material', required: true }, salt: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: bromineRecovery,
+  },
+  'aluminium-smelter': {
+    kind: 'converter',
+    ports: {
+      alumina: { direction: 'in', kind: 'material', required: true }, carbon: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      aluminium: { direction: 'out', kind: 'material', required: true }, carbonDioxide: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: aluminiumSmelter,
+  },
+  'hydrogen-dri': {
+    kind: 'converter',
+    ports: {
+      ironOre: { direction: 'in', kind: 'material', required: true }, hydrogen: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      steel: { direction: 'out', kind: 'material', required: true }, water: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: hydrogenDri,
+  },
+  'titanium-kroll': {
+    kind: 'converter',
+    ports: {
+      titaniumTetrachloride: { direction: 'in', kind: 'material', required: true }, magnesium: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      titanium: { direction: 'out', kind: 'material', required: true }, magnesiumChloride: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: titaniumKroll,
   },
 });
 

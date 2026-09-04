@@ -1,14 +1,28 @@
-# Solar Chemical/AI Plant Builder
+# Molecular Foundry
 
 **Attribution.** This codebase is derived from [Ben Schrauwen](https://github.com/benschrauwen)'s unofficial MIT-licensed [`terraform-simulator`](https://github.com/benschrauwen/terraform-simulator) ([terraform-simulator.com](https://terraform-simulator.com/)). Copyright (c) 2026 benschrauwen. This GitHub repository was created new rather than using GitHub's fork button, so GitHub will not show "forked from." It is an independent educational tool and is not affiliated with Terraform Industries.
 
-An unofficial, MIT-licensed browser app for exploring a Terraform Industries-style solar-to-chemical plant. The current simulator is best understood as an educational techno-economic model for a direct-coupled solar + electrolysis + DAC + methane/methanol system, with an optional colocated **AI compute** load that competes for the same solar and battery resources. It is not a bankable engineering model.
+An unofficial, MIT-licensed browser app for exploring coupled industrial processes. The main product is Molecular Foundry, a flowsheet workspace for connecting process blocks and inspecting material and energy flows. The archived legacy solar-to-chemical techno-economic app remains available at [`legacy/tea.html`](legacy/tea.html) for reference; it is no longer the primary product surface.
 
 The app is intentionally centered on the idea that very cheap local solar DC, low-capex intermittent hardware, and colocated conversion can matter more than chasing maximum utilization or maximum electrical efficiency.
 
-## Current State
+## Current Foundry State
 
-Today it supports:
+The root app now provides:
+
+- A blank, editable process canvas with explicit material, electricity, heat, and consumable ports.
+- Reusable desalination, electrolysis, DAC, Sabatier, ASU, Haber–Bosch, brine-mineral, chlor-alkali, bromine, aluminium, hydrogen-DRI steel, titanium, energy, storage, splitter, mixer, source, and destination blocks.
+- A deterministic operating solver with capacity limits, bottleneck reporting, recycles, and visible balance residuals.
+- A generic post-solve economics fold: source purchases, installed CAPEX, fixed and variable O&M, sale/disposal destinations, demand caps, replacements, delivered cost, NPV, and IRR.
+- Editable economic assumptions on every source, converter, and destination, including zero-cost inputs for in-the-limit experiments.
+- Captured-baseline scenario comparison and a synergy ledger for avoided purchases, avoided disposal, and added product revenue.
+- Integrated methane + water-recycle and ammonia + brine industrial-hub examples. The abundance hub couples brine-derived bromide with chlor-alkali chlorine, then uses chlor-alkali hydrogen with ASU nitrogen for ammonia.
+
+The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`, `index.html`, and `flowsheet.css`. The old app is frozen under `legacy/tea.html`; its supporting modules remain only so that archived page continues to run.
+
+## Archived TEA Reference
+
+The archived app supported:
 
 - Yield-driven annual solar modeling with preset Earth sites, stylized Mars and Moon presets, and manual `MWh / MWdc / year` input.
 - Earth `Annual Average` and `Specific Day` views, plus average-cycle Mars and Moon modes with annual dispatch built on local-cycle and orbital-year assumptions.
@@ -28,7 +42,8 @@ Today it supports:
 
 The app is still a mostly static front-end project, with a lightweight Node build that generates versioned `dist/` assets for deployment. The source is split into clearer modules:
 
-- `index.html`: app layout and control surfaces
+- `index.html`: Molecular Foundry workspace
+- `legacy/tea.html`: archived legacy TEA app
 - `style.css`: visual styling
 - `js/app.js`: app bootstrap, high-level coordination, and dynamic module rendering
 - `js/app-controls.js`: UI event binding and control behavior
@@ -51,7 +66,7 @@ The app is still a mostly static front-end project, with a lightweight Node buil
 - `scripts/build.mjs` + `scripts/dev.mjs`: minimal build and static-serving scripts for local development and deployment output
 - `tests/`: Node-based regression tests for calculations and renderer output
 
-## What Is Modeled Well Enough Today
+## What The Archived TEA Modeled
 
 These are the parts of the app that are currently structured well enough to be useful for scenario exploration:
 
@@ -67,7 +82,7 @@ These are the parts of the app that are currently structured well enough to be u
 - Exploratory route economics driven by route-specific electricity intensity, required feedstocks, cycling penalties, peak-throughput sizing, CAPEX basis, O&M, and sale-price assumptions.
 - A lean IRR calculation path plus worker-backed search used by the inline optimization controls.
 
-## What Is Still Simplified Or Missing
+## Archived TEA Limitations
 
 The simulator is useful, but it still has important limitations:
 
@@ -83,7 +98,7 @@ The simulator is useful, but it still has important limitations:
 - AI compute is a stylized constant-load and token-pricing layer, not a GPU, network, or datacenter engineering model.
 - Planetary modes are exploratory and use literature-inspired benchmarks rather than bankable resource datasets.
 
-## Key Assumptions
+## Archived TEA Assumptions
 
 The current implementation makes several deliberate assumptions that should stay visible:
 
@@ -388,7 +403,7 @@ net_water_needed_kgpd =
   max(0, electrolyzer_water_kgpd - water_recycled_kgpd)
 ```
 
-## Current Defaults In The App
+## Archived TEA Defaults
 
 The current default state is roughly a `1 MW` Mojave-style methane scenario:
 
@@ -424,7 +439,7 @@ The current default state is roughly a `1 MW` Mojave-style methane scenario:
 - Analysis horizon: `30 years`
 - Discount rate: `8%`
 
-## Supported vs Exploratory Coverage
+## Archived TEA Coverage
 
 ### Supported today
 
@@ -449,7 +464,7 @@ The current default state is roughly a `1 MW` Mojave-style methane scenario:
 
 These exploratory routes are no longer UI-only scaffolds. They now carry rough throughput, CAPEX, O&M, replacement, and revenue assumptions into project economics, but they should still be treated as high-level placeholders rather than validated process designs.
 
-## Future Improvements
+## Historical TEA Backlog
 
 The most important next steps are:
 

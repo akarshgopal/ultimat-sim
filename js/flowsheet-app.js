@@ -4,6 +4,7 @@
   const units = FlowsheetUnits.UNITS;
   const graph = { nodes: [], edges: [] };
   const setpoints = {};
+  const projectEconomics = { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 };
   const counts = {};
   const storage = (() => { try { return window.localStorage; } catch { return null; } })();
   const AUTOSAVE_KEY = 'molecular-foundry.autosave.v1';
@@ -13,6 +14,9 @@
   let selectedNodeId = null;
   let pendingPort = null;
   let result = null;
+  let currentEconomics = null;
+  let baseline = null;
+  let canvasZoom = 1;
   let solveError = '';
   let dragging = null;
   let suppressClick = false;
@@ -93,9 +97,77 @@
       ],
     },
     sabatier: { label: 'Sabatier', capacity: 100, rate: 5, activityUnit: 'kg CH₄/day', palette: { section: 'building', order: 6, glyph: 'CH₄', tone: 'methane', description: 'CO₂ + H₂ → methane' }, params: { electricityKWhPerKgCH4: 1 } },
+    asu: {
+      label: 'Air separation unit', capacity: 1000, rate: 100, activityUnit: 'kg N₂/day',
+      palette: { section: 'building', order: 7, glyph: 'ASU', tone: 'hydrogen', description: 'Air + power → N₂ + O₂' },
+      params: { nitrogenRecovery: 0.98, oxygenRecovery: 0.95, electricityKWhPerKgN2: 0.25 },
+      controls: [
+        { key: 'nitrogenRecovery', label: 'Nitrogen recovery', min: 0.5, max: 1, step: 0.01 },
+        { key: 'oxygenRecovery', label: 'Oxygen recovery', min: 0, max: 1, step: 0.01 },
+        { key: 'electricityKWhPerKgN2', label: 'Electricity', min: 0.05, max: 1, step: 0.01, unit: 'kWh/kg N₂' },
+      ],
+      references: [{ label: 'DOE air separation R&D', url: 'https://www.energy.gov/hgeo/articles/energy-department-invests-4m-air-separation-research-national-labs' }],
+    },
+    ammonia: {
+      label: 'Haber–Bosch ammonia', capacity: 1000, rate: 100, activityUnit: 'kg NH₃/day',
+      palette: { section: 'building', order: 8, glyph: 'NH₃', tone: 'hydrogen', description: 'N₂ + H₂ + power → ammonia' },
+      params: { electricityKWhPerKg: 0.6 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Synthesis electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg NH₃' }],
+      references: [{ label: 'DOE ammonia synthesis', url: 'https://www.energy.gov/cmei/fuels/h2iq-hour-ammonia-fertilizer-energy-carriers-text-version' }],
+    },
+    'brine-minerals': {
+      label: 'Brine mineral train', capacity: 100000, rate: 1000, activityUnit: 'kg brine/day',
+      palette: { section: 'building', order: 9, glyph: 'Li+', tone: 'water', description: 'Brine → Li, Br, Mg, K, salt, gypsum' },
+      params: { electricityKWhPerKgBrine: 0.05, lithiumRecovery: 0.9, bromideRecovery: 0.9, magnesiumRecovery: 0.5, potashRecovery: 0.7, gypsumRecovery: 0.7, saltRecovery: 0.5 },
+      controls: [
+        { key: 'electricityKWhPerKgBrine', label: 'Electricity', min: 0, max: 1, step: 0.01, unit: 'kWh/kg brine' },
+        { key: 'lithiumRecovery', label: 'Lithium recovery', min: 0, max: 1, step: 0.01 },
+        { key: 'bromideRecovery', label: 'Bromide recovery', min: 0, max: 1, step: 0.01 },
+        { key: 'magnesiumRecovery', label: 'Magnesium recovery', min: 0, max: 1, step: 0.01 },
+        { key: 'potashRecovery', label: 'Potash recovery', min: 0, max: 1, step: 0.01 },
+        { key: 'gypsumRecovery', label: 'Gypsum recovery', min: 0, max: 1, step: 0.01 },
+        { key: 'saltRecovery', label: 'Salt recovery', min: 0, max: 1, step: 0.01 },
+      ],
+      references: [{ label: 'USGS brine commodities', url: 'https://pubs.usgs.gov/bul/1738d/report.pdf' }],
+    },
+    'chlor-alkali': {
+      label: 'Chlor-alkali', capacity: 1000, rate: 100, activityUnit: 'kg NaOH/day',
+      palette: { section: 'building', order: 10, glyph: 'Cl₂', tone: 'water', description: 'Salt + water + power → NaOH + Cl₂ + H₂' },
+      params: { electricityKWhPerKg: 2.5 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 6, step: 0.05, unit: 'kWh/kg NaOH' }],
+      references: [{ label: 'DOE chlor-alkali profile', url: 'https://www1.eere.energy.gov/manufacturing/resources/chemicals/pdfs/profile_chap6.pdf' }],
+    },
+    'bromine-recovery': {
+      label: 'Bromine recovery', capacity: 1000, rate: 10, activityUnit: 'kg Br₂/day',
+      palette: { section: 'building', order: 11, glyph: 'Br₂', tone: 'methane', description: 'Bromide + chlorine → bromine + salt' },
+      params: { electricityKWhPerKg: 0.2 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg Br₂' }],
+      references: [{ label: 'USGS bromine production context', url: 'https://www.usgs.gov/centers/national-minerals-information-center/israel' }],
+    },
+    'aluminium-smelter': {
+      label: 'Aluminium smelter', capacity: 1000, rate: 100, activityUnit: 'kg Al/day',
+      palette: { section: 'building', order: 12, glyph: 'Al', description: 'Alumina + carbon + power → aluminium' },
+      params: { electricityKWhPerKg: 14 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Smelting electricity', min: 8, max: 25, step: 0.1, unit: 'kWh/kg Al' }],
+      references: [{ label: 'DOE aluminium roadmap', url: 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf' }],
+    },
+    'hydrogen-dri': {
+      label: 'Hydrogen DRI steel', capacity: 1000, rate: 100, activityUnit: 'kg Fe/day',
+      palette: { section: 'building', order: 13, glyph: 'Fe', tone: 'carbon', description: 'Iron oxide + H₂ + power → iron + water' },
+      params: { electricityKWhPerKg: 0.7 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Direct electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg Fe' }],
+      references: [{ label: 'DOE hydrogen for industry', url: 'https://www.energy.gov/cmei/fuels/systems-development-and-integration-chemical-and-industrial-processes' }],
+    },
+    'titanium-kroll': {
+      label: 'Titanium Kroll', capacity: 1000, rate: 100, activityUnit: 'kg Ti/day',
+      palette: { section: 'building', order: 14, glyph: 'Ti', description: 'TiCl₄ + Mg + power → Ti + MgCl₂' },
+      params: { electricityKWhPerKg: 8 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Process electricity', min: 0, max: 30, step: 0.5, unit: 'kWh/kg Ti' }],
+      references: [{ label: 'USGS Kroll process', url: 'https://www.usgs.gov/publications/titanium-2013' }],
+    },
     'solar-pv': {
       label: 'Solar PV', sourceUnit: 'kWh/day',
-      palette: { section: 'building', order: 7, glyph: 'PV', description: 'Capacity × resource → electricity' },
+      palette: { section: 'building', order: 20, glyph: 'PV', description: 'Capacity × resource → electricity' },
       params: { capacityKW: 1000, capacityFactor: 0.24, capexPerKW: 1560, fixedOMPerKWYear: 20, variableCostPerMWh: 0, discountRate: 0.07, lifeYears: 30 },
       controls: [
         { key: 'capacityKW', label: 'AC capacity', min: 10, max: 10000, step: 10, unit: 'kW' },
@@ -116,7 +188,7 @@
     },
     'nuclear-electricity': {
       label: 'Advanced nuclear', sourceUnit: 'kWh/day', economicsNote: 'Costs are editable assumptions, not vendor quotes.',
-      palette: { section: 'building', order: 8, glyph: 'N', tone: 'carbon', description: 'Radiant, Valar, generic SMR' },
+      palette: { section: 'building', order: 21, glyph: 'N', tone: 'carbon', description: 'Radiant, Valar, generic SMR' },
       params: { capacityKW: 1000, capacityFactor: 0.9, capexPerKW: 10717, fixedOMPerKWYear: 300, variableCostPerMWh: 15, discountRate: 0.07, lifeYears: 30 },
       presets: {
         radiant: { label: 'Radiant Kaleidos · 1 MWe', params: { capacityKW: 1000, capacityFactor: 0.9, capexPerKW: 10717 } },
@@ -138,7 +210,7 @@
     },
     battery: {
       label: 'Battery', capacity: 4000, rate: 1000, activityUnit: 'kWh/day',
-      palette: { section: 'building', order: 9, glyph: 'B', description: 'Electricity in → shifted electricity' },
+      palette: { section: 'building', order: 22, glyph: 'B', description: 'Electricity in → shifted electricity' },
       params: { efficiency: 0.95, capexPerKWh: 400 },
       controls: [
         { key: 'efficiency', label: 'One-way efficiency', min: 0.7, max: 1, step: 0.01 },
@@ -148,7 +220,7 @@
     },
     'solar-thermal': {
       label: 'Solar thermal', sourceUnit: 'kWhₜₕ/day',
-      palette: { section: 'building', order: 10, glyph: 'ST', tone: 'carbon', description: 'Sun → temperature-graded heat' },
+      palette: { section: 'building', order: 23, glyph: 'ST', tone: 'carbon', description: 'Sun → temperature-graded heat' },
       params: { capacityKW: 1000, sunHours: 6, temperatureC: 150, capexPerKW: 1000, fixedOMPerKWYear: 20, variableCostPerMWh: 0, discountRate: 0.07, lifeYears: 25 },
       controls: [
         { key: 'capacityKW', label: 'Thermal capacity', min: 10, max: 10000, step: 10, unit: 'kWₜₕ' },
@@ -160,7 +232,7 @@
     },
     'thermal-storage': {
       label: 'Thermal storage', capacity: 10000, rate: 1000, activityUnit: 'kWhₜₕ/day',
-      palette: { section: 'building', order: 11, glyph: 'TS', tone: 'carbon', description: 'Heat in → shifted process heat' },
+      palette: { section: 'building', order: 24, glyph: 'TS', tone: 'carbon', description: 'Heat in → shifted process heat' },
       params: { efficiency: 0.95, temperatureLossC: 5, capexPerKWh: 30 },
       controls: [
         { key: 'efficiency', label: 'Discharge efficiency', min: 0.5, max: 1, step: 0.01 },
@@ -185,15 +257,28 @@
     capturedCo2: 'Captured CO₂', depletedAir: 'Depleted gas', feed: 'Feed water', product: 'Fresh water',
     brine: 'Brine', water: 'Water', hydrogen: 'Hydrogen', oxygen: 'Oxygen', waterReject: 'Reject water',
     co2: 'CO₂', methane: 'Methane', out: 'Output', in: 'Input',
-    wasteHeat: 'Waste heat',
+    wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'Ammonia', offgas: 'Off-gas',
+    lithium: 'Lithium chloride', bromide: 'Sodium bromide', magnesium: 'Magnesium chloride', potash: 'Potash', gypsum: 'Gypsum', salt: 'Salt', raffinate: 'Raffinate',
+    caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Aluminium', carbonDioxide: 'Carbon dioxide',
+    ironOre: 'Iron ore', steel: 'Iron / steel', titaniumTetrachloride: 'Titanium tetrachloride', titanium: 'Titanium', magnesiumChloride: 'Magnesium chloride',
   };
   const materialPresets = {
     air: { label: 'Ambient air', phase: 'gas', mol: { CO2: 428, O2: 211409, N2: 788163 } },
     seawater: { label: 'Seawater', phase: 'liquid', mol: { H2O: 53500, 'Na+': 550, 'Cl-': 550 } },
+    brine: { label: 'Concentrated brine', phase: 'liquid', mol: { H2O: 53500, 'Na+': 1100, 'Cl-': 1298.1, 'Mg+2': 80, 'Ca+2': 20, 'K+': 40, 'SO4-2': 20, 'Br-': 2, 'Li+': 0.1 } },
     water: { label: 'Pure water', phase: 'liquid', mol: { H2O: 1000 } },
     co2: { label: 'Carbon dioxide', phase: 'gas', mol: { CO2: 1000 } },
     hydrogen: { label: 'Hydrogen', phase: 'gas', mol: { H2: 1000 } },
     oxygen: { label: 'Oxygen', phase: 'gas', mol: { O2: 1000 } },
+    nitrogen: { label: 'Nitrogen', phase: 'gas', mol: { N2: 1000 } },
+    salt: { label: 'Sodium chloride', phase: 'solid', mol: { NaCl: 1000 } },
+    bromide: { label: 'Sodium bromide', phase: 'solid', mol: { NaBr: 1000 } },
+    chlorine: { label: 'Chlorine', phase: 'gas', mol: { Cl2: 1000 } },
+    alumina: { label: 'Alumina', phase: 'solid', mol: { Al2O3: 1000 } },
+    carbon: { label: 'Carbon anode', phase: 'solid', mol: { C: 1000 } },
+    ironOre: { label: 'Hematite concentrate', phase: 'solid', mol: { Fe2O3: 1000 } },
+    titaniumTetrachloride: { label: 'Titanium tetrachloride', phase: 'liquid', mol: { TiCl4: 1000 } },
+    magnesium: { label: 'Magnesium', phase: 'solid', mol: { Mg: 1000 } },
   };
 
   function renderPalettes() {
@@ -214,8 +299,17 @@
   document.getElementById('clearFactory').addEventListener('click', clearFactory);
   document.getElementById('autoArrange').addEventListener('click', autoArrange);
   document.getElementById('focusCanvas').addEventListener('click', toggleCanvasFocus);
+  document.getElementById('zoomOut').addEventListener('click', () => setCanvasZoom(canvasZoom - 0.1));
+  document.getElementById('zoomIn').addEventListener('click', () => setCanvasZoom(canvasZoom + 0.1));
+  document.getElementById('zoomReset').addEventListener('click', () => setCanvasZoom(1));
+  document.getElementById('canvasZoom').addEventListener('input', event => setCanvasZoom(Number(event.target.value) / 100));
+  document.getElementById('captureBaseline').addEventListener('click', captureBaseline);
+  document.getElementById('clearBaseline').addEventListener('click', clearBaseline);
+  document.getElementById('projectLifeYears').addEventListener('input', handleProjectEconomics);
+  document.getElementById('discountRate').addEventListener('input', handleProjectEconomics);
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
   document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
+  document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
   document.getElementById('saveFactory').addEventListener('click', () => {
     const name = window.prompt('Name this factory save:')?.trim();
     if (name) saveNamed(name);
@@ -233,6 +327,7 @@
   canvas.addEventListener('pointermove', dragNode);
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('wheel', handleCanvasWheel, { passive: false });
   canvas.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
@@ -265,6 +360,7 @@
     }
     if (kind === 'source') configureNewSource(current, options.preset);
     if (kind === 'converter') setpoints[id] = definition.rate;
+    current.economics = defaultEconomics(current);
     graph.nodes.push(current);
     if (!options.silent) {
       selectedNodeId = id;
@@ -325,7 +421,15 @@
   }
 
   function loadMethaneRecycle() {
-    const definition = SabatierCase.createSabatierCase({ recycleWater: true });
+    loadCase(SabatierCase.createSabatierCase({ recycleWater: true }), 'sabatier');
+  }
+
+  function loadAbundanceHub() {
+    loadCase(AbundanceCase.createAbundanceCase(), 'minerals');
+  }
+
+  function loadCase(definition, selection) {
+    Object.assign(projectEconomics, definition.economics || {});
     graph.nodes.length = 0;
     graph.edges.length = 0;
     Object.keys(setpoints).forEach(key => delete setpoints[key]);
@@ -342,21 +446,22 @@
         ...(kind === 'source' ? {
           rate: stream?.kind === 'material' ? FlowsheetModel.streamMassKg(stream)
             : stream?.kind === 'consumable' ? stream.amount : stream?.kWh,
-          ...(saved.id === 'air' ? { sourcePreset: 'air' } : saved.id === 'seawater' ? { sourcePreset: 'seawater' } : {}),
+          ...(saved.sourcePreset ? { sourcePreset: saved.sourcePreset } : saved.id === 'air' ? { sourcePreset: 'air' } : saved.id === 'seawater' ? { sourcePreset: 'seawater' } : {}),
           ...(stream?.kind === 'heat' ? { temperature: stream.T_C } : {}),
         } : {}),
       });
     }
+    for (const current of graph.nodes) current.economics ||= defaultEconomics(current);
     graph.edges.push(...definition.graph.edges.map(edge => ({ ...edge })));
     Object.assign(setpoints, definition.operation.setpoints);
-    selectedNodeId = 'sabatier';
+    selectedNodeId = selection;
     pendingPort = null;
     autoArrange();
     solveAndRender();
   }
 
   function snapshot() {
-    return { version: 1, graph, setpoints, selectedNodeId };
+    return { version: 1, graph, setpoints, selectedNodeId, projectEconomics, canvasZoom };
   }
 
   function persistAutosave() {
@@ -395,6 +500,9 @@
       counts[current.unit] = Math.max(counts[current.unit] || 0, suffix);
     }
     selectedNodeId = ids.has(saved.selectedNodeId) ? saved.selectedNodeId : null;
+    for (const current of graph.nodes) current.economics ||= defaultEconomics(current);
+    Object.assign(projectEconomics, saved.projectEconomics || {});
+    canvasZoom = clampZoom(saved.canvasZoom ?? 1);
     pendingPort = null;
     return true;
   }
@@ -422,6 +530,134 @@
     delete saves[name];
     storage.setItem(SAVES_KEY, JSON.stringify(saves));
     refreshSaveOptions();
+  }
+
+  function clone(value) { return JSON.parse(JSON.stringify(value)); }
+
+  function graphCaseSnapshot() {
+    return { graph: clone(graph), operation: { setpoints: clone(setpoints) }, economics: clone(projectEconomics) };
+  }
+
+  function evaluateEconomics(graphCase, solved) {
+    const evaluator = window.FlowsheetEconomics?.evaluateEconomics;
+    if (typeof evaluator !== 'function' || !solved) return null;
+    try { return evaluator(graphCase, solved) || null; } catch { return null; }
+  }
+
+  function captureBaseline() {
+    baseline = { graphCase: graphCaseSnapshot(), solved: result ? clone(result) : null, economics: currentEconomics ? clone(currentEconomics) : null };
+    renderComparison();
+    return true;
+  }
+
+  function clearBaseline() {
+    baseline = null;
+    renderComparison();
+  }
+
+  function numberAt(value, paths) {
+    for (const path of paths) {
+      const candidate = path.split('.').reduce((current, key) => current?.[key], value);
+      if (Number.isFinite(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  function sumNumbers(value, exclude = []) {
+    if (Number.isFinite(value)) return value;
+    if (!value || typeof value !== 'object') return null;
+    const values = Object.entries(value)
+      .filter(([key, entry]) => !exclude.includes(key) && Number.isFinite(entry))
+      .map(([, entry]) => entry);
+    return values.length ? values.reduce((sum, entry) => sum + entry, 0) : null;
+  }
+
+  function economicsSummary(value) {
+    const economics = value?.economics || value;
+    if (!economics || typeof economics !== 'object') return null;
+    const revenueBreakdown = economics.revenue;
+    const summary = {
+      capex: numberAt(economics, ['totalCapex', 'installedCapex', 'capex', 'CAPEX']),
+      revenue: numberAt(economics, ['totalAnnualRevenue', 'annualRevenue', 'annual.revenue'])
+        ?? sumNumbers(revenueBreakdown, ['policyCredits', 'total']),
+      cost: numberAt(economics, ['annualCost', 'annualOperatingCost', 'totalAnnualCost', 'annualCosts', 'annual.cost', 'costs.total']),
+      netCash: numberAt(economics, ['annualNetCash', 'annualNetCashFlow', 'annualOperatingCashFlow', 'annualProfit', 'annual.netCash']),
+      npv: numberAt(economics, ['npv', 'NPV']),
+      irr: numberAt(economics, ['irr', 'projectIrr', 'equityIrr', 'IRR']),
+      purchases: numberAt(economics, ['annualSourcePurchases', 'sourcePurchases.total', 'purchases.total', 'breakdown.sourcePurchases'])
+        ?? sumNumbers(economics.sourcePurchases || economics.purchases),
+      disposal: numberAt(economics, ['annualDisposalCost', 'disposalCost', 'disposal.total', 'disposals.total', 'breakdown.disposalCost'])
+        ?? sumNumbers(economics.disposal || economics.disposals),
+      productRevenue: numberAt(economics, ['annualProductRevenue', 'productRevenue', 'revenue.products', 'breakdown.productRevenue'])
+        ?? sumNumbers(revenueBreakdown, ['policyCredits', 'total']),
+    };
+    return Object.values(summary).some(Number.isFinite) ? summary : null;
+  }
+
+  function deltaValue(current, previous) {
+    return Number.isFinite(current) && Number.isFinite(previous) ? current - previous : null;
+  }
+
+  function formatDelta(value, format = formatMoney) {
+    if (!Number.isFinite(value)) return '—';
+    return `${value >= 0 ? '+' : ''}${format(value)}`;
+  }
+
+  function formatRate(value) {
+    if (!Number.isFinite(value)) return '—';
+    return `${formatNumber(Math.abs(value) <= 1 ? value * 100 : value)}%`;
+  }
+
+  function renderComparison() {
+    const panel = document.getElementById('comparisonPanel');
+    const status = document.getElementById('comparisonStatus');
+    const metrics = document.getElementById('comparisonMetrics');
+    const ledger = document.getElementById('synergyLedger');
+    const clear = document.getElementById('clearBaseline');
+    if (!panel || !status || !metrics || !ledger) return;
+    clear.disabled = !baseline;
+    panel.hidden = !baseline;
+    if (!baseline) { status.textContent = ''; metrics.innerHTML = ''; ledger.innerHTML = ''; return; }
+
+    const baselineEconomics = baseline.economics
+      || evaluateEconomics(baseline.graphCase, baseline.solved);
+    const current = economicsSummary(currentEconomics);
+    const previous = economicsSummary(baselineEconomics);
+    if (!current || !previous) {
+      status.textContent = result ? 'Economics unavailable — load the optional economics adapter.' : 'Current graph is incomplete.';
+      metrics.innerHTML = '';
+      ledger.innerHTML = '';
+      return;
+    }
+    status.textContent = 'Current graph compared with captured baseline';
+    const rows = [
+      ['CAPEX', current.capex, previous.capex, formatMoney],
+      ['Annual revenue', current.revenue, previous.revenue, formatMoney],
+      ['Annual cost', current.cost, previous.cost, formatMoney],
+      ['Annual net cash', current.netCash, previous.netCash, formatMoney],
+      ['NPV', current.npv, previous.npv, formatMoney],
+      ['IRR', current.irr, previous.irr, formatRate],
+    ];
+    metrics.innerHTML = rows.map(([label, value, oldValue, format]) => {
+      const delta = label === 'IRR' && Number.isFinite(value) && Number.isFinite(oldValue)
+        ? (Math.abs(value) <= 1 ? value * 100 : value) - (Math.abs(oldValue) <= 1 ? oldValue * 100 : oldValue)
+        : deltaValue(value, oldValue);
+      const direction = ['Annual revenue', 'Annual net cash', 'NPV', 'IRR'].includes(label) ? delta : -delta;
+      const cls = direction > 0 ? 'positive' : direction < 0 ? 'negative' : '';
+      const deltaLabel = label === 'IRR' ? formatDelta(delta, value => `${formatNumber(delta)} pp`) : formatDelta(delta, format);
+      return `<div><dt>${label}</dt><dd class="${cls}">${Number.isFinite(value) ? format(value) : '—'} <small>${deltaLabel}</small></dd></div>`;
+    }).join('');
+    // ponytail: annual aggregate ledger; add per-stream provenance when economics exposes it.
+    const synergies = [
+      ['Avoided source purchases', deltaValue(previous.purchases, current.purchases)],
+      ['Avoided disposal', deltaValue(previous.disposal, current.disposal)],
+      ['Additional product revenue', deltaValue(current.productRevenue, previous.productRevenue)],
+    ].filter(([, value]) => Number.isFinite(value));
+    const netSynergy = synergies.reduce((sum, [, value]) => sum + value, 0);
+    if (synergies.length) synergies.push(['Net synergy value', netSynergy]);
+    ledger.innerHTML = synergies.length
+      ? synergies.map(([label, value]) => `<div class="synergy-row"><span>${label}</span><strong class="${value >= 0 ? 'positive' : 'negative'}">${formatDelta(value)}</strong></div>`).join('')
+      : '<p class="status-meta">No comparable purchase, disposal, or product-revenue breakdowns.</p>';
   }
 
   function refreshSaveOptions(selected = '') {
@@ -472,6 +708,25 @@
       x: (event.clientX - bounds.left) * svg.viewBox.baseVal.width / bounds.width,
       y: (event.clientY - bounds.top) * svg.viewBox.baseVal.height / bounds.height,
     };
+  }
+
+  function clampZoom(value) { return Math.min(2, Math.max(0.25, Number(value) || 1)); }
+
+  function setCanvasZoom(value) {
+    canvasZoom = clampZoom(value);
+    renderGraph();
+    persistAutosave();
+  }
+
+  function handleCanvasWheel(event) {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    setCanvasZoom(canvasZoom + (event.deltaY < 0 ? 0.1 : -0.1));
+  }
+
+  function renderCanvasZoom() {
+    document.getElementById('canvasZoom').value = Math.round(canvasZoom * 100);
+    document.getElementById('canvasZoomValue').textContent = `${Math.round(canvasZoom * 100)}%`;
   }
 
   function autoArrange() {
@@ -593,16 +848,28 @@
     if (event.target.name === 'processParameter') {
       current.processPreset = 'custom';
       current.params[event.target.dataset.param] = Number(event.target.value);
+      if (['battery', 'thermal-storage'].includes(current.unit) && event.target.dataset.param === 'capexPerKWh') current.economics.installedCapex = current.capacity * current.params.capexPerKWh;
     }
     if (event.target.name === 'sourceParameter') {
       current.processPreset = 'custom';
       current.params[event.target.dataset.param] = Number(event.target.value);
       updateSourceStream(current);
+      if (['capacityKW', 'capexPerKW', 'fixedOMPerKWYear', 'variableCostPerMWh', 'lifeYears', 'pricePerMWh'].includes(event.target.dataset.param)) current.economics = defaultEconomics(current);
     }
     if (event.target.name === 'sourceRate') { current.rate = Number(event.target.value); updateSourceStream(current); }
     if (event.target.name === 'sourcePreset') { current.sourcePreset = event.target.value; updateSourceStream(current); }
     if (event.target.name === 'heatTemperature') { current.temperature = Number(event.target.value); updateSourceStream(current); }
     if (event.target.name === 'branchWeight') graph.edges[Number(event.target.dataset.edge)].weight = Number(event.target.value);
+    if (event.target.name === 'economics') {
+      const key = event.target.dataset.economics;
+      current.economics[key] = key === 'disposition' ? event.target.value : Number(event.target.value);
+    }
+    solveAndRender();
+  }
+
+  function handleProjectEconomics(event) {
+    if (event.target.id === 'projectLifeYears') projectEconomics.projectLifeYears = Math.max(1, Number(event.target.value) || 1);
+    if (event.target.id === 'discountRate') projectEconomics.discountRate = Math.max(0, Number(event.target.value) || 0) / 100;
     solveAndRender();
   }
 
@@ -634,14 +901,23 @@
   }
 
   function suggestedPreset(unit, port) {
-    return { 'dac.air': 'air', 'swro.feed': 'seawater', 'med.feed': 'seawater', 'msf.feed': 'seawater', 'electrolyzer.water': 'water', 'sabatier.co2': 'co2', 'sabatier.hydrogen': 'hydrogen' }[`${unit}.${port}`] || 'water';
+    return {
+      'dac.air': 'air', 'asu.air': 'air', 'swro.feed': 'seawater', 'med.feed': 'seawater', 'msf.feed': 'seawater', 'brine-minerals.brine': 'brine',
+      'electrolyzer.water': 'water', 'chlor-alkali.water': 'water', 'sabatier.co2': 'co2', 'sabatier.hydrogen': 'hydrogen',
+      'ammonia.nitrogen': 'nitrogen', 'ammonia.hydrogen': 'hydrogen', 'chlor-alkali.salt': 'salt',
+      'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
+      'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
+      'titanium-kroll.titaniumTetrachloride': 'titaniumTetrachloride', 'titanium-kroll.magnesium': 'magnesium',
+    }[`${unit}.${port}`] || 'water';
   }
 
   function solveAndRender() {
     result = null;
+    currentEconomics = null;
     if (graph.nodes.length && missingConnections().length === 0) {
       try {
         result = FlowsheetSolver.solveOperation({ graph, operation: { setpoints } });
+        currentEconomics = evaluateEconomics(graphCaseSnapshot(), result);
         solveError = '';
       } catch (error) { solveError = error.message; }
     }
@@ -672,9 +948,10 @@
   function node(id) { return graph.nodes.find(candidate => candidate.id === id); }
   function portName(port) { return portNames[port] || port.replace(/([a-z])([A-Z])/g, '$1 $2'); }
 
-  function render() { renderGraph(); renderStatus(); renderInspector(); }
+  function render() { renderGraph(); renderStatus(); renderInspector(); renderEconomics(); renderComparison(); }
 
   function renderGraph() {
+    renderCanvasZoom();
     if (!graph.nodes.length) {
       canvas.classList.add('empty');
       canvas.innerHTML = '<p class="empty-canvas">Add a process block or source to begin.</p>';
@@ -700,7 +977,7 @@
       const labelY = edge.recycle ? recycleY - 8 : (start.y + end.y) / 2 - 7;
       return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${constrained ? ' bottleneck' : ''}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}" x="${labelX}" y="${labelY}" text-anchor="middle">${stream ? `${edge.recycle ? '↻ ' : ''}${formatStream(stream)}` : ''}</text>`;
     }).join('');
-    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="min-width:${width}px" aria-label="Editable factory flowsheet">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
+    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:${width * canvasZoom}px;height:${height * canvasZoom}px;max-width:none" aria-label="Editable factory flowsheet">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
   }
 
   function renderNode(current) {
@@ -798,7 +1075,7 @@
       const preset = definition.presets ? `<label>Process type</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
       const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="processParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
       const references = (definition.references || []).map(reference => `<a href="${reference.url}" target="_blank" rel="noreferrer">${reference.label}</a>`).join(' · ');
-      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${preset || parameters ? `<fieldset><legend>Process assumptions</legend>${preset}${parameters}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset>` : ''}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
+      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${preset || parameters ? `<fieldset><legend>Process assumptions</legend>${preset}${parameters}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
     }
     if (kind === 'source') {
       const definition = catalog[current.unit];
@@ -812,9 +1089,65 @@
       const rate = definition.controls && !definition.manualRateMax
         ? `<p class="status-meta">Available: ${formatNumber(current.rate)} ${unit}</p>`
         : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100}" value="${current.rate}">`;
-      return `<fieldset><legend>Source settings</legend>${preset}${processPreset}${rate}${temperature}${parameters}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset><button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
+      return `<fieldset><legend>Source settings</legend>${preset}${processPreset}${rate}${temperature}${parameters}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
     }
-    return `<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
+    return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
+  }
+
+  function defaultEconomics(current) {
+    const kind = units[current.unit].kind;
+    if (kind === 'source') {
+      if (['solar-pv', 'nuclear-electricity', 'solar-thermal'].includes(current.unit)) return {
+        installedCapex: current.params.capacityKW * current.params.capexPerKW,
+        fixedOM: current.params.capacityKW * Number(current.params.fixedOMPerKWYear || 0),
+        variableOM: Number(current.params.variableCostPerMWh || 0) / 1000,
+        assetLifeYears: current.params.lifeYears,
+      };
+      const unitCost = current.unit === 'grid-electricity' ? current.params.pricePerMWh / 1000
+        : current.unit === 'electricity-source' ? 0.05
+          : current.unit === 'heat-source' ? 0.02
+            : current.unit === 'consumable-source' ? 1 : 0;
+      return { unitCost };
+    }
+    if (kind === 'converter') return {
+      installedCapex: ['battery', 'thermal-storage'].includes(current.unit) ? current.capacity * current.params.capexPerKWh : 0,
+      fixedOMPercent: 3,
+      variableOM: 0,
+      assetLifeYears: 20,
+    };
+    if (kind === 'sink') return { disposition: 'vent', unitPrice: 0, disposalCost: 0, annualDemandLimit: 1e12 };
+    return {};
+  }
+
+  function economicsControlsFor(current) {
+    const kind = units[current.unit].kind;
+    const economics = current.economics || (current.economics = defaultEconomics(current));
+    const field = (key, label, step = '0.01') => `<label>${label}<input name="economics" data-economics="${key}" type="number" min="0" step="${step}" value="${economics[key] ?? 0}"></label>`;
+    if (kind === 'source') return `<fieldset><legend>Economics</legend>${economics.unitCost != null ? field('unitCost', 'Delivered input cost') : `${field('installedCapex', 'Installed CAPEX', '100')}${field('fixedOM', 'Fixed O&M / year', '100')}${field('variableOM', 'Variable cost / output unit')}`}<p class="status-meta">Native unit is kg, kWh, or consumable unit. Zero values explore the physical limit.</p></fieldset>`;
+    if (kind === 'converter') return `<fieldset><legend>Economics</legend>${field('installedCapex', 'Installed CAPEX', '100')}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${field('variableOM', 'Variable O&M / activity unit')}${field('assetLifeYears', 'Asset life (years)', '1')}</fieldset>`;
+    return `<fieldset><legend>Destination economics</legend><label>Disposition<select name="economics" data-economics="disposition">${['sale', 'disposal', 'vent', 'reinjection'].map(value => `<option value="${value}"${economics.disposition === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>${field('unitPrice', 'Sale price / unit')}${field('annualDemandLimit', 'Annual demand limit', '1')}${field('disposalCost', 'Disposal cost / unit')}</fieldset>`;
+  }
+
+  function renderEconomics() {
+    const metrics = document.getElementById('economicsMetrics');
+    const status = document.getElementById('economicsStatus');
+    document.getElementById('projectLifeYears').value = projectEconomics.projectLifeYears;
+    document.getElementById('discountRate').value = projectEconomics.discountRate * 100;
+    if (!currentEconomics) {
+      status.textContent = result ? 'Economics adapter unavailable.' : 'Complete the graph to calculate viability.';
+      metrics.innerHTML = '';
+      return;
+    }
+    status.textContent = `${currentEconomics.periodDays} operating days/year · illustrative assumptions; edit any source, block, or destination in the inspector.`;
+    metrics.innerHTML = metricRows([
+      ['Installed CAPEX', formatMoney(currentEconomics.installedCapex)],
+      ['Annual revenue', formatMoney(currentEconomics.annualRevenue)],
+      ['Annual operating cost', formatMoney(currentEconomics.annualOperatingCost)],
+      ['Annual net cash', formatMoney(currentEconomics.annualNetCash)],
+      ['NPV', formatMoney(currentEconomics.npv)],
+      ['IRR', formatRate(currentEconomics.irr)],
+      ['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatMoney(currentEconomics.levelizedDeliveredCost)}/unit`],
+    ]);
   }
 
   function renderInspectorPort(current, port, declaration) {
@@ -873,7 +1206,12 @@
   function formatMoney(value) { return `$${formatNumber(value)}`; }
   function metricRows(rows) { return rows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join(''); }
 
-  window.__FLOWSHEET_APP__ = { graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus, completeBoundaries, loadMethaneRecycle, saveNamed, loadNamed, solve: solveAndRender, get result() { return result; } };
+  window.__FLOWSHEET_APP__ = {
+    graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
+    completeBoundaries, loadMethaneRecycle, loadAbundanceHub, saveNamed, loadNamed, captureBaseline, clearBaseline,
+    solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },
+    get economics() { return currentEconomics; }, projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
+  };
   refreshSaveOptions();
   if (restoreSnapshot(readJson(AUTOSAVE_KEY))) solveAndRender();
   else render();

@@ -318,11 +318,11 @@ If the recycle edge is absent, makeup water must be connected or electrolysis th
 
 ### 5. Bind economics and UI
 
-Render the solved graph and stream table first, then bind existing TEA panels to installed capacities and solved boundary flows. A graphical editor remains optional.
+Implemented: the graphical editor is the primary product. A generic post-solve fold prices source flows, converter capacity and throughput, and sink dispositions, then reports delivered cost, cash flow, NPV, and IRR. Baseline capture compares those outputs and attributes simple synergy value to avoided purchases, avoided disposal, and added product revenue.
 
-## Deferred catalog
+## Extended abundance catalog
 
-Salt mining, geothermal lithium, reagent networks, ammonia, steel, and lime products wait until a concrete coupling case needs them. They must use the same ports and unit contract when added; they do not justify speculative hooks.
+The shared unit contract now covers ASU nitrogen/oxygen separation, Haber–Bosch ammonia, brine fractionation into lithium chloride, sodium bromide, magnesium chloride, potash, gypsum and salt, chlor-alkali co-products, bromine recovery, aluminium smelting, hydrogen direct-reduced iron, and titanium Kroll reduction. These remain screening models: explicit stoichiometry, recoveries, power, capacity, balances, and economics are modeled; detailed pretreatment, kinetics, pressure/temperature trains, purity specifications, and logistics are not.
 
 ## Initial layout
 

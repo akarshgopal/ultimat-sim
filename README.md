@@ -50,8 +50,9 @@ Requires Node.js 18 or newer; no external runtime packages are needed.
 - `npm run preview`: serve the built output.
 - `npm run flowsheet`: print the integrated methane example's flows and balances.
 - `npm test`: run Foundry regression checks.
+- `npm run deploy`: build `dist/` and publish it to GitHub Pages.
 
-Vercel is configured to build and serve `dist/`. The build includes only the remaining project files.
+The live site is [akarshgopal.github.io/ultimat-sim](https://akarshgopal.github.io/ultimat-sim/). Pushes to `flowsheet` rebuild it. Vercel is also configured to build and serve `dist/`.
 
 ## License
 

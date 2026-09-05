@@ -47,6 +47,18 @@
 .project-assumptions label { color: var(--text-muted); font-size: 0.75rem; }
 .project-assumptions input { width: 72px; margin-left: 4px; }
 .economics-panel { margin: 0 0 12px; }
+.empire-panel { margin: 0 0 12px; }
+.empire-plants { display: grid; gap: 8px; margin: 10px 0; }
+.empire-plant {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+.empire-plant button { margin-left: 6px; }
 .site-panel { margin: 0 0 12px; }
 .site-panel .comparison-metrics { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
 .site-panel .comparison-metrics dt small {

@@ -1,0 +1,80 @@
+(function exposeEmpireCase(root, factory) {
+  const api = factory(
+    typeof require === 'function' ? require('./coastal') : root.CoastalCase,
+    typeof require === 'function' ? require('./abundance') : root.AbundanceCase,
+    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel
+  );
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.EmpireCase = api;
+})(globalThis, (coastal, abundance, model) => {
+const { streamMassKg } = model;
+const DEAD_SEA_PV = 5.4;
+
+function siteDeadSeaAbundance() {
+  const definition = abundance.createAbundanceCase();
+  const node = id => definition.graph.nodes.find(item => item.id === id);
+  const power = node('power').params.stream.kWh;
+  const solarKWp = power / DEAD_SEA_PV;
+  const clone = stream => JSON.parse(JSON.stringify(stream));
+  node('power').siteResource = 'electricity';
+  node('brine').siteResource = 'brine';
+  node('salt-feed').siteResource = 'salt';
+  node('water').siteResource = 'freshwater';
+  node('air').siteResource = 'air';
+  node('power').economics = { installedCapex: solarKWp * 1000, fixedOM: solarKWp * 20, assetLifeYears: 25 };
+  definition.site = {
+    id: 'dead-sea-2026-09-05',
+    name: 'Dead Sea industrial shore',
+    latitude: 31.16,
+    longitude: 35.43,
+    solarKWp,
+    dailyPVKWhPerKWp: DEAD_SEA_PV,
+    resources: {
+      electricity: {
+        stream: clone(node('power').params.stream),
+        quality: 'literature-estimate',
+        evidence: 'Screening 5.4 kWh/kWp-day desert PV to cover the hub; not a local TMY or permit',
+      },
+      brine: {
+        stream: clone(node('brine').params.stream),
+        quality: 'literature-estimate',
+        evidence: 'Example concentrated brine assay for screening; not a mineral concession',
+      },
+      salt: {
+        stream: clone(node('salt-feed').params.stream),
+        quality: 'user-assumption',
+        evidence: 'Purchased salt makeup assumed available; not a local quote',
+      },
+      freshwater: {
+        stream: clone(node('water').params.stream),
+        quality: 'user-assumption',
+        evidence: 'Process water is assumed, not a Dead Sea freshwater right',
+      },
+      air: {
+        stream: clone(node('air').params.stream),
+        quality: 'literature-estimate',
+        evidence: 'Ambient air intake; no quality permit modeled',
+      },
+      grid: { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' },
+    },
+    evidence: [
+      { label: 'Dead Sea industrial geography', url: 'https://en.wikipedia.org/wiki/Dead_Sea' },
+      { label: 'Desert PV screening yield, not site-measured TMY', url: 'https://re.jrc.ec.europa.eu/pvg_tools/en/' },
+    ],
+    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at 5.4 kWh/kWp-day. Freshwater and purchased salt are explicit assumptions. Annual economics repeat this day 365 times.',
+  };
+  return definition;
+}
+
+function createFuelsAndMineralsEmpire(month = 6) {
+  return {
+    plants: [
+      { id: 'almeria-fuels', name: 'Almería solar methane', definition: coastal.createCoastalCase(month) },
+      { id: 'dead-sea-minerals', name: 'Dead Sea brine and ammonia', definition: siteDeadSeaAbundance() },
+    ],
+    corridors: [],
+  };
+}
+
+return { DEAD_SEA_PV, siteDeadSeaAbundance, createFuelsAndMineralsEmpire };
+});

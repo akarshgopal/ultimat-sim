@@ -79,6 +79,8 @@ The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARA
 
 When `site.solar.typicalMonths` is present, `solveHorizon` runs 24 hourly operating solves. Daily setpoints are leftover demand, nameplate is capacity/24, and methane-chain setpoints stay stoichiometric so intermediate CO₂/H₂ is not orphaned. Site electricity is that hour's PV yield plus optional battery discharge. Other site budgets are remaining daily quantities. Night hours with no PV and no stored energy produce nothing.
 
+An empire is a set of sited plants plus optional haul corridors. `engine/empire.js` solves each plant with the same physics engine, then rolls up product tonnes, PV land, freight, and cash. A corridor moves a sold material to another plant's purchased source, applying distance, loss, and $/t-km. Prices still never enter a unit equation.
+
 ## Substances and streams
 
 Material composition is primary. Purity, mass, volume, TDS, and product tonnes are derived views.

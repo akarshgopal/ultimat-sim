@@ -9,6 +9,7 @@
   const storage = (() => { try { return window.localStorage; } catch { return null; } })();
   const AUTOSAVE_KEY = 'molecular-foundry.autosave.v1';
   const SAVES_KEY = 'molecular-foundry.saves.v1';
+  const EMPIRE_KEY = 'molecular-foundry.empire.v1';
   const NODE_WIDTH = 220;
   const COLUMN_GAP = 120;
   let selectedNodeId = null;
@@ -18,6 +19,8 @@
   let baseline = null;
   let canvasZoom = 1;
   let site = null;
+  let empire = { plants: [], corridors: [] };
+  let empireResult = null;
   let solveError = '';
   let routeNote = '';
   let dragging = null;
@@ -362,6 +365,16 @@
   document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
   document.getElementById('loadCoastalMethane').addEventListener('click', () => loadCoastalMethane(0));
   document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
+  document.getElementById('loadDemoEmpire').addEventListener('click', loadDemoEmpire);
+  document.getElementById('addPlantToEmpire').addEventListener('click', () => {
+    const name = window.prompt('Name this plant in the empire:')?.trim();
+    if (name) addCurrentPlant(name);
+  });
+  document.getElementById('clearEmpire').addEventListener('click', clearEmpire);
+  document.getElementById('empirePlants').addEventListener('click', event => {
+    const id = event.target.closest('[data-open-plant]')?.dataset.openPlant;
+    if (id) openEmpirePlant(id);
+  });
   document.getElementById('siteMonth').addEventListener('change', event => {
     if (!site) return;
     site.month = Number(event.target.value);
@@ -662,6 +675,67 @@
 
   function loadAbundanceHub() {
     loadCase(AbundanceCase.createAbundanceCase(), 'minerals');
+  }
+
+  function plantSnapshot(name, definition) {
+    return {
+      id: `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString(36)}`,
+      name,
+      definition: clone(definition),
+    };
+  }
+
+  function addCurrentPlant(name) {
+    empire.plants.push(plantSnapshot(name, {
+      graph: { nodes: graph.nodes, edges: graph.edges },
+      operation: { setpoints },
+      site,
+      economics: projectEconomics,
+    }));
+    refreshEmpire();
+    return true;
+  }
+
+  function clearEmpire() {
+    empire = { plants: [], corridors: [] };
+    empireResult = null;
+    persistEmpire();
+    renderEmpire();
+  }
+
+  function loadDemoEmpire() {
+    empire = clone(EmpireCase.createFuelsAndMineralsEmpire(6));
+    refreshEmpire();
+    const first = empire.plants[0];
+    if (first) openEmpirePlant(first.id);
+  }
+
+  function openEmpirePlant(id) {
+    const plant = empire.plants.find(item => item.id === id);
+    if (!plant) return false;
+    loadCase(plant.definition, plant.definition.graph.nodes.find(node => node.unit === 'sabatier' || node.unit === 'ammonia')?.id);
+    return true;
+  }
+
+  function refreshEmpire() {
+    try {
+      empireResult = FlowsheetEmpire.evaluateEmpire(empire);
+      empire.plants = empireResult.plants.map(plant => ({
+        id: plant.id,
+        name: plant.name,
+        definition: plant.definition,
+      }));
+    } catch (error) {
+      empireResult = null;
+      routeNote = error.message;
+    }
+    persistEmpire();
+    renderEmpire();
+  }
+
+  function persistEmpire() {
+    if (!storage) return;
+    try { storage.setItem(EMPIRE_KEY, JSON.stringify({ plants: empire.plants, corridors: empire.corridors })); } catch { /* ignore */ }
   }
 
   function loadCase(definition, selection) {
@@ -1212,7 +1286,7 @@
   function node(id) { return graph.nodes.find(candidate => candidate.id === id); }
   function portName(port) { return portNames[port] || port.replace(/([a-z])([A-Z])/g, '$1 $2'); }
 
-  function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); }
+  function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderEmpire(); }
 
   function renderGraph() {
     renderCanvasZoom();
@@ -1314,9 +1388,11 @@
       monthLabel.hidden = true;
     }
     const hours = result?.horizon?.hours;
-    document.getElementById('siteHorizon').textContent = hours
-      ? `${hours.filter(entry => entry.pv > 0).length} daylight hours · ${hours.filter(entry => entry.pv === 0).length} night hours · peak ${formatNumber(Math.max(...hours.map(entry => entry.pv)))} kWh PV · battery ${formatNumber(site?.storage?.batteryKWh || 0)} kWh`
-      : '';
+    const land = site?.solarKWp && FlowsheetEmpire ? FlowsheetEmpire.pvLandHa(site.solarKWp) : 0;
+    document.getElementById('siteHorizon').textContent = [
+      hours ? `${hours.filter(entry => entry.pv > 0).length} daylight hours · ${hours.filter(entry => entry.pv === 0).length} night hours · peak ${formatNumber(Math.max(...hours.map(entry => entry.pv)))} kWh PV · battery ${formatNumber(site?.storage?.batteryKWh || 0)} kWh` : '',
+      land ? `${formatNumber(land)} ha PV land at 1.6 ha/MWp screening` : '',
+    ].filter(Boolean).join(' · ');
     document.getElementById('siteResources').innerHTML = Object.entries(site?.resources || {}).map(([id, resource]) => {
       const quality = resource.quality || 'user-assumption';
       return `<div class="${quality === 'unverified' ? 'unverified' : ''}"><dt>${id} <small>${quality}</small></dt><dd>${formatStream(resource.stream)}</dd></div>`;
@@ -1324,6 +1400,42 @@
     document.getElementById('siteEvidence').innerHTML = (site?.evidence || []).map(item => (
       item.url ? `<a href="${item.url}" target="_blank" rel="noreferrer">${item.label}</a>` : item.label
     )).join(' · ');
+  }
+
+  function renderEmpire() {
+    const plants = document.getElementById('empirePlants');
+    const status = document.getElementById('empireStatus');
+    const metrics = document.getElementById('empireMetrics');
+    const products = document.getElementById('empireProducts');
+    const corridors = document.getElementById('empireCorridors');
+    if (!empire.plants.length) {
+      status.textContent = 'Add sited plants. Each keeps its own physics solve; the empire rolls up materials, land, freight, and cash.';
+      plants.innerHTML = '';
+      metrics.innerHTML = '';
+      products.innerHTML = '';
+      corridors.textContent = '';
+      return;
+    }
+    if (!empireResult) {
+      status.textContent = 'Empire solve failed.';
+      return;
+    }
+    status.textContent = `${empireResult.plants.length} plants · ${formatNumber(empireResult.landHa)} ha PV land · freight ${formatMoney(empireResult.freight)}/year`;
+    plants.innerHTML = empireResult.plants.map(plant => {
+      const siteName = plant.definition.site?.name || 'Unspecified site';
+      return `<div class="empire-plant"><div><strong>${plant.name}</strong><small class="status-meta">${siteName}</small></div><div><button type="button" data-open-plant="${plant.id}">Open</button></div></div>`;
+    }).join('');
+    metrics.innerHTML = metricRows([
+      ['Empire CAPEX', formatMoney(empireResult.installedCapex)],
+      ['Annual revenue', formatMoney(empireResult.annualRevenue)],
+      ['Annual cost', formatMoney(empireResult.annualOperatingCost)],
+      ['Annual net cash', formatMoney(empireResult.annualNetCash)],
+      ['Empire NPV', formatMoney(empireResult.npv)],
+    ]);
+    products.innerHTML = metricRows(Object.entries(empireResult.slate).sort((left, right) => right[1] - left[1]).map(([substance, tonnes]) => [substance, `${formatNumber(tonnes)} t/year`]));
+    corridors.textContent = empireResult.corridors.length
+      ? empireResult.corridors.map(corridor => `${corridor.substance} ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatMoney(corridor.annualFreight)}/year`).join(' · ')
+      : 'No haul corridors yet. Plants trade with markets, not each other, until you add a corridor.';
   }
 
   function renderInspector() {
@@ -1447,6 +1559,9 @@
       ['NPV', formatMoney(currentEconomics.npv)],
       ['IRR', formatRate(currentEconomics.irr)],
       ['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatMoney(currentEconomics.levelizedDeliveredCost)}/unit`],
+      ...(currentEconomics.sinks || []).filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0).map(sink => (
+        [`Sold ${sink.id}`, `${formatNumber(sink.deliveredAmount / 1000)} t/year`]
+      )),
     ]);
   }
 
@@ -1473,7 +1588,10 @@
 
   function formatStream(stream) {
     if (!stream) return '—';
-    if (stream.kind === 'material') return `${formatNumber(FlowsheetModel.streamMassKg(stream))} kg/day`;
+    if (stream.kind === 'material') {
+      const kg = FlowsheetModel.streamMassKg(stream);
+      return `${formatNumber(kg)} kg/day · ${formatNumber(kg * 365 / 1000)} t/year`;
+    }
     if (stream.kind === 'consumable') return `${formatNumber(stream.amount)} ${stream.unit}`;
     return `${formatNumber(stream.kWh)} kWh/day${stream.kind === 'heat' ? ` @ ${stream.T_C}°C` : ''}`;
   }
@@ -1508,12 +1626,17 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, replaceUnit, bindLocation,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, loadDemoEmpire,
+    addCurrentPlant, openEmpirePlant, clearEmpire, replaceUnit, bindLocation,
     saveNamed, loadNamed, captureBaseline, clearBaseline,
     solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },
-    get economics() { return currentEconomics; }, get site() { return site; }, projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
+    get economics() { return currentEconomics; }, get site() { return site; }, get empire() { return empireResult; },
+    projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
   };
   refreshSaveOptions();
+  const savedEmpire = readJson(EMPIRE_KEY);
+  if (savedEmpire?.plants) empire = { plants: savedEmpire.plants, corridors: savedEmpire.corridors || [] };
+  if (empire.plants.length) refreshEmpire();
   if (restoreSnapshot(readJson(AUTOSAVE_KEY))) solveAndRender();
   else render();
 })();

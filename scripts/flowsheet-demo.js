@@ -4,6 +4,7 @@ const { createSabatierCase } = require('../cases/sabatier');
 
 function formatStream(stream) {
   if (stream.kind === 'material') return `${streamMassKg(stream).toFixed(6)} kg`;
+  if (stream.kind === 'consumable') return `${stream.amount.toFixed(6)} ${stream.unit || 'units'}`;
   const temperature = stream.kind === 'heat' ? ` @ ${stream.T_C} °C` : '';
   return `${stream.kWh.toFixed(6)} kWh${temperature}`;
 }

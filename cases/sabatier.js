@@ -126,14 +126,6 @@ function createSabatierCase(overrides = {}) {
 
   return {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
-    constraints: [
-      { id: 'electricity', label: 'Electricity', node: 'electricity', side: 'source', capacity: electricityKWh, unit: 'kWh/day', detail: `${solarElectricityKWh.toFixed(1)} solar + ${gridElectricityKWh.toFixed(1)} grid` },
-      { id: 'heat', label: 'DAC heat', node: 'heat', side: 'source', capacity: heatKWh, unit: 'kWh/day' },
-      { id: 'seawater', label: 'Seawater intake', node: 'seawater', side: 'source', capacity: streamMassKg(seawater), unit: 'kg/day' },
-      { id: 'air', label: 'Feed gas intake', node: 'air', side: 'source', capacity: airMassKg, unit: 'kg/day', detail: `${co2Ppm.toLocaleString('en-US')} ppm CO2` },
-      { id: 'brine', label: 'Brine disposal', node: 'brine', side: 'sink', capacity: brineCapacityKg, unit: 'kg/day' },
-      { id: 'depleted-air', label: 'Off-gas discharge', node: 'depleted-air', side: 'sink', capacity: offgasCapacityKg, unit: 'kg/day' },
-    ],
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
@@ -227,7 +219,6 @@ function createSabatierCase(overrides = {}) {
         sabatier: boundaryLimitedBy.length ? upstreamTarget : sabatierRequested,
       },
       priorities: { 'electrical-bus': ['dac', 'swro', 'electrolyzer', 'sabatier'] },
-      requestedProductActivity: sabatierRequested,
       boundaryLimitedBy,
     },
   };

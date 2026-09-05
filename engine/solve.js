@@ -12,6 +12,7 @@ const {
   elementAmounts,
   nonnegative,
   scaleStream,
+  streamMassKg,
   validateStream,
 } = model;
 const { UNITS } = units;
@@ -19,6 +20,7 @@ const { UNITS } = units;
 function solveOperation(caseDefinition) {
   const { nodes, edges } = caseDefinition.graph;
   validateGraph(nodes, edges);
+  validateSite(caseDefinition);
   const buses = nodes.filter(node => node.unit === 'electrical-bus');
   const recycleEdges = edges.filter(edge => edge.recycle);
   let recycleStreams = new Map(recycleEdges.map(edge => [edge, cloneStream(edge.initialStream)]));
@@ -65,7 +67,6 @@ function solveOperation(caseDefinition) {
     streams,
     nodes: solved.nodeResults,
     balances,
-    constraints: caseDefinition.constraints || [],
     warnings,
     convergence: {
       converged,
@@ -75,8 +76,51 @@ function solveOperation(caseDefinition) {
   };
 }
 
+function streamAmount(stream) {
+  if (stream.kind === 'material') return streamMassKg(stream);
+  if (stream.kind === 'consumable') return stream.amount;
+  return stream.kWh;
+}
+
+function siteBudgets(site) {
+  return new Map(Object.entries(site?.resources || {})
+    .filter(([, resource]) => resource?.stream)
+    .map(([id, resource]) => [id, streamAmount(resource.stream)]));
+}
+
+// Presence and access stay distinct: every source on a sited factory must name a
+// resource. Quantity is clamped later so two blocks cannot duplicate one budget.
+function validateSite({ site, graph }) {
+  if (!site) return;
+  if (!site.resources || typeof site.resources !== 'object') throw new Error('Site needs resource budgets');
+  for (const node of graph.nodes.filter(node => UNITS[node.unit].kind === 'source')) {
+    const resource = site.resources[node.siteResource];
+    if (!resource?.stream) throw new Error(`${node.id}: choose a verified or explicitly assumed site resource`);
+    const available = validateStream(resource.stream, UNITS[node.unit].ports.out.kind);
+    const requested = validateStream(node.params?.stream, available.kind);
+    const quantity = streamAmount(requested);
+    const limit = streamAmount(available);
+    if (available.kind === 'material' && quantity > 0 && limit > 0) {
+      if (available.phase !== requested.phase || available.T_C !== requested.T_C || available.P_bar !== requested.P_bar) {
+        throw new Error(`${node.id}: site feed phase, temperature and pressure must be preserved`);
+      }
+      for (const species of new Set([...Object.keys(available.mol), ...Object.keys(requested.mol)])) {
+        const expected = (available.mol[species] || 0) * quantity / limit;
+        if (Math.abs((requested.mol[species] || 0) - expected) > Math.max(1, expected) * 1e-9) {
+          throw new Error(`${node.id}: site feed composition must be preserved`);
+        }
+      }
+    }
+    if (available.kind === 'heat' && requested.T_C > available.T_C) throw new Error(`${node.id}: site heat is too cold`);
+    if (available.kind === 'consumable' && (requested.chemicalId !== available.chemicalId || requested.unit !== available.unit)) {
+      throw new Error(`${node.id}: incompatible site consumable`);
+    }
+  }
+}
+
 function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map()) {
   const { nodes, edges } = caseDefinition.graph;
+  const remaining = siteBudgets(caseDefinition.site);
   const edgeStreams = new Map([...recycleStreams].map(([edge, stream]) => [edge, cloneStream(stream)]));
   const nodeResults = {};
   for (const node of topologicalOrder(nodes, edges)) {
@@ -84,8 +128,18 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map()) 
     const incoming = edges.filter(edge => edge.to.node === node.id);
     const outgoing = edges.filter(edge => edge.from.node === node.id);
     if (unit.kind === 'source') {
-      const stream = cloneStream(validateStream(node.params?.stream, unit.ports.out.kind));
-      nodeResults[node.id] = { available: stream };
+      let stream = cloneStream(validateStream(node.params?.stream, unit.ports.out.kind));
+      const limitedBy = [];
+      if (caseDefinition.site && remaining.has(node.siteResource)) {
+        const requested = streamAmount(stream);
+        const available = remaining.get(node.siteResource);
+        if (requested > available + Math.max(1, available) * 1e-9) {
+          stream = scaleStream(stream, requested === 0 ? 0 : available / requested);
+          limitedBy.push('site budget');
+        }
+        remaining.set(node.siteResource, Math.max(0, available - streamAmount(stream)));
+      }
+      nodeResults[node.id] = { available: stream, limitedBy };
       edgeStreams.set(outgoing[0], stream);
       continue;
     }

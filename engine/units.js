@@ -290,6 +290,31 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
   };
 }
 
+const DAC_TECHNOLOGIES = {
+  'dac-solid': { label: 'Solid-sorbent DAC', chemicalId: 'amine-sorbent', heat: true },
+  'dac-electroswing': { label: 'Electro-swing DAC', chemicalId: 'quinone-electrode', heat: false },
+};
+
+function technologyDac(args, technology) {
+  const spec = DAC_TECHNOLOGIES[technology];
+  if (args.inlets.consumables?.chemicalId !== spec.chemicalId || args.inlets.consumables?.unit !== 'kg/day') {
+    throw new Error(`${spec.label} requires ${spec.chemicalId} makeup in kg/day`);
+  }
+  const result = dac(spec.heat ? args : {
+    ...args,
+    params: { ...args.params, heatKWhPerKgCO2: 0 },
+    inlets: { ...args.inlets, heat: { kind: 'heat', kWh: 0, T_C: 25 } },
+  });
+  // Screening boundary: replacement mass exits as spent media; degradation chemistry is not resolved.
+  result.outlets.spentMedia = { ...result.consumed.consumables, label: `Spent ${spec.chemicalId}` };
+  if (!spec.heat) {
+    delete result.requestedInputs.heat;
+    delete result.consumed.heat;
+    delete result.outlets.wasteHeat;
+  }
+  return result;
+}
+
 function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
   const co2 = validateStream(inlets.co2, 'material');
   const hydrogen = validateStream(inlets.hydrogen, 'material');
@@ -696,6 +721,23 @@ const UNITS = Object.freeze({
     },
     evaluate: dac,
   },
+  ...Object.fromEntries(Object.entries(DAC_TECHNOLOGIES).map(([id, spec]) => [id, {
+    kind: 'converter',
+    ports: {
+      air: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      ...(spec.heat ? { heat: { direction: 'in', kind: 'heat', required: true } } : {}),
+      consumables: { direction: 'in', kind: 'consumable', required: true },
+      capturedCo2: { direction: 'out', kind: 'material', required: true },
+      depletedAir: { direction: 'out', kind: 'material', required: true },
+      ...(spec.heat ? { wasteHeat: { direction: 'out', kind: 'heat', required: true } } : {}),
+      spentMedia: { direction: 'out', kind: 'consumable', required: true },
+    },
+    evaluate: args => technologyDac(args, id),
+  }])),
+  'consumable-sink': {
+    kind: 'sink', ports: { in: { direction: 'in', kind: 'consumable', required: true } },
+  },
   sabatier: {
     kind: 'converter',
     ports: {
@@ -774,5 +816,5 @@ const UNITS = Object.freeze({
   },
 });
 
-return { UNITS };
+return { UNITS, DAC_TECHNOLOGIES };
 });

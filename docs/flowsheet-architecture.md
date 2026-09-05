@@ -1,10 +1,10 @@
 # Flowsheet engine
 
-Status: Stage 5 started: SWRO, electrolysis, DAC, methane synthesis, and explicitly marked material recycle.
+Status: Molecular Foundry is the root app, with an editable flowsheet, material recycle, an extended process catalog, post-solve economics, baseline comparison, and site resource budgets. The coastal methane example is the first factory whose available solar, seawater, and unverified supplies come from a named site rather than unbounded sliders.
 
-`main` remains the live TEA. The replacement engine solves material and energy flows first; the existing economics becomes a consumer of the solved flowsheet. Site, solar, DCF, policy, charts, maps, and shareable URLs are reused where they still fit.
+The engine solves material and energy flows first; `engine/economics.js` values the solved result. The earlier TEA page and its policy, dispatch, maps, and financing modules have been removed.
 
-## Goal
+## Original implementation sequence
 
 Build one small steady-state process engine that can grow in this order:
 
@@ -54,7 +54,7 @@ An output port has one destination. Fan-out requires a splitter; fan-in requires
 
 ```text
 Case
-  site          # optional boundary data such as solar yield
+  site          # named location with bounded, evidenced resource budgets
   graph         # nodes and edges
   operation     # setpoints, following rules, split and priority policies
   period        # one representative day in v1
@@ -72,6 +72,10 @@ Edge
 ```
 
 Edges do not repeat their stream type or disposition. Those are determined by the connected ports, and all boundary outputs terminate at explicit sinks.
+
+When `site` is present, every source block must name a `siteResource`. Resource presence is not access: an unverified grid or freshwater budget is explicit zero, not unlimited supply and not a silent free input. Two source blocks that share a resource draw from the same remaining quantity; the solver clamps rather than duplicating the budget. Composition, phase, temperature, and consumable identity on a source must match the named resource.
+
+The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield, global 35 g/kg seawater as NaCl, solid-sorbent DAC, and unverified grid/freshwater. It is a representative-day screen, not hourly dispatch.
 
 ## Substances and streams
 
@@ -115,9 +119,11 @@ Process presets are editable starting points, not universal performance claims. 
 | --- | --- | --- |
 | Seawater desalination | SWRO, MED, MSF | [Elimelech & Phillip (2011)](https://doi.org/10.1126/science.1200488); [Ghaffour et al. (2013)](https://doi.org/10.1016/j.apenergy.2012.12.073) |
 | Low-temperature electrolysis | alkaline, PEM | [Buttler & Spliethoff (2018)](https://doi.org/10.1016/j.rser.2017.09.003) |
-| Direct air capture | solid sorbent, KOH/calcium looping, electro-swing | [Keith et al. (2018)](https://doi.org/10.1016/j.joule.2018.05.006); [Voskian & Hatton (2019)](https://doi.org/10.1039/C9EE02412C) |
+| Direct air capture | `dac-solid` and `dac-electroswing` as separate units; generic `dac` remains a screening block | [IEA DAC 2022](https://www.iea.org/reports/direct-air-capture-2022/executive-summary); [Keith et al. (2018)](https://doi.org/10.1016/j.joule.2018.05.006); [Voskian & Hatton (2019)](https://doi.org/10.1039/C9EE02412C) |
 | Electricity | solar PV, grid imports, Radiant/Valar/generic advanced nuclear | [NREL ATB: PV](https://atb.nrel.gov/electricity/2024/utility-scale_pv); [NRC: Kaleidos](https://www.nrc.gov/reactors/new-reactors/advanced/who-were-working-with/pre-application-activities/kaleidos); [Valar Atomics](https://www.valaratomics.com/) |
 | Energy storage and process heat | battery, solar thermal, thermal storage | [NREL ATB: battery storage](https://atb.nrel.gov/electricity/2024/2023/utility-scale_battery_storage); [DOE: solar process heat](https://www.energy.gov/cmei/systems/solar-industrial-processes); [DOE: thermal storage](https://www.energy.gov/cmei/systems/solar-thermal-energy-storage-and-heat-transfer-media) |
+
+Different chemistry or external requirements get a separate unit, grouped in the same menu. Parameter presets are only for the same ports and reagents. Switching a DAC route preserves compatible connections and drops incompatible heat or reagent edges without rewriting the existing makeup chemical.
 
 SOEC and enhanced rock weathering are separate future units because their steam/mineral feeds and products do not match the existing electrolyzer or DAC port contracts.
 
@@ -177,6 +183,8 @@ optimizeEconomics(caseDefinition)    // later still
 ```
 
 ## Solver growth
+
+The stages below record the implementation sequence; current UI and catalog support is described later in this document.
 
 The solver grows with the acceptance cases rather than anticipating them all.
 
@@ -266,8 +274,9 @@ Economics runs only after a flowsheet has solved:
 - variable O&M from solved throughput
 - source costs from purchased boundary flows
 - sink revenue from product boundary flows
-- policy by eligible unit kind
-- financing, DCF, and IRR using the existing model where possible
+- replacement-aware cash flows, NPV, and fractional project IRR
+
+Policy support and debt financing belonged to the retired TEA; they are not part of the Foundry economics fold.
 
 Market demand and price do not alter a physics solve. If they later influence operation, an outer dispatch or optimization layer chooses new setpoints and calls the same solver.
 
@@ -326,7 +335,7 @@ The shared unit contract now covers ASU nitrogen/oxygen separation, Haber–Bosc
 
 ## Initial layout
 
-Stage 4 uses:
+Historical Stage 4 layout (see the README for the current code map):
 
 ```text
 engine/
@@ -336,6 +345,7 @@ engine/
 cases/
   dac.js         # Stage 3 DAC acceptance fixture
   sabatier.js    # Integrated air + water to methane fixture
+  coastal.js     # Sited Almería methane example with PVGIS solar budgets
 scripts/
   flowsheet-demo.js # Integrated CLI report
 tests/
@@ -352,13 +362,11 @@ Cases can remain JavaScript fixtures until serialization or a shareable URL requ
 - automatic plant sizing or economic optimization
 - full thermodynamic properties or phase equilibrium
 - heat-exchanger-network synthesis
-- hourly storage dynamics and optimized dispatch
-- broad product catalog
-- replacing Leaflet, Chart.js, or the existing policy/DCF implementation
+- hourly storage dynamics, 8760-hour solar dispatch, or inventories that carry between periods
 
 ## Decisions
 
-1. Same repository and `flowsheet` branch; `main` remains live until an explicit cutover.
+1. Same repository; Molecular Foundry is the root page and the TEA code has been removed.
 2. Representative-day steady state first.
 3. Component-vector material streams, explicit electricity, and temperature-graded heat.
 4. Fixed installed capacities during an operating solve.
@@ -366,5 +374,5 @@ Cases can remain JavaScript fixtures until serialization or a shareable URL requ
 6. Environment, purchases, products, vents, disposal, and reinjection are explicit boundary nodes.
 7. Economics is a fold over the solved graph, with optimization deferred.
 8. JavaScript catalog and Node's built-in test runner; no new dependency for v1.
-9. JSON and a node editor wait until persistence or editing is actually needed.
-10. Pages remains on `main` until the new engine has a usable diagram and stream table.
+9. The node editor saves versioned JSON factory snapshots in local storage.
+10. Baseline comparison retains a copy of evaluated economics; it does not duplicate or re-solve the captured graph.

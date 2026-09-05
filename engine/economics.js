@@ -20,8 +20,6 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
   const discountRate = number(config.discountRate ?? config.discountRatePercent / 100, 0.08);
   const nodeConfigs = config.nodes || {};
   const streams = solved.streams || [];
-  const nodeEconomics = {};
-  const sources = [];
   const converters = [];
   const sinks = [];
   let installedCapex = 0;
@@ -36,13 +34,11 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
       ...(node.economics || {}),
       ...(nodeConfigs[node.id] || {}),
     };
-    nodeEconomics[node.id] = economics;
     if (economics.unitCost != null) {
       const amount = nativeAmount(result.supplied || firstOutgoingStream(streams, node.id));
       const cost = amount * periodDays * number(economics.unitCost);
       annualOperatingCost += cost;
       breakdown.sourcePurchases += cost;
-      sources.push({ id: node.id, amountPerDay: amount, annualAmount: amount * periodDays, annualCost: cost });
     }
 
     const capexRate = number(economics.capexRate, 0);
@@ -108,15 +104,11 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
 
   const npv = netPresentValue(cashFlows, discountRate);
   const irr = approximateIRR(cashFlows);
-  const levelizedCosts = {};
   const annualizedCapex = installedCapex * capitalRecoveryFactor(discountRate, projectLifeYears);
   const levelizedNumerator = annualizedCapex + annualOperatingCost;
-  for (const sink of sinks.filter(entry => entry.disposition === 'sale')) {
-    levelizedCosts[sink.id] = sink.deliveredAmount > 0
-      ? (levelizedNumerator - (annualRevenue - sink.annualRevenue)) / sink.deliveredAmount
-      : null;
-  }
-  const delivered = Object.values(levelizedCosts).filter(value => value != null);
+  const delivered = sinks
+    .filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0)
+    .map(sink => (levelizedNumerator - (annualRevenue - sink.annualRevenue)) / sink.deliveredAmount);
   return {
     periodDays,
     projectLifeYears,
@@ -125,18 +117,11 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
     annualRevenue,
     annualOperatingCost,
     annualNetCash,
-    annualDelivered: Object.fromEntries(sinks.map(sink => [sink.id, sink.deliveredAmount])),
     breakdown,
-    levelizedCosts,
     levelizedDeliveredCost: delivered.length === 1 ? delivered[0] : null,
-    levelizedCost: delivered.length === 1 ? delivered[0] : null,
-    levelizedDeliveredCosts: levelizedCosts,
     cashFlows,
     npv,
     irr,
-    nodeEconomics,
-    sources,
-    converters,
     sinks,
   };
 }

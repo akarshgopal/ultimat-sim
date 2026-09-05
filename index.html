@@ -11,7 +11,6 @@
 <body class="flowsheet-page">
   <header class="flowsheet-header">
     <div>
-      <a class="flowsheet-back" href="legacy/tea.html">← Archived legacy TEA</a>
       <h1>Molecular Foundry</h1>
     </div>
     <div class="flowsheet-status" aria-live="polite">
@@ -46,6 +45,7 @@
         </div>
         <div class="stage-actions">
           <button type="button" class="primary-action" id="loadMethaneRecycle">Load methane + water recycle</button>
+          <button type="button" class="primary-action" id="loadCoastalMethane">Load coastal methane</button>
           <button type="button" class="primary-action" id="loadAbundanceHub">Load ammonia + brine hub</button>
           <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
           <button type="button" id="autoArrange">Arrange</button>
@@ -62,6 +62,15 @@
           </details>
         </div>
       </div>
+      <section class="comparison-panel site-panel" id="sitePanel" hidden>
+        <div class="comparison-heading">
+          <div><span class="eyebrow">Site resources</span><h3 id="siteName">No site selected</h3></div>
+          <label id="siteMonthLabel" hidden>Representative day <select id="siteMonth"></select></label>
+        </div>
+        <p class="status-meta" id="siteNotes"></p>
+        <dl class="comparison-metrics" id="siteResources"></dl>
+        <p class="literature-links" id="siteEvidence"></p>
+      </section>
       <section class="comparison-panel economics-panel" aria-live="polite">
         <div class="comparison-heading">
           <div><span class="eyebrow">Decision support</span><h3>Factory economics</h3></div>
@@ -113,6 +122,7 @@
   <script src="engine/solve.js"></script>
   <script src="engine/economics.js"></script>
   <script src="cases/sabatier.js"></script>
+  <script src="cases/coastal.js"></script>
   <script src="cases/abundance.js"></script>
   <script src="js/flowsheet-app.js"></script>
 </body>

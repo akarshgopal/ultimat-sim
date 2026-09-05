@@ -17,6 +17,7 @@
   let currentEconomics = null;
   let baseline = null;
   let canvasZoom = 1;
+  let site = null;
   let solveError = '';
   let dragging = null;
   let suppressClick = false;
@@ -76,13 +77,7 @@
     },
     dac: {
       label: 'DAC', capacity: 100, rate: 10, activityUnit: 'kg CO₂/day',
-      palette: { section: 'building', order: 5, glyph: 'CO₂', tone: 'carbon', description: 'Gas + power + heat + consumables' },
       params: { captureFraction: 0.9, electricityKWhPerKgCO2: 0.5, heatKWhPerKgCO2: 1.5, minHeatT_C: 80, consumablesPerKgCO2: 0.02, wasteHeatT_C: 40 },
-      presets: {
-        solid: { label: 'Solid sorbent', params: { captureFraction: 0.9, electricityKWhPerKgCO2: 0.5, heatKWhPerKgCO2: 1.5, minHeatT_C: 80, consumablesPerKgCO2: 0.02, wasteHeatT_C: 40 } },
-        koh: { label: 'KOH + calcium looping', params: { captureFraction: 0.75, electricityKWhPerKgCO2: 0.366, heatKWhPerKgCO2: 2.45, minHeatT_C: 900, consumablesPerKgCO2: 0.01, wasteHeatT_C: 100 } },
-        electroSwing: { label: 'Electro-swing adsorption', params: { captureFraction: 0.5, electricityKWhPerKgCO2: 0.45, heatKWhPerKgCO2: 0, minHeatT_C: 20, consumablesPerKgCO2: 0.005, wasteHeatT_C: 30 } },
-      },
       controls: [
         { key: 'captureFraction', label: 'Single-pass capture', min: 0.1, max: 0.95, step: 0.01 },
         { key: 'electricityKWhPerKgCO2', label: 'Electricity', min: 0.05, max: 1.5, step: 0.01, unit: 'kWh/kg CO₂' },
@@ -93,8 +88,36 @@
       ],
       references: [
         { label: 'Keith et al. 2018', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
-        { label: 'Voskian & Hatton 2019', url: 'https://doi.org/10.1039/C9EE02412C' },
+        { label: 'IEA DAC 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
       ],
+    },
+    'dac-solid': {
+      label: 'Solid-sorbent DAC', capacity: 100, rate: 10, activityUnit: 'kg CO₂/day', chemicalId: 'amine-sorbent',
+      palette: { section: 'building', order: 5, glyph: 'CO₂', tone: 'carbon', description: 'Air + heat + amine makeup → CO₂' },
+      params: { captureFraction: 0.9, electricityKWhPerKgCO2: 0.5, heatKWhPerKgCO2: 1.5, minHeatT_C: 80, consumablesPerKgCO2: 0.02, wasteHeatT_C: 40 },
+      controls: [
+        { key: 'captureFraction', label: 'Single-pass capture', min: 0.1, max: 0.95, step: 0.01 },
+        { key: 'electricityKWhPerKgCO2', label: 'Electricity', min: 0.05, max: 1.5, step: 0.01, unit: 'kWh/kg CO₂' },
+        { key: 'heatKWhPerKgCO2', label: 'Thermal duty', min: 0, max: 3.5, step: 0.05, unit: 'kWhₜₕ/kg CO₂' },
+        { key: 'minHeatT_C', label: 'Minimum heat', min: 20, max: 1000, step: 5, unit: '°C' },
+        { key: 'consumablesPerKgCO2', label: 'Amine makeup', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
+        { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
+      ],
+      references: [
+        { label: 'IEA DAC 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
+        { label: 'Keith et al. 2018', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
+      ],
+    },
+    'dac-electroswing': {
+      label: 'Electro-swing DAC', capacity: 100, rate: 10, activityUnit: 'kg CO₂/day', chemicalId: 'quinone-electrode',
+      palette: { section: 'building', order: 5.5, glyph: 'eDAC', tone: 'carbon', description: 'Air + electricity + electrode makeup → CO₂' },
+      params: { captureFraction: 0.5, electricityKWhPerKgCO2: 0.45, consumablesPerKgCO2: 0.005 },
+      controls: [
+        { key: 'captureFraction', label: 'Single-pass capture', min: 0.1, max: 0.95, step: 0.01 },
+        { key: 'electricityKWhPerKgCO2', label: 'Electricity', min: 0.05, max: 1.5, step: 0.01, unit: 'kWh/kg CO₂' },
+        { key: 'consumablesPerKgCO2', label: 'Electrode makeup', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
+      ],
+      references: [{ label: 'Voskian & Hatton 2019', url: 'https://doi.org/10.1039/C9EE02412C' }],
     },
     sabatier: { label: 'Sabatier', capacity: 100, rate: 5, activityUnit: 'kg CH₄/day', palette: { section: 'building', order: 6, glyph: 'CH₄', tone: 'methane', description: 'CO₂ + H₂ → methane' }, params: { electricityKWhPerKgCH4: 1 } },
     asu: {
@@ -245,6 +268,7 @@
     'electricity-source': { label: 'Electricity source', palette: { section: 'utility', order: 5, glyph: '⚡', description: 'Set available kWh/day' } },
     'heat-source': { label: 'Heat source', palette: { section: 'utility', order: 7, glyph: 'H', tone: 'carbon', description: 'Set energy and temperature' } },
     'consumable-source': { label: 'Consumables', palette: { section: 'utility', order: 8, glyph: 'C', tone: 'methane', description: 'Sorbent or reagent makeup' } },
+    'consumable-sink': { label: 'Spent media', palette: { section: 'utility', order: 12, glyph: '↓C', tone: 'methane', description: 'Dispose spent sorbent or reagent' } },
     'electrical-bus': { label: 'Electricity bus', palette: { section: 'utility', order: 1, glyph: '⚡↗', description: 'One supply → many blocks' } },
     'material-splitter': { label: 'Material splitter', palette: { section: 'utility', order: 2, glyph: 'M↗', tone: 'water', description: 'One stream → many branches' } },
     'material-mixer': { label: 'Material mixer', palette: { section: 'utility', order: 3, glyph: '↘M', tone: 'water', description: 'Many streams → one output' } },
@@ -254,7 +278,7 @@
   };
   const portNames = {
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
-    capturedCo2: 'Captured CO₂', depletedAir: 'Depleted gas', feed: 'Feed water', product: 'Fresh water',
+    capturedCo2: 'Captured CO₂', depletedAir: 'Depleted gas', spentMedia: 'Spent media', feed: 'Feed water', product: 'Fresh water',
     brine: 'Brine', water: 'Water', hydrogen: 'Hydrogen', oxygen: 'Oxygen', waterReject: 'Reject water',
     co2: 'CO₂', methane: 'Methane', out: 'Output', in: 'Input',
     wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'Ammonia', offgas: 'Off-gas',
@@ -280,6 +304,16 @@
     titaniumTetrachloride: { label: 'Titanium tetrachloride', phase: 'liquid', mol: { TiCl4: 1000 } },
     magnesium: { label: 'Magnesium', phase: 'solid', mol: { Mg: 1000 } },
   };
+  const DAC_ROUTES = {
+    dac: 'Generic screening DAC',
+    'dac-solid': 'Solid-sorbent DAC',
+    'dac-electroswing': 'Electro-swing DAC',
+  };
+  const CONSUMABLE_CHEMICALS = {
+    'amine-sorbent': 'Amine sorbent makeup',
+    'quinone-electrode': 'Quinone electrode makeup',
+  };
+  const SITE_MONTHS = ['Annual average', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
   function renderPalettes() {
     for (const [id, section] of [['buildingPalette', 'building'], ['utilityPalette', 'utility']]) {
@@ -309,7 +343,11 @@
   document.getElementById('discountRate').addEventListener('input', handleProjectEconomics);
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
   document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
+  document.getElementById('loadCoastalMethane').addEventListener('click', () => loadCoastalMethane(0));
   document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
+  document.getElementById('siteMonth').addEventListener('change', event => {
+    if (site?.id === 'almeria-pvgis-2026-09-05') loadCoastalMethane(Number(event.target.value));
+  });
   document.getElementById('saveFactory').addEventListener('click', () => {
     const name = window.prompt('Name this factory save:')?.trim();
     if (name) saveNamed(name);
@@ -358,7 +396,7 @@
       current.processPreset = Object.keys(definition.presets)[0];
       Object.assign(current.params, definition.presets[current.processPreset].params);
     }
-    if (kind === 'source') configureNewSource(current, options.preset);
+    if (kind === 'source') configureNewSource(current, options);
     if (kind === 'converter') setpoints[id] = definition.rate;
     current.economics = defaultEconomics(current);
     graph.nodes.push(current);
@@ -370,15 +408,27 @@
     return current;
   }
 
-  function configureNewSource(current, preset) {
+  function configureNewSource(current, options = {}) {
     if (current.unit === 'material-source') {
-      current.sourcePreset = preset || 'air';
+      current.sourcePreset = options.preset || 'air';
       current.rate = current.sourcePreset === 'air' ? 25000 : 100;
     } else if (current.unit === 'electricity-source' || current.unit === 'grid-electricity') current.rate = 1000;
     else if (current.unit === 'heat-source') { current.rate = 100; current.temperature = 100; }
     else if (current.unit === 'solar-pv' || current.unit === 'nuclear-electricity' || current.unit === 'solar-thermal') current.rate = 0;
     else current.rate = 10;
+    if (options.chemicalId) current.chemicalId = options.chemicalId;
+    assignSiteResource(current);
     updateSourceStream(current);
+  }
+
+  function assignSiteResource(current) {
+    if (!site || units[current.unit].kind !== 'source') return;
+    const kind = units[current.unit].ports.out.kind;
+    if (current.unit === 'grid-electricity' && site.resources.grid) current.siteResource = 'grid';
+    else if (current.sourcePreset && site.resources[current.sourcePreset]?.stream?.kind === kind) current.siteResource = current.sourcePreset;
+    else if (kind === 'electricity' && site.resources.electricity) current.siteResource = 'electricity';
+    else if (kind === 'heat' && site.resources.heat) current.siteResource = 'heat';
+    else if (kind === 'consumable' && site.resources.consumables) current.siteResource = 'consumables';
   }
 
   function positionFor(kind, index) {
@@ -388,6 +438,23 @@
   }
 
   function updateSourceStream(current) {
+    const resource = site?.resources?.[current.siteResource];
+    if (resource?.stream) {
+      const budget = sourceAmount(resource.stream);
+      current.rate = Math.min(Number(current.rate) || 0, budget);
+      if (resource.stream.kind === 'material') {
+        current.params.stream = FlowsheetModel.scaleStream(resource.stream, budget === 0 ? 0 : current.rate / budget);
+      } else if (resource.stream.kind === 'consumable') {
+        current.params.stream = { ...resource.stream, amount: current.rate };
+        current.chemicalId = resource.stream.chemicalId;
+      } else if (resource.stream.kind === 'heat') {
+        current.temperature = resource.stream.T_C;
+        current.params.stream = { ...resource.stream, kWh: current.rate };
+      } else {
+        current.params.stream = { ...resource.stream, kWh: current.rate };
+      }
+      return;
+    }
     if (current.unit === 'material-source') current.params.stream = materialStream(current.sourcePreset, current.rate);
     if (current.unit === 'electricity-source') current.params.stream = { kind: 'electricity', kWh: current.rate };
     if (current.unit === 'grid-electricity') current.params.stream = { kind: 'electricity', kWh: current.rate };
@@ -400,7 +467,19 @@
       current.rate = current.params.capacityKW * current.params.sunHours;
       current.params.stream = { kind: 'heat', kWh: current.rate, T_C: current.params.temperatureC };
     }
-    if (current.unit === 'consumable-source') current.params.stream = { kind: 'consumable', amount: current.rate, unit: 'kg/day', label: 'Sorbent makeup' };
+    if (current.unit === 'consumable-source') {
+      current.params.stream = {
+        kind: 'consumable', amount: current.rate, unit: 'kg/day',
+        label: CONSUMABLE_CHEMICALS[current.chemicalId] || 'Sorbent makeup',
+        ...(current.chemicalId ? { chemicalId: current.chemicalId } : {}),
+      };
+    }
+  }
+
+  function sourceAmount(stream) {
+    if (stream.kind === 'material') return FlowsheetModel.streamMassKg(stream);
+    if (stream.kind === 'consumable') return stream.amount;
+    return stream.kWh;
   }
 
   function materialStream(presetId, targetKg) {
@@ -417,6 +496,7 @@
     Object.keys(counts).forEach(key => delete counts[key]);
     selectedNodeId = null;
     pendingPort = null;
+    site = null;
     solveAndRender();
   }
 
@@ -424,11 +504,16 @@
     loadCase(SabatierCase.createSabatierCase({ recycleWater: true }), 'sabatier');
   }
 
+  function loadCoastalMethane(month = 0) {
+    loadCase(CoastalCase.createCoastalCase(month), 'sabatier');
+  }
+
   function loadAbundanceHub() {
     loadCase(AbundanceCase.createAbundanceCase(), 'minerals');
   }
 
   function loadCase(definition, selection) {
+    site = definition.site || null;
     Object.assign(projectEconomics, definition.economics || {});
     graph.nodes.length = 0;
     graph.edges.length = 0;
@@ -460,8 +545,52 @@
     solveAndRender();
   }
 
+  function replaceUnit(nodeId, nextUnit) {
+    const current = node(nodeId);
+    const definition = catalog[nextUnit];
+    if (!current || !definition || !units[nextUnit] || units[nextUnit].kind !== units[current.unit].kind) return false;
+    const previousPorts = units[current.unit].ports;
+    const nextPorts = units[nextUnit].ports;
+    const dropped = [];
+    graph.edges = graph.edges.filter(edge => {
+      const onNode = edge.from.node === nodeId || edge.to.node === nodeId;
+      if (!onNode) return true;
+      const outgoing = edge.from.node === nodeId;
+      const port = outgoing ? edge.from.port : edge.to.port;
+      const next = nextPorts[port];
+      const previous = previousPorts[port];
+      if (!next || next.direction !== (outgoing ? 'out' : 'in') || next.kind !== previous?.kind) {
+        dropped.push(portName(port));
+        return false;
+      }
+      if (next.kind === 'consumable' && !outgoing) {
+        const required = catalog[nextUnit].chemicalId;
+        const supply = node(edge.from.node)?.params?.stream;
+        if (required && supply?.chemicalId !== required) {
+          dropped.push(`${portName(port)} (${supply?.chemicalId || 'unspecified'} ≠ ${required})`);
+          return false;
+        }
+      }
+      return true;
+    });
+    current.unit = nextUnit;
+    current.label = definition.label;
+    current.params = { ...(definition.params || {}) };
+    if (Number.isFinite(definition.capacity)) current.capacity = definition.capacity;
+    if (Number.isFinite(definition.rate) && setpoints[nodeId] != null) {
+      setpoints[nodeId] = Math.min(setpoints[nodeId], current.capacity);
+    }
+    delete current.processPreset;
+    selectedNodeId = nodeId;
+    solveError = dropped.length
+      ? `Incompatible connections removed: ${dropped.join(', ')}. Reconnect the new requirements; existing reagent supplies are not converted.`
+      : '';
+    solveAndRender();
+    return true;
+  }
+
   function snapshot() {
-    return { version: 1, graph, setpoints, selectedNodeId, projectEconomics, canvasZoom };
+    return { version: 1, graph, setpoints, selectedNodeId, projectEconomics, canvasZoom, site };
   }
 
   function persistAutosave() {
@@ -503,6 +632,7 @@
     for (const current of graph.nodes) current.economics ||= defaultEconomics(current);
     Object.assign(projectEconomics, saved.projectEconomics || {});
     canvasZoom = clampZoom(saved.canvasZoom ?? 1);
+    site = saved.site || null;
     pendingPort = null;
     return true;
   }
@@ -532,20 +662,12 @@
     refreshSaveOptions();
   }
 
-  function clone(value) { return JSON.parse(JSON.stringify(value)); }
-
-  function graphCaseSnapshot() {
-    return { graph: clone(graph), operation: { setpoints: clone(setpoints) }, economics: clone(projectEconomics) };
-  }
-
-  function evaluateEconomics(graphCase, solved) {
-    const evaluator = window.FlowsheetEconomics?.evaluateEconomics;
-    if (typeof evaluator !== 'function' || !solved) return null;
-    try { return evaluator(graphCase, solved) || null; } catch { return null; }
+  function clone(value) {
+    return typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value));
   }
 
   function captureBaseline() {
-    baseline = { graphCase: graphCaseSnapshot(), solved: result ? clone(result) : null, economics: currentEconomics ? clone(currentEconomics) : null };
+    baseline = { economics: currentEconomics ? clone(currentEconomics) : null };
     renderComparison();
     return true;
   }
@@ -553,45 +675,6 @@
   function clearBaseline() {
     baseline = null;
     renderComparison();
-  }
-
-  function numberAt(value, paths) {
-    for (const path of paths) {
-      const candidate = path.split('.').reduce((current, key) => current?.[key], value);
-      if (Number.isFinite(candidate)) return candidate;
-    }
-    return null;
-  }
-
-  function sumNumbers(value, exclude = []) {
-    if (Number.isFinite(value)) return value;
-    if (!value || typeof value !== 'object') return null;
-    const values = Object.entries(value)
-      .filter(([key, entry]) => !exclude.includes(key) && Number.isFinite(entry))
-      .map(([, entry]) => entry);
-    return values.length ? values.reduce((sum, entry) => sum + entry, 0) : null;
-  }
-
-  function economicsSummary(value) {
-    const economics = value?.economics || value;
-    if (!economics || typeof economics !== 'object') return null;
-    const revenueBreakdown = economics.revenue;
-    const summary = {
-      capex: numberAt(economics, ['totalCapex', 'installedCapex', 'capex', 'CAPEX']),
-      revenue: numberAt(economics, ['totalAnnualRevenue', 'annualRevenue', 'annual.revenue'])
-        ?? sumNumbers(revenueBreakdown, ['policyCredits', 'total']),
-      cost: numberAt(economics, ['annualCost', 'annualOperatingCost', 'totalAnnualCost', 'annualCosts', 'annual.cost', 'costs.total']),
-      netCash: numberAt(economics, ['annualNetCash', 'annualNetCashFlow', 'annualOperatingCashFlow', 'annualProfit', 'annual.netCash']),
-      npv: numberAt(economics, ['npv', 'NPV']),
-      irr: numberAt(economics, ['irr', 'projectIrr', 'equityIrr', 'IRR']),
-      purchases: numberAt(economics, ['annualSourcePurchases', 'sourcePurchases.total', 'purchases.total', 'breakdown.sourcePurchases'])
-        ?? sumNumbers(economics.sourcePurchases || economics.purchases),
-      disposal: numberAt(economics, ['annualDisposalCost', 'disposalCost', 'disposal.total', 'disposals.total', 'breakdown.disposalCost'])
-        ?? sumNumbers(economics.disposal || economics.disposals),
-      productRevenue: numberAt(economics, ['annualProductRevenue', 'productRevenue', 'revenue.products', 'breakdown.productRevenue'])
-        ?? sumNumbers(revenueBreakdown, ['policyCredits', 'total']),
-    };
-    return Object.values(summary).some(Number.isFinite) ? summary : null;
   }
 
   function deltaValue(current, previous) {
@@ -605,7 +688,7 @@
 
   function formatRate(value) {
     if (!Number.isFinite(value)) return '—';
-    return `${formatNumber(Math.abs(value) <= 1 ? value * 100 : value)}%`;
+    return `${formatNumber(value * 100)}%`;
   }
 
   function renderComparison() {
@@ -619,39 +702,37 @@
     panel.hidden = !baseline;
     if (!baseline) { status.textContent = ''; metrics.innerHTML = ''; ledger.innerHTML = ''; return; }
 
-    const baselineEconomics = baseline.economics
-      || evaluateEconomics(baseline.graphCase, baseline.solved);
-    const current = economicsSummary(currentEconomics);
-    const previous = economicsSummary(baselineEconomics);
+    const current = currentEconomics;
+    const previous = baseline.economics;
     if (!current || !previous) {
-      status.textContent = result ? 'Economics unavailable — load the optional economics adapter.' : 'Current graph is incomplete.';
+      status.textContent = !result ? 'Current graph is incomplete.' : !current ? 'Current economics unavailable.' : 'Baseline economics unavailable — capture a complete graph.';
       metrics.innerHTML = '';
       ledger.innerHTML = '';
       return;
     }
     status.textContent = 'Current graph compared with captured baseline';
     const rows = [
-      ['CAPEX', current.capex, previous.capex, formatMoney],
-      ['Annual revenue', current.revenue, previous.revenue, formatMoney],
-      ['Annual cost', current.cost, previous.cost, formatMoney],
-      ['Annual net cash', current.netCash, previous.netCash, formatMoney],
+      ['CAPEX', current.installedCapex, previous.installedCapex, formatMoney],
+      ['Annual revenue', current.annualRevenue, previous.annualRevenue, formatMoney],
+      ['Annual cost', current.annualOperatingCost, previous.annualOperatingCost, formatMoney],
+      ['Annual net cash', current.annualNetCash, previous.annualNetCash, formatMoney],
       ['NPV', current.npv, previous.npv, formatMoney],
       ['IRR', current.irr, previous.irr, formatRate],
     ];
     metrics.innerHTML = rows.map(([label, value, oldValue, format]) => {
       const delta = label === 'IRR' && Number.isFinite(value) && Number.isFinite(oldValue)
-        ? (Math.abs(value) <= 1 ? value * 100 : value) - (Math.abs(oldValue) <= 1 ? oldValue * 100 : oldValue)
+        ? (value - oldValue) * 100
         : deltaValue(value, oldValue);
       const direction = ['Annual revenue', 'Annual net cash', 'NPV', 'IRR'].includes(label) ? delta : -delta;
       const cls = direction > 0 ? 'positive' : direction < 0 ? 'negative' : '';
-      const deltaLabel = label === 'IRR' ? formatDelta(delta, value => `${formatNumber(delta)} pp`) : formatDelta(delta, format);
+      const deltaLabel = label === 'IRR' ? formatDelta(delta, value => `${formatNumber(value)} pp`) : formatDelta(delta, format);
       return `<div><dt>${label}</dt><dd class="${cls}">${Number.isFinite(value) ? format(value) : '—'} <small>${deltaLabel}</small></dd></div>`;
     }).join('');
     // ponytail: annual aggregate ledger; add per-stream provenance when economics exposes it.
     const synergies = [
-      ['Avoided source purchases', deltaValue(previous.purchases, current.purchases)],
-      ['Avoided disposal', deltaValue(previous.disposal, current.disposal)],
-      ['Additional product revenue', deltaValue(current.productRevenue, previous.productRevenue)],
+      ['Avoided source purchases', deltaValue(previous.breakdown.sourcePurchases, current.breakdown.sourcePurchases)],
+      ['Avoided disposal', deltaValue(previous.breakdown.disposalCost, current.breakdown.disposalCost)],
+      ['Additional product revenue', deltaValue(current.breakdown.productRevenue, previous.breakdown.productRevenue)],
     ].filter(([, value]) => Number.isFinite(value));
     const netSynergy = synergies.reduce((sum, [, value]) => sum + value, 0);
     if (synergies.length) synergies.push(['Net synergy value', netSynergy]);
@@ -812,7 +893,11 @@
     const current = node(target.node);
     const kind = units[current.unit].ports[target.port].kind;
     if (target.direction === 'in') {
-      const source = addNode(`${kind}-source`, { preset: suggestedPreset(current.unit, target.port), silent });
+      const source = addNode(`${kind}-source`, {
+        preset: suggestedPreset(current.unit, target.port),
+        chemicalId: catalog[current.unit]?.chemicalId,
+        silent,
+      });
       graph.edges.push({ from: { node: source.id, port: 'out' }, to: { node: target.node, port: target.port } });
       return source;
     }
@@ -840,10 +925,22 @@
     const current = node(selectedNodeId);
     if (!current) return;
     if (event.target.name === 'requestedRate') setpoints[current.id] = Number(event.target.value);
+    if (event.target.name === 'dacRoute' && event.target.value !== current.unit) {
+      replaceUnit(current.id, event.target.value);
+      return;
+    }
     if (event.target.name === 'processPreset') {
       current.processPreset = event.target.value;
       if (current.processPreset !== 'custom') Object.assign(current.params, catalog[current.unit].presets[current.processPreset].params);
       if (units[current.unit].kind === 'source') updateSourceStream(current);
+    }
+    if (event.target.name === 'siteResource') {
+      current.siteResource = event.target.value || undefined;
+      updateSourceStream(current);
+    }
+    if (event.target.name === 'chemicalId') {
+      current.chemicalId = event.target.value || undefined;
+      updateSourceStream(current);
     }
     if (event.target.name === 'processParameter') {
       current.processPreset = 'custom';
@@ -902,7 +999,8 @@
 
   function suggestedPreset(unit, port) {
     return {
-      'dac.air': 'air', 'asu.air': 'air', 'swro.feed': 'seawater', 'med.feed': 'seawater', 'msf.feed': 'seawater', 'brine-minerals.brine': 'brine',
+      'dac.air': 'air', 'dac-solid.air': 'air', 'dac-electroswing.air': 'air',
+      'asu.air': 'air', 'swro.feed': 'seawater', 'med.feed': 'seawater', 'msf.feed': 'seawater', 'brine-minerals.brine': 'brine',
       'electrolyzer.water': 'water', 'chlor-alkali.water': 'water', 'sabatier.co2': 'co2', 'sabatier.hydrogen': 'hydrogen',
       'ammonia.nitrogen': 'nitrogen', 'ammonia.hydrogen': 'hydrogen', 'chlor-alkali.salt': 'salt',
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
@@ -916,8 +1014,8 @@
     currentEconomics = null;
     if (graph.nodes.length && missingConnections().length === 0) {
       try {
-        result = FlowsheetSolver.solveOperation({ graph, operation: { setpoints } });
-        currentEconomics = evaluateEconomics(graphCaseSnapshot(), result);
+        result = FlowsheetSolver.solveOperation({ graph, operation: { setpoints }, site });
+        currentEconomics = FlowsheetEconomics.evaluateEconomics({ graph, operation: { setpoints }, economics: projectEconomics }, result);
         solveError = '';
       } catch (error) { solveError = error.message; }
     }
@@ -948,7 +1046,7 @@
   function node(id) { return graph.nodes.find(candidate => candidate.id === id); }
   function portName(port) { return portNames[port] || port.replace(/([a-z])([A-Z])/g, '$1 $2'); }
 
-  function render() { renderGraph(); renderStatus(); renderInspector(); renderEconomics(); renderComparison(); }
+  function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); }
 
   function renderGraph() {
     renderCanvasZoom();
@@ -1000,7 +1098,7 @@
 
   function bottlenecksFor(nodeId) { return result?.nodes[nodeId]?.limitedBy || []; }
   function limitingPort(current, limit) {
-    if (current.unit === 'dac' && limit === 'feed') return 'air';
+    if (DAC_ROUTES[current.unit] && limit === 'feed') return 'air';
     if (['battery', 'thermal-storage'].includes(current.unit) && ['electricity', 'heat'].includes(limit)) return 'in';
     return limit;
   }
@@ -1022,7 +1120,7 @@
     const solveStatus = document.getElementById('solveStatus');
     const balanceStatus = document.getElementById('balanceStatus');
     document.getElementById('flowSummary').textContent = `${graph.nodes.length} blocks · ${graph.edges.length} connections`;
-    document.getElementById('diagramTitle').textContent = graph.nodes.length ? 'Factory canvas' : 'Blank factory';
+    document.getElementById('diagramTitle').textContent = site?.name || (graph.nodes.length ? 'Factory canvas' : 'Blank factory');
     solveStatus.textContent = !graph.nodes.length ? 'Empty factory' : result ? 'Factory running' : 'Factory incomplete';
     solveStatus.className = `status-chip${result ? ' good' : missing.length || solveError ? ' warn' : ''}`;
     balanceStatus.textContent = result ? (result.balances.maxAbsResidual < 1e-8 ? 'Balances closed' : 'Check balances') : pendingPort ? 'Choose compatible port' : 'Manual setpoints';
@@ -1030,6 +1128,29 @@
     const warning = document.getElementById('warnings');
     warning.hidden = !solveError && !pendingPort && missing.length === 0 && bottlenecks.length === 0;
     warning.textContent = solveError || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : '');
+  }
+
+  function renderSite() {
+    const panel = document.getElementById('sitePanel');
+    if (!site) { panel.hidden = true; return; }
+    panel.hidden = false;
+    document.getElementById('siteName').textContent = site.name;
+    document.getElementById('siteNotes').textContent = site.notes || '';
+    const monthLabel = document.getElementById('siteMonthLabel');
+    const monthSelect = document.getElementById('siteMonth');
+    if (site.id === 'almeria-pvgis-2026-09-05') {
+      monthLabel.hidden = false;
+      monthSelect.innerHTML = SITE_MONTHS.map((label, index) => `<option value="${index}"${index === site.month ? ' selected' : ''}>${label}</option>`).join('');
+    } else {
+      monthLabel.hidden = true;
+    }
+    document.getElementById('siteResources').innerHTML = Object.entries(site.resources || {}).map(([id, resource]) => {
+      const quality = resource.quality || 'user-assumption';
+      return `<div class="${quality === 'unverified' ? 'unverified' : ''}"><dt>${id} <small>${quality}</small></dt><dd>${formatStream(resource.stream)}</dd></div>`;
+    }).join('');
+    document.getElementById('siteEvidence').innerHTML = (site.evidence || []).map(item => (
+      item.url ? `<a href="${item.url}" target="_blank" rel="noreferrer">${item.label}</a>` : item.label
+    )).join(' · ');
   }
 
   function renderInspector() {
@@ -1053,7 +1174,7 @@
       ['Achieved', `${formatNumber(nodeResult.activity)} ${catalog[current.unit].activityUnit}`],
       ['Requested', `${formatNumber(setpoints[current.id])} ${catalog[current.unit].activityUnit}`],
       ['Limited by', nodeResult.limitedBy.join(', ') || 'Nothing'],
-    ] : [];
+    ] : nodeResult?.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')]] : [];
     document.getElementById('inspectorMetrics').innerHTML = metricRows([...metrics, ...economicsRows(current)]);
     document.getElementById('streamList').innerHTML = Object.entries(units[current.unit].ports).map(([port, declaration]) => renderInspectorPort(current, port, declaration)).join('');
     document.getElementById('recipeList').innerHTML = nodeResult?.requestedInputs ? `${recipeGroup('INFLOW', nodeResult.requestedInputs)}${recipeGroup('OUTFLOW', nodeResult.outlets)}` : '<p class="status-meta">Complete the graph to calculate flows.</p>';
@@ -1073,23 +1194,29 @@
     if (kind === 'converter') {
       const definition = catalog[current.unit];
       const preset = definition.presets ? `<label>Process type</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
+      const route = DAC_ROUTES[current.unit] ? `<label>Process route<select name="dacRoute">${Object.entries(DAC_ROUTES).filter(([id]) => current.unit === 'dac' || id !== 'dac').map(([id, label]) => `<option value="${id}"${id === current.unit ? ' selected' : ''}>${label}</option>`).join('')}</select></label>` : '';
       const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="processParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
       const references = (definition.references || []).map(reference => `<a href="${reference.url}" target="_blank" rel="noreferrer">${reference.label}</a>`).join(' · ');
-      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${preset || parameters ? `<fieldset><legend>Process assumptions</legend>${preset}${parameters}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
+      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${route || preset || parameters ? `<fieldset><legend>Process assumptions</legend>${route}${preset}${parameters}${definition.chemicalId ? `<p class="status-meta">Makeup chemical: ${CONSUMABLE_CHEMICALS[definition.chemicalId] || definition.chemicalId}. Switching routes does not rewrite an existing supply.</p>` : ''}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
     }
     if (kind === 'source') {
       const definition = catalog[current.unit];
-      const max = definition.manualRateMax || (current.unit === 'material-source' ? 100000 : current.unit === 'electricity-source' ? 10000 : current.unit === 'heat-source' ? 1000 : 100);
+      const budget = current.siteResource && site?.resources?.[current.siteResource]?.stream
+        ? sourceAmount(site.resources[current.siteResource].stream) : null;
+      const max = budget ?? definition.manualRateMax ?? (current.unit === 'material-source' ? 100000 : current.unit === 'electricity-source' ? 10000 : current.unit === 'heat-source' ? 1000 : 100);
       const unit = definition.sourceUnit || (current.unit === 'material-source' || current.unit === 'consumable-source' ? 'kg/day' : 'kWh/day');
-      const preset = current.unit === 'material-source' ? `<label>Material</label><select name="sourcePreset">${Object.entries(materialPresets).map(([id, item]) => `<option value="${id}"${id === current.sourcePreset ? ' selected' : ''}>${item.label}</option>`).join('')}</select>` : '';
-      const temperature = current.unit === 'heat-source' ? `<label>Temperature <output>${current.temperature} °C</output></label><input name="heatTemperature" type="range" min="20" max="1000" step="5" value="${current.temperature}">` : '';
+      const siteResource = site ? `<label>Site resource<select name="siteResource"><option value="">Unassigned — unverified</option>${Object.entries(site.resources).filter(([, resource]) => resource.stream?.kind === units[current.unit].ports.out.kind).map(([id, resource]) => `<option value="${id}"${id === current.siteResource ? ' selected' : ''}>${id} · ${resource.quality || 'assumed'}</option>`).join('')}</select></label>` : '';
+      const preset = current.unit === 'material-source' && !current.siteResource ? `<label>Material</label><select name="sourcePreset">${Object.entries(materialPresets).map(([id, item]) => `<option value="${id}"${id === current.sourcePreset ? ' selected' : ''}>${item.label}</option>`).join('')}</select>` : '';
+      const chemical = current.unit === 'consumable-source' && !current.siteResource ? `<label>Makeup chemical<select name="chemicalId"><option value="">Unspecified</option>${Object.entries(CONSUMABLE_CHEMICALS).map(([id, label]) => `<option value="${id}"${id === current.chemicalId ? ' selected' : ''}>${label}</option>`).join('')}</select></label>` : '';
+      const temperature = current.unit === 'heat-source' && !current.siteResource ? `<label>Temperature <output>${current.temperature} °C</output></label><input name="heatTemperature" type="range" min="20" max="1000" step="5" value="${current.temperature}">` : '';
       const processPreset = definition.presets ? `<label>Technology</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
       const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="sourceParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
       const references = (definition.references || []).map(reference => `<a href="${reference.url}" target="_blank" rel="noreferrer">${reference.label}</a>`).join(' · ');
       const rate = definition.controls && !definition.manualRateMax
         ? `<p class="status-meta">Available: ${formatNumber(current.rate)} ${unit}</p>`
-        : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100}" value="${current.rate}">`;
-      return `<fieldset><legend>Source settings</legend>${preset}${processPreset}${rate}${temperature}${parameters}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
+        : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100 || 0.01}" value="${current.rate}">`;
+      const capNote = budget != null ? `<p class="status-meta">${site.resources[current.siteResource]?.evidence || 'Capped by the named site resource. A second block sharing this resource cannot duplicate it.'}</p>` : (site && !current.siteResource ? '<p class="status-meta">Unassigned sources are unverified. They do not become unlimited supply.</p>' : '');
+      return `<fieldset><legend>Source settings</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }
@@ -1134,7 +1261,7 @@
     document.getElementById('projectLifeYears').value = projectEconomics.projectLifeYears;
     document.getElementById('discountRate').value = projectEconomics.discountRate * 100;
     if (!currentEconomics) {
-      status.textContent = result ? 'Economics adapter unavailable.' : 'Complete the graph to calculate viability.';
+      status.textContent = result ? `Economics unavailable: ${solveError}` : 'Complete the graph to calculate viability.';
       metrics.innerHTML = '';
       return;
     }
@@ -1208,9 +1335,10 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadAbundanceHub, saveNamed, loadNamed, captureBaseline, clearBaseline,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, replaceUnit,
+    saveNamed, loadNamed, captureBaseline, clearBaseline,
     solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },
-    get economics() { return currentEconomics; }, projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
+    get economics() { return currentEconomics; }, get site() { return site; }, projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
   };
   refreshSaveOptions();
   if (restoreSnapshot(readJson(AUTOSAVE_KEY))) solveAndRender();

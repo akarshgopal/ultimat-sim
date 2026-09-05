@@ -3,11 +3,12 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.CoastalCase = api;
 })(globalThis, sabatier => {
+const HOURLY = typeof require === 'function' ? require('../data/pvgis-almeria-hourly.js') : globalThis.PvgisAlmeriaHourly;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=36.834&lon=-2.463&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
 // Frozen PVGIS response: data/pvgis-almeria.json, retrieved 2026-09-05.
 const DAILY_PV = [1716.39 / 365, 3.75, 4.35, 4.75, 5.17, 5.37, 5.54, 5.52, 5.38, 4.91, 4.31, 3.72, 3.65];
 const EVIDENCE = [
-  { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023; 30° south-facing c-Si, 14% system loss', url: PVGIS_URL },
+  { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; 2023 hourly typical day for dispatch', url: PVGIS_URL },
   { label: 'PEM: DOE 2022 system status, 55 kWh/kg H₂; not a future target', url: 'https://www.energy.gov/cmei/fuels/technical-targets-proton-exchange-membrane-electrolysis' },
   { label: 'Salinity: 35 g/kg global reference, represented as NaCl; not an Almería water assay', url: 'https://oceanservice.noaa.gov/facts/whysalty.html' },
   { label: 'Air: 422.45 ppm, 2024 global estimate; dry O₂/N₂ balance is simplified', url: 'https://essd.copernicus.org/articles/17/965/2025/' },
@@ -54,7 +55,15 @@ function createCoastalCase(month = 0) {
   definition.site = {
     id: 'almeria-pvgis-2026-09-05', name: 'Almería coast · Spain', latitude: 36.834, longitude: -2.463,
     month, solarKWp, dailyPVKWhPerKWp: DAILY_PV[month], resources, evidence: EVIDENCE,
-    notes: 'Monthly-average screening, not hourly dispatch. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. No mineral assay or grid tariff verified. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected representative day for 365 days.',
+    solar: HOURLY ? {
+      typicalMonths: HOURLY.typicalMonths,
+      annualTypical: HOURLY.annualTypical,
+      year: HOURLY.year,
+      database: HOURLY.database,
+      url: HOURLY.url,
+    } : null,
+    storage: { batteryKWh: 0, powerKW: 0, efficiency: 0.9, initialKWh: 0 },
+    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. No mineral assay or grid tariff verified. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
   };
   definition.operation.boundaryLimitedBy = target < 5 ? ['site solar electricity'] : [];
   return definition;

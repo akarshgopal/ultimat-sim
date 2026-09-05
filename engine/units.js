@@ -292,6 +292,7 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
 
 const DAC_TECHNOLOGIES = {
   'dac-solid': { label: 'Solid-sorbent DAC', chemicalId: 'amine-sorbent', heat: true },
+  'dac-liquid': { label: 'Liquid-solvent DAC', chemicalId: 'potassium-hydroxide', heat: true },
   'dac-electroswing': { label: 'Electro-swing DAC', chemicalId: 'quinone-electrode', heat: false },
 };
 

@@ -62,12 +62,21 @@
           </details>
         </div>
       </div>
-      <section class="comparison-panel site-panel" id="sitePanel" hidden>
+      <section class="comparison-panel site-panel" id="sitePanel">
         <div class="comparison-heading">
           <div><span class="eyebrow">Site resources</span><h3 id="siteName">No site selected</h3></div>
-          <label id="siteMonthLabel" hidden>Representative day <select id="siteMonth"></select></label>
+          <label id="siteMonthLabel" hidden>Typical day <select id="siteMonth"></select></label>
         </div>
+        <div class="site-location">
+          <label>Lat <input id="siteLatitude" type="number" step="0.001" value="36.834"></label>
+          <label>Lon <input id="siteLongitude" type="number" step="0.001" value="-2.463"></label>
+          <label>PV kWp <input id="siteSolarKWp" type="number" min="0" step="0.5" value="37.5"></label>
+          <label>Battery kWh <input id="siteBatteryKWh" type="number" min="0" step="1" value="0"></label>
+          <button type="button" id="applyCoordinates">Apply location</button>
+        </div>
+        <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
         <p class="status-meta" id="siteNotes"></p>
+        <p class="status-meta" id="siteHorizon"></p>
         <dl class="comparison-metrics" id="siteResources"></dl>
         <p class="literature-links" id="siteEvidence"></p>
       </section>
@@ -121,6 +130,7 @@
   <script src="engine/units.js"></script>
   <script src="engine/solve.js"></script>
   <script src="engine/economics.js"></script>
+  <script src="data/pvgis-almeria-hourly.js"></script>
   <script src="cases/sabatier.js"></script>
   <script src="cases/coastal.js"></script>
   <script src="cases/abundance.js"></script>

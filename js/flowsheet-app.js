@@ -19,6 +19,7 @@
   let canvasZoom = 1;
   let site = null;
   let solveError = '';
+  let routeNote = '';
   let dragging = null;
   let suppressClick = false;
   let canvasFocused = false;
@@ -107,6 +108,20 @@
         { label: 'IEA DAC 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
         { label: 'Keith et al. 2018', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
       ],
+    },
+    'dac-liquid': {
+      label: 'Liquid-solvent DAC', capacity: 100, rate: 10, activityUnit: 'kg CO₂/day', chemicalId: 'potassium-hydroxide',
+      palette: { section: 'building', order: 5.2, glyph: 'KOH', tone: 'carbon', description: 'Air + 900°C heat + KOH makeup → CO₂' },
+      params: { captureFraction: 0.75, electricityKWhPerKgCO2: 0.366, heatKWhPerKgCO2: 2.45, minHeatT_C: 900, consumablesPerKgCO2: 0.01, wasteHeatT_C: 100 },
+      controls: [
+        { key: 'captureFraction', label: 'Single-pass capture', min: 0.1, max: 0.95, step: 0.01 },
+        { key: 'electricityKWhPerKgCO2', label: 'Electricity', min: 0.05, max: 1.5, step: 0.01, unit: 'kWh/kg CO₂' },
+        { key: 'heatKWhPerKgCO2', label: 'Thermal duty', min: 0, max: 3.5, step: 0.05, unit: 'kWhₜₕ/kg CO₂' },
+        { key: 'minHeatT_C', label: 'Minimum heat', min: 20, max: 1000, step: 5, unit: '°C' },
+        { key: 'consumablesPerKgCO2', label: 'KOH makeup', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
+        { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
+      ],
+      references: [{ label: 'Keith et al. 2018 Carbon Engineering process', url: 'https://doi.org/10.1016/j.joule.2018.05.006' }],
     },
     'dac-electroswing': {
       label: 'Electro-swing DAC', capacity: 100, rate: 10, activityUnit: 'kg CO₂/day', chemicalId: 'quinone-electrode',
@@ -307,10 +322,12 @@
   const DAC_ROUTES = {
     dac: 'Generic screening DAC',
     'dac-solid': 'Solid-sorbent DAC',
+    'dac-liquid': 'Liquid-solvent DAC',
     'dac-electroswing': 'Electro-swing DAC',
   };
   const CONSUMABLE_CHEMICALS = {
     'amine-sorbent': 'Amine sorbent makeup',
+    'potassium-hydroxide': 'KOH solvent makeup',
     'quinone-electrode': 'Quinone electrode makeup',
   };
   const SITE_MONTHS = ['Annual average', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -346,7 +363,17 @@
   document.getElementById('loadCoastalMethane').addEventListener('click', () => loadCoastalMethane(0));
   document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
   document.getElementById('siteMonth').addEventListener('change', event => {
-    if (site?.id === 'almeria-pvgis-2026-09-05') loadCoastalMethane(Number(event.target.value));
+    if (!site) return;
+    site.month = Number(event.target.value);
+    refreshSiteElectricity();
+    solveAndRender();
+  });
+  document.getElementById('applyCoordinates').addEventListener('click', applyCoordinates);
+  document.getElementById('siteBatteryKWh').addEventListener('change', event => {
+    if (!site) return;
+    const batteryKWh = Math.max(0, Number(event.target.value) || 0);
+    site.storage = { ...(site.storage || {}), batteryKWh, powerKW: batteryKWh, efficiency: site.storage?.efficiency ?? 0.9 };
+    solveAndRender();
   });
   document.getElementById('saveFactory').addEventListener('click', () => {
     const name = window.prompt('Name this factory save:')?.trim();
@@ -417,7 +444,9 @@
     else if (current.unit === 'solar-pv' || current.unit === 'nuclear-electricity' || current.unit === 'solar-thermal') current.rate = 0;
     else current.rate = 10;
     if (options.chemicalId) current.chemicalId = options.chemicalId;
+    if (options.temperature != null) current.temperature = options.temperature;
     assignSiteResource(current);
+    if (site && !current.siteResource) assumeSiteResource(current);
     updateSourceStream(current);
   }
 
@@ -428,7 +457,32 @@
     else if (current.sourcePreset && site.resources[current.sourcePreset]?.stream?.kind === kind) current.siteResource = current.sourcePreset;
     else if (kind === 'electricity' && site.resources.electricity) current.siteResource = 'electricity';
     else if (kind === 'heat' && site.resources.heat) current.siteResource = 'heat';
-    else if (kind === 'consumable' && site.resources.consumables) current.siteResource = 'consumables';
+    else if (kind === 'consumable') {
+      const match = Object.entries(site.resources).find(([, resource]) => (
+        resource.stream?.kind === 'consumable' && resource.stream.chemicalId === current.chemicalId
+      ));
+      if (match) current.siteResource = match[0];
+    }
+  }
+
+  function assumeSiteResource(current) {
+    updateSourceStream(current);
+    const stream = current.params.stream;
+    if (!stream) return;
+    const key = stream.chemicalId || `${current.unit}-assumed`;
+    let id = key;
+    let n = 1;
+    while (site.resources[id] && site.resources[id].stream?.chemicalId !== stream.chemicalId) {
+      id = `${key}-${++n}`;
+    }
+    if (!site.resources[id]) {
+      site.resources[id] = {
+        stream: clone(stream),
+        quality: 'user-assumption',
+        evidence: 'Explicit project assumption added to complete a process route; not a verified local supply',
+      };
+    }
+    current.siteResource = id;
   }
 
   function positionFor(kind, index) {
@@ -508,6 +562,104 @@
     loadCase(CoastalCase.createCoastalCase(month), 'sabatier');
   }
 
+  function refreshSiteElectricity() {
+    if (!site?.resources?.electricity) return;
+    const hours = FlowsheetSolver.hourlyProfile?.(site);
+    const daily = hours ? hours.reduce((sum, value) => sum + value, 0) : Number(site.dailyPVKWhPerKWp) || 0;
+    const kWh = daily * Number(site.solarKWp || 0);
+    site.resources.electricity.stream = { kind: 'electricity', kWh };
+    site.dailyPVKWhPerKWp = daily;
+    for (const current of graph.nodes.filter(item => item.siteResource === 'electricity')) {
+      current.rate = kWh;
+      updateSourceStream(current);
+    }
+  }
+
+  function bindLocation({ latitude, longitude, solarKWp, batteryKWh = 0, solar, name }) {
+    const hours = solar?.typicalMonths?.[1] && (solar.annualTypical || Object.values(solar.typicalMonths)[0]);
+    site = {
+      ...(site || {}),
+      id: site?.id || `site-${latitude}-${longitude}`,
+      name: name || site?.name || `${Number(latitude).toFixed(3)}, ${Number(longitude).toFixed(3)}`,
+      latitude, longitude, solarKWp, month: site?.month || 0, solar,
+      storage: { batteryKWh, powerKW: batteryKWh, efficiency: 0.9, initialKWh: 0 },
+      resources: { ...(site?.resources || {}) },
+      notes: site?.notes || 'Location-bound solar from PVGIS. Other supplies stay unverified until assigned.',
+    };
+    if (!site.resources.grid) {
+      site.resources.grid = { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' };
+    }
+    const daily = (FlowsheetSolver.hourlyProfile?.(site) || hours || []).reduce((sum, value) => sum + value, 0);
+    site.resources.electricity = {
+      stream: { kind: 'electricity', kWh: daily * solarKWp },
+      quality: 'literature-estimate',
+      evidence: `PVGIS typical-day × ${solarKWp} kWp`,
+    };
+    site.dailyPVKWhPerKWp = daily;
+    for (const current of graph.nodes.filter(item => units[item.unit].kind === 'source')) {
+      if (!current.siteResource) assignSiteResource(current);
+      if (current.siteResource === 'electricity') {
+        current.rate = daily * solarKWp;
+        updateSourceStream(current);
+      }
+    }
+    solveAndRender();
+    return site;
+  }
+
+  async function applyCoordinates() {
+    const latitude = Number(document.getElementById('siteLatitude').value);
+    const longitude = Number(document.getElementById('siteLongitude').value);
+    const solarKWp = Number(document.getElementById('siteSolarKWp').value);
+    const batteryKWh = Math.max(0, Number(document.getElementById('siteBatteryKWh').value) || 0);
+    const status = document.getElementById('siteFetchStatus');
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90) {
+      status.textContent = 'Latitude and longitude must be a real location.';
+      return;
+    }
+    status.textContent = 'Fetching PVGIS hourly series…';
+    try {
+      const solar = await fetchPvgisHourly(latitude, longitude);
+      bindLocation({ latitude, longitude, solarKWp, batteryKWh, solar });
+      status.textContent = `Typical-day solar from ${solar.database || 'PVGIS'} ${solar.year || ''}`.trim();
+    } catch (error) {
+      const frozen = globalThis.PvgisAlmeriaHourly;
+      if (frozen && Math.abs(latitude - 36.834) < 0.2 && Math.abs(longitude + 2.463) < 0.2) {
+        bindLocation({ latitude: 36.834, longitude: -2.463, solarKWp, batteryKWh, solar: frozen, name: 'Almería coast · Spain' });
+        status.textContent = 'Live PVGIS unavailable; using frozen Almería 2023 typical days.';
+        return;
+      }
+      status.textContent = error.message;
+    }
+  }
+
+  async function fetchPvgisHourly(latitude, longitude) {
+    const url = `https://re.jrc.ec.europa.eu/api/v5_3/seriescalc?lat=${latitude}&lon=${longitude}&startyear=2023&endyear=2023&pvcalculation=1&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`PVGIS ${response.status}`);
+    const payload = await response.json();
+    const rows = payload.outputs?.hourly;
+    if (!rows?.length) throw new Error('PVGIS returned no hourly series for this location');
+    const byMonth = Array.from({ length: 13 }, () => Array.from({ length: 24 }, () => []));
+    for (const row of rows) {
+      const stamp = String(row.time);
+      byMonth[Number(stamp.slice(4, 6))][Number(stamp.slice(9, 11))].push(row.P / 1000);
+    }
+    const typicalMonths = {};
+    const annualTypical = Array.from({ length: 24 }, () => 0);
+    for (let month = 1; month <= 12; month += 1) {
+      typicalMonths[month] = byMonth[month].map(values => (
+        values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0
+      ));
+      typicalMonths[month].forEach((value, hour) => { annualTypical[hour] += value / 12; });
+    }
+    return {
+      typicalMonths, annualTypical, year: 2023,
+      database: payload.inputs?.meteo_data?.radiation_db,
+      url,
+    };
+  }
+
   function loadAbundanceHub() {
     loadCase(AbundanceCase.createAbundanceCase(), 'minerals');
   }
@@ -582,11 +734,22 @@
     }
     delete current.processPreset;
     selectedNodeId = nodeId;
-    solveError = dropped.length
-      ? `Incompatible connections removed: ${dropped.join(', ')}. Reconnect the new requirements; existing reagent supplies are not converted.`
+    completeNodePorts(nodeId);
+    routeNote = dropped.length
+      ? `Route changed. Disconnected: ${dropped.join(', ')}. Existing reagent supplies were not converted.`
       : '';
     solveAndRender();
     return true;
+  }
+
+  function completeNodePorts(nodeId) {
+    const current = node(nodeId);
+    for (const [port, declaration] of Object.entries(units[current.unit].ports)) {
+      if (!declaration.required) continue;
+      if (edgeAt({ node: nodeId, port, direction: declaration.direction }) >= 0) continue;
+      if (!catalog[`${declaration.kind}-${declaration.direction === 'in' ? 'source' : 'sink'}`]) continue;
+      addBoundaryNode({ node: nodeId, port, direction: declaration.direction }, true);
+    }
   }
 
   function snapshot() {
@@ -896,6 +1059,7 @@
       const source = addNode(`${kind}-source`, {
         preset: suggestedPreset(current.unit, target.port),
         chemicalId: catalog[current.unit]?.chemicalId,
+        temperature: kind === 'heat' ? current.params?.minHeatT_C : undefined,
         silent,
       });
       graph.edges.push({ from: { node: source.id, port: 'out' }, to: { node: target.node, port: target.port } });
@@ -999,7 +1163,7 @@
 
   function suggestedPreset(unit, port) {
     return {
-      'dac.air': 'air', 'dac-solid.air': 'air', 'dac-electroswing.air': 'air',
+      'dac.air': 'air', 'dac-solid.air': 'air', 'dac-liquid.air': 'air', 'dac-electroswing.air': 'air',
       'asu.air': 'air', 'swro.feed': 'seawater', 'med.feed': 'seawater', 'msf.feed': 'seawater', 'brine-minerals.brine': 'brine',
       'electrolyzer.water': 'water', 'chlor-alkali.water': 'water', 'sabatier.co2': 'co2', 'sabatier.hydrogen': 'hydrogen',
       'ammonia.nitrogen': 'nitrogen', 'ammonia.hydrogen': 'hydrogen', 'chlor-alkali.salt': 'salt',
@@ -1014,7 +1178,8 @@
     currentEconomics = null;
     if (graph.nodes.length && missingConnections().length === 0) {
       try {
-        result = FlowsheetSolver.solveOperation({ graph, operation: { setpoints }, site });
+        const solver = FlowsheetSolver.solveHorizon || FlowsheetSolver.solveOperation;
+        result = solver({ graph, operation: { setpoints }, site });
         currentEconomics = FlowsheetEconomics.evaluateEconomics({ graph, operation: { setpoints }, economics: projectEconomics }, result);
         solveError = '';
       } catch (error) { solveError = error.message; }
@@ -1026,6 +1191,7 @@
   function missingConnections() {
     const missing = [];
     for (const current of graph.nodes) {
+      if (['source', 'sink'].includes(units[current.unit].kind)) continue;
       for (const [port, declaration] of Object.entries(units[current.unit].ports)) {
         if (declaration.required && edgeAt({ node: current.id, port, direction: declaration.direction }) < 0) missing.push(`${current.label}: ${portName(port)}`);
       }
@@ -1126,29 +1292,36 @@
     balanceStatus.textContent = result ? (result.balances.maxAbsResidual < 1e-8 ? 'Balances closed' : 'Check balances') : pendingPort ? 'Choose compatible port' : 'Manual setpoints';
     balanceStatus.className = `status-chip${result?.balances.maxAbsResidual < 1e-8 ? ' good' : ''}`;
     const warning = document.getElementById('warnings');
-    warning.hidden = !solveError && !pendingPort && missing.length === 0 && bottlenecks.length === 0;
-    warning.textContent = solveError || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : '');
+    warning.hidden = !solveError && !routeNote && !pendingPort && missing.length === 0 && bottlenecks.length === 0;
+    warning.textContent = solveError || routeNote || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : '');
   }
 
   function renderSite() {
     const panel = document.getElementById('sitePanel');
-    if (!site) { panel.hidden = true; return; }
     panel.hidden = false;
-    document.getElementById('siteName').textContent = site.name;
-    document.getElementById('siteNotes').textContent = site.notes || '';
+    document.getElementById('siteName').textContent = site?.name || 'No site selected';
+    document.getElementById('siteNotes').textContent = site?.notes || '';
+    document.getElementById('siteLatitude').value = site?.latitude ?? 36.834;
+    document.getElementById('siteLongitude').value = site?.longitude ?? -2.463;
+    document.getElementById('siteSolarKWp').value = site?.solarKWp ?? 37.5;
+    document.getElementById('siteBatteryKWh').value = site?.storage?.batteryKWh ?? 0;
     const monthLabel = document.getElementById('siteMonthLabel');
     const monthSelect = document.getElementById('siteMonth');
-    if (site.id === 'almeria-pvgis-2026-09-05') {
+    if (site?.solar?.typicalMonths || site?.id === 'almeria-pvgis-2026-09-05') {
       monthLabel.hidden = false;
-      monthSelect.innerHTML = SITE_MONTHS.map((label, index) => `<option value="${index}"${index === site.month ? ' selected' : ''}>${label}</option>`).join('');
+      monthSelect.innerHTML = SITE_MONTHS.map((label, index) => `<option value="${index}"${index === (site.month || 0) ? ' selected' : ''}>${label}</option>`).join('');
     } else {
       monthLabel.hidden = true;
     }
-    document.getElementById('siteResources').innerHTML = Object.entries(site.resources || {}).map(([id, resource]) => {
+    const hours = result?.horizon?.hours;
+    document.getElementById('siteHorizon').textContent = hours
+      ? `${hours.filter(entry => entry.pv > 0).length} daylight hours · ${hours.filter(entry => entry.pv === 0).length} night hours · peak ${formatNumber(Math.max(...hours.map(entry => entry.pv)))} kWh PV · battery ${formatNumber(site?.storage?.batteryKWh || 0)} kWh`
+      : '';
+    document.getElementById('siteResources').innerHTML = Object.entries(site?.resources || {}).map(([id, resource]) => {
       const quality = resource.quality || 'user-assumption';
       return `<div class="${quality === 'unverified' ? 'unverified' : ''}"><dt>${id} <small>${quality}</small></dt><dd>${formatStream(resource.stream)}</dd></div>`;
     }).join('');
-    document.getElementById('siteEvidence').innerHTML = (site.evidence || []).map(item => (
+    document.getElementById('siteEvidence').innerHTML = (site?.evidence || []).map(item => (
       item.url ? `<a href="${item.url}" target="_blank" rel="noreferrer">${item.label}</a>` : item.label
     )).join(' · ');
   }
@@ -1335,7 +1508,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, replaceUnit,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, replaceUnit, bindLocation,
     saveNamed, loadNamed, captureBaseline, clearBaseline,
     solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },
     get economics() { return currentEconomics; }, get site() { return site; }, projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },

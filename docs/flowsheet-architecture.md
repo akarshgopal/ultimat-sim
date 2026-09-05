@@ -75,7 +75,9 @@ Edges do not repeat their stream type or disposition. Those are determined by th
 
 When `site` is present, every source block must name a `siteResource`. Resource presence is not access: an unverified grid or freshwater budget is explicit zero, not unlimited supply and not a silent free input. Two source blocks that share a resource draw from the same remaining quantity; the solver clamps rather than duplicating the budget. Composition, phase, temperature, and consumable identity on a source must match the named resource.
 
-The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield, global 35 g/kg seawater as NaCl, solid-sorbent DAC, and unverified grid/freshwater. It is a representative-day screen, not hourly dispatch.
+The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield plus a 2023 hourly typical day (`data/pvgis-almeria-hourly.js`), global 35 g/kg seawater as NaCl, solid-sorbent DAC, and unverified grid/freshwater.
+
+When `site.solar.typicalMonths` is present, `solveHorizon` runs 24 hourly operating solves. Daily setpoints are leftover demand, nameplate is capacity/24, and methane-chain setpoints stay stoichiometric so intermediate CO₂/H₂ is not orphaned. Site electricity is that hour's PV yield plus optional battery discharge. Other site budgets are remaining daily quantities. Night hours with no PV and no stored energy produce nothing.
 
 ## Substances and streams
 
@@ -362,7 +364,7 @@ Cases can remain JavaScript fixtures until serialization or a shareable URL requ
 - automatic plant sizing or economic optimization
 - full thermodynamic properties or phase equilibrium
 - heat-exchanger-network synthesis
-- hourly storage dynamics, 8760-hour solar dispatch, or inventories that carry between periods
+- full 8760-hour year simulation (the current horizon is a 24-hour typical day per selected month, with optional same-day battery carry)
 
 ## Decisions
 

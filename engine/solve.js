@@ -254,6 +254,7 @@ function validateGraph(nodes, edges) {
   }
 
   for (const node of nodes) {
+    if (['source', 'sink'].includes(UNITS[node.unit].kind)) continue;
     for (const [port, declaration] of Object.entries(UNITS[node.unit].ports)) {
       if (!declaration.required) continue;
       const key = `${declaration.direction}:${node.id}:${port}`;
@@ -375,5 +376,193 @@ function mixMaterial(streams) {
   };
 }
 
-return { solveOperation, validateGraph };
+function hourlyProfile(site) {
+  const solar = site?.solar;
+  if (!solar) return null;
+  const month = Number(site.month) || 0;
+  if (month >= 1 && month <= 12 && solar.typicalMonths?.[month]?.length === 24) return solar.typicalMonths[month];
+  if (solar.annualTypical?.length === 24) return solar.annualTypical;
+  if (solar.typicalDayKWhPerKWp?.length === 24) return solar.typicalDayKWhPerKWp;
+  return null;
+}
+
+function addStreams(left, right) {
+  if (!left) return cloneStream(right);
+  if (left.kind === 'material') {
+    const mol = { ...left.mol };
+    add(mol, right.mol);
+    return { ...left, mol };
+  }
+  if (left.kind === 'consumable') return { ...left, amount: left.amount + right.amount };
+  return { ...left, kWh: left.kWh + right.kWh };
+}
+
+function accumulateSolved(totals, solved) {
+  totals.balances.maxAbsResidual = Math.max(totals.balances.maxAbsResidual, solved.balances.maxAbsResidual);
+  for (const warning of solved.warnings || []) {
+    if (!totals.warnings.includes(warning)) totals.warnings.push(warning);
+  }
+  for (const [id, result] of Object.entries(solved.nodes)) {
+    const current = totals.nodes[id];
+    if (!current) {
+      totals.nodes[id] = JSON.parse(JSON.stringify(result));
+      continue;
+    }
+    if (result.activity != null) current.activity = (current.activity || 0) + result.activity;
+    if (result.supplied) current.supplied = addStreams(current.supplied, result.supplied);
+    if (result.received) current.received = addStreams(current.received, result.received);
+    if (result.available && result.available.kWh != null) {
+      current.available = addStreams(current.available, result.available);
+    }
+    current.limitedBy = [...new Set([...(current.limitedBy || []), ...(result.limitedBy || [])])];
+    for (const group of ['requestedInputs', 'consumed', 'outlets']) {
+      if (!result[group]) continue;
+      current[group] = current[group] || {};
+      for (const [port, stream] of Object.entries(result[group])) {
+        current[group][port] = addStreams(current[group][port], stream);
+      }
+    }
+  }
+  solved.streams.forEach((edge, index) => {
+    if (!totals.streams[index]) totals.streams[index] = { ...edge, stream: cloneStream(edge.stream) };
+    else totals.streams[index].stream = addStreams(totals.streams[index].stream, edge.stream);
+  });
+}
+
+// One representative day as 24 hourly operating solves. Daily setpoints are leftover
+// demand; nameplate is capacity/24. Site electricity is the hourly PV yield plus
+// optional battery discharge. Other site budgets are remaining daily quantities.
+function solveHorizon(caseDefinition) {
+  const hours = hourlyProfile(caseDefinition.site);
+  if (!hours) return solveOperation(caseDefinition);
+
+  const solarKWp = Number(caseDefinition.site.solarKWp) || 0;
+  const storage = caseDefinition.site.storage || {};
+  const batteryKWh = Math.max(0, Number(storage.batteryKWh) || 0);
+  const powerKW = Math.max(0, Number(storage.powerKW) || batteryKWh);
+  const eta = Number(storage.efficiency ?? 0.9);
+  let soc = Math.max(0, Number(storage.initialKWh) || 0);
+  const remainingResource = {};
+  for (const [id, resource] of Object.entries(caseDefinition.site.resources || {})) {
+    remainingResource[id] = streamAmount(resource.stream);
+  }
+  const remainingDemand = {};
+  for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'converter')) {
+    remainingDemand[node.id] = caseDefinition.operation?.setpoints?.[node.id] ?? 0;
+  }
+
+  const totals = {
+    nodes: {},
+    streams: [],
+    warnings: [],
+    balances: { elements: {}, chargeMol: 0, electricityKWh: 0, heatKWh: 0, maxAbsResidual: 0 },
+    convergence: { converged: true, iterations: 24, largestResidual: 0 },
+    horizon: { hours: [], solarKWp, profile: hours, batteryKWh },
+  };
+
+  for (let hour = 0; hour < 24; hour += 1) {
+    const hourCase = JSON.parse(JSON.stringify(caseDefinition));
+    const pv = hours[hour] * solarKWp;
+    const discharge = Math.min(soc, powerKW);
+    if (hourCase.site.resources.electricity) {
+      hourCase.site.resources.electricity.stream = { kind: 'electricity', kWh: pv + discharge };
+    }
+    for (const [id, resource] of Object.entries(hourCase.site.resources || {})) {
+      if (id === 'electricity' || id === 'grid') continue;
+      const original = caseDefinition.site.resources[id].stream;
+      const remaining = remainingResource[id];
+      const daily = streamAmount(original);
+      if (original.kind === 'material') {
+        resource.stream = scaleStream(original, daily === 0 ? 0 : Math.max(0, remaining) / daily);
+      } else if (original.kind === 'consumable') {
+        resource.stream = { ...original, amount: Math.max(0, remaining) };
+      } else {
+        resource.stream = { ...original, kWh: Math.max(0, remaining) };
+      }
+    }
+    hourCase.operation = hourCase.operation || { setpoints: {} };
+    hourCase.operation.setpoints = { ...(caseDefinition.operation?.setpoints || {}) };
+    if (hourCase.operation.priorities?.['electrical-bus']?.includes('sabatier')) {
+      hourCase.operation.priorities = {
+        ...hourCase.operation.priorities,
+        'electrical-bus': hourCase.operation.priorities['electrical-bus'].filter(id => id !== 'sabatier').flatMap(id => (
+          id === 'electrolyzer' ? ['sabatier', 'electrolyzer'] : [id]
+        )),
+      };
+    }
+    const sunLeft = hours.slice(hour).filter(value => value > 0).length || 1;
+    const power = pv + discharge;
+    for (const node of hourCase.graph.nodes) {
+      if (UNITS[node.unit].kind === 'source' && node.siteResource && hourCase.site.resources[node.siteResource]) {
+        node.params.stream = cloneStream(hourCase.site.resources[node.siteResource].stream);
+      }
+      if (UNITS[node.unit].kind === 'converter') {
+        node.capacity = (caseDefinition.graph.nodes.find(item => item.id === node.id).capacity || 0) / 24;
+        const leftover = remainingDemand[node.id] || 0;
+        hourCase.operation.setpoints[node.id] = power === 0 ? 0 : Math.min(leftover, node.capacity, leftover / sunLeft);
+      }
+    }
+    const sabatier = hourCase.graph.nodes.find(node => node.unit === 'sabatier');
+    if (sabatier && power > 0) {
+      const h2 = 4 * 2.01588 / 16.04246;
+      const co2 = 44.0095 / 16.04246;
+      const dac = hourCase.graph.nodes.find(node => String(node.unit).startsWith('dac'));
+      const electrolyzer = hourCase.graph.nodes.find(node => node.unit === 'electrolyzer');
+      const swro = hourCase.graph.nodes.find(node => node.unit === 'swro');
+      const recovery = Number(swro?.params?.recovery ?? 0.45) || 0.45;
+      const secH2 = Number(electrolyzer?.params?.secKWhPerKgH2 ?? 55);
+      const secDac = Number(dac?.params?.electricityKWhPerKgCO2 ?? 0.5);
+      const secRo = Number(swro?.params?.secKWhPerM3 ?? 3.5);
+      const secCh4 = Number(sabatier.params?.electricityKWhPerKgCH4 ?? 1);
+      const kWhPerKg = h2 * secH2 + co2 * secDac + h2 * 18.01528 / 2.01588 / 1000 / recovery * secRo + secCh4;
+      const methaneHour = Math.min(
+        hourCase.operation.setpoints[sabatier.id] || 0,
+        kWhPerKg > 0 ? power / kWhPerKg : 0
+      );
+      hourCase.operation.setpoints[sabatier.id] = methaneHour;
+      if (dac) hourCase.operation.setpoints[dac.id] = methaneHour * co2;
+      if (electrolyzer) hourCase.operation.setpoints[electrolyzer.id] = methaneHour * h2;
+      if (swro) hourCase.operation.setpoints[swro.id] = methaneHour * h2 * 18.01528 / 2.01588 / 1000 / recovery;
+    }
+    const solved = solveOperation(hourCase);
+    accumulateSolved(totals, solved);
+    for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'converter')) {
+      remainingDemand[node.id] = Math.max(0, (remainingDemand[node.id] || 0) - (solved.nodes[node.id]?.activity || 0));
+    }
+    for (const [id] of Object.entries(caseDefinition.site.resources || {})) {
+      if (id === 'electricity' || id === 'grid') continue;
+      const used = hourCase.graph.nodes
+        .filter(node => node.siteResource === id)
+        .reduce((sum, node) => sum + streamAmount(solved.nodes[node.id]?.supplied || { kind: 'electricity', kWh: 0 }), 0);
+      remainingResource[id] = Math.max(0, remainingResource[id] - used);
+    }
+    const electricityId = hourCase.graph.nodes.find(node => node.siteResource === 'electricity')?.id;
+    const supplied = electricityId ? streamAmount(solved.nodes[electricityId]?.supplied || { kind: 'electricity', kWh: 0 }) : 0;
+    soc = Math.max(0, soc - Math.max(0, supplied - pv));
+    soc = Math.min(batteryKWh, soc + Math.min(Math.max(0, pv - supplied) * eta, powerKW));
+    const methane = solved.nodes.sabatier?.activity || 0;
+    totals.horizon.hours.push({
+      hour, pv, discharge, soc, supplied,
+      methane,
+      limited: Object.entries(solved.nodes)
+        .filter(([, result]) => result.limitedBy?.length)
+        .map(([id]) => id),
+    });
+    totals.convergence.largestResidual = Math.max(totals.convergence.largestResidual, solved.convergence.largestResidual);
+    totals.convergence.converged = totals.convergence.converged && solved.convergence.converged;
+    totals.balances.elements = solved.balances.elements;
+    totals.balances.chargeMol = solved.balances.chargeMol;
+    totals.balances.electricityKWh = solved.balances.electricityKWh;
+    totals.balances.heatKWh = solved.balances.heatKWh;
+  }
+
+  totals.warnings = totals.warnings.concat(
+    totals.horizon.hours.filter(entry => entry.pv === 0 && entry.methane === 0).length === 24
+      ? []
+      : [`${totals.horizon.hours.filter(entry => entry.pv > 0).length} daylight hours on the selected typical day`]
+  );
+  return totals;
+}
+
+return { solveOperation, solveHorizon, hourlyProfile, validateGraph };
 });

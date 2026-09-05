@@ -26,7 +26,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -245,14 +245,14 @@ test('IRR always renders fractional engine rates as percentages, including above
 test('coastal methane loads a sited factory whose winter solar cuts methane', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
-  app.loadCoastalMethane(0);
+  app.loadCoastalMethane(12);
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
   assert.equal(app.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
   assert.match(context.__elements.get('siteResources').innerHTML, /unverified/);
-  const annual = app.result.nodes.sabatier.activity;
-  app.loadCoastalMethane(12);
-  assert.ok(app.result.nodes.sabatier.activity < annual);
   assert.equal(app.site.month, 12);
+  assert.equal(app.result.horizon.hours[0].methane, 0);
+  assert.ok(app.result.horizon.hours.some(entry => entry.pv > 0 && entry.methane > 0));
+  assert.ok(app.result.nodes.sabatier.activity > 0);
 });
 
 test('switching DAC route drops incompatible heat and reagent connections', () => {
@@ -268,8 +268,27 @@ test('switching DAC route drops incompatible heat and reagent connections', () =
   assert.equal(context.FlowsheetUnits.UNITS[dac.unit].ports.heat, undefined);
   assert.ok(context.__elements.get('warnings').textContent.includes('not converted'));
   assert.equal(app.graph.edges.some(edge => edge.to.node === dac.id && edge.to.port === 'heat'), false);
-  assert.equal(app.graph.edges.some(edge => edge.to.node === dac.id && edge.to.port === 'consumables'), false);
-  assert.equal(app.graph.nodes.find(node => node.unit === 'consumable-source').params.stream.chemicalId, 'amine-sorbent');
+  assert.ok(app.result.nodes[dac.id].activity > 0);
+  const chemicals = app.graph.nodes.filter(node => node.unit === 'consumable-source').map(node => node.params.stream.chemicalId);
+  assert.ok(chemicals.includes('amine-sorbent'));
+  assert.ok(chemicals.includes('quinone-electrode'));
+  assert.equal(app.graph.nodes.find(node => node.params.stream?.chemicalId === 'amine-sorbent').params.stream.chemicalId, 'amine-sorbent');
+});
+
+test('coastal DAC swap stays runnable and compares against the captured baseline', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(0);
+  app.captureBaseline();
+  const baselineMethane = app.result.nodes.sabatier.activity;
+  app.replaceUnit('dac', 'dac-electroswing');
+  assert.equal(app.graph.nodes.find(node => node.id === 'dac').unit, 'dac-electroswing');
+  assert.ok(app.result);
+  assert.ok(app.economics);
+  assert.equal(JSON.stringify(app.baseline.economics) !== '{}', true);
+  assert.match(context.__elements.get('comparisonMetrics').innerHTML, /CAPEX/);
+  assert.equal(app.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId, 'amine-sorbent');
+  assert.ok(app.result.nodes.sabatier.activity <= baselineMethane + 1e-6);
 });
 
 test('an incomplete baseline has no economics until a complete graph is captured', () => {

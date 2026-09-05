@@ -5,7 +5,7 @@ const test = require('node:test');
 
 const { streamMassKg } = require('../engine/model');
 const { UNITS } = require('../engine/units');
-const { solveOperation } = require('../engine/solve');
+const { solveOperation, solveHorizon } = require('../engine/solve');
 const { createCoastalCase, DAILY_PV } = require('../cases/coastal');
 
 const pvgis = require('../data/pvgis-almeria.json');
@@ -107,6 +107,35 @@ test('solid-sorbent DAC rejects the wrong makeup chemical', () => {
   delete unsited.site;
   unsited.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId = 'quinone-electrode';
   assert.throws(() => solveOperation(unsited), /amine-sorbent/);
+});
+
+test('hourly typical-day dispatch idles at night and produces in daylight', () => {
+  const solved = solveHorizon(createCoastalCase(12));
+  assert.ok(solved.horizon.hours.length === 24);
+  assert.equal(solved.horizon.hours[0].pv, 0);
+  assert.equal(solved.horizon.hours[0].methane, 0);
+  assert.ok(solved.horizon.hours.some(entry => entry.pv > 0 && entry.methane > 0));
+  assert.ok(solved.nodes.sabatier.activity > 0);
+  assert.ok(solved.nodes.sabatier.activity < 5);
+  assert.ok(solved.balances.maxAbsResidual < 1e-8);
+  const june = solveHorizon(createCoastalCase(6));
+  assert.ok(june.horizon.hours.filter(entry => entry.methane > 0).length > solved.horizon.hours.filter(entry => entry.methane > 0).length);
+  const small = createCoastalCase(12);
+  small.site.solarKWp = 10;
+  assert.ok(solveHorizon(small).nodes.sabatier.activity < solved.nodes.sabatier.activity);
+});
+
+test('liquid-solvent DAC on coastal heat is temperature-limited', () => {
+  const definition = createCoastalCase(0);
+  definition.graph.nodes.find(node => node.id === 'dac').unit = 'dac-liquid';
+  Object.assign(definition.graph.nodes.find(node => node.id === 'dac').params, {
+    captureFraction: 0.75, electricityKWhPerKgCO2: 0.366, heatKWhPerKgCO2: 2.45, minHeatT_C: 900,
+  });
+  definition.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId = 'potassium-hydroxide';
+  definition.site.resources.consumables.stream.chemicalId = 'potassium-hydroxide';
+  const solved = solveOperation(definition);
+  assert.equal(solved.nodes.dac.activity, 0);
+  assert.ok(solved.nodes.dac.limitedBy.includes('heatTemperature'));
 });
 
 test('electro-swing DAC drops heat ports and requires quinone makeup', () => {

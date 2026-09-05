@@ -59,6 +59,9 @@
 .site-panel .unverified dt, .site-panel .unverified dd { color: var(--warning); }
 #siteMonthLabel { color: var(--text-muted); font-size: 0.75rem; }
 #siteMonth { margin-left: 4px; }
+.site-location { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 10px 0; }
+.site-location label { color: var(--text-muted); font-size: 0.75rem; }
+.site-location input { width: 88px; margin-left: 4px; }
 
 .flowsheet-workspace {
   min-height: 0;

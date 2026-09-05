@@ -16,7 +16,9 @@ The root app now provides:
 - A generic post-solve economics fold: source purchases, installed CAPEX, fixed and variable O&M, sale/disposal destinations, demand caps, replacements, delivered cost, NPV, and IRR.
 - Editable economic assumptions on every source, converter, and destination, including zero-cost inputs for in-the-limit experiments.
 - Captured-baseline scenario comparison and a synergy ledger for avoided purchases, avoided disposal, and added product revenue.
-- Integrated methane + water-recycle, evidence-backed coastal methane, and ammonia + brine industrial-hub examples. The coastal case binds Almería PVGIS solar, seawater intake, and unverified grid/freshwater to the plant. The abundance hub couples brine-derived bromide with chlor-alkali chlorine, then uses chlor-alkali hydrogen with ASU nitrogen for ammonia.
+- Integrated methane + water-recycle, evidence-backed coastal methane, and ammonia + brine industrial-hub examples. The coastal case binds Almería PVGIS solar, seawater intake, and unverified grid/freshwater to the plant, then dispatches a 24-hour typical day so night hours produce nothing unless a battery is assumed. The abundance hub couples brine-derived bromide with chlor-alkali chlorine, then uses chlor-alkali hydrogen with ASU nitrogen for ammonia.
+- Distinct DAC routes (solid-sorbent, liquid-solvent, electro-swing) with different heat and reagent contracts. Switching a route keeps compatible connections, does not rewrite an existing makeup chemical, and stays comparable against a captured baseline.
+- A location bar: coordinates plus PV kWp fetch or reuse PVGIS typical-day solar and bind it to the current factory. Unverified grid and freshwater stay explicit zeros until assigned.
 
 The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`, `index.html`, and `flowsheet.css`.
 

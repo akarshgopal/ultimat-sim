@@ -268,3 +268,64 @@ test('sizeToProduct does not mutate the input case', () => {
   sizeToProduct({ product: 'lithium', rate: 1, definition: original });
   assert.equal(JSON.stringify(original), snapshot);
 });
+
+const DAC_HEAT_PER_KG_CO2 = 1.5;
+
+test('CH4 heat credit lowers solar versus heatCredit:false', () => {
+  const withCredit = sizeCoastalToMethane(15, 0);
+  const withoutCredit = sizeCoastalToMethane(15, 0, { heatCredit: false });
+  assert.ok(withCredit.definition.site.solarKWp < withoutCredit.definition.site.solarKWp);
+  assert.ok(withCredit.heatCoveredKWh > 0);
+  const purchasedWith = withCredit.history.at(-1).duties.heatKWh;
+  const purchasedWithout = withoutCredit.history.at(-1).duties.heatKWh;
+  const demandWithout = withoutCredit.history.at(-1).duties.co2 * DAC_HEAT_PER_KG_CO2;
+  assert.ok(purchasedWith < purchasedWithout);
+  assert.ok(Math.abs(purchasedWithout - demandWithout) / Math.max(1, demandWithout) < 1e-6);
+  assert.ok(Math.abs(withCredit.achieved - 15) < 1e-6);
+  assert.ok(Math.abs(withoutCredit.achieved - 15) < 1e-6);
+  assertClosed(withCredit.solved);
+  assertClosed(withoutCredit.solved);
+  assert.ok(withCredit.definition.graph.nodes.some(node => node.unit === 'heat-source'));
+});
+
+test('history surfaces heat covered and residual that sum to DAC heat demand', () => {
+  const sized = sizeCoastalToMethane(12, 3);
+  const last = sized.history.at(-1).duties;
+  assert.ok(last.heatCoveredKWh > 0);
+  assert.ok(last.heatResidualKWh >= 0);
+  const demand = last.co2 * DAC_HEAT_PER_KG_CO2;
+  assert.ok(Math.abs(last.heatCoveredKWh + last.heatResidualKWh - demand) / Math.max(1, demand) < 1e-6);
+  assert.ok(Math.abs(last.heatKWh - last.heatResidualKWh) < 1e-9);
+  assert.ok(Math.abs(sized.heatCoveredKWh - last.heatCoveredKWh) < 1e-9);
+  assert.ok(Math.abs(sized.heatResidualKWh - last.heatResidualKWh) < 1e-9);
+  assert.equal(moneyKeys(last).length, 0);
+});
+
+test('Sabatier waste colder than DAC minHeat gets no cascade credit', () => {
+  const sized = sizeToTarget(() => createSabatierCase({
+    recycleWater: false,
+    params: { sabatier: { wasteHeatT_C: 50 }, dac: { minHeatT_C: 80 } },
+  }), 8);
+  const last = sized.history.at(-1).duties;
+  assert.ok(last.heatCoveredKWh < 1e-6);
+  const demand = last.co2 * DAC_HEAT_PER_KG_CO2;
+  assert.ok(Math.abs(last.heatKWh - demand) / Math.max(1, demand) < 1e-6);
+  assert.ok(Math.abs(last.heatResidualKWh - demand) / Math.max(1, demand) < 1e-6);
+  assert.ok(Math.abs(sized.achieved - 8) < 1e-6);
+  assertClosed(sized.solved);
+});
+
+test('H2 sizing does not credit parked Sabatier waste heat', () => {
+  const sized = sizeToProduct({ product: 'H2', rate: 10, caseOrBuilder: () => createCoastalCase(0) });
+  const last = sized.history.at(-1).duties;
+  assert.equal(last.ch4, 0);
+  assert.ok((last.heatCoveredKWh || 0) < 1e-9);
+  assert.ok((sized.heatCoveredKWh || 0) < 1e-9);
+  const swro = 10 * WATER_KG_PER_KG_H2 / 1000;
+  const processKWh = 10 * 55 + swro * 3.5;
+  assert.ok(Math.abs(last.electricityKWh - processKWh) / processKWh < 1e-6);
+  const heat = sized.definition.graph.nodes.find(node => node.unit === 'heat-source');
+  assert.ok(heat);
+  assert.ok((heat.params.stream.kWh || 0) < 1e-9);
+  assert.ok(Math.abs(sized.achieved - 10) < 1e-6);
+});

@@ -2,19 +2,23 @@
   const api = factory(
     typeof require === 'function' ? require('./model') : root.FlowsheetModel,
     typeof require === 'function' ? require('./solve') : root.FlowsheetSolver,
-    typeof require === 'function' ? require('./footprint') : root.FlowsheetFootprint
+    typeof require === 'function' ? require('./footprint') : root.FlowsheetFootprint,
+    typeof require === 'function' ? require('./heat') : root.FlowsheetHeat
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FlowsheetSize = api;
-})(globalThis, (model, solver, footprint) => {
+})(globalThis, (model, solver, footprint, heat) => {
 const { SUBSTANCES, cloneStream, scaleStream, streamMassKg } = model;
 const { solveOperation } = solver;
+const { cascadeHeat } = heat;
 
 // Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
 // this module is the separate design calculation that chooses those capacities.
 //
 // product kg/day (CH4, H2, lithium, salt)
 //   -> strategy estimates converter duties and source budgets
+//   -> CH4: T-feasible cascade before purchasing heat; residual heat is
+//      electric resistance COP=1 for PV; covered heat is not
 //   -> solarKWp from site.dailyPVKWhPerKWp (else typical-day hourly sum)
 //   -> solveOperation
 //   -> recycle / yield credit from the solved plant
@@ -122,9 +126,30 @@ function chainParams(definition) {
     secDesal: Number(desal?.params?.secKWhPerM3 ?? desal?.params?.electricityKWhPerM3 ?? 3.5),
     heatDesal: Number(desal?.params?.heatKWhPerM3 ?? 0),
     secCh4: Number(sabatier.params?.electricityKWhPerKgCH4 ?? sabatier.params?.secKWhPerKgCH4 ?? 1),
+    heatKWhPerKgCH4: Number(sabatier.params?.heatKWhPerKgCH4 ?? 2.86),
+    wasteHeatT_C: Number(sabatier.params?.wasteHeatT_C ?? 250),
+    minHeatDac: Number(dac?.params?.minHeatT_C ?? 80),
+    minHeatDesal: Number(desal?.params?.minHeatT_C ?? 0),
     captureFraction: Number(dac?.params?.captureFraction ?? 0.9),
     consumablesPerKgCO2: Number(dac?.params?.consumablesPerKgCO2 ?? 0),
     recycle: hasWaterRecycle(definition, sabatier),
+  };
+}
+
+function creditHeat(flag) {
+  return flag !== false;
+}
+
+function cascadePurchasedHeat({ sources = [], sinks = [], enabled = true } = {}) {
+  const demandKWh = (sinks || []).reduce((sum, sink) => sum + (Number(sink.demandKWh) || 0), 0);
+  if (!enabled) {
+    return { heatCoveredKWh: 0, purchasedHeatKWh: demandKWh, heatResidualKWh: demandKWh };
+  }
+  const cascade = cascadeHeat({ sources, sinks });
+  return {
+    heatCoveredKWh: cascade.coveredKWh,
+    purchasedHeatKWh: cascade.residualDemandKWh,
+    heatResidualKWh: cascade.residualDemandKWh,
   };
 }
 
@@ -154,6 +179,7 @@ function h2Chain(definition) {
     secH2: Number(electrolyzer.params?.secKWhPerKgH2 ?? 52),
     secDesal: Number(desal?.params?.secKWhPerM3 ?? desal?.params?.electricityKWhPerM3 ?? 3.5),
     heatDesal: Number(desal?.params?.heatKWhPerM3 ?? 0),
+    minHeatDesal: Number(desal?.params?.minHeatT_C ?? 0),
   };
 }
 
@@ -186,10 +212,11 @@ function applyCapScale(duties, raw, caps, keys) {
   return next;
 }
 
-function estimateDuties(definition, methaneKg, recoveredPerKg, caps) {
+function estimateDuties(definition, methaneKg, recoveredPerKg, caps, heatCredit = true) {
   const chain = chainParams(definition);
   const yieldPerKWp = dailyPvKWhPerKWp(definition);
   const recycleCredit = chain.recycle ? Math.max(0, recoveredPerKg) : 0;
+  const enabled = creditHeat(heatCredit);
 
   const raw = ch4 => {
     const methane = Math.max(0, ch4);
@@ -198,8 +225,36 @@ function estimateDuties(definition, methaneKg, recoveredPerKg, caps) {
     const makeupWaterKg = Math.max(0, methane * chain.waterKgPerKg - methane * recycleCredit);
     const swro = makeupWaterKg / chain.productDensity;
     const seawaterKg = (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity;
-    const electricityKWh = h2 * chain.secH2 + co2 * chain.secDac + swro * chain.secDesal + methane * chain.secCh4;
-    const heatKWh = co2 * chain.heatDac + swro * chain.heatDesal;
+    const processElectricityKWh = h2 * chain.secH2 + co2 * chain.secDac + swro * chain.secDesal + methane * chain.secCh4;
+    const dacHeatKWh = co2 * chain.heatDac;
+    const desalHeatKWh = swro * chain.heatDesal;
+    const sources = [];
+    const sinks = [];
+    if (methane > 0 && chain.heatKWhPerKgCH4 > 0) {
+      sources.push({
+        id: chain.sabatier.id,
+        kWh: methane * chain.heatKWhPerKgCH4,
+        T_C: chain.wasteHeatT_C,
+      });
+    }
+    if (dacHeatKWh > 0 && chain.dac) {
+      sinks.push({
+        id: chain.dac.id,
+        demandKWh: dacHeatKWh,
+        minT_C: chain.minHeatDac,
+      });
+    }
+    if (desalHeatKWh > 0 && chain.desal) {
+      sinks.push({
+        id: chain.desal.id,
+        demandKWh: desalHeatKWh,
+        minT_C: chain.minHeatDesal,
+      });
+    }
+    const cascade = cascadePurchasedHeat({ sources, sinks, enabled });
+    // Screening: unmet process heat after cascade is electric resistance COP=1.
+    // Covered cascade duty is not added to electricity or PV.
+    const electricityKWh = processElectricityKWh + cascade.heatResidualKWh;
     const solarKWp = yieldPerKWp > 0 ? electricityKWh / yieldPerKWp : 0;
     return {
       ch4: methane,
@@ -208,8 +263,11 @@ function estimateDuties(definition, methaneKg, recoveredPerKg, caps) {
       makeupWaterKg,
       swro,
       seawaterKg,
+      processElectricityKWh,
       electricityKWh,
-      heatKWh,
+      heatKWh: cascade.purchasedHeatKWh,
+      heatCoveredKWh: cascade.heatCoveredKWh,
+      heatResidualKWh: cascade.heatResidualKWh,
       solarKWp,
       airKg: airKgForCo2(definition, co2, chain.captureFraction),
       consumablesKg: co2 * chain.consumablesPerKgCO2,
@@ -238,8 +296,15 @@ function estimateH2Duties(definition, h2Kg, caps) {
     const seawaterKg = chain.desal
       ? (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity
       : makeupWaterKg;
-    const electricityKWh = h2 * chain.secH2 + swro * chain.secDesal;
-    const heatKWh = swro * chain.heatDesal;
+    const processElectricityKWh = h2 * chain.secH2 + swro * chain.secDesal;
+    const desalHeatKWh = swro * chain.heatDesal;
+    const sinks = desalHeatKWh > 0 && chain.desal
+      ? [{ id: chain.desal.id, demandKWh: desalHeatKWh, minT_C: chain.minHeatDesal }]
+      : [];
+    // H2 parks Sabatier/DAC: no methanation waste credit. Residual desal heat
+    // is electric resistance COP=1 when present (SWRO heat is typically 0).
+    const cascade = cascadePurchasedHeat({ sources: [], sinks, enabled: true });
+    const electricityKWh = processElectricityKWh + cascade.heatResidualKWh;
     const solarKWp = yieldPerKWp > 0 ? electricityKWh / yieldPerKWp : 0;
     return {
       ch4: 0,
@@ -248,8 +313,11 @@ function estimateH2Duties(definition, h2Kg, caps) {
       makeupWaterKg,
       swro,
       seawaterKg,
+      processElectricityKWh,
       electricityKWh,
-      heatKWh,
+      heatKWh: cascade.purchasedHeatKWh,
+      heatCoveredKWh: cascade.heatCoveredKWh,
+      heatResidualKWh: cascade.heatResidualKWh,
       solarKWp,
       airKg: 0,
       consumablesKg: 0,
@@ -353,7 +421,10 @@ function applyDuties(definition, duties) {
 
   if (duties.airKg > 0) setMaterial(air, duties.airKg);
   if (duties.seawaterKg > 0) setMaterial(seawater, duties.seawaterKg);
-  if (duties.heatKWh > 0) setHeat(heat, duties.heatKWh);
+  // Purchased residual is duties.heatKWh. Cascade is accounting-only (no HEN,
+  // no edge rewrite), so the heat-source still delivers residual + covered
+  // process demand. Always write, including 0, to avoid a stale heat budget.
+  setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
   if (duties.consumablesKg > 0) setConsumable(consumables, duties.consumablesKg);
 
   applyPowerAndSite(definition, duties);
@@ -379,7 +450,7 @@ function applyH2Duties(definition, duties) {
     || nodeBy(definition, node => node.siteResource === 'seawater');
   const heat = nodeBy(definition, node => node.id === 'heat') || nodeBy(definition, node => node.siteResource === 'heat');
   if (duties.seawaterKg > 0) setMaterial(water, duties.seawaterKg);
-  if (duties.heatKWh > 0) setHeat(heat, duties.heatKWh);
+  setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
   applyPowerAndSite(definition, duties);
   syncSiteResource(definition, water);
   syncSiteResource(definition, heat);
@@ -398,6 +469,18 @@ function electricityConsumed(solved) {
     }
   }
   return kWh;
+}
+
+function processElectricityKWh(duties) {
+  if (duties.processElectricityKWh != null) return duties.processElectricityKWh;
+  return Math.max(0, (duties.electricityKWh || 0) - (duties.heatResidualKWh || 0));
+}
+
+function heatMeasureExtras(solved, duties) {
+  return {
+    heatCoveredKWh: solved.heatIntegration?.coveredKWh ?? duties.heatCoveredKWh ?? 0,
+    heatResidualKWh: solved.heatIntegration?.residualDemandKWh ?? duties.heatResidualKWh ?? 0,
+  };
 }
 
 function recoveredWaterKg(solved, sabatier) {
@@ -434,6 +517,8 @@ function historyDuties(duties, solved, definition, extras = {}) {
     brineKg: duties.brineKg || 0,
     electricityKWh: duties.electricityKWh || 0,
     heatKWh: duties.heatKWh || 0,
+    heatCoveredKWh: extras.heatCoveredKWh ?? duties.heatCoveredKWh ?? 0,
+    heatResidualKWh: extras.heatResidualKWh ?? duties.heatResidualKWh ?? 0,
     solarKWp: duties.solarKWp || 0,
     airKg: duties.airKg || 0,
     consumablesKg: duties.consumablesKg || 0,
@@ -533,6 +618,7 @@ function iterateSize({
   for (const warning of solver.unverifiedRightsWarnings?.(definition.site) || []) {
     if (!warnings.includes(warning)) warnings.push(warning);
   }
+  const lastDuties = history[history.length - 1]?.duties || {};
   return {
     definition,
     solved,
@@ -546,6 +632,8 @@ function iterateSize({
     converged: consistency < tolerance && (relativeGap(achieved, target) < tolerance || Boolean(duties?.capped)),
     history,
     warnings,
+    heatCoveredKWh: lastDuties.heatCoveredKWh ?? solved?.heatIntegration?.coveredKWh ?? 0,
+    heatResidualKWh: lastDuties.heatResidualKWh ?? solved?.heatIntegration?.residualDemandKWh ?? 0,
   };
 }
 
@@ -559,7 +647,9 @@ function sizeMethane(definition, target, opts) {
     maxIterations: opts.maxIterations,
     tolerance: opts.tolerance,
     product: 'CH4',
-    estimate: (current, methaneKg, _state, caps) => estimateDuties(current, methaneKg, recoveredPerKg, caps),
+    estimate: (current, methaneKg, _state, caps) => (
+      estimateDuties(current, methaneKg, recoveredPerKg, caps, opts.heatCredit)
+    ),
     apply: applyDuties,
     measure: (solved, current, duties) => {
       const achieved = activity(solved, chain.sabatier);
@@ -568,7 +658,10 @@ function sizeMethane(definition, target, opts) {
       } else if (chain.recycle) {
         recoveredPerKg = chain.recoveredWaterPerKg;
       }
-      const gaps = [relativeGap(achieved, duties.ch4), relativeGap(electricityConsumed(solved), duties.electricityKWh)];
+      const gaps = [
+        relativeGap(achieved, duties.ch4),
+        relativeGap(electricityConsumed(solved), processElectricityKWh(duties)),
+      ];
       if (chain.electrolyzer) gaps.push(relativeGap(activity(solved, chain.electrolyzer), duties.h2));
       if (chain.dac) gaps.push(relativeGap(activity(solved, chain.dac), duties.co2));
       if (chain.desal) gaps.push(relativeGap(activity(solved, chain.desal), duties.swro));
@@ -587,6 +680,7 @@ function sizeMethane(definition, target, opts) {
           achievedCo2: activity(solved, chain.dac),
           achievedSwro: activity(solved, chain.desal),
           achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
         }),
       };
     },
@@ -606,7 +700,10 @@ function sizeHydrogen(definition, target, opts) {
     apply: applyH2Duties,
     measure: (solved, current, duties) => {
       const achieved = activity(solved, chain.electrolyzer);
-      const gaps = [relativeGap(achieved, duties.h2), relativeGap(electricityConsumed(solved), duties.electricityKWh)];
+      const gaps = [
+        relativeGap(achieved, duties.h2),
+        relativeGap(electricityConsumed(solved), processElectricityKWh(duties)),
+      ];
       if (chain.desal) gaps.push(relativeGap(activity(solved, chain.desal), duties.swro));
       const consistency = Math.max(...gaps);
       return {
@@ -618,6 +715,7 @@ function sizeHydrogen(definition, target, opts) {
           achievedH2: achieved,
           achievedSwro: activity(solved, chain.desal),
           achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
         }),
       };
     },
@@ -657,8 +755,11 @@ function sizeMinerals(definition, product, target, opts) {
         return {
           brineKg,
           seawaterKg: brineKg,
+          processElectricityKWh: electricityKWh,
           electricityKWh,
           heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
           solarKWp,
           yieldPerKWp,
           makeupWaterKg: 0,
@@ -697,6 +798,7 @@ function sizeMinerals(definition, product, target, opts) {
           achieved,
           achievedBrine: activity(solved, minerals),
           achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
         }),
       };
     },
@@ -720,7 +822,7 @@ function sizeToProduct(opts = {}) {
   const definition = resolveDefinition(caseOrBuilder);
   const maxIterations = Math.max(1, Number(opts.maxIterations) || DEFAULT_MAX_ITERATIONS);
   const tolerance = Number(opts.tolerance) > 0 ? Number(opts.tolerance) : DEFAULT_TOLERANCE;
-  const loopOpts = { caps: opts.caps || {}, maxIterations, tolerance };
+  const loopOpts = { caps: opts.caps || {}, maxIterations, tolerance, heatCredit: opts.heatCredit };
   if (product === 'CH4') return sizeMethane(definition, rate, loopOpts);
   if (product === 'H2') return sizeHydrogen(definition, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
@@ -737,6 +839,7 @@ function sizeToTarget(caseOrBuilder, target, opts = {}) {
     caps: opts.caps,
     maxIterations: opts.maxIterations,
     tolerance: opts.tolerance,
+    heatCredit: opts.heatCredit,
   });
 }
 

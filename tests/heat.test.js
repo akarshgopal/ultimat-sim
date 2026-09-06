@@ -89,10 +89,12 @@ test('coastal methane keeps heatIntegration and does not drop the heat source', 
   assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
 });
 
-test('index.html loads heat.js before solve.js', () => {
+test('index.html loads heat.js before solve.js and size.js', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const heatAt = html.indexOf('src="engine/heat.js"');
   const solveAt = html.indexOf('src="engine/solve.js"');
+  const sizeAt = html.indexOf('src="engine/size.js"');
   assert.ok(heatAt >= 0);
   assert.ok(solveAt > heatAt);
+  assert.ok(sizeAt > heatAt);
 });

@@ -137,7 +137,8 @@ These distort “real” material–energy–land–money coupling the most when
 | --- | --- | --- | --- | --- |
 | MED/MSF/DAC waste heat T | 40–100 °C defaults | Reject heat grade | **assumption** | Screening reject temperature for cascade eligibility. |
 | Sabatier `heatKWhPerKgCH4` 2.86; `wasteHeatT_C` 250 °C | Recoverable methanation reject | **derived** (enthalpy) / **assumption** (T) | 165 kJ/mol CH₄ / 3.6 / 16.04 ≈ 2.86 kWh/kg. 250 °C is a screening reject T, not a measured outlet. Cascade-eligible vs DAC `minHeatT_C` 80 °C. |
-| `engine/heat.js` cascade | Covered / residual demand / unrecovered waste | **derived** | Post-solve T-feasible greedy match of converter `wasteHeat` onto `consumed.heat`. Not HEN synthesis. Does not change `balances.heatKWh` or remove the external heat-source node. |
+| `engine/heat.js` cascade | Covered / residual demand / unrecovered waste | **derived** | Post-solve T-feasible greedy match of converter `wasteHeat` onto `consumed.heat`. Not HEN synthesis. Does not change `balances.heatKWh` or remove the external heat-source node. `sizeToProduct` CH4 duty estimate uses the same matcher; purchased heat is residual. |
+| `engine/size.js` unmet heat | Electric resistance COP=1 | **assumption** / **screening** | After cascade, residual process heat is added to electricity for PV (`solarKWp`). Covered cascade duty is not. Opt out with `heatCredit: false`. Not a heat pump; not a modeled electric heater block. |
 | coastal heat budget | 30 kWh/day @ 100 °C | DAC heat supply | **assumption** | Explicitly noted unverified in site notes. |
 | `solar-thermal` | sunHours 6; T 150 °C; CAPEX 1000 $/kWₜₕ | Process heat source | **assumption** (DOE process-heat page linked) | Map to DOE/NREL CSP or flat-plate cost & yield. |
 | `thermal-storage` | η 0.95; ΔT loss 5 °C; CAPEX 30 $/kWhₜₕ | Heat shift | **assumption** | Cite DOE TES ranges. |

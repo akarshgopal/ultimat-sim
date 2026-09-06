@@ -34,7 +34,7 @@ Prices never enter a unit equation or a conservation balance. A later optimizer 
 ## Principles
 
 1. Elemental material balances close before money exists.
-2. Electricity and heat are explicit edges, not hidden utility deductions. After the operating solve, `engine/heat.js` runs a greedy temperature-feasible cascade (converter `wasteHeat` outlets vs `consumed.heat` sinks). That pass is accounting of recoverable duty versus residual external heat, not heat-exchanger-network synthesis, and it does not mutate the graph or `balances.heatKWh`.
+2. Electricity and heat are explicit edges, not hidden utility deductions. After the operating solve, `engine/heat.js` runs a greedy temperature-feasible cascade (converter `wasteHeat` outlets vs `consumed.heat` sinks). That pass is accounting of recoverable duty versus residual external heat, not heat-exchanger-network synthesis, and it does not mutate the graph or `balances.heatKWh`. `sizeToProduct` uses the same matcher in the CH4 duty estimate so purchased heat is the residual; unmet heat is electric resistance COP=1 for PV. The post-solve `heatIntegration` report remains the accounting check.
 3. If material or energy crosses a unit boundary, it is on an edge.
 4. Units see only their inlet streams, physical parameters, installed capacity, and requested activity.
 5. Installed capacity is an input to an operating solve. Automatic plant sizing is a separate outer calculation.
@@ -389,21 +389,25 @@ Installed capacity remains an input to `solveOperation`. `engine/size.js` is the
 ```text
 product kg/day (CH4 | H2 | lithium | salt)
   -> strategy estimates converter duties and source budgets
+  -> CH4: cascadeHeat on Sabatier waste vs DAC/desal sinks; purchased heat = residual
+  -> unmet process heat after cascade is electric resistance COP=1 for PV (covered heat is not)
   -> solarKWp = electricity / dailyPVKWhPerKWp when the site has a PV yield
   -> solveOperation
   -> recycle water (CH4) or mineral yield (lithium/salt)
   -> repeat until residual < tolerance or maxIterations
 ```
 
-`sizeToProduct({ product, rate, definition|caseOrBuilder, caps, maxIterations, tolerance })` clones the case, never mutates the caller, and returns `{ product, rate, target, definition, solved, iterations, residual, consistency, converged, history }`. Product aliases: `methane`/`ch4` → CH4, `h2` → H2, `Li`/`LiCl` → lithium. Each history step records physical duties only (`ch4`, `h2`, `co2`, `swro`, `brineKg`, `electricityKWh`, `solarKWp`, `landHa`, …). Prices, CAPEX, OPEX, NPV, and IRR are not convergence signals; land hectares are a physical consequence from `engine/footprint.js`. Optional `caps` (`sabatier`, `electrolyzer`, `dac`, `swro`, `solarKWp`, `minerals`) clamp the design and set `operation.boundaryLimitedBy` to `sizing cap` when they bind.
+`sizeToProduct({ product, rate, definition|caseOrBuilder, caps, maxIterations, tolerance, heatCredit })` clones the case, never mutates the caller, and returns `{ product, rate, target, definition, solved, iterations, residual, consistency, converged, history, heatCoveredKWh, heatResidualKWh }`. Product aliases: `methane`/`ch4` → CH4, `h2` → H2, `Li`/`LiCl` → lithium. Each history step records physical duties only (`ch4`, `h2`, `co2`, `swro`, `brineKg`, `electricityKWh`, `heatKWh` purchased residual, `heatCoveredKWh`, `heatResidualKWh`, `solarKWp`, `landHa`, …). Prices, CAPEX, OPEX, NPV, and IRR are not convergence signals; land hectares are a physical consequence from `engine/footprint.js`. Optional `caps` (`sabatier`, `electrolyzer`, `dac`, `swro`, `solarKWp`, `minerals`) clamp the design and set `operation.boundaryLimitedBy` to `sizing cap` when they bind. `heatCredit: false` zeros the cascade credit (default true).
+
+The CH4 estimator builds cascade sources/sinks from stoichiometry before purchasing heat: Sabatier waste at `heatKWhPerKgCH4` / `wasteHeatT_C` (defaults 2.86 kWh/kg, 250 °C) versus DAC and desal heat sinks. Purchased heat is `residualDemandKWh`; covered duty is not added to electricity. Unmet heat is a screening electric-resistance load at COP=1 for `solarKWp`. The heat-source node stays on the graph (no edge rewrite); `solveOperation.heatIntegration` remains the post-solve accounting check. No qualifying match (too-cold waste, or credit off) leaves covered at 0 and residual at full demand.
 
 Strategies:
 
-- **CH4**: existing Sabatier path plus recycle water. `achieved` is Sabatier activity. `sizeToTarget` is this wrapper.
+- **CH4**: existing Sabatier path plus recycle water and cascade heat credit. `achieved` is Sabatier activity. `sizeToTarget` is this wrapper.
 - **H2**: electrolyzer-led water, desal, and PV. If Sabatier or DAC are present their capacity and setpoint go to 0 so H2 is the product. `achieved` is electrolyzer activity.
 - **lithium / salt**: scale `brine-minerals`, the brine source, and power so the sink inlet mass meets the rate (abundance / Dead Sea). Throws if the minerals block or sink is missing.
 
-`sizeCoastalToMethane(target, month, opts)` runs the CH4 loop on `createCoastalCase(month)`. The one-shot coastal fixture keeps `solarKWp = 37.5` and still clamps methane from the electricity budget. The Foundry site panel **Size to target** control sizes the currently loaded plant via `sizeToProduct` and shows product, iteration count, and residual.
+`sizeCoastalToMethane(target, month, opts)` runs the CH4 loop on `createCoastalCase(month)`. The one-shot coastal fixture keeps `solarKWp = 37.5` and still clamps methane from the electricity budget. The Foundry site panel **Size to target** control sizes the currently loaded plant via `sizeToProduct` and shows product, iteration count, residual, and heat covered / residual kWh.
 
 The sizing residual is the max of demand miss (`|achieved − target| / max(1, target)`) and consistency (setpoint vs solved converters / electricity). The loop stops when the plant is internally consistent, even if a cap prevented the requested demand.
 

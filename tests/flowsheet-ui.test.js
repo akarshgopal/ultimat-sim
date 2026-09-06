@@ -311,6 +311,7 @@ test('size to target resizes coastal methane and reports iterations and residual
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /CH₄/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /iteration/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /residual/);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /heat covered/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /unverified site right/);
   assert.equal(app.sizing.iterations, sized.iterations);
 });

@@ -1704,7 +1704,10 @@
           ? ` · ${unverified.length} unverified site right${unverified.length === 1 ? '' : 's'}`
           : '';
         const product = SIZE_PRODUCT_LABELS[lastSizing.product] || lastSizing.product || 'CH₄';
-        sizeStatus.textContent = `${product} · ${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${capNote}${convergeNote}${rightsNote}`;
+        const heatNote = lastSizing.heatCoveredKWh != null || lastSizing.heatResidualKWh != null
+          ? ` · heat covered ${formatNumber(lastSizing.heatCoveredKWh || 0)} / residual ${formatNumber(lastSizing.heatResidualKWh || 0)} kWh`
+          : '';
+        sizeStatus.textContent = `${product} · ${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${heatNote}${capNote}${convergeNote}${rightsNote}`;
       } else {
         sizeStatus.textContent = 'Demand sizes the selected product. Water, converters, and PV follow. The operating solve stays physics-only.';
       }

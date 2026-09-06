@@ -7,10 +7,23 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = path.join(ROOT, "dist");
 
-const ORIGIN = execSync("git remote get-url origin", {
-  cwd: ROOT,
-  encoding: "utf8",
-}).trim();
+const ORIGIN = authenticatedOrigin(
+  execSync("git remote get-url origin", {
+    cwd: ROOT,
+    encoding: "utf8",
+  }).trim(),
+);
+
+function authenticatedOrigin(origin) {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return origin;
+  if (origin.startsWith("https://")) {
+    return origin.replace(/^https:\/\//, `https://x-access-token:${token}@`);
+  }
+  const ssh = origin.match(/^git@github\.com:(.+)$/);
+  if (ssh) return `https://x-access-token:${token}@github.com/${ssh[1]}`;
+  return origin;
+}
 
 if (!ORIGIN.includes("akarshgopal/ultimat-sim")) {
   throw new Error(

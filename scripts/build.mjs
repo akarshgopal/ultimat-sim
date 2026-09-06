@@ -8,18 +8,17 @@ const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist');
 const BUILD_ID = getBuildId();
-const BUILD_TOKEN = '__APP_BUILD_ID__';
-const EXTRA_COPY_FILES = ['node_modules/lz-string/libs/lz-string.min.js'];
 
 const EXCLUDED_PATH_PREFIXES = ['.git', 'dist', 'node_modules', 'scripts', 'tests', '.github'];
 const EXCLUDED_ROOT_FILES = new Set(['.gitignore', 'package.json', 'package-lock.json', 'vercel.json']);
-const TEXT_FILE_EXTENSIONS = new Set(['.css', '.html', '.js', '.json', '.md', '.svg', '.txt']);
-
 await fs.rm(DIST, { recursive: true, force: true });
 await fs.mkdir(DIST, { recursive: true });
 await copyProjectTree(ROOT, DIST, '');
-await copyExtraFiles(ROOT, DIST, EXTRA_COPY_FILES);
-await rewriteDistFiles(DIST);
+for (const entry of ['index.html', 'flowsheet.html']) {
+  const entryPath = path.join(DIST, entry);
+  const original = await fs.readFile(entryPath, 'utf8');
+  await fs.writeFile(entryPath, rewriteLocalAssetUrls(original, BUILD_ID));
+}
 
 console.log(`Built dist/ with asset version ${BUILD_ID}`);
 
@@ -72,41 +71,6 @@ async function copyProjectTree(sourceDir, targetDir, relativePath) {
     }
 
     await fs.copyFile(sourcePath, targetPath);
-  }
-}
-
-async function copyExtraFiles(sourceRoot, targetRoot, relativePaths) {
-  for (const relativePath of relativePaths) {
-    const sourcePath = path.join(sourceRoot, relativePath);
-    const targetPath = path.join(targetRoot, relativePath);
-    await fs.mkdir(path.dirname(targetPath), { recursive: true });
-    await fs.copyFile(sourcePath, targetPath);
-  }
-}
-
-async function rewriteDistFiles(directory) {
-  const entries = await fs.readdir(directory, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const entryPath = path.join(directory, entry.name);
-
-    if (entry.isDirectory()) {
-      await rewriteDistFiles(entryPath);
-      continue;
-    }
-
-    if (!TEXT_FILE_EXTENSIONS.has(path.extname(entry.name))) continue;
-
-    const original = await fs.readFile(entryPath, 'utf8');
-    let updated = original.replaceAll(BUILD_TOKEN, BUILD_ID);
-
-    if (path.extname(entry.name) === '.html') {
-      updated = rewriteLocalAssetUrls(updated, BUILD_ID);
-    }
-
-    if (updated !== original) {
-      await fs.writeFile(entryPath, updated);
-    }
   }
 }
 

@@ -1293,7 +1293,7 @@
     renderCanvasZoom();
     if (!graph.nodes.length) {
       canvas.classList.add('empty');
-      canvas.innerHTML = '<p class="empty-canvas">Add a process block or source to begin.</p>';
+      canvas.innerHTML = '<div class="empty-canvas"><span class="eyebrow">Blank factory</span><strong>Add a process block to begin</strong><p>Pick a block from the build menu, then click two compatible ports to connect them.</p></div>';
       return;
     }
     canvas.classList.remove('empty');
@@ -1362,10 +1362,17 @@
     const balanceStatus = document.getElementById('balanceStatus');
     document.getElementById('flowSummary').textContent = `${graph.nodes.length} blocks · ${graph.edges.length} connections`;
     document.getElementById('diagramTitle').textContent = site?.name || (graph.nodes.length ? 'Factory canvas' : 'Blank factory');
-    solveStatus.textContent = !graph.nodes.length ? 'Empty factory' : result ? 'Factory running' : 'Factory incomplete';
-    solveStatus.className = `status-chip${result ? ' good' : missing.length || solveError ? ' warn' : ''}`;
-    balanceStatus.textContent = result ? (result.balances.maxAbsResidual < 1e-8 ? 'Balances closed' : 'Check balances') : pendingPort ? 'Choose compatible port' : 'Manual setpoints';
-    balanceStatus.className = `status-chip${result?.balances.maxAbsResidual < 1e-8 ? ' good' : ''}`;
+    if (!graph.nodes.length) {
+      solveStatus.textContent = 'Empty factory';
+      solveStatus.className = 'status-chip idle';
+      balanceStatus.textContent = 'Add a block';
+      balanceStatus.className = 'status-chip idle';
+    } else {
+      solveStatus.textContent = result ? 'Factory running' : 'Factory incomplete';
+      solveStatus.className = `status-chip${result ? ' good' : missing.length || solveError ? ' warn' : ''}`;
+      balanceStatus.textContent = result ? (result.balances.maxAbsResidual < 1e-8 ? 'Balances closed' : 'Check balances') : pendingPort ? 'Choose compatible port' : 'Manual setpoints';
+      balanceStatus.className = `status-chip${result?.balances.maxAbsResidual < 1e-8 ? ' good' : result || pendingPort ? ' warn' : ''}`;
+    }
     const warning = document.getElementById('warnings');
     warning.hidden = !solveError && !routeNote && !pendingPort && missing.length === 0 && bottlenecks.length === 0;
     warning.textContent = solveError || routeNote || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : '');
@@ -1404,17 +1411,25 @@
   }
 
   function renderNetwork() {
+    const panel = document.getElementById('networkPanel');
+    const body = document.getElementById('networkBody');
+    const title = document.getElementById('networkTitle');
     const plants = document.getElementById('networkPlants');
     const status = document.getElementById('networkStatus');
     const metrics = document.getElementById('networkMetrics');
     const products = document.getElementById('networkProducts');
     const corridors = document.getElementById('networkCorridors');
-    if (!network.plants.length) {
+    const empty = !network.plants.length;
+    title.textContent = empty ? 'No plants' : `${network.plants.length} plant${network.plants.length === 1 ? '' : 's'}`;
+    if (empty) panel.classList.add('is-empty');
+    else panel.classList.remove('is-empty');
+    body.hidden = empty;
+    if (empty) {
       status.textContent = 'Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.';
       plants.innerHTML = '';
       metrics.innerHTML = '';
       products.innerHTML = '';
-      corridors.textContent = '';
+      corridors.innerHTML = '';
       return;
     }
     if (!networkResult) {
@@ -1422,28 +1437,38 @@
       return;
     }
     status.textContent = `${networkResult.plants.length} plants · ${formatNumber(networkResult.landHa)} ha PV land · freight ${formatMoney(networkResult.freight)}/year`;
+    const transferred = networkResult.transferred || new Set();
     plants.innerHTML = networkResult.plants.map(plant => {
       const siteName = plant.definition.site?.name || 'Unspecified site';
-      return `<div class="network-plant"><div><strong>${plant.name}</strong><small class="status-meta">${siteName}</small></div><div><button type="button" data-open-plant="${plant.id}">Open</button></div></div>`;
+      const lead = (networkResult.products || [])
+        .filter(item => item.plantId === plant.id && item.tonnesPerYear && !transferred.has(`${item.plantId}:${item.nodeId}`))
+        .sort((left, right) => right.tonnesPerYear - left.tonnesPerYear)[0];
+      const leadText = lead ? `${lead.substance} · ${formatNumber(lead.tonnesPerYear)} t/year` : 'No sale products';
+      return `<div class="network-plant"><div class="network-plant-copy"><strong>${plant.name}</strong><small>${siteName}</small><small>${leadText}</small></div><button type="button" data-open-plant="${plant.id}">Open</button></div>`;
     }).join('');
     metrics.innerHTML = metricRows([
-      ['Network CAPEX', formatMoney(networkResult.installedCapex)],
-      ['Annual revenue', formatMoney(networkResult.annualRevenue)],
-      ['Annual cost', formatMoney(networkResult.annualOperatingCost)],
-      ['Annual net cash', formatMoney(networkResult.annualNetCash)],
-      ['Network NPV', formatMoney(networkResult.npv)],
+      ['CAPEX', formatMoney(networkResult.installedCapex)],
+      ['NPV', formatMoney(networkResult.npv)],
+      ['Net cash', formatMoney(networkResult.annualNetCash)],
+      ['Revenue', formatMoney(networkResult.annualRevenue)],
+      ['Cost', formatMoney(networkResult.annualOperatingCost)],
     ]);
-    products.innerHTML = metricRows(Object.entries(networkResult.slate).sort((left, right) => right[1] - left[1]).map(([substance, tonnes]) => [substance, `${formatNumber(tonnes)} t/year`]));
-    corridors.textContent = networkResult.corridors.length
-      ? networkResult.corridors.map(corridor => `${corridor.substance} ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatMoney(corridor.annualFreight)}/year`).join(' · ')
-      : 'No haul corridors yet. Plants trade with markets, not each other, until you add a corridor.';
+    const ranked = Object.entries(networkResult.slate).sort((left, right) => right[1] - left[1]);
+    const peak = ranked[0]?.[1] || 1;
+    products.innerHTML = ranked.map(([substance, tonnes], index) => {
+      const share = Math.max(6, (tonnes / peak) * 100);
+      return `<div class="${index === 0 ? 'lead' : ''}"><dt>${substance}</dt><dd><span class="product-bar" aria-hidden="true"><i style="width:${share}%"></i></span><strong>${formatNumber(tonnes)}</strong> <small>t/year</small></dd></div>`;
+    }).join('');
+    corridors.innerHTML = networkResult.corridors.length
+      ? networkResult.corridors.map(corridor => `<div class="corridor-row">${corridor.substance} · ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatMoney(corridor.annualFreight)}/year</div>`).join('')
+      : '<p class="status-meta">No haul corridors. Plants trade with markets until a corridor is added.</p>';
   }
 
   function renderInspector() {
     const current = node(selectedNodeId);
     if (!current) {
       document.getElementById('inspectorTitle').textContent = 'Nothing selected';
-      document.getElementById('inspectorKind').textContent = 'Select a block to configure it.';
+      document.getElementById('inspectorKind').textContent = 'Select a block on the canvas to configure it.';
       document.getElementById('nodeControls').innerHTML = '';
       document.getElementById('inspectorMetrics').innerHTML = '';
       document.getElementById('streamList').innerHTML = '<p class="status-meta">No ports yet.</p>';

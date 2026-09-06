@@ -10,22 +10,88 @@
 </head>
 <body class="flowsheet-page">
   <header class="flowsheet-header">
-    <div>
+    <div class="brand">
       <h1>Molecular Foundry</h1>
       <p class="status-meta">Chemical industry planner · physics first, then money</p>
     </div>
     <div class="flowsheet-status" aria-live="polite">
-      <span class="status-chip" id="solveStatus">Empty factory</span>
-      <span class="status-chip" id="balanceStatus">Add a block</span>
+      <span class="status-chip idle" id="solveStatus">Empty factory</span>
+      <span class="status-chip idle" id="balanceStatus">Add a block</span>
     </div>
   </header>
+
+  <div class="tool-panels" role="region" aria-label="Site, network, and economics">
+    <section class="tool-panel site-panel" id="sitePanel">
+      <div class="tool-panel-head">
+        <div>
+          <span class="eyebrow">Site</span>
+          <h3 id="siteName">No site selected</h3>
+        </div>
+        <label id="siteMonthLabel" hidden>Typical day <select id="siteMonth"></select></label>
+      </div>
+      <div class="site-location">
+        <label>Lat <input id="siteLatitude" type="number" step="0.001" value="36.834"></label>
+        <label>Lon <input id="siteLongitude" type="number" step="0.001" value="-2.463"></label>
+        <label>PV kWp <input id="siteSolarKWp" type="number" min="0" step="0.5" value="37.5"></label>
+        <label>Battery kWh <input id="siteBatteryKWh" type="number" min="0" step="1" value="0"></label>
+        <button type="button" id="applyCoordinates">Apply location</button>
+      </div>
+      <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
+      <p class="status-meta" id="siteNotes"></p>
+      <p class="status-meta" id="siteHorizon"></p>
+      <dl class="strip-metrics" id="siteResources"></dl>
+      <p class="literature-links" id="siteEvidence"></p>
+    </section>
+
+    <section class="tool-panel network-panel is-empty" id="networkPanel">
+      <div class="tool-panel-head">
+        <div>
+          <span class="eyebrow">Network</span>
+          <h3 id="networkTitle">No plants</h3>
+        </div>
+        <div class="network-actions">
+          <button type="button" id="addPlantToNetwork">Add current plant</button>
+          <button type="button" id="clearNetwork">Clear network</button>
+        </div>
+      </div>
+      <p class="status-meta" id="networkStatus">Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.</p>
+      <div id="networkBody" class="network-body" hidden>
+        <div class="network-plants-block">
+          <h4>Plants</h4>
+          <div id="networkPlants" class="network-plants"></div>
+        </div>
+        <div class="network-rollup">
+          <h4>Rollup</h4>
+          <dl class="strip-metrics" id="networkMetrics"></dl>
+          <h4>Product slate · t/year</h4>
+          <dl class="product-slate" id="networkProducts"></dl>
+          <div id="networkCorridors" class="network-haul"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tool-panel economics-panel" aria-live="polite">
+      <div class="tool-panel-head">
+        <div>
+          <span class="eyebrow">Economics</span>
+          <h3>This factory</h3>
+        </div>
+        <div class="project-assumptions">
+          <label>Years <input id="projectLifeYears" type="number" min="1" step="1" value="20"></label>
+          <label>Discount <span class="number-with-unit"><input id="discountRate" type="number" min="0" step="0.1" value="8"><span>%</span></span></label>
+        </div>
+      </div>
+      <p class="status-meta" id="economicsStatus">Complete the graph to calculate viability.</p>
+      <dl class="strip-metrics" id="economicsMetrics"></dl>
+    </section>
+  </div>
 
   <main class="flowsheet-workspace">
     <aside class="flowsheet-sidebar controls-sidebar" aria-label="Build menu">
       <div class="sidebar-heading">
-        <span class="eyebrow">Build menu</span>
+        <span class="eyebrow">Build</span>
         <h2>Process blocks</h2>
-        <p>Add only what you want. Each click creates a real, independent block.</p>
+        <p>Each click adds an independent block. Connect ports on the canvas.</p>
       </div>
       <div class="building-palette" id="buildingPalette"></div>
       <h3 class="palette-heading">Sources and destinations</h3>
@@ -70,55 +136,6 @@
         </div>
       </div>
 
-      <div class="tool-panels">
-        <section class="comparison-panel site-panel" id="sitePanel">
-          <div class="comparison-heading">
-            <div><span class="eyebrow">Site</span><h3 id="siteName">No site selected</h3></div>
-            <label id="siteMonthLabel" hidden>Typical day <select id="siteMonth"></select></label>
-          </div>
-          <div class="site-location">
-            <label>Lat <input id="siteLatitude" type="number" step="0.001" value="36.834"></label>
-            <label>Lon <input id="siteLongitude" type="number" step="0.001" value="-2.463"></label>
-            <label>PV kWp <input id="siteSolarKWp" type="number" min="0" step="0.5" value="37.5"></label>
-            <label>Battery kWh <input id="siteBatteryKWh" type="number" min="0" step="1" value="0"></label>
-            <button type="button" id="applyCoordinates">Apply location</button>
-          </div>
-          <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
-          <p class="status-meta" id="siteNotes"></p>
-          <p class="status-meta" id="siteHorizon"></p>
-          <dl class="comparison-metrics" id="siteResources"></dl>
-          <p class="literature-links" id="siteEvidence"></p>
-        </section>
-
-        <section class="comparison-panel network-panel" id="networkPanel">
-          <div class="comparison-heading">
-            <div><span class="eyebrow">Network</span><h3>Plants, products, and haul</h3></div>
-            <div class="snapshot-controls network-actions">
-              <button type="button" id="addPlantToNetwork">Add current plant</button>
-              <button type="button" id="clearNetwork">Clear network</button>
-            </div>
-          </div>
-          <p class="status-meta" id="networkStatus">Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.</p>
-          <div id="networkPlants" class="network-plants"></div>
-          <dl class="comparison-metrics" id="networkMetrics"></dl>
-          <h4>Product slate · t/year</h4>
-          <dl class="comparison-metrics" id="networkProducts"></dl>
-          <div id="networkCorridors" class="status-meta"></div>
-        </section>
-
-        <section class="comparison-panel economics-panel" aria-live="polite">
-          <div class="comparison-heading">
-            <div><span class="eyebrow">Economics</span><h3>Factory economics</h3></div>
-            <div class="project-assumptions">
-              <label>Project years <input id="projectLifeYears" type="number" min="1" step="1" value="20"></label>
-              <label>Discount rate <span class="number-with-unit"><input id="discountRate" type="number" min="0" step="0.1" value="8"><span>%</span></span></label>
-            </div>
-          </div>
-          <p class="status-meta" id="economicsStatus">Complete the graph to calculate viability.</p>
-          <dl class="comparison-metrics" id="economicsMetrics"></dl>
-        </section>
-      </div>
-
       <section class="comparison-panel" id="comparisonPanel" hidden aria-live="polite">
         <div class="comparison-heading">
           <div><span class="eyebrow">Decision support</span><h3>Scenario comparison</h3></div>
@@ -129,14 +146,22 @@
         <div class="synergy-ledger" id="synergyLedger"></div>
       </section>
 
-      <div class="canvas-zoom" aria-label="Canvas zoom controls">
-        <button type="button" id="zoomOut" aria-label="Zoom canvas out">−</button>
-        <input id="canvasZoom" type="range" min="25" max="200" step="5" value="100" aria-label="Canvas zoom">
-        <output id="canvasZoomValue" for="canvasZoom">100%</output>
-        <button type="button" id="zoomIn" aria-label="Zoom canvas in">+</button>
-        <button type="button" id="zoomReset">Reset</button>
+      <div class="canvas-frame">
+        <div class="canvas-zoom" aria-label="Canvas zoom controls">
+          <button type="button" id="zoomOut" aria-label="Zoom canvas out">−</button>
+          <input id="canvasZoom" type="range" min="25" max="200" step="5" value="100" aria-label="Canvas zoom">
+          <output id="canvasZoomValue" for="canvasZoom">100%</output>
+          <button type="button" id="zoomIn" aria-label="Zoom canvas in">+</button>
+          <button type="button" id="zoomReset">Reset</button>
+        </div>
+        <div class="flowsheet-canvas empty" id="flowsheetCanvas">
+          <div class="empty-canvas">
+            <span class="eyebrow">Blank factory</span>
+            <strong>Add a process block to begin</strong>
+            <p>Pick a block from the build menu, then click two compatible ports to connect them.</p>
+          </div>
+        </div>
       </div>
-      <div class="flowsheet-canvas empty" id="flowsheetCanvas"><p class="empty-canvas">Add a process block or source to begin.</p></div>
       <div class="warning-strip" id="warnings" hidden></div>
     </section>
 
@@ -144,7 +169,7 @@
       <div class="sidebar-heading">
         <span class="eyebrow">Inspector</span>
         <h2 id="inspectorTitle">Nothing selected</h2>
-        <p id="inspectorKind">Select a block to configure it.</p>
+        <p id="inspectorKind">Select a block on the canvas to configure it.</p>
       </div>
       <div id="nodeControls"></div>
       <dl class="inspector-metrics" id="inspectorMetrics"></dl>

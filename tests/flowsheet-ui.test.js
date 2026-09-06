@@ -299,7 +299,18 @@ test('fuels plus minerals network rolls up two sited plants', () => {
   assert.ok(app.network.slate.CH4 > 0);
   assert.ok(app.network.slate.NH3 > 0);
   assert.match(context.__elements.get('networkProducts').innerHTML, /CH4/);
+  assert.match(context.__elements.get('networkProducts').innerHTML, /lead/);
+  assert.match(context.__elements.get('networkPlants').innerHTML, /Almería solar methane/);
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
+});
+
+test('product chrome uses Network and never Empire', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
+  assert.doesNotMatch(html, /empire/i);
+  assert.doesNotMatch(css, /empire/i);
+  assert.match(html, /Network/);
+  assert.match(css, /\.network-panel/);
 });
 
 test('an incomplete baseline has no economics until a complete graph is captured', () => {

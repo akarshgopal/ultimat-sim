@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Molecular Foundry — ultimat-sim</title>
   <meta name="description" content="Plan a chemical industry from physics, chemistry, and economics at real locations.">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="flowsheet.css">
 </head>
@@ -28,6 +29,14 @@
           <h3 id="siteName">No site selected</h3>
         </div>
         <label id="siteMonthLabel" hidden>Typical day <select id="siteMonth"></select></label>
+      </div>
+      <div class="site-map-panel" id="siteMapPanel">
+        <div class="site-map-layers" id="siteMapLayers" role="group" aria-label="Map layers"></div>
+        <div class="site-map-shell">
+          <div class="site-map" id="siteMap" role="application" aria-label="Site location map"></div>
+          <div class="site-map-empty" id="siteMapEmpty" hidden>Map unavailable. Enter latitude and longitude, then Apply location.</div>
+        </div>
+        <p class="status-meta" id="siteMapStatus">Click the map to set the plant location. Screening layers cite OSM, PVGIS, water, footprint, and network plants; they do not replace site meteo, assay, or rights.</p>
       </div>
       <div class="site-location">
         <label>Lat <input id="siteLatitude" type="number" step="0.001" value="36.834"></label>
@@ -215,6 +224,7 @@
   <script src="engine/size.js"></script>
   <script src="engine/network.js"></script>
   <script src="engine/uncertainty.js"></script>
+  <script src="engine/map-site.js"></script>
   <script src="data/pvgis-almeria-hourly.js"></script>
   <script src="data/dead-sea-brine.js"></script>
   <script src="data/almeria-seawater.js"></script>
@@ -222,6 +232,7 @@
   <script src="cases/coastal.js"></script>
   <script src="cases/abundance.js"></script>
   <script src="cases/network.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
   <script src="js/flowsheet-app.js"></script>
 </body>
 </html>

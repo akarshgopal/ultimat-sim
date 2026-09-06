@@ -154,4 +154,6 @@ test('the site panel has meteo, assay, and rights mounts', () => {
   assert.match(html, /id="siteAssay"/);
   assert.match(html, /id="siteRights"/);
   assert.match(html, /data\/almeria-seawater\.js/);
+  assert.match(html, /id="siteMap"/);
+  assert.match(html, /engine\/map-site\.js/);
 });

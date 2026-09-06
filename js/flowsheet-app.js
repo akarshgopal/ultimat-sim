@@ -46,7 +46,15 @@
   let canvasFocused = false;
   let lastSizing = null;
   let operationMeta = {};
+  let siteMap = null;
+  let siteMapMarker = null;
+  let siteMapOverlays = { osm: null, pvgis: null, water: null, footprint: null, network: null };
+  let siteMapEnabled = { osm: true, pvgis: true, water: true, footprint: true, network: true };
+  let siteMapFailed = false;
+  let siteMapTilesFailed = false;
+  let siteMapLayersReady = false;
   const SIZE_PRODUCT_LABELS = { CH4: 'CH₄', H2: 'H₂', lithium: 'lithium', salt: 'salt' };
+  const MapSite = typeof FlowsheetMapSite !== 'undefined' ? FlowsheetMapSite : null;
 
   const catalog = {
     swro: {
@@ -441,6 +449,15 @@
     solveAndRender();
   });
   document.getElementById('applyCoordinates').addEventListener('click', applyCoordinates);
+  document.getElementById('siteLatitude').addEventListener('input', syncSiteMapFromInputs);
+  document.getElementById('siteLongitude').addEventListener('input', syncSiteMapFromInputs);
+  document.getElementById('siteMapLayers').addEventListener('change', event => {
+    const target = event.target;
+    const id = target?.getAttribute?.('data-layer') || target?.['data-layer'];
+    if (!id || !Object.prototype.hasOwnProperty.call(siteMapEnabled, id)) return;
+    siteMapEnabled[id] = !!target.checked;
+    updateSiteMapOverlays();
+  });
   document.getElementById('siteBatteryKWh').addEventListener('change', event => {
     if (!site) return;
     const batteryKWh = Math.max(0, Number(event.target.value) || 0);
@@ -922,6 +939,7 @@
     networkResult = null;
     persistNetwork();
     renderNetwork();
+    renderSiteMap();
   }
 
   function loadDemoNetwork() {
@@ -952,6 +970,7 @@
     }
     persistNetwork();
     renderNetwork();
+    renderSiteMap();
   }
 
   function persistNetwork() {
@@ -1541,6 +1560,286 @@
   function node(id) { return graph.nodes.find(candidate => candidate.id === id); }
   function portName(port) { return portNames[port] || port.replace(/([a-z])([A-Z])/g, '$1 $2'); }
 
+  function readMapCoordinates() {
+    const latitude = Number(document.getElementById('siteLatitude')?.value);
+    const longitude = Number(document.getElementById('siteLongitude')?.value);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90) return null;
+    let lon = longitude;
+    while (lon > 180) lon -= 360;
+    while (lon < -180) lon += 360;
+    return { latitude, longitude: lon };
+  }
+
+  function siteMapStatus(text) {
+    const status = document.getElementById('siteMapStatus');
+    if (status && text) status.textContent = text;
+  }
+
+  function showSiteMapUnavailable(message) {
+    const mapEl = document.getElementById('siteMap');
+    const emptyEl = document.getElementById('siteMapEmpty');
+    if (mapEl) mapEl.hidden = true;
+    if (emptyEl) {
+      emptyEl.hidden = false;
+      emptyEl.textContent = message;
+    }
+  }
+
+  function showSiteMapAvailable() {
+    const mapEl = document.getElementById('siteMap');
+    const emptyEl = document.getElementById('siteMapEmpty');
+    if (mapEl) mapEl.hidden = false;
+    if (emptyEl) emptyEl.hidden = true;
+  }
+
+  function layerCiteHtml(source) {
+    if (!source?.cite) return '';
+    if (source.cite.url) {
+      return `<a href="${source.cite.url}" target="_blank" rel="noreferrer">${source.cite.label}</a>`;
+    }
+    return source.cite.label || '';
+  }
+
+  function renderSiteMapLayerToggles() {
+    const el = document.getElementById('siteMapLayers');
+    if (!el || siteMapLayersReady) return;
+    const sources = MapSite?.LAYER_SOURCES;
+    if (!sources) {
+      el.innerHTML = '';
+      siteMapLayersReady = true;
+      return;
+    }
+    el.innerHTML = Object.values(sources).map(source => {
+      const checked = siteMapEnabled[source.id] !== false ? ' checked' : '';
+      const cite = layerCiteHtml(source);
+      return `<label><input type="checkbox" data-layer="${source.id}"${checked}> ${source.label}${cite ? ` <span class="site-map-cite">${cite}</span>` : ''}</label>`;
+    }).join('');
+    siteMapLayersReady = true;
+  }
+
+  function pvOverlayColor(band) {
+    return {
+      excellent: '#7ea96d',
+      good: '#c79a48',
+      moderate: '#5f7fb8',
+      limited: '#8d99a8',
+      poor: '#c77379',
+    }[band] || '#c79a48';
+  }
+
+  function waterOverlayColor(band) {
+    return {
+      seawater: '#6ba5b5',
+      brine: '#8c84b4',
+      freshwater: '#6ba177',
+      arid: '#c79a48',
+      unknown: '#8d99a8',
+    }[band] || '#6ba5b5';
+  }
+
+  function clearSiteMapLayer(id) {
+    const layer = siteMapOverlays[id];
+    if (!layer || !siteMap) return;
+    try { siteMap.removeLayer(layer); } catch { /* already removed */ }
+    siteMapOverlays[id] = null;
+  }
+
+  function initSiteMap() {
+    const mapEl = document.getElementById('siteMap');
+    if (!mapEl || siteMap || siteMapFailed) return siteMap;
+    if (typeof L === 'undefined') {
+      siteMapFailed = true;
+      showSiteMapUnavailable('Map library failed to load. Enter latitude and longitude, then Apply location.');
+      siteMapStatus('Leaflet is unavailable. Coordinates still apply; site meteo, assay, and rights stay in this panel.');
+      return null;
+    }
+    try {
+      const start = readMapCoordinates() || { latitude: 36.834, longitude: -2.463 };
+      siteMap = L.map(mapEl, {
+        zoomControl: false,
+        scrollWheelZoom: false,
+        attributionControl: true,
+      });
+      siteMap.setView([start.latitude, start.longitude], 10, { animate: false });
+      L.control.zoom({ position: 'bottomright' }).addTo(siteMap);
+      const osm = MapSite?.LAYER_SOURCES?.osm;
+      siteMapOverlays.osm = L.tileLayer(osm?.url || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: osm?.attribution || '&copy; OpenStreetMap',
+        maxZoom: osm?.maxZoom || 19,
+      }).addTo(siteMap);
+      siteMapOverlays.osm.on('tileerror', () => {
+        if (siteMapTilesFailed) return;
+        siteMapTilesFailed = true;
+        siteMapStatus('Basemap tiles failed to load. Click-to-site still works; screening overlays remain.');
+      });
+      const icon = L.divIcon({
+        className: 'site-map-marker-wrap',
+        html: '<span class="site-map-marker-dot"></span>',
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+      });
+      siteMapMarker = L.marker([start.latitude, start.longitude], { icon, keyboard: false }).addTo(siteMap);
+      siteMap.on('click', event => {
+        const latlng = event?.latlng;
+        if (!latlng || !Number.isFinite(latlng.lat) || !Number.isFinite(latlng.lng)) return;
+        const latInput = document.getElementById('siteLatitude');
+        const lonInput = document.getElementById('siteLongitude');
+        if (latInput) latInput.value = Number(latlng.lat).toFixed(3);
+        if (lonInput) lonInput.value = Number(latlng.lng).toFixed(3);
+        try {
+          siteMapMarker?.setLatLng([latlng.lat, latlng.lng]);
+          updateSiteMapOverlays();
+        } catch { /* overlays are optional while PVGIS fetches */ }
+        applyCoordinates();
+      });
+      showSiteMapAvailable();
+      return siteMap;
+    } catch {
+      siteMapFailed = true;
+      siteMap = null;
+      showSiteMapUnavailable('Map failed to initialize. Enter latitude and longitude, then Apply location.');
+      siteMapStatus('The map could not start. Coordinates, PVGIS fetch, and site truth panels still work.');
+      return null;
+    }
+  }
+
+  function syncSiteMapFromInputs() {
+    const coords = readMapCoordinates();
+    if (!coords || !siteMap) return;
+    try {
+      siteMapMarker?.setLatLng([coords.latitude, coords.longitude]);
+      const zoom = siteMap.getZoom?.() || 10;
+      siteMap.setView([coords.latitude, coords.longitude], zoom, { animate: false });
+    } catch { /* leaflet unavailable mid-update */ }
+  }
+
+  function updateSiteMapOverlays() {
+    if (!siteMap || typeof L === 'undefined') return;
+    const coords = readMapCoordinates();
+    if (!coords) return;
+    const latlng = [coords.latitude, coords.longitude];
+
+    if (siteMapOverlays.osm) {
+      if (siteMapEnabled.osm) {
+        if (!siteMap.hasLayer(siteMapOverlays.osm)) siteMapOverlays.osm.addTo(siteMap);
+      } else if (siteMap.hasLayer(siteMapOverlays.osm)) {
+        siteMap.removeLayer(siteMapOverlays.osm);
+      }
+    }
+
+    clearSiteMapLayer('pvgis');
+    if (siteMapEnabled.pvgis && MapSite) {
+      const pv = MapSite.pvScreeningBand(coords);
+      const pvLayer = L.circle(latlng, {
+        radius: 14000,
+        color: pvOverlayColor(pv.band),
+        weight: 1.5,
+        fillColor: pvOverlayColor(pv.band),
+        fillOpacity: 0.18,
+        interactive: true,
+      });
+      pvLayer.bindPopup(`${pv.band} PV screening · ${pv.typicalKWhPerKWpDay != null ? `${pv.typicalKWhPerKWpDay.toFixed(1)} kWh/kWp·day` : 'n/a'}<br><a href="${pv.cite.url}" target="_blank" rel="noreferrer">${pv.cite.label}</a>`);
+      pvLayer.addTo(siteMap);
+      siteMapOverlays.pvgis = pvLayer;
+    }
+
+    clearSiteMapLayer('water');
+    if (siteMapEnabled.water && MapSite) {
+      const water = MapSite.waterAvailabilityScreening(coords);
+      const waterLayer = L.circle(latlng, {
+        radius: 22000,
+        color: waterOverlayColor(water.band),
+        weight: 1.5,
+        fillColor: waterOverlayColor(water.band),
+        fillOpacity: 0.14,
+        interactive: true,
+      });
+      waterLayer.bindPopup(`${water.band} water screening<br>${water.note}<br><a href="${water.cite.url}" target="_blank" rel="noreferrer">${water.cite.label}</a>`);
+      waterLayer.addTo(siteMap);
+      siteMapOverlays.water = waterLayer;
+    }
+
+    clearSiteMapLayer('footprint');
+    if (siteMapEnabled.footprint && MapSite && typeof FlowsheetFootprint !== 'undefined') {
+      const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
+      const radiusM = MapSite.haToRadiusM(footprint.totalHa);
+      const ring = MapSite.circlePolygon(coords.latitude, coords.longitude, radiusM);
+      if (ring.length) {
+        const poly = L.polygon(ring, {
+          color: '#5f7fb8',
+          weight: 2,
+          fillColor: '#5f7fb8',
+          fillOpacity: 0.28,
+          interactive: true,
+        });
+        poly.bindPopup(`Site footprint ${formatHa(footprint.totalHa)} from estimateFootprint (panel area ÷ GCR + process pads).`);
+        poly.addTo(siteMap);
+        siteMapOverlays.footprint = poly;
+      }
+    }
+
+    clearSiteMapLayer('network');
+    if (siteMapEnabled.network && MapSite) {
+      const markers = MapSite.networkPlantMarkers(networkResult || network);
+      const group = L.layerGroup();
+      for (const plant of markers) {
+        const marker = L.circleMarker([plant.latitude, plant.longitude], {
+          radius: 6,
+          color: '#6ba177',
+          weight: 2,
+          fillColor: '#6ba177',
+          fillOpacity: 0.9,
+        });
+        marker.bindPopup(`${plant.name}${plant.landHa ? ` · ${formatHa(plant.landHa)}` : ''}`);
+        marker.on('click', () => {
+          if (plant.id && network.plants.some(item => item.id === plant.id)) openNetworkPlant(plant.id);
+        });
+        marker.addTo(group);
+        if (plant.polygon?.length) {
+          L.polygon(plant.polygon, {
+            color: '#6ba177',
+            weight: 1,
+            fillOpacity: 0.12,
+            interactive: false,
+          }).addTo(group);
+        }
+      }
+      group.addTo(siteMap);
+      siteMapOverlays.network = group;
+    }
+
+    if (siteMapMarker?.bringToFront) siteMapMarker.bringToFront();
+  }
+
+  function renderSiteMap() {
+    renderSiteMapLayerToggles();
+    const coords = readMapCoordinates();
+    if (!coords) {
+      if (typeof L === 'undefined') {
+        siteMapFailed = true;
+        showSiteMapUnavailable('Map library failed to load. Enter latitude and longitude, then Apply location.');
+      }
+      return;
+    }
+    initSiteMap();
+    if (!siteMap) return;
+    showSiteMapAvailable();
+    try {
+      siteMapMarker?.setLatLng([coords.latitude, coords.longitude]);
+      const current = siteMap.getCenter?.();
+      const moved = !current
+        || Math.abs(current.lat - coords.latitude) > 0.0005
+        || Math.abs(current.lng - coords.longitude) > 0.0005;
+      if (moved) siteMap.setView([coords.latitude, coords.longitude], siteMap.getZoom?.() || 10, { animate: false });
+      updateSiteMapOverlays();
+      const invalidate = () => { try { siteMap.invalidateSize({ animate: false }); } catch { /* ignore */ } };
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(invalidate);
+      else invalidate();
+    } catch {
+      siteMapStatus('Map overlay update failed. Latitude/longitude and Apply location still work.');
+    }
+  }
+
   function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); }
 
   function renderGraph() {
@@ -1758,6 +2057,7 @@
       : '';
     renderSiteFootprint();
     renderSiteTruth();
+    renderSiteMap();
     document.getElementById('siteResources').innerHTML = Object.entries(site?.resources || {}).map(([id, resource]) => {
       const quality = resource.quality || 'user-assumption';
       const chip = quality === 'unverified'

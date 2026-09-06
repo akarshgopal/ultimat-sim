@@ -26,7 +26,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/almeria-seawater.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/almeria-seawater.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -240,6 +240,26 @@ test('IRR always renders fractional engine rates as percentages, including above
   assert.ok(context.__elements.get('economicsMetrics').innerHTML.includes(`${percent}%`));
   assert.ok(context.__elements.get('comparisonMetrics').innerHTML.includes(`${percent}%`));
   assert.ok(context.__elements.get('comparisonMetrics').innerHTML.includes(`+${delta} pp`));
+});
+
+test('site map picker lists cited layers and degrades without Leaflet', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  const layers = context.__elements.get('siteMapLayers').innerHTML;
+  assert.equal(typeof context.FlowsheetMapSite.circlePolygon, 'function');
+  assert.match(layers, /OSM/);
+  assert.match(layers, /PVGIS PV/);
+  assert.match(layers, /Water screening/);
+  assert.match(layers, /Site footprint/);
+  assert.match(layers, /Network markers/);
+  assert.match(layers, /openstreetmap\.org\/copyright/);
+  assert.equal(context.__elements.get('siteMapEmpty').hidden, false);
+  assert.match(context.__elements.get('siteMapEmpty').textContent, /failed to load|unavailable/i);
+  app.loadCoastalMethane(0);
+  assert.match(context.__elements.get('siteMeteo').innerHTML, /PVGIS/);
+  assert.match(context.__elements.get('siteAssay').innerHTML, /Millero|Alboran|36\.5/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /gridImport/);
+  assert.equal(typeof context.__elements.get('applyCoordinates').listeners.click, 'function');
 });
 
 test('coastal methane loads a sited factory whose winter solar cuts methane', () => {

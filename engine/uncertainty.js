@@ -152,10 +152,6 @@ function digitsFor(quality) {
   return 2;
 }
 
-function usesTilde(quality) {
-  return quality === 'screening' || quality === 'assumption';
-}
-
 function significantFigures(value, digits) {
   const number = Number(value);
   if (!Number.isFinite(number) || number === 0) return number;
@@ -219,9 +215,8 @@ function formatUncertainNumber(value, quality = 'assumption', options = {}) {
   const q = resolveQuality(quality);
   const digits = options.digits ?? digitsFor(q);
   const formatted = formatPlain(number, digits);
-  const tilde = usesTilde(q) && options.tilde !== false && number !== 0 ? '~' : '';
   const unit = options.unit ? ` ${options.unit}` : (options.suffix ? `${options.suffix}` : '');
-  return `${tilde}${formatted}${unit}${bandSuffix(options.band)}`;
+  return `${formatted}${unit}${bandSuffix(options.band)}`;
 }
 
 function formatUncertainMoney(value, quality = 'assumption', options = {}) {
@@ -231,7 +226,6 @@ function formatUncertainMoney(value, quality = 'assumption', options = {}) {
   const digits = options.digits ?? digitsFor(q);
   const rounded = significantFigures(number, digits);
   if (!Number.isFinite(rounded)) return '—';
-  const tilde = usesTilde(q) && options.tilde !== false && number !== 0 ? '~' : '';
   const mag = rounded === 0 ? 0 : Math.floor(Math.log10(Math.abs(rounded)));
   const fractionDigits = Math.max(0, digits - 1 - mag);
   const absText = Math.abs(rounded).toLocaleString('en-US', {
@@ -240,12 +234,13 @@ function formatUncertainMoney(value, quality = 'assumption', options = {}) {
   });
   const signed = rounded < 0 ? `-$${absText}` : `$${absText}`;
   const unit = options.unit ? ` ${options.unit}` : (options.suffix || '');
-  return `${tilde}${signed}${unit}${bandSuffix(options.band)}`;
+  return `${signed}${unit}${bandSuffix(options.band)}`;
 }
 
-function qualityChip(quality) {
+function qualityChip(quality, options = {}) {
   const q = typeof quality === 'object' && quality ? classifyQuality(quality) : resolveQuality(quality);
   if (!q) return '';
+  if (options.omitNoisy && (q === 'screening' || q === 'assumption')) return '';
   const title = QUALITY_TITLES[q] || q;
   return `<span class="quality-chip quality-${q}" title="${title}">${q}</span>`;
 }

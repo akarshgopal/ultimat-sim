@@ -198,4 +198,4 @@ These distort “real” material–energy–land–money coupling the most when
 3. When adding `footprint.js`, mark every pad coefficient **assumption** and retire naked `1.6` or derive it from η×GCR with a citation.
 4. Split “family citation present” vs “number traced to table X” in UI literature links.
 5. Mark all case `unitPrice` / lump CAPEX as `quality: 'user-assumption'` in site evidence where missing.
-6. UI quality tags: `engine/uncertainty.js` labels LCOE (**cited** when NREL ATB), product cost (**screening**), land (**assumption**), and catalog intensities. Screening money uses a tilde / fewer sig figs. No fake ± error bars.
+6. UI quality tags: `engine/uncertainty.js` labels LCOE (**cited** when NREL ATB), product cost (**screening**), land (**assumption**), and catalog intensities. Screening money uses fewer sig figs (no leading tilde). Screening chips are not repeated on every money/land metric. No fake ± error bars.

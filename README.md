@@ -48,7 +48,7 @@ See [engine architecture](docs/flowsheet-architecture.md) for model contracts an
 
 ## Model limits
 
-The operating model uses representative-day flows and fixed installed capacities. It checks component/element, charge, electricity, and heat accounting, but does not provide full thermodynamic closure, hourly storage dispatch, or economic optimization. Automatic plant sizing is a separate outer loop (`engine/size.js`) that chooses capacities and `solarKWp` from a product target (CH₄, H₂, lithium, or salt), then calls the same operating solver. Process and cost presets are editable screening assumptions. Foundry money and land outputs carry quality chips; screening values use a tilde instead of fake precision.
+The operating model uses representative-day flows and fixed installed capacities. It checks component/element, charge, electricity, and heat accounting, but does not provide full thermodynamic closure, hourly storage dispatch, or economic optimization. Automatic plant sizing is a separate outer loop (`engine/size.js`) that chooses capacities and `solarKWp` from a product target (CH₄, H₂, lithium, or salt), then calls the same operating solver. Process and cost presets are editable screening assumptions. Foundry money and land use fewer significant figures when screening; a single economics banner covers bankability instead of repeating screening chips on every metric.
 
 ## Running locally
 

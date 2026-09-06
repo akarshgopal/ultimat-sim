@@ -2593,9 +2593,9 @@
   function formatMoney(value) { return `$${formatNumber(value)}`; }
   function metricMetaMarkup(meta) {
     if (!meta) return '';
-    if (typeof meta === 'string') return qualityChip(meta);
+    if (typeof meta === 'string') return qualityChip(meta, { omitNoisy: true });
     const quality = meta.quality || (meta.kind ? classifyQuality(meta) : '');
-    const chip = quality ? qualityChip(quality) : '';
+    const chip = quality ? qualityChip(quality, { omitNoisy: true }) : '';
     const band = parseBand(meta.band);
     const bandText = band
       ? `<span class="quality-band">${formatUncertainNumber(band.low, 'cited')}–${formatUncertainNumber(band.high, 'cited')}${band.unit ? ` ${band.unit}` : ''}</span>`

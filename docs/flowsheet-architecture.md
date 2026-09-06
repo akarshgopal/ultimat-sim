@@ -143,7 +143,7 @@ Energy CAPEX, O&M, tariffs, capacity factors, and simple levelized costs are edi
 
 ### Uncertainty display
 
-The Foundry UI tags key outputs with quality classes from `docs/constants-audit.md` (`cited`, `recoverable`, `assumption`, `derived`, `screening`) via `engine/uncertainty.js`. LCOE is **cited** when the solar-pv catalog row uses NREL ATB; product cost is **screening**; site land is **assumption**; process intensities follow catalog `sourceNote` / references. Site meteo and assay use the same classes; site rights use a separate `authorized` / `assumed` / `unverified` chip with a light `kind` label. Screening and assumption money uses a tilde and fewer significant figures. A numeric band is shown only when a source states a range. The UI never invents ± error bars.
+The Foundry UI tags key outputs with quality classes from `docs/constants-audit.md` (`cited`, `recoverable`, `assumption`, `derived`, `screening`) via `engine/uncertainty.js`. LCOE is **cited** when the solar-pv catalog row uses NREL ATB; product cost is **screening**; site land is **assumption**; process intensities follow catalog `sourceNote` / references. Site meteo and assay use the same classes; site rights use a separate `authorized` / `assumed` / `unverified` chip with a light `kind` label. Screening and assumption money uses fewer significant figures (no leading tilde). Metric rows omit screening/assumption chips; cited quality, rights/meteo/assay chips, and the economics not-bankable banner remain. A numeric band is shown only when a source states a range. The UI never invents ± error bars.
 
 ## Unit contract
 

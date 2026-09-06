@@ -86,19 +86,19 @@ test('intensities follow catalog source notes', () => {
   assert.equal(classifyQuality({ kind: 'intensity', sourceNote: 'stoichiometry from molar masses' }), 'derived');
 });
 
-test('screening money uses a tilde and fewer significant figures', () => {
-  assert.equal(formatUncertainMoney(52425, 'screening'), '~$52,000');
-  assert.equal(formatUncertainMoney(-12345, 'assumption'), '~-$12,000');
+test('screening money uses fewer significant figures without a tilde', () => {
+  assert.equal(formatUncertainMoney(52425, 'screening'), '$52,000');
+  assert.equal(formatUncertainMoney(-12345, 'assumption'), '-$12,000');
   assert.equal(formatUncertainMoney(1560, 'cited'), '$1,560');
-  assert.equal(formatUncertainMoney(52425, { kind: 'product-cost' }), '~$52,000');
-  assert.doesNotMatch(formatUncertainMoney(52425, 'screening'), /±|\+\/-/);
+  assert.equal(formatUncertainMoney(52425, { kind: 'product-cost' }), '$52,000');
+  assert.doesNotMatch(formatUncertainMoney(52425, 'screening'), /~|±|\+\/-/);
 });
 
 test('formatters never invent a plus/minus band', () => {
   assert.equal(formatUncertainNumber(0.45, 'cited'), '0.45');
-  assert.equal(formatUncertainNumber(0.45, 'screening'), '~0.45');
+  assert.equal(formatUncertainNumber(0.45, 'screening'), '0.45');
   assert.equal(formatUncertainNumber(0.24, 'cited'), '0.24');
-  assert.doesNotMatch(formatUncertainNumber(52, 'cited'), /±|\+\/-/);
+  assert.doesNotMatch(formatUncertainNumber(52, 'cited'), /~|±|\+\/-/);
   assert.equal(parseBand({ plusMinus: 5 }), null);
   assert.equal(parseBand({ low: 10, high: 10 }), null);
   assert.equal(formatUncertainNumber(52, 'cited', { band: { plusMinus: 3 } }), '52');
@@ -176,6 +176,10 @@ test('qualityChip renders a known class and citeMarkup keeps source links', () =
   assert.match(qualityChip({ kind: 'land' }), /quality-assumption/);
   assert.match(qualityChip({ kind: 'product-cost' }), /quality-screening/);
   assert.doesNotMatch(qualityChip('screening'), /±/);
+  assert.equal(qualityChip('screening', { omitNoisy: true }), '');
+  assert.equal(qualityChip({ kind: 'land' }, { omitNoisy: true }), '');
+  assert.match(qualityChip('cited', { omitNoisy: true }), /quality-cited/);
+  assert.match(qualityChip('recoverable', { omitNoisy: true }), /quality-recoverable/);
   const cite = citeMarkup([{ label: 'NREL 2024 ATB', url: 'https://atb.nrel.gov/electricity/2024/utility-scale_pv' }]);
   assert.match(cite, /number-cite/);
   assert.match(cite, /NREL 2024 ATB/);

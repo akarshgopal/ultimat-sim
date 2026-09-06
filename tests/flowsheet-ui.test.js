@@ -399,16 +399,22 @@ test('product chrome uses Network and never Empire', () => {
   assert.match(css, /\.network-panel/);
 });
 
-test('economics panel tags screening money without fake plus/minus', () => {
+test('economics panel does not spam screening chips or tildes', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
   app.loadMethaneRecycle();
   const html = context.__elements.get('economicsMetrics').innerHTML;
-  assert.match(html, /quality-chip quality-screening/);
-  assert.match(html, /~/);
+  assert.doesNotMatch(html, /quality-chip quality-screening/);
+  assert.doesNotMatch(html, /~/);
   assert.match(html, /Levelized delivered cost/);
   assert.doesNotMatch(html, /±|&plusmn;|\+\/-\s*\d/);
   assert.equal(context.FlowsheetUncertainty.classifyQuality({ kind: 'product-cost' }), 'screening');
+  app.loadCoastalMethane(0);
+  const banner = context.__elements.get('economicsBanner');
+  assert.equal(banner.hidden, false);
+  assert.match(banner.textContent, /not bankable/);
+  assert.match(context.__elements.get('economicsMetrics').innerHTML, /hidden until acknowledged/);
+  assert.doesNotMatch(context.__elements.get('economicsMetrics').innerHTML, /quality-chip quality-screening/);
 });
 
 test('solar PV inspector cites NREL ATB next to LCOE', () => {
@@ -425,18 +431,19 @@ test('solar PV inspector cites NREL ATB next to LCOE', () => {
   assert.match(controls, /ATB 2024/);
 });
 
-test('site footprint and network rollup carry land and money quality chips', () => {
+test('site footprint and network rollup skip noisy screening chips', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
   app.loadCoastalMethane(0);
   const footprint = context.__elements.get('siteFootprintMetrics').innerHTML;
-  assert.match(footprint, /quality-chip quality-assumption/);
+  assert.doesNotMatch(footprint, /quality-chip quality-screening/);
+  assert.doesNotMatch(footprint, /quality-chip quality-assumption/);
   assert.match(footprint, /Solar land/);
   assert.doesNotMatch(footprint, /±|&plusmn;|\+\/-\s*\d/);
   app.loadDemoNetwork();
   const network = context.__elements.get('networkMetrics').innerHTML;
-  assert.match(network, /quality-chip quality-screening/);
-  assert.match(network, /quality-chip quality-assumption/);
+  assert.doesNotMatch(network, /quality-chip quality-screening/);
+  assert.doesNotMatch(network, /quality-chip quality-assumption/);
   assert.match(network, /Land/);
   assert.match(network, /Freight/);
   assert.match(network, /Not modeled \(no corridors\)/);

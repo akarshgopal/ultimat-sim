@@ -10,6 +10,7 @@ const {
   circlePolygon,
   waterAvailabilityScreening,
   pvScreeningBand,
+  landValueScreening,
   networkPlantMarkers,
   distanceKm,
 } = require('../engine/map-site');
@@ -59,4 +60,43 @@ test('pvScreeningBand is a latitude screen, not a PVGIS hourly series', () => {
   assert.ok(deadSea.typicalKWhPerKWpDay > oslo.typicalKWhPerKWpDay);
   assert.ok(oslo.typicalKWhPerKWpDay < 3);
   assert.equal(pvScreeningBand(NaN).band, 'unknown');
+});
+
+test('landValueScreening is a coastal / inland / arid land-cost screen', () => {
+  const almeria = landValueScreening(36.834, -2.463);
+  assert.equal(almeria.quality, 'screening');
+  assert.equal(almeria.band, 'coastal-high');
+  assert.ok(almeria.relativeIndex > 0.6);
+  assert.match(almeria.cite.label, /not cadastral|not transaction/i);
+  assert.match(almeria.cite.url, /worldbank|fao/i);
+  assert.match(almeria.note, /coastal|not a cadastral/i);
+
+  const sahara = landValueScreening(23, 10);
+  assert.equal(sahara.band, 'arid-low');
+  assert.ok(sahara.relativeIndex < almeria.relativeIndex);
+
+  const amazon = landValueScreening(3, -60);
+  assert.equal(amazon.band, 'inland-moderate');
+  assert.ok(amazon.relativeIndex > sahara.relativeIndex);
+  assert.ok(amazon.relativeIndex < almeria.relativeIndex);
+
+  const bad = landValueScreening(120, 0);
+  assert.equal(bad.band, 'unknown');
+  assert.equal(bad.relativeIndex, 0);
+});
+
+test('LAYER_SOURCES includes Land value screening overlay', () => {
+  assert.equal(LAYER_SOURCES.land.id, 'land');
+  assert.equal(LAYER_SOURCES.land.label, 'Land value');
+  assert.equal(LAYER_SOURCES.land.kind, 'overlay');
+  assert.equal(LAYER_SOURCES.land.quality, 'screening');
+  assert.match(LAYER_SOURCES.land.cite.label, /not cadastral|not transaction/i);
+  assert.ok(LAYER_SOURCES.land.cite.url === null || /worldbank|fao/i.test(LAYER_SOURCES.land.cite.url));
+  assert.equal(LAYER_SOURCES.pvgis.label, 'PVGIS PV');
+  assert.equal(LAYER_SOURCES.water.label, 'Water screening');
+  for (const source of Object.values(LAYER_SOURCES)) {
+    assert.ok(source.id);
+    assert.ok(source.cite);
+    assert.ok(source.quality);
+  }
 });

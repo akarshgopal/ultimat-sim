@@ -57,8 +57,8 @@
   let operationMeta = {};
   let siteMap = null;
   let siteMapMarker = null;
-  let siteMapOverlays = { osm: null, pvgis: null, water: null, footprint: null, network: null };
-  let siteMapEnabled = { osm: true, pvgis: false, water: false, footprint: false, network: false };
+  let siteMapOverlays = { osm: null, pvgis: null, water: null, land: null, footprint: null, network: null };
+  let siteMapEnabled = { osm: true, pvgis: true, water: true, land: true, footprint: false, network: false };
   let activeDemoId = null;
   let lastCashflowCompare = null;
   let siteMapFailed = false;
@@ -1836,6 +1836,15 @@
     return source.cite.label || '';
   }
 
+  const MAP_LAYER_UI = Object.freeze({
+    osm: Object.freeze({ label: 'Basemap OSM', tone: 'basemap' }),
+    pvgis: Object.freeze({ label: 'Solar (PV)', tone: 'solar' }),
+    water: Object.freeze({ label: 'Water', tone: 'water' }),
+    land: Object.freeze({ label: 'Land value', tone: 'land' }),
+    footprint: Object.freeze({ label: 'Footprint', tone: 'footprint' }),
+    network: Object.freeze({ label: 'Network', tone: 'network' }),
+  });
+
   function renderSiteMapLayerToggles() {
     const el = document.getElementById('siteMapLayers');
     if (!el || siteMapLayersReady) return;
@@ -1845,32 +1854,46 @@
       siteMapLayersReady = true;
       return;
     }
-    el.innerHTML = Object.values(sources).map(source => {
-      const checked = siteMapEnabled[source.id] ? ' checked' : '';
-      const cite = layerCiteHtml(source);
-      return `<label><input type="checkbox" data-layer="${source.id}"${checked}> ${source.label}${cite ? ` <span class="site-map-cite">${cite}</span>` : ''}</label>`;
+    const order = ['pvgis', 'water', 'land', 'footprint', 'network', 'osm'];
+    const ids = order.filter(id => sources[id]).concat(Object.keys(sources).filter(id => !order.includes(id)));
+    el.innerHTML = ids.map(id => {
+      const source = sources[id];
+      const ui = MAP_LAYER_UI[id] || { label: source.label, tone: id };
+      const checked = siteMapEnabled[id] ? ' checked' : '';
+      const citeText = source.cite?.label || '';
+      const title = citeText.replace(/"/g, '&quot;');
+      return `<label class="map-layer-chip map-layer-chip--${ui.tone}" title="${title}"><input type="checkbox" data-layer="${id}"${checked}><span class="map-layer-dot" aria-hidden="true"></span><span class="map-layer-label">${ui.label}</span></label>`;
     }).join('');
     siteMapLayersReady = true;
   }
 
   function pvOverlayColor(band) {
     return {
-      excellent: '#7ea96d',
-      good: '#c79a48',
-      moderate: '#5f7fb8',
-      limited: '#8d99a8',
-      poor: '#c77379',
-    }[band] || '#c79a48';
+      excellent: '#e8a317',
+      good: '#d4a017',
+      moderate: '#c79a48',
+      limited: '#9aa8b8',
+      poor: '#e07070',
+    }[band] || '#e8a317';
   }
 
   function waterOverlayColor(band) {
     return {
-      seawater: '#6ba5b5',
-      brine: '#8c84b4',
+      seawater: '#2bb5a0',
+      brine: '#9b8ec4',
       freshwater: '#6ba177',
       arid: '#c79a48',
-      unknown: '#8d99a8',
-    }[band] || '#6ba5b5';
+      unknown: '#9aa8b8',
+    }[band] || '#2bb5a0';
+  }
+
+  function landOverlayColor(band) {
+    return {
+      'coastal-high': '#c4a35a',
+      'inland-moderate': '#a8894a',
+      'arid-low': '#8b7355',
+      unknown: '#9aa8b8',
+    }[band] || '#c4a35a';
   }
 
   function clearSiteMapLayer(id) {
@@ -1995,6 +2018,26 @@
       siteMapOverlays.water = waterLayer;
     }
 
+    clearSiteMapLayer('land');
+    if (siteMapEnabled.land && MapSite) {
+      const land = MapSite.landValueScreening(coords);
+      const landColor = landOverlayColor(land.band);
+      const landLayer = L.circle(latlng, {
+        radius: 30000,
+        color: landColor,
+        weight: 1.5,
+        fillColor: landColor,
+        fillOpacity: 0.12,
+        interactive: true,
+      });
+      const landCite = land.cite?.url
+        ? `<br><a href="${land.cite.url}" target="_blank" rel="noreferrer">${land.cite.label}</a>`
+        : (land.cite?.label ? `<br>${land.cite.label}` : '');
+      landLayer.bindPopup(`${land.band} land-value screening · index ${Number(land.relativeIndex || 0).toFixed(2)}<br>${land.note || ''}${landCite}`);
+      landLayer.addTo(siteMap);
+      siteMapOverlays.land = landLayer;
+    }
+
     clearSiteMapLayer('footprint');
     if (siteMapEnabled.footprint && MapSite && typeof FlowsheetFootprint !== 'undefined') {
       const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
@@ -2002,9 +2045,9 @@
       const ring = MapSite.circlePolygon(coords.latitude, coords.longitude, radiusM);
       if (ring.length) {
         const poly = L.polygon(ring, {
-          color: '#5f7fb8',
+          color: '#7a8fa3',
           weight: 2,
-          fillColor: '#5f7fb8',
+          fillColor: '#7a8fa3',
           fillOpacity: 0.28,
           interactive: true,
         });

@@ -80,6 +80,17 @@ const LAYER_SOURCES = Object.freeze({
       url: 'https://www.wri.org/data/aqueduct-water-risk-atlas',
     }),
   }),
+  land: Object.freeze({
+    id: 'land',
+    label: 'Land value',
+    kind: 'overlay',
+    quality: 'screening',
+    url: 'https://www.worldbank.org/en/topic/land',
+    cite: Object.freeze({
+      label: 'Screening land-cost band (not cadastral / not transaction data)',
+      url: 'https://www.worldbank.org/en/topic/land',
+    }),
+  }),
   footprint: Object.freeze({
     id: 'footprint',
     label: 'Site footprint',
@@ -298,6 +309,54 @@ function pvScreeningBand(latitude, longitude) {
   };
 }
 
+function landValueScreening(latitude, longitude) {
+  const coords = coordsFrom(latitude, longitude);
+  const cite = LAYER_SOURCES.land.cite;
+  if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude) || coords.latitude < -90 || coords.latitude > 90) {
+    return {
+      band: 'unknown',
+      note: 'Latitude and longitude must be a real location.',
+      cite,
+      relativeIndex: 0,
+      quality: 'screening',
+    };
+  }
+
+  const water = waterAvailabilityScreening(coords);
+  const absLat = Math.abs(coords.latitude);
+  let band;
+  let relativeIndex;
+  let note;
+
+  if (water.band === 'seawater' || (Number.isFinite(water.seawaterKm) && water.seawaterKm <= COASTAL_SEAWATER_KM)) {
+    band = 'coastal-high';
+    // Ports / coasts usually clear higher — subtropical solar belts a bit more.
+    relativeIndex = absLat < 40 ? 0.85 : 0.72;
+    const km = Number.isFinite(water.seawaterKm) ? Math.round(water.seawaterKm) : null;
+    note = km != null
+      ? `Coastal screening (~${km} km to seawater). Land-cost band tends high near coasts and ports — not a cadastral value or transaction price.`
+      : 'Coastal screening. Land-cost band tends high near coasts and ports — not a cadastral value or transaction price.';
+  } else if (water.band === 'arid' || water.climate === 'subtropical-dry' || water.climate === 'polar') {
+    band = 'arid-low';
+    relativeIndex = 0.22;
+    note = 'Arid / sparse-settlement screening from latitude + water-access proxy. Proxy land-cost band tends low inland where water and access are scarce — not a market appraisal.';
+  } else {
+    band = 'inland-moderate';
+    relativeIndex = water.band === 'brine' ? 0.42 : 0.52;
+    note = 'Inland moderate screening from coastal distance + latitude. Not cadastral, not transaction data — early siting triage only (World Bank / FAO land-topic proxy).';
+  }
+
+  return {
+    band,
+    note,
+    cite,
+    relativeIndex,
+    quality: 'screening',
+    waterBand: water.band,
+    seawaterKm: water.seawaterKm ?? null,
+  };
+}
+
 function plantSite(plant) {
   return plant?.definition?.site || plant?.site || {};
 }
@@ -333,6 +392,7 @@ return {
   circlePolygon,
   waterAvailabilityScreening,
   pvScreeningBand,
+  landValueScreening,
   networkPlantMarkers,
   distanceKm,
 };

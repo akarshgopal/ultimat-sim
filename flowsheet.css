@@ -187,14 +187,6 @@
   gap: 28px;
 }
 
-.overview-identity h2 {
-  margin: 0;
-  font-size: 1.28rem;
-  line-height: 1.3;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-}
-
 .overview-honesty {
   margin-top: 6px;
   color: var(--text-secondary);
@@ -211,13 +203,6 @@
   text-transform: uppercase;
 }
 
-.overview-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 0;
-}
-
 .overview-metrics div,
 .overview-slate div {
   padding: 12px 14px;
@@ -231,13 +216,6 @@
   color: var(--text-muted);
   font-size: 0.68rem;
   line-height: 1.3;
-}
-
-.overview-metrics dd {
-  margin-top: 6px;
-  font-size: 1.12rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
 }
 
 .overview-metrics dd.positive { color: var(--success); }
@@ -601,29 +579,6 @@
 }
 .site-location button:hover,
 .site-location button:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
-.site-size {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-  align-items: end;
-  margin: 4px 0 2px;
-}
-.site-size label { color: var(--text-muted); font-size: 0.7rem; margin: 0; }
-.site-size input,
-.site-size select { margin: 2px 0 0; padding: 5px 6px; }
-.site-size input { width: 76px; }
-.site-size select { min-width: 92px; }
-.site-size button {
-  padding: 6px 8px;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-card);
-  cursor: pointer;
-  white-space: nowrap;
-}
-.site-size button:hover,
-.site-size button:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
 
 .network-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .network-actions button {
@@ -701,12 +656,6 @@
 }
 .network-plant button:hover,
 .network-plant button:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
-
-.network-empty {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-}
 
 .network-metrics { margin-top: 0; }
 
@@ -1339,7 +1288,6 @@ label output + .quality-chip {
   #panelProcess:not([hidden]) { overflow: auto; }
 }
 
-
 .economics-banner {
   margin: 8px 0 6px;
   padding: 8px 10px;
@@ -1438,7 +1386,6 @@ label output + .quality-chip {
 }
 
 .network-detail { margin-top: 6px; }
-
 
 /* UX polish: hero overview, issues, focus exit, demos */
 .overview-dashboard { max-width: 960px; width: 100%; margin: 0 auto; }

@@ -40,11 +40,10 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 - `engine/uncertainty.js`: quality tags (`cited` / `recoverable` / `assumption` / `derived` / `screening`) and screening-precision formatters. No fake error bars.
 - `cases/`: runnable reference plants.
 - `tests/*flowsheet*.test.js`: engine, economics, and browser-global/UI regression checks. `tests/map-site.test.js` covers the map-picker geometry and layer cites.
-- `scripts/`: local server, static build, CLI example, and deployment.
+- `scripts/`: local server, static build, GitHub Pages deploy.
 
 The root page loads only the Foundry engine, cases, and UI scripts. `style.css` retains base styles used by Foundry. `flowsheet.html` redirects old links to the root page. The archived TEA page, JavaScript, and tests have been removed; their committed history remains in Git.
 
-See [engine architecture](docs/flowsheet-architecture.md) for model contracts and fidelity limits.
 
 ## Model limits
 
@@ -57,11 +56,10 @@ Requires Node.js 18 or newer; no external runtime packages are needed.
 - `npm run dev`: serve source files with caching disabled.
 - `npm run build`: generate versioned deployment assets in `dist/`.
 - `npm run preview`: serve the built output.
-- `npm run flowsheet`: print the integrated methane example's flows and balances.
 - `npm test`: run Foundry regression checks.
 - `npm run deploy`: build `dist/` and publish it to GitHub Pages.
 
-The live site is [akarshgopal.github.io/ultimat-sim](https://akarshgopal.github.io/ultimat-sim/). Pushes to `flowsheet` rebuild it. Vercel is also configured to build and serve `dist/`.
+The live site is https://akarshgopal.github.io/ultimat-sim/ — pushes to main rebuild via GitHub Pages.
 
 ## License
 

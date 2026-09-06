@@ -1,5 +1,5 @@
 {
-  "name": "terraform-industries",
+  "name": "ultimat-sim",
   "private": true,
   "engines": {
     "node": ">=18"
@@ -9,7 +9,6 @@
     "build": "node scripts/build.mjs",
     "preview": "node scripts/dev.mjs dist",
     "test": "node --test",
-    "flowsheet": "node scripts/flowsheet-demo.js",
     "deploy": "node scripts/deploy-pages.mjs"
   }
 }

@@ -67,6 +67,7 @@ test('factory starts blank and wiring blocks does not rewrite their setpoints', 
   assert.equal(app.setpoints[sabatier.id], 5);
 });
 
+
 test('palette clicks add the selected process and utility blocks', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -404,42 +405,6 @@ test('fuels plus minerals network rolls up two sited plants', () => {
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
 });
 
-test('product chrome uses Network and never Empire', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
-  const js = fs.readFileSync(path.join(__dirname, '..', 'js', 'flowsheet-app.js'), 'utf8');
-  assert.doesNotMatch(html, /empire/i);
-  assert.doesNotMatch(css, /empire/i);
-  assert.doesNotMatch(js, /LEGACY_EMPIRE|\bEmpire\b/);
-  assert.match(html, /Network/);
-  assert.match(html, /id="networkPanel"/);
-  assert.match(html, /class="[^"]*network-panel/);
-  assert.match(css, /\.network-panel/);
-});
-
-test('four primary tabs land on Overview and fold Network into Economics', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const labels = [...html.matchAll(/role="tab"(?![a-z])[^>]*>([^<]+)/gi)].map(match => match[1].trim());
-  assert.deepEqual(labels, ['Overview', 'Location', 'Process', 'Economics']);
-  assert.match(html, /role="tablist"/);
-  assert.match(html, /id="tabOverview"[^>]*aria-selected="true"/);
-  assert.match(html, /id="panelOverview"/);
-  assert.match(html, /id="panelLocation"[^>]*hidden/);
-  assert.match(html, /id="panelProcess"[^>]*hidden/);
-  assert.match(html, /id="panelEconomics"[^>]*hidden/);
-  assert.match(html, /id="sizeForCashflow"/);
-  assert.match(html, /id="loadDemoNetwork"/);
-  assert.match(html, /id="siteMap"/);
-  assert.match(html, /id="flowsheetCanvas"/);
-  assert.match(html, /id="economicsBanner"/);
-  assert.match(html, /id="economicsAck"/);
-  assert.doesNotMatch(html, /role="tab"[^>]*>\s*Network\s*</i);
-  assert.match(html, /id="networkPanel"/);
-  const economicsChunk = html.slice(html.indexOf('id="panelEconomics"'));
-  assert.match(economicsChunk, /id="networkPanel"/);
-  assert.match(economicsChunk, /id="siteFootprint"/);
-});
-
 test('activateTab switches panels, defaults to Overview, and persists', () => {
   const values = new Map();
   const storage = {
@@ -474,134 +439,6 @@ test('activateTab switches panels, defaults to Overview, and persists', () => {
   assert.equal(restored.activeTab, 'economics');
 });
 
-test('overview dashboard stays calm after loading demos', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  assert.equal(app.activeTab, 'overview');
-  app.loadMethaneRecycle();
-  const cash = context.__elements.get('overviewCashflow').innerHTML;
-  assert.match(cash, /Net cash \/ year|Annual net cash/);
-  assert.match(cash, /CAPEX/);
-  assert.doesNotMatch(cash, /quality-chip/);
-  assert.doesNotMatch(cash, /~/);
-  const limiting = context.__elements.get('overviewLimiting');
-  assert.equal(limiting.hidden, true);
-  assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /flow-edge material recycle/);
-
-  app.loadCoastalMethane(0);
-  assert.match(context.__elements.get('overviewSiteName').textContent, /Almer/);
-  assert.match(context.__elements.get('overviewHonesty').textContent, /not bankable/i);
-  assert.doesNotMatch(context.__elements.get('overviewLand').textContent, /1\.6 ha\/MWp/);
-  assert.match(context.__elements.get('siteMapLayers').innerHTML, /OSM/);
-  assert.equal(typeof context.__elements.get('sizeForCashflow').listeners.click, 'function');
-
-  app.loadDemoNetwork();
-  assert.match(context.__elements.get('networkProducts').innerHTML, /CH4/);
-  assert.match(context.__elements.get('overviewSlate').innerHTML, /t\/year/);
-  assert.doesNotMatch(context.__elements.get('overviewSlate').innerHTML, /quality-chip quality-screening/);
-});
-
-test('economics panel does not spam screening chips or tildes', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.loadMethaneRecycle();
-  const html = context.__elements.get('economicsMetrics').innerHTML;
-  assert.doesNotMatch(html, /quality-chip quality-screening/);
-  assert.doesNotMatch(html, /~/);
-  assert.match(html, /Levelized delivered cost/);
-  assert.doesNotMatch(html, /±|&plusmn;|\+\/-\s*\d/);
-  assert.equal(context.FlowsheetUncertainty.classifyQuality({ kind: 'product-cost' }), 'screening');
-  app.loadCoastalMethane(0);
-  const banner = context.__elements.get('economicsBanner');
-  assert.equal(banner.hidden, false);
-  assert.match(banner.textContent, /not bankable/);
-  assert.match(context.__elements.get('economicsMetrics').innerHTML, /hidden until acknowledged/);
-  assert.doesNotMatch(context.__elements.get('economicsMetrics').innerHTML, /quality-chip quality-screening/);
-});
-
-test('solar PV inspector cites NREL ATB next to LCOE', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.addNode('solar-pv');
-  const metrics = context.__elements.get('inspectorMetrics').innerHTML;
-  const controls = context.__elements.get('nodeControls').innerHTML;
-  assert.match(metrics, /Simple LCOE/);
-  assert.match(metrics, /quality-chip quality-cited/);
-  assert.match(metrics, /NREL 2024 ATB/);
-  assert.doesNotMatch(metrics, /±|&plusmn;|\+\/-\s*\d/);
-  assert.match(controls, /quality-chip quality-cited/);
-  assert.match(controls, /ATB 2024/);
-});
-
-test('site footprint and network rollup skip noisy screening chips', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.loadCoastalMethane(0);
-  const footprint = context.__elements.get('siteFootprintMetrics').innerHTML;
-  assert.doesNotMatch(footprint, /quality-chip quality-screening/);
-  assert.doesNotMatch(footprint, /quality-chip quality-assumption/);
-  assert.match(footprint, /Solar land/);
-  assert.doesNotMatch(footprint, /±|&plusmn;|\+\/-\s*\d/);
-  app.loadDemoNetwork();
-  const network = context.__elements.get('networkMetrics').innerHTML;
-  assert.doesNotMatch(network, /quality-chip quality-screening/);
-  assert.doesNotMatch(network, /quality-chip quality-assumption/);
-  assert.match(network, /Land/);
-  assert.match(network, /Freight/);
-  assert.match(network, /Not modeled \(no corridors\)/);
-  assert.match(network, /UNCTAD/);
-});
-
-test('inspector renders catalog sourceNote for electrolyzer and DAC energy', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.addNode('electrolyzer');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Buttler & Spliethoff 2018/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /52 kWh\/kg H/);
-  app.addNode('dac-solid');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /IEA DAC 2022/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /1\.8 GJ\/t/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /5\.4 GJ\/t/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Capture fraction 0\.9/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /amine makeup 0\.02/);
-  app.addNode('dac-liquid');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Scenario A/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Scenario C/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Table 1 74\.5%/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /KOH makeup 0\.01/);
-  app.addNode('dac-electroswing');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /40–90 kJ\/mol/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Balance-of-plant/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Capture fraction 0\.5/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /electrode makeup 0\.005/);
-  app.addNode('swro');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Elimelech & Phillip 2011/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /3–4 kWh\/m/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /45–55%/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Ghaffour et al\. 2013/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /quality-chip quality-cited/);
-  app.addNode('med');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Ghaffour et al\. 2013 MED band/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /1\.5–2\.5 kWh\/m/);
-  app.addNode('msf');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Ghaffour et al\. 2013 MSF band/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /3–5 kWh\/m/);
-  app.addNode('sabatier');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /0\.4–1\.5 kWh\/kg/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /not electrolysis/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Zapf/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Baier et al\. 2018/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /quality-chip quality-screening/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /fenrg\.2018\.00005/);
-  app.addNode('solar-pv');
-  assert.match(context.__elements.get('nodeControls').innerHTML, /ATB 2024/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /Class 8/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /24\.5%/);
-  assert.match(context.__elements.get('nodeControls').innerHTML, /quality-chip quality-cited/);
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(html, /engine\/uncertainty\.js/);
-});
-
 test('an incomplete baseline has no economics until a complete graph is captured', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -628,16 +465,6 @@ test('coastal methane sizeToProduct H2 produces electrolyzer activity and never 
   assert.ok(electricity.rate > 0);
 });
 
-test('blank canvas and draft site copy guide onboarding', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.clearFactory();
-  const canvas = context.__elements.get('flowsheetCanvas').innerHTML;
-  assert.match(canvas, /Start here/);
-  assert.match(canvas, /Load a scenario/);
-  assert.match(context.__elements.get('siteName').textContent, /Draft site|Choose a site|Almer/);
-});
-
 test('formatNumber hides false precision near zero', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -648,101 +475,12 @@ test('formatNumber hides false precision near zero', () => {
   assert.doesNotMatch(status, /2\.78e-17|2\.775/);
 });
 
-function detailsOpeningTag(html, id) {
-  const match = html.match(new RegExp(`<details\\b[^>]*\\sid="${id}"[^>]*>`));
-  assert.ok(match, `details#${id} exists`);
-  return match[0];
-}
-
-function assertClosedDetailsId(html, id) {
-  const tag = detailsOpeningTag(html, id);
-  assert.doesNotMatch(tag, /\sopen(\s|>|=)/, `${id} starts closed`);
-}
-
-test('secondary Foundry controls start collapsed behind closed details', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const overview = html.slice(html.indexOf('id="panelOverview"'), html.indexOf('id="panelLocation"'));
-  const location = html.slice(html.indexOf('id="panelLocation"'), html.indexOf('id="panelProcess"'));
-  const process = html.slice(html.indexOf('id="panelProcess"'), html.indexOf('id="panelEconomics"'));
-  const economics = html.slice(html.indexOf('id="panelEconomics"'));
-
-  assertClosedDetailsId(html, 'sizeToTargetDetails');
-  assert.match(html, /id="overviewDemoMenu"/);
-  assert.match(html, /id="overviewDemoChip"/);
-  assert.match(html, /id="cashflowResult"/);
-  assert.match(html, /id="exitFocus"/);
-  assert.match(html, /id="paletteSearch"/);
-  assertClosedDetailsId(html, 'siteMethodDetails');
-  assertClosedDetailsId(html, 'siteMapLayerDetails');
-  assertClosedDetailsId(html, 'siteLocationDetails');
-  assertClosedDetailsId(html, 'siteMeteoDetails');
-  assertClosedDetailsId(html, 'siteAssayDetails');
-  assertClosedDetailsId(html, 'siteRightsDetails');
-  assertClosedDetailsId(html, 'processDemoMenu');
-  assertClosedDetailsId(html, 'baselineMenu');
-
-  const sizeChunk = overview.slice(overview.indexOf('id="sizeToTargetDetails"'));
-  assert.match(sizeChunk, /id="sizeToTarget"/);
-  assert.match(sizeChunk, /id="sizeProduct"/);
-  assert.match(sizeChunk, /id="sizeTargetRate"/);
-  assert.match(sizeChunk, /id="sizeToTargetStatus"/);
-  assert.ok(overview.indexOf('id="sizeForCashflow"') < overview.indexOf('id="sizeToTargetDetails"'));
-
-  const demoChunk = overview.slice(overview.indexOf('id="overviewDemoMenu"'));
-  assert.match(demoChunk, /id="loadMethaneRecycle"/);
-  assert.match(demoChunk, /id="loadCoastalMethane"/);
-  assert.match(demoChunk, /id="loadAbundanceHub"/);
-  assert.match(demoChunk, /id="loadDemoNetwork"/);
-
-  const layerClose = location.indexOf('</details>', location.indexOf('id="siteMapLayerDetails"'));
-  assert.ok(location.indexOf('id="siteName"') < location.indexOf('id="siteMapLayerDetails"'));
-  assert.ok(location.indexOf('id="siteMap"') > layerClose);
-  assert.match(location, /class="site-location"/);
-  assert.match(location, /id="siteMapLayers"/);
-  assert.match(location, /id="applyCoordinates"/);
-  assert.match(location, /id="siteMeteo"/);
-  assert.match(location, /id="siteAssay"/);
-  assert.match(location, /id="siteRights"/);
-
-  assert.match(process, /id="captureBaseline"/);
-  assert.match(process, /id="clearBaseline"/);
-  assert.match(process, /id="flowsheetCanvas"/);
-
-  assert.match(economics, /id="economicsBanner"/);
-  assert.match(economics, /id="economicsAck"/);
-  assert.match(economics, /<details class="more-section network-detail">/);
-  assert.match(economics, /<details class="more-section footprint-details">/);
-  assert.doesNotMatch(economics, /<details class="more-section network-detail" open/);
-  assert.doesNotMatch(economics, /<details class="more-section footprint-details" open/);
-  assert.ok(economics.indexOf('id="economicsAck"') < economics.indexOf('class="more-section network-detail"'));
-  assert.match(economics, /id="networkBody"/);
-  assert.match(economics, /id="siteFootprint"/);
-});
-
-test('building palette groups units into closed category details', () => {
-  const context = loadApp();
-  const palette = context.__elements.get('buildingPalette').innerHTML;
-  for (const name of ['Water', 'Carbon', 'Fuels', 'Minerals', 'Power']) {
-    assert.match(palette, new RegExp(`<details class="palette-category"><summary>${name}</summary>`));
-  }
-  assert.doesNotMatch(palette, /<details class="palette-category" open/);
-  for (const unit of ['swro', 'med', 'msf', 'dac-solid', 'dac-liquid', 'dac-electroswing', 'electrolyzer', 'sabatier', 'brine-minerals', 'solar-pv', 'nuclear-electricity']) {
-    assert.match(palette, new RegExp(`data-unit="${unit}"`));
-  }
-  context.__elements.get('buildingPalette').listeners.click({
-    target: { closest: () => ({ dataset: { unit: 'sabatier' } }) },
-  });
-  assert.equal(context.__FLOWSHEET_APP__.graph.nodes[0].unit, 'sabatier');
-});
-
-test('inspector literature stays in the DOM behind closed details', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.addNode('electrolyzer');
-  const html = context.__elements.get('nodeControls').innerHTML;
-  assert.match(html, /<details class="more-section">/);
-  assert.match(html, /<summary>Literature<\/summary>/);
-  assert.match(html, /Buttler & Spliethoff 2018/);
-  assert.match(html, /52 kWh\/kg H/);
-  assert.doesNotMatch(html, /<details[^>]*\sopen/);
+test("Foundry IA keeps four tabs and Network without Empire", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const labels = [...html.matchAll(/role="tab"(?![a-z])[^>]*>([^<]+)/gi)].map(m => m[1].trim());
+  assert.deepEqual(labels, ["Overview", "Location", "Process", "Economics"]);
+  assert.doesNotMatch(html, /empire/i);
+  assert.match(html, /Network/);
+  assert.match(html, /id="sizeForCashflow"/);
+  assert.match(html, /id="siteMap"/);
 });

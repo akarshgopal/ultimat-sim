@@ -57,7 +57,7 @@ Case
   site          # named location with bounded, evidenced resource budgets
     meteo       # daily/monthly PV yield, cite, quality
     assay       # feed composition summary, quality, evidence
-    rights      # gridImport, freshwater, seawaterIntake, brineConcession, saltPurchase
+    rights      # gridImport, freshwater, seawaterIntake, seawaterDischarge, brineConcession, saltPurchase
     resources   # named streams the solver clamps (unchanged contract)
   graph         # nodes and edges
   operation     # setpoints, following rules, split and priority policies
@@ -79,9 +79,9 @@ Edges do not repeat their stream type or disposition. Those are determined by th
 
 When `site` is present, every source block must name a `siteResource`. Resource presence is not access: an unverified grid or freshwater budget is explicit zero, not unlimited supply and not a silent free input. Two source blocks that share a resource draw from the same remaining quantity; the solver clamps rather than duplicating the budget. Composition, phase, temperature, and consumable identity on a source must match the named resource.
 
-`site.meteo`, `site.assay`, and `site.rights` are first-class site truth. They do not replace `resources` streams. `dailyPVKWhPerKWp` stays on the site root for sizing; `meteo` carries the same daily value plus the monthly series, a cite, and a quality class. Assay is a composition summary with quality and evidence URLs, not a second mol vector. Each right is `authorized`, `assumed`, or `unverified`. `solveOperation`, `sizeToTarget`, and `sizeToProduct` warn on unverified rights; they do not invent authorized supply.
+`site.meteo`, `site.assay`, and `site.rights` are first-class site truth. They do not replace `resources` streams. `dailyPVKWhPerKWp` stays on the site root for sizing; `meteo` carries the same daily value plus the monthly series, a cite, and a quality class. Assay is a composition summary with quality and evidence URLs, not a second mol vector. Each right has `kind` (`grid` | `freshwater` | `intake` | `discharge` | `concession` | `purchase`), `status` (`authorized` | `assumed` | `unverified`), and `authorize` (true for authorized rights and for assumed screening budgets; false when unverified). `solveOperation` warns `unverified site right: KEY`. `sizeToTarget` / `sizeToProduct` still emit that warning, and they throw `size-to-target cannot assume KEY` when they would grow a resource whose right is not authorized. They do not invent grid or freshwater supply when `authorize` is false.
 
-The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield plus a 2023 hourly typical day (`data/pvgis-almeria-hourly.js`), global 35 g/kg seawater as a cited NaCl proxy assay, assumed seawater intake, and unverified grid/freshwater/brine/salt rights. The Dead Sea hub (`cases/network.js`) cites the same PVGIS family, uses a frozen open-water ion assay (`data/dead-sea-brine.json`), and marks freshwater and salt purchase as assumed. A literature assay is not a mineral concession.
+The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield plus a 2023 hourly typical day (`data/pvgis-almeria-hourly.js`), a cited Alboran multi-ion seawater assay (`data/almeria-seawater.json`: Millero/Pilson S=35 majors scaled 36.5/35; not a NaCl proxy), assumed 0.1 m³/day intake, and unverified grid, freshwater, and seawater-discharge rights (no outfall on file). The Dead Sea hub (`cases/network.js`) cites the same PVGIS family, uses a frozen open-water ion assay (`data/dead-sea-brine.json`), and marks freshwater and salt purchase as assumed. Seawater intake and discharge stay unverified inland. A literature assay is not a mineral concession.
 
 When `site.solar.typicalMonths` is present, `solveHorizon` runs 24 hourly operating solves. Daily setpoints are leftover demand, nameplate is capacity/24, and methane-chain setpoints stay stoichiometric so intermediate CO₂/H₂ is not orphaned. Site electricity is that hour's PV yield plus optional battery discharge. Other site budgets are remaining daily quantities. Night hours with no PV and no stored energy produce nothing.
 
@@ -143,7 +143,7 @@ Energy CAPEX, O&M, tariffs, capacity factors, and simple levelized costs are edi
 
 ### Uncertainty display
 
-The Foundry UI tags key outputs with quality classes from `docs/constants-audit.md` (`cited`, `recoverable`, `assumption`, `derived`, `screening`) via `engine/uncertainty.js`. LCOE is **cited** when the solar-pv catalog row uses NREL ATB; product cost is **screening**; site land is **assumption**; process intensities follow catalog `sourceNote` / references. Site meteo and assay use the same classes; site rights use a separate `authorized` / `assumed` / `unverified` chip. Screening and assumption money uses a tilde and fewer significant figures. A numeric band is shown only when a source states a range. The UI never invents ± error bars.
+The Foundry UI tags key outputs with quality classes from `docs/constants-audit.md` (`cited`, `recoverable`, `assumption`, `derived`, `screening`) via `engine/uncertainty.js`. LCOE is **cited** when the solar-pv catalog row uses NREL ATB; product cost is **screening**; site land is **assumption**; process intensities follow catalog `sourceNote` / references. Site meteo and assay use the same classes; site rights use a separate `authorized` / `assumed` / `unverified` chip with a light `kind` label. Screening and assumption money uses a tilde and fewer significant figures. A numeric band is shown only when a source states a range. The UI never invents ± error bars.
 
 ## Unit contract
 
@@ -407,7 +407,7 @@ Strategies:
 - **H2**: electrolyzer-led water, desal, and PV. If Sabatier or DAC are present their capacity and setpoint go to 0 so H2 is the product. `achieved` is electrolyzer activity.
 - **lithium / salt**: scale `brine-minerals`, the brine source, and power so the sink inlet mass meets the rate (abundance / Dead Sea). Throws if the minerals block or sink is missing.
 
-`sizeCoastalToMethane(target, month, opts)` runs the CH4 loop on `createCoastalCase(month)`. The one-shot coastal fixture keeps `solarKWp = 37.5` and still clamps methane from the electricity budget. The Foundry site panel **Size to target** control sizes the currently loaded plant via `sizeToProduct` and shows product, iteration count, residual, and heat covered / residual kWh.
+`sizeCoastalToMethane(target, month, opts)` runs the CH4 loop on `createCoastalCase(month)`. The one-shot coastal fixture keeps `solarKWp = 37.5` and still clamps methane from the electricity budget. Size still warns `unverified site right: KEY` and throws `size-to-target cannot assume KEY` instead of treating an unverified intake, concession, grid import, or freshwater right as a screening budget. The Foundry site panel **Size to target** control sizes the currently loaded plant via `sizeToProduct` and shows product, iteration count, residual, and heat covered / residual kWh.
 
 The sizing residual is the max of demand miss (`|achieved − target| / max(1, target)`) and consistency (setpoint vs solved converters / electricity). The loop stops when the plant is internally consistent, even if a cap prevented the requested demand.
 

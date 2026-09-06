@@ -6,8 +6,16 @@
 const QUALITIES = Object.freeze(['cited', 'recoverable', 'assumption', 'derived', 'screening']);
 const QUALITY_SET = new Set(QUALITIES);
 const RIGHT_KEYS = Object.freeze([
-  'gridImport', 'freshwater', 'seawaterIntake', 'brineConcession', 'saltPurchase',
+  'gridImport', 'freshwater', 'seawaterIntake', 'seawaterDischarge', 'brineConcession', 'saltPurchase',
 ]);
+const RIGHT_KINDS = Object.freeze({
+  gridImport: 'grid',
+  freshwater: 'freshwater',
+  seawaterIntake: 'intake',
+  seawaterDischarge: 'discharge',
+  brineConcession: 'concession',
+  saltPurchase: 'purchase',
+});
 const RIGHT_STATUSES = Object.freeze(['authorized', 'assumed', 'unverified']);
 
 const QUALITY_TITLES = Object.freeze({
@@ -256,6 +264,17 @@ function citeFrom(value) {
   return [];
 }
 
+function authorizeForStatus(status) {
+  return status === 'authorized' || status === 'assumed';
+}
+
+function rightIsAuthorized(right) {
+  if (!right) return false;
+  if (right.authorize === true) return true;
+  if (right.authorize === false) return false;
+  return authorizeForStatus(right.status);
+}
+
 function unverifiedRightsWarnings(site) {
   const rights = site?.rights;
   if (!rights || typeof rights !== 'object') return [];
@@ -278,8 +297,11 @@ return {
   QUALITIES,
   QUALITY_TITLES,
   RIGHT_KEYS,
+  RIGHT_KINDS,
   RIGHT_STATUSES,
   RIGHT_TITLES,
+  authorizeForStatus,
+  rightIsAuthorized,
   classifyQuality,
   formatUncertainMoney,
   formatUncertainNumber,

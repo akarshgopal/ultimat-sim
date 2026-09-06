@@ -255,6 +255,11 @@
   gap: 4px;
   color: var(--text-muted);
 }
+.site-rights .rights-kind {
+  font-size: 0.78em;
+  opacity: 0.65;
+  font-weight: 400;
+}
 .quality-chip.rights-authorized {
   color: var(--success);
   border-color: rgba(126, 169, 109, 0.45);

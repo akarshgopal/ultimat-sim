@@ -123,8 +123,8 @@ test('Foundry page exposes co-product cashflow control and keeps size.js', () =>
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /engine\/size\.js/);
   assert.match(html, /id="sizeForCashflow"/);
-  assert.match(html, /Size for co-product cashflow/);
-  assert.match(html, /Co-product cashflow is the goal/);
+  assert.match(html, /Optimize co-product cashflow|Size for co-product cashflow/);
+  assert.match(html, /Single-product physics tool|Co-product cashflow is the goal/);
   assert.match(html, /id="sizeToTarget"/);
 });
 

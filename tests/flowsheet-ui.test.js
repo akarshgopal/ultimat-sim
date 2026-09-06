@@ -6,15 +6,29 @@ const vm = require('node:vm');
 
 function loadApp(localStorage) {
   const elements = new Map();
-  const makeElement = () => ({
-    listeners: {},
-    addEventListener(type, listener) { this.listeners[type] = listener; },
-    classList: { add() {}, remove() {} },
-    setAttribute(name, value) { this[name] = value; },
-    innerHTML: '',
-    textContent: '',
-    hidden: false,
-  });
+  const makeElement = () => {
+    const el = {
+      listeners: {},
+      addEventListener(type, listener) { this.listeners[type] = listener; },
+      classList: { add() {}, remove() {}, toggle() {} },
+      setAttribute(name, value) { this[name] = value; },
+      _innerHTML: '',
+      _textContent: '',
+      hidden: false,
+      dataset: {},
+      get innerHTML() { return this._innerHTML; },
+      set innerHTML(value) {
+        this._innerHTML = String(value ?? '');
+        this._textContent = this._innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      },
+      get textContent() { return this._textContent; },
+      set textContent(value) {
+        this._textContent = String(value ?? '');
+        this._innerHTML = this._textContent;
+      },
+    };
+    return el;
+  };
   const document = {
     body: makeElement(),
     getElementById(id) {
@@ -22,6 +36,8 @@ function loadApp(localStorage) {
       return elements.get(id);
     },
     querySelector() { return makeElement(); },
+    querySelectorAll() { return []; },
+    addEventListener() {},
   };
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
@@ -366,7 +382,7 @@ test('site panel reports location-aware footprint instead of 1.6 ha/MWp', () => 
   assert.doesNotMatch(horizon, /1\.6 ha\/MWp/);
   assert.match(metrics, /GCR/);
   assert.match(metrics, /Solar land/);
-  assert.match(note, /order-of-magnitude screening/);
+  assert.match(note, /orders of magnitude|order-of-magnitude screening/);
   assert.equal(context.__elements.get('siteFootprint').hidden, false);
   assert.match(context.__elements.get('siteFootprintPads').innerHTML, /Electrolyzer|DAC|Sabatier|SWRO/i);
 });
@@ -464,16 +480,17 @@ test('overview dashboard stays calm after loading demos', () => {
   assert.equal(app.activeTab, 'overview');
   app.loadMethaneRecycle();
   const cash = context.__elements.get('overviewCashflow').innerHTML;
-  assert.match(cash, /Annual net cash/);
-  assert.match(cash, /Installed CAPEX/);
+  assert.match(cash, /Net cash \/ year|Annual net cash/);
+  assert.match(cash, /CAPEX/);
   assert.doesNotMatch(cash, /quality-chip/);
   assert.doesNotMatch(cash, /~/);
-  assert.match(context.__elements.get('overviewLimiting').textContent, /Factory running|balances closed/);
+  const limiting = context.__elements.get('overviewLimiting');
+  assert.equal(limiting.hidden, true);
   assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /flow-edge material recycle/);
 
   app.loadCoastalMethane(0);
   assert.match(context.__elements.get('overviewSiteName').textContent, /Almer/);
-  assert.match(context.__elements.get('overviewHonesty').textContent, /not bankable/);
+  assert.match(context.__elements.get('overviewHonesty').textContent, /not bankable/i);
   assert.doesNotMatch(context.__elements.get('overviewLand').textContent, /1\.6 ha\/MWp/);
   assert.match(context.__elements.get('siteMapLayers').innerHTML, /OSM/);
   assert.equal(typeof context.__elements.get('sizeForCashflow').listeners.click, 'function');
@@ -616,8 +633,8 @@ test('blank canvas and draft site copy guide onboarding', () => {
   const app = context.__FLOWSHEET_APP__;
   app.clearFactory();
   const canvas = context.__elements.get('flowsheetCanvas').innerHTML;
-  assert.match(canvas, /Recommended path/);
-  assert.match(canvas, /Size to target/);
+  assert.match(canvas, /Start here/);
+  assert.match(canvas, /Load a scenario/);
   assert.match(context.__elements.get('siteName').textContent, /Draft site|Choose a site|Almer/);
 });
 
@@ -650,7 +667,12 @@ test('secondary Foundry controls start collapsed behind closed details', () => {
   const economics = html.slice(html.indexOf('id="panelEconomics"'));
 
   assertClosedDetailsId(html, 'sizeToTargetDetails');
-  assertClosedDetailsId(html, 'overviewDemoMenu');
+  assert.match(html, /id="overviewDemoMenu"/);
+  assert.match(html, /id="overviewDemoChip"/);
+  assert.match(html, /id="cashflowResult"/);
+  assert.match(html, /id="exitFocus"/);
+  assert.match(html, /id="paletteSearch"/);
+  assertClosedDetailsId(html, 'siteMethodDetails');
   assertClosedDetailsId(html, 'siteMapLayerDetails');
   assertClosedDetailsId(html, 'siteLocationDetails');
   assertClosedDetailsId(html, 'siteMeteoDetails');

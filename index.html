@@ -29,48 +29,43 @@
   </div>
 
   <div class="foundry-panels">
-    <section class="tab-panel overview-panel is-active" id="panelOverview" role="tabpanel" aria-labelledby="tabOverview">
+        <section class="tab-panel overview-panel is-active" id="panelOverview" role="tabpanel" aria-labelledby="tabOverview">
       <div class="overview-dashboard">
-        <header class="overview-identity">
-          <span class="eyebrow">This factory</span>
-          <h2 id="overviewSiteName">Choose a site</h2>
-          <p class="overview-honesty" id="overviewHonesty">Blank factory — load a demo or add blocks on Process.</p>
+        <header class="overview-hero">
+          <div class="overview-hero-copy">
+            <span class="eyebrow" id="overviewDemoChip" hidden></span>
+            <h2 id="overviewSiteName">Choose a site</h2>
+            <p class="overview-honesty" id="overviewHonesty">Load a demo or build on Process.</p>
+          </div>
+          <div class="overview-hero-metrics" id="overviewCashflow" aria-label="Cashflow summary">
+            <div class="hero-metric"><span>Net cash / year</span><strong>—</strong></div>
+            <div class="hero-metric"><span>Revenue / year</span><strong>—</strong></div>
+            <div class="hero-metric"><span>CAPEX</span><strong>—</strong></div>
+          </div>
         </header>
 
-        <section class="overview-block" aria-labelledby="overviewCashflowHeading">
-          <h3 id="overviewCashflowHeading">Co-product cashflow</h3>
-          <dl class="overview-metrics" id="overviewCashflow">
-            <div><dt>Annual net cash</dt><dd>—</dd></div>
-            <div><dt>Annual revenue</dt><dd>—</dd></div>
-            <div><dt>Installed CAPEX</dt><dd>—</dd></div>
-          </dl>
-        </section>
+        <button type="button" class="issue-card" id="overviewLimiting" hidden>Empty factory</button>
+        <div class="cashflow-result" id="cashflowResult" hidden></div>
 
         <div class="overview-split">
           <section class="overview-block" aria-labelledby="overviewSlateHeading">
-            <h3 id="overviewSlateHeading">Product slate</h3>
+            <h3 id="overviewSlateHeading">Top materials</h3>
             <dl class="overview-slate" id="overviewSlate">
               <div><dt>Products</dt><dd>None yet</dd></div>
             </dl>
           </section>
           <section class="overview-block" aria-labelledby="overviewLandHeading">
             <h3 id="overviewLandHeading">Land</h3>
-            <p class="overview-oneliner" id="overviewLand">No site land yet</p>
+            <p class="overview-oneliner" id="overviewLand">—</p>
           </section>
         </div>
 
-        <section class="overview-block" aria-labelledby="overviewLimitingHeading">
-          <h3 id="overviewLimitingHeading">What’s limiting</h3>
-          <p class="overview-oneliner" id="overviewLimiting">Empty factory</p>
-        </section>
-
-        <section class="overview-block overview-actions-block" aria-labelledby="overviewActionsHeading">
-          <h3 id="overviewActionsHeading">Next step</h3>
+        <section class="overview-block overview-actions-block">
           <div class="overview-actions">
-            <button type="button" class="primary-action" id="sizeForCashflow">Size for co-product cashflow</button>
+            <button type="button" class="primary-action" id="sizeForCashflow">Optimize co-product cashflow</button>
           </div>
           <details class="more-section" id="sizeToTargetDetails">
-            <summary>Size to a single product</summary>
+            <summary>Size one product</summary>
             <div class="overview-actions">
               <label>Product
                 <select id="sizeProduct" aria-label="Size-to-target product">
@@ -83,17 +78,17 @@
               <label>kg/day <input id="sizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
               <button type="button" id="sizeToTarget">Size to target</button>
             </div>
-            <p class="status-meta" id="sizeToTargetStatus">Co-product cashflow is the goal: maximize sale products while plant net cash stays positive. Size-to-target remains a single-product physics tool.</p>
+            <p class="status-meta" id="sizeToTargetStatus">Single-product physics tool.</p>
           </details>
-          <details class="demo-menu" id="overviewDemoMenu">
-            <summary>Load demo</summary>
-            <div class="demo-menu-actions overview-demos" role="group" aria-label="Load demo">
-              <button type="button" id="loadMethaneRecycle">Methane + water recycle</button>
-              <button type="button" id="loadCoastalMethane">Coastal methane</button>
-              <button type="button" id="loadAbundanceHub">Ammonia + brine hub</button>
-              <button type="button" id="loadDemoNetwork">Fuels + minerals network</button>
+          <div class="demo-scenarios" id="overviewDemoMenu" role="group" aria-label="Demo scenarios">
+            <span class="eyebrow">Scenarios</span>
+            <div class="overview-demos">
+              <button type="button" id="loadMethaneRecycle" data-demo-id="methane-recycle">Methane recycle</button>
+              <button type="button" id="loadCoastalMethane" data-demo-id="coastal-methane">Coastal methane</button>
+              <button type="button" id="loadAbundanceHub" data-demo-id="abundance-hub">Brine + ammonia</button>
+              <button type="button" id="loadDemoNetwork" data-demo-id="demo-network">Fuels + minerals</button>
             </div>
-          </details>
+          </div>
         </section>
       </div>
     </section>
@@ -111,13 +106,13 @@
           <details class="more-section" id="siteMapLayerDetails">
             <summary>Map layers</summary>
             <div class="site-map-layers" id="siteMapLayers" role="group" aria-label="Map layers"></div>
-            <p class="status-meta">Screening overlays, not site truth.</p>
+            <p class="status-meta">Optional evidence layers.</p>
           </details>
           <div class="site-map-shell">
             <div class="site-map" id="siteMap" role="application" aria-label="Site location map"></div>
             <div class="site-map-empty" id="siteMapEmpty" hidden>Map unavailable. Apply latitude and longitude below.</div>
           </div>
-          <p class="status-meta" id="siteMapStatus">Click the map to set location.</p>
+          <p class="status-meta" id="siteMapStatus">Click map to set site.</p>
         </div>
         <details class="more-section" id="siteLocationDetails">
           <summary>Coordinates</summary>
@@ -128,9 +123,9 @@
             <label>Battery kWh <input id="siteBatteryKWh" type="number" min="0" step="1" value="0"></label>
             <button type="button" id="applyCoordinates">Apply location</button>
           </div>
-          <p class="status-meta" id="siteFetchStatus">PVGIS solar from coordinates. Other supplies stay unverified until assigned.</p>
+          <p class="status-meta" id="siteFetchStatus">Applies PVGIS solar for these coordinates.</p>
         </details>
-        <p class="status-meta" id="siteNotes"></p>
+        <details class="more-section" id="siteMethodDetails"><summary>Method &amp; sources</summary><p class="status-meta" id="siteNotes"></p><p class="literature-links" id="siteEvidence"></p></details>
         <details class="more-section" id="siteMeteoDetails">
           <summary>Meteo</summary>
           <div id="siteMeteo" class="site-truth"></div>
@@ -144,8 +139,7 @@
           <div id="siteRights" class="site-rights"></div>
         </details>
         <p class="status-meta" id="siteHorizon"></p>
-        <dl class="strip-metrics" id="siteResources"></dl>
-        <p class="literature-links" id="siteEvidence"></p>
+        <details class="more-section" id="siteResourcesDetails"><summary>Resource budgets</summary><dl class="strip-metrics" id="siteResources"></dl></details>
       </section>
     </section>
 
@@ -155,8 +149,8 @@
           <div class="sidebar-heading">
             <span class="eyebrow">Build</span>
             <h2>Process blocks</h2>
-            <p>Click a block, then connect ports.</p>
           </div>
+          <label class="palette-search"><input id="paletteSearch" type="search" placeholder="Search blocks" aria-label="Search process blocks"></label>
           <div class="building-palette" id="buildingPalette"></div>
           <h3 class="palette-heading">Sources and destinations</h3>
           <div class="building-palette" id="utilityPalette"></div>
@@ -227,12 +221,13 @@
             <div class="flowsheet-canvas empty" id="flowsheetCanvas">
               <div class="empty-canvas">
                 <span class="eyebrow">Blank factory</span>
-                <strong>Recommended path</strong>
-                <p>1) Set site coords or load a demo · 2) Add sources, process blocks, and sinks · 3) Connect ports · 4) Size to target · 5) Read economics for co-product cashflow. Shift-drag or middle-drag to pan; use Fit after loading a demo.</p>
+                <strong>Start here</strong>
+                <p>Load a scenario on Overview, or add blocks here and connect ports. Shift-drag to pan · Fit to frame.</p>
               </div>
             </div>
           </div>
           <div class="warning-strip" id="warnings" hidden></div>
+          <button type="button" class="exit-focus" id="exitFocus" hidden>Exit focus</button>
         </section>
 
         <aside class="flowsheet-sidebar inspector-sidebar" aria-label="Selected node details">
@@ -256,7 +251,7 @@
         <section class="tool-panel economics-panel" aria-live="polite">
           <div class="tool-panel-head">
             <div>
-              <span class="eyebrow">Economics</span>
+              <span class="eyebrow">Current plant</span>
               <h3>This factory</h3>
             </div>
             <div class="project-assumptions">
@@ -273,7 +268,7 @@
         <section class="tool-panel network-panel is-empty" id="networkPanel">
           <div class="tool-panel-head">
             <div>
-              <span class="eyebrow">Network</span>
+              <span class="eyebrow">Network rollup</span>
               <h3 id="networkTitle">No plants</h3>
             </div>
             <div class="network-actions">
@@ -281,7 +276,7 @@
               <button type="button" id="clearNetwork">Clear network</button>
             </div>
           </div>
-          <p class="status-meta" id="networkStatus">Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.</p>
+          <p class="status-meta" id="networkStatus">Separate from the plant above — multi-plant materials, land, freight, cash.</p>
           <details class="more-section network-detail">
             <summary>Network detail</summary>
             <div id="networkBody" class="network-body" hidden>

@@ -307,8 +307,10 @@ test('fuels plus minerals network rolls up two sited plants', () => {
 test('product chrome uses Network and never Empire', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
+  const js = fs.readFileSync(path.join(__dirname, '..', 'js', 'flowsheet-app.js'), 'utf8');
   assert.doesNotMatch(html, /empire/i);
   assert.doesNotMatch(css, /empire/i);
+  assert.doesNotMatch(js, /LEGACY_EMPIRE|\bEmpire\b/);
   assert.match(html, /Network/);
   assert.match(css, /\.network-panel/);
 });

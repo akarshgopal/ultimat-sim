@@ -10,7 +10,7 @@
   const AUTOSAVE_KEY = 'molecular-foundry.autosave.v1';
   const SAVES_KEY = 'molecular-foundry.saves.v1';
   const NETWORK_KEY = 'molecular-foundry.network.v1';
-  const LEGACY_EMPIRE_KEY = 'molecular-foundry.empire.v1';
+  const LEGACY_NETWORK_KEY = 'molecular-foundry.empire.v1';
   const NODE_WIDTH = 220;
   const COLUMN_GAP = 120;
   let selectedNodeId = null;
@@ -1660,14 +1660,14 @@
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
   };
   refreshSaveOptions();
-  const savedNetwork = readJson(NETWORK_KEY) || readJson(LEGACY_EMPIRE_KEY);
+  const savedNetwork = readJson(NETWORK_KEY) || readJson(LEGACY_NETWORK_KEY);
   if (savedNetwork?.plants) network = { plants: savedNetwork.plants, corridors: savedNetwork.corridors || [] };
   if (network.plants.length) {
     refreshNetwork();
-    if (storage && !readJson(NETWORK_KEY) && readJson(LEGACY_EMPIRE_KEY)) {
+    if (storage && !readJson(NETWORK_KEY) && readJson(LEGACY_NETWORK_KEY)) {
       try {
         storage.setItem(NETWORK_KEY, JSON.stringify({ plants: network.plants, corridors: network.corridors }));
-        storage.removeItem(LEGACY_EMPIRE_KEY);
+        storage.removeItem(LEGACY_NETWORK_KEY);
       } catch { /* ignore */ }
     }
   }

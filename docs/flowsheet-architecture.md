@@ -79,7 +79,7 @@ Edges do not repeat their stream type or disposition. Those are determined by th
 
 When `site` is present, every source block must name a `siteResource`. Resource presence is not access: an unverified grid or freshwater budget is explicit zero, not unlimited supply and not a silent free input. Two source blocks that share a resource draw from the same remaining quantity; the solver clamps rather than duplicating the budget. Composition, phase, temperature, and consumable identity on a source must match the named resource.
 
-`site.meteo`, `site.assay`, and `site.rights` are first-class site truth. They do not replace `resources` streams. `dailyPVKWhPerKWp` stays on the site root for sizing; `meteo` carries the same daily value plus the monthly series, a cite, and a quality class. Assay is a composition summary with quality and evidence URLs, not a second mol vector. Each right is `authorized`, `assumed`, or `unverified`. `solveOperation` and `sizeToTarget` warn on unverified rights; they do not invent authorized supply.
+`site.meteo`, `site.assay`, and `site.rights` are first-class site truth. They do not replace `resources` streams. `dailyPVKWhPerKWp` stays on the site root for sizing; `meteo` carries the same daily value plus the monthly series, a cite, and a quality class. Assay is a composition summary with quality and evidence URLs, not a second mol vector. Each right is `authorized`, `assumed`, or `unverified`. `solveOperation`, `sizeToTarget`, and `sizeToProduct` warn on unverified rights; they do not invent authorized supply.
 
 The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield plus a 2023 hourly typical day (`data/pvgis-almeria-hourly.js`), global 35 g/kg seawater as a cited NaCl proxy assay, assumed seawater intake, and unverified grid/freshwater/brine/salt rights. The Dead Sea hub (`cases/network.js`) cites the same PVGIS family, uses a frozen open-water ion assay (`data/dead-sea-brine.json`), and marks freshwater and salt purchase as assumed. A literature assay is not a mineral concession.
 
@@ -194,7 +194,8 @@ There is no `demand | resource | fixed` sizing mode. A unit can follow downstrea
 
 ```js
 solveOperation(caseDefinition)
-sizeToTarget(caseDefinition, target) // outer sizing loop; see engine/size.js
+sizeToProduct({ product, rate, definition }) // outer sizing loop; see engine/size.js
+sizeToTarget(caseDefinition, target)          // CH4 wrapper around sizeToProduct
 optimizeEconomics(caseDefinition)    // later still
 ```
 
@@ -364,7 +365,7 @@ engine/
   heat.js        # post-solve temperature-feasible heat cascade
   units.js       # initial catalog and physics
   footprint.js   # location-aware solar land and process pads
-  size.js        # outer methane sizing loop (capacities + solarKWp)
+  size.js        # outer product sizing loop (CH4, H2, lithium, salt)
   uncertainty.js # quality tags and screening-precision formatters
 cases/
   dac.js         # Stage 3 DAC acceptance fixture
@@ -386,21 +387,25 @@ Cases can remain JavaScript fixtures until serialization or a shareable URL requ
 Installed capacity remains an input to `solveOperation`. `engine/size.js` is the outer design loop that chooses those capacities from a product target:
 
 ```text
-CH4 kg/day
-  -> stoich H2, CO2, electrolysis water, desal feed
-  -> electricity and heat duties
-  -> solarKWp = electricity / dailyPVKWhPerKWp
-  -> source budgets (air, seawater, heat, consumables, PV kWh)
+product kg/day (CH4 | H2 | lithium | salt)
+  -> strategy estimates converter duties and source budgets
+  -> solarKWp = electricity / dailyPVKWhPerKWp when the site has a PV yield
   -> solveOperation
-  -> recycle water and actual converter duties
+  -> recycle water (CH4) or mineral yield (lithium/salt)
   -> repeat until residual < tolerance or maxIterations
 ```
 
-`sizeToTarget(caseOrBuilder, targetKgCH4PerDay, { caps, maxIterations, tolerance })` clones the case, never mutates the caller, and returns `{ definition, solved, iterations, residual, consistency, converged, history }`. Each history step records physical duties (`ch4`, `h2`, `co2`, `swro`, `electricityKWh`, `solarKWp`, `landHa`, …). Prices, CAPEX, OPEX, NPV, and IRR are not convergence signals; land hectares are a physical consequence from `engine/footprint.js`. Optional `caps` (`sabatier`, `electrolyzer`, `dac`, `swro`, `solarKWp`) clamp the design and set `operation.boundaryLimitedBy` to `sizing cap` when they bind.
+`sizeToProduct({ product, rate, definition|caseOrBuilder, caps, maxIterations, tolerance })` clones the case, never mutates the caller, and returns `{ product, rate, target, definition, solved, iterations, residual, consistency, converged, history }`. Product aliases: `methane`/`ch4` → CH4, `h2` → H2, `Li`/`LiCl` → lithium. Each history step records physical duties only (`ch4`, `h2`, `co2`, `swro`, `brineKg`, `electricityKWh`, `solarKWp`, `landHa`, …). Prices, CAPEX, OPEX, NPV, and IRR are not convergence signals; land hectares are a physical consequence from `engine/footprint.js`. Optional `caps` (`sabatier`, `electrolyzer`, `dac`, `swro`, `solarKWp`, `minerals`) clamp the design and set `operation.boundaryLimitedBy` to `sizing cap` when they bind.
 
-`sizeCoastalToMethane(target, month, opts)` runs that loop on `createCoastalCase(month)`. The one-shot coastal fixture keeps `solarKWp = 37.5` and still clamps methane from the electricity budget. The Foundry site panel **Size to target** control calls the outer loop and shows iteration count and residual.
+Strategies:
 
-The sizing residual is the max of demand miss (`|achieved CH4 − target| / max(1, target)`) and consistency (setpoint vs solved H2 / DAC / SWRO / electricity). The loop stops when the plant is internally consistent, even if a cap prevented the requested demand.
+- **CH4**: existing Sabatier path plus recycle water. `achieved` is Sabatier activity. `sizeToTarget` is this wrapper.
+- **H2**: electrolyzer-led water, desal, and PV. If Sabatier or DAC are present their capacity and setpoint go to 0 so H2 is the product. `achieved` is electrolyzer activity.
+- **lithium / salt**: scale `brine-minerals`, the brine source, and power so the sink inlet mass meets the rate (abundance / Dead Sea). Throws if the minerals block or sink is missing.
+
+`sizeCoastalToMethane(target, month, opts)` runs the CH4 loop on `createCoastalCase(month)`. The one-shot coastal fixture keeps `solarKWp = 37.5` and still clamps methane from the electricity budget. The Foundry site panel **Size to target** control sizes the currently loaded plant via `sizeToProduct` and shows product, iteration count, and residual.
+
+The sizing residual is the max of demand miss (`|achieved − target| / max(1, target)`) and consistency (setpoint vs solved converters / electricity). The loop stops when the plant is internally consistent, even if a cap prevented the requested demand.
 
 This loop sizes a representative day. `solveHorizon` still dispatches that day hourly, so night hours produce nothing unless a battery is assumed.
 

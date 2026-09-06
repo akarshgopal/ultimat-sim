@@ -33,4 +33,17 @@ test('flowsheet engine runs through browser globals', () => {
   assert.ok(Math.abs(sized.achieved - 8) < 1e-6);
   assert.ok(sized.iterations >= 1);
   assert.match(String(sized.residual), /./);
+  assert.equal(typeof context.FlowsheetSize.sizeToProduct, 'function');
+  const hydrogen = context.FlowsheetSize.sizeToProduct({
+    product: 'H2',
+    rate: 6,
+    definition: context.CoastalCase.createCoastalCase(0),
+  });
+  assert.ok(Math.abs(hydrogen.achieved - 6) < 1e-6);
+  const lithium = context.FlowsheetSize.sizeToProduct({
+    product: 'lithium',
+    rate: 1,
+    caseOrBuilder: context.AbundanceCase.createAbundanceCase,
+  });
+  assert.ok(Math.abs(lithium.achieved - 1) < 1e-6);
 });

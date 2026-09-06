@@ -308,10 +308,29 @@ test('size to target resizes coastal methane and reports iterations and residual
   const sized = app.sizeCoastalToMethane(15, 12);
   assert.ok(app.site.solarKWp > before);
   assert.ok(Math.abs(sized.achieved - 15) < 1e-6);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /CH₄/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /iteration/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /residual/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /unverified site right/);
   assert.equal(app.sizing.iterations, sized.iterations);
+});
+
+test('size to target uses the loaded plant and selected product', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  assert.throws(() => app.sizeToProduct('CH4', 5), /loaded flowsheet/);
+  app.loadAbundanceHub();
+  const sized = app.sizeToProduct('lithium', 2);
+  assert.ok(Math.abs(sized.achieved - 2) < 1e-6);
+  assert.equal(sized.product, 'lithium');
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /lithium/);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /iteration/);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /residual/);
+  assert.equal(app.sizing.product, 'lithium');
+  app.loadCoastalMethane(0);
+  const hydrogen = app.sizeToProduct('H2', 8);
+  assert.ok(Math.abs(hydrogen.achieved - 8) < 1e-6);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /H₂/);
 });
 
 test('site panel reports location-aware footprint instead of 1.6 ha/MWp', () => {

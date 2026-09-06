@@ -1,11 +1,11 @@
-(function exposeEmpireCase(root, factory) {
+(function exposeNetworkCase(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('./coastal') : root.CoastalCase,
     typeof require === 'function' ? require('./abundance') : root.AbundanceCase,
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.EmpireCase = api;
+  else root.NetworkCase = api;
 })(globalThis, (coastal, abundance, model) => {
 const { streamMassKg } = model;
 const DEAD_SEA_PV = 5.4;
@@ -66,7 +66,7 @@ function siteDeadSeaAbundance() {
   return definition;
 }
 
-function createFuelsAndMineralsEmpire(month = 6) {
+function createFuelsAndMineralsNetwork(month = 6) {
   return {
     plants: [
       { id: 'almeria-fuels', name: 'Almería solar methane', definition: coastal.createCoastalCase(month) },
@@ -76,5 +76,5 @@ function createFuelsAndMineralsEmpire(month = 6) {
   };
 }
 
-return { DEAD_SEA_PV, siteDeadSeaAbundance, createFuelsAndMineralsEmpire };
+return { DEAD_SEA_PV, siteDeadSeaAbundance, createFuelsAndMineralsNetwork };
 });

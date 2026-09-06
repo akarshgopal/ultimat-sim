@@ -1,11 +1,11 @@
-(function exposeEmpire(root, factory) {
+(function exposeNetwork(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('./model') : root.FlowsheetModel,
     typeof require === 'function' ? require('./solve') : root.FlowsheetSolver,
     typeof require === 'function' ? require('./economics') : root.FlowsheetEconomics
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.FlowsheetEmpire = api;
+  else root.FlowsheetNetwork = api;
 })(globalThis, (model, solver, economics) => {
 const { scaleStream, streamMassKg } = model;
 const { evaluateEconomics } = economics;
@@ -13,6 +13,10 @@ const { evaluateEconomics } = economics;
 const SEA_USD_PER_T_KM = 0.012;
 const ROAD_USD_PER_T_KM = 0.08;
 const PV_HA_PER_MWP = 1.6;
+
+function cloneDefinition(definition) {
+  return JSON.parse(JSON.stringify(definition));
+}
 
 function distanceKm(from, to) {
   if (![from?.latitude, from?.longitude, to?.latitude, to?.longitude].every(Number.isFinite)) return null;
@@ -82,6 +86,7 @@ function applyCorridor(corridor, plants) {
   const kgPerDay = streamMassKg(received);
   const deliveredKgPerDay = kgPerDay * (1 - loss);
   const periodDays = from.economics.periodDays || 365;
+  // Freight is USD/year: (t/day) × periodDays × km × ($/t-km).
   const annualFreight = deliveredKgPerDay / 1000 * periodDays * km * rate;
   const destination = to.definition.graph.nodes.find(node => node.id === corridor.to.node);
   if (!destination || destination.economics?.unitCost == null) {
@@ -102,6 +107,8 @@ function applyCorridor(corridor, plants) {
   Object.assign(to, { definition: resolved.definition, solved: resolved.solved, economics: resolved.economics });
   return {
     id: corridor.id || `${corridor.from.plant}:${corridor.from.node}->${corridor.to.plant}:${corridor.to.node}`,
+    from: { plant: corridor.from.plant, node: corridor.from.node },
+    to: { plant: corridor.to.plant, node: corridor.to.node },
     km,
     mode: corridor.mode || 'sea',
     loss,
@@ -113,18 +120,41 @@ function applyCorridor(corridor, plants) {
   };
 }
 
-function evaluateEmpire(empire = {}) {
-  const plants = (empire.plants || []).map(plant => {
-    const solved = plant.solved && plant.economics ? plant : solvePlant(plant.definition);
-    return { ...plant, ...solved };
+function evaluateNetwork(network = {}) {
+  // Deep-clone definitions up front so corridor scaling never mutates caller input
+  // and evaluateNetwork stays idempotent across repeated calls on the same object.
+  const plants = (network.plants || []).map(plant => {
+    const definition = cloneDefinition(plant.definition);
+    const resolved = solvePlant(definition);
+    return {
+      id: plant.id,
+      name: plant.name,
+      definition: resolved.definition,
+      solved: resolved.solved,
+      economics: resolved.economics,
+    };
   });
+
+  // Key transferred origin sales by plantId:nodeId (corridor transfers are not market sales).
+  const transferred = new Set(
+    (network.corridors || []).map(corridor => `${corridor.from.plant}:${corridor.from.node}`)
+  );
+
   const corridors = [];
-  for (const corridor of empire.corridors || []) corridors.push(applyCorridor(corridor, plants));
+  for (const corridor of network.corridors || []) corridors.push(applyCorridor(corridor, plants));
 
   const products = plants.flatMap(plantProducts);
-  const transferred = new Set(corridors.map(corridor => `${corridor.id}`));
   const slate = {};
+  let transferredOriginRevenue = 0;
   for (const product of products) {
+    const key = `${product.plantId}:${product.nodeId}`;
+    if (transferred.has(key)) {
+      // Rule: a corridor haul is an internal transfer, not an external market sale.
+      // Exclude the origin sale from the network product slate and from network annualRevenue.
+      // Destination economics after re-solve count normally; corridor freight stays in OPEX.
+      transferredOriginRevenue += product.annualAmount * product.unitPrice;
+      continue;
+    }
     if (!product.tonnesPerYear) continue;
     slate[product.substance] = (slate[product.substance] || 0) + product.tonnesPerYear;
   }
@@ -132,7 +162,8 @@ function evaluateEmpire(empire = {}) {
   const landHa = plants.reduce((sum, plant) => sum + pvLandHa(plant.definition.site?.solarKWp), 0);
   const freight = corridors.reduce((sum, corridor) => sum + corridor.annualFreight, 0);
   const installedCapex = plants.reduce((sum, plant) => sum + plant.economics.installedCapex, 0);
-  const annualRevenue = plants.reduce((sum, plant) => sum + plant.economics.annualRevenue, 0);
+  const plantRevenue = plants.reduce((sum, plant) => sum + plant.economics.annualRevenue, 0);
+  const annualRevenue = plantRevenue - transferredOriginRevenue;
   const annualOperatingCost = plants.reduce((sum, plant) => sum + plant.economics.annualOperatingCost, 0) + freight;
   const annualNetCash = annualRevenue - annualOperatingCost;
   const projectLifeYears = Math.max(1, ...plants.map(plant => plant.economics.projectLifeYears || 20));
@@ -149,6 +180,7 @@ function evaluateEmpire(empire = {}) {
     landHa,
     freight,
     transferred,
+    transferredOriginRevenue,
     installedCapex,
     annualRevenue,
     annualOperatingCost,
@@ -167,6 +199,6 @@ return {
   pvLandHa,
   solvePlant,
   plantProducts,
-  evaluateEmpire,
+  evaluateNetwork,
 };
 });

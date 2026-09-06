@@ -46,8 +46,24 @@
 .project-assumptions { display: flex; gap: 10px; }
 .project-assumptions label { color: var(--text-muted); font-size: 0.75rem; }
 .project-assumptions input { width: 72px; margin-left: 4px; }
-.economics-panel { margin: 0 0 12px; }
-.empire-panel { margin: 0 0 12px; }
+.economics-panel,
+.network-panel,
+.site-panel { margin: 0; min-width: 0; }
+.network-plants { display: grid; gap: 8px; margin: 10px 0; }
+.network-plant {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+.network-plant button { margin-left: 6px; }
+.network-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.network-actions button { white-space: nowrap; }
+/* Temporary aliases during Empire → Network rename */
+.empire-panel { margin: 0; min-width: 0; }
 .empire-plants { display: grid; gap: 8px; margin: 10px 0; }
 .empire-plant {
   display: flex;
@@ -59,7 +75,6 @@
   background: var(--bg-surface);
 }
 .empire-plant button { margin-left: 6px; }
-.site-panel { margin: 0 0 12px; }
 .site-panel .comparison-metrics { grid-template-columns: repeat(4, minmax(120px, 1fr)); }
 .site-panel .comparison-metrics dt small {
   display: block;
@@ -228,46 +243,88 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 18px;
+  gap: 16px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 
-.stage-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.stage-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: min(720px, 100%);
+}
 .snapshot-controls { display: grid; gap: 6px; }
 .snapshot-controls select { min-width: 120px; }
 .stage-actions button,
-.save-menu summary {
+.save-menu summary,
+.demo-menu summary {
   padding: 7px 10px;
   color: var(--text-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
   cursor: pointer;
+  white-space: nowrap;
 }
 .stage-actions .primary-action { color: var(--electric); border-color: rgba(95, 127, 184, 0.65); }
 .stage-actions button:hover,
 .stage-actions button:focus-visible,
 .save-menu summary:hover,
-.save-menu summary:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
-.save-menu { position: relative; }
-.save-menu summary { list-style: none; }
-.save-menu summary::-webkit-details-marker { display: none; }
-.save-menu[open] .snapshot-controls {
+.save-menu summary:focus-visible,
+.demo-menu summary:hover,
+.demo-menu summary:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
+.save-menu,
+.demo-menu { position: relative; }
+.save-menu summary,
+.demo-menu summary { list-style: none; }
+.save-menu summary::-webkit-details-marker,
+.demo-menu summary::-webkit-details-marker { display: none; }
+.save-menu[open] .snapshot-controls,
+.demo-menu[open] .demo-menu-actions {
   position: absolute;
   z-index: 5;
   top: calc(100% + 8px);
   right: 0;
-  width: 190px;
+  width: 220px;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-secondary);
   box-shadow: var(--shadow);
 }
+.demo-menu-actions {
+  display: grid;
+  gap: 6px;
+}
+.demo-menu-actions button {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+}
 
+.tool-panels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+.tool-panels .comparison-panel {
+  margin-bottom: 0;
+  height: 100%;
+}
+.tool-panels .comparison-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+.tool-panels .site-panel .comparison-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+}
 .flowsheet-canvas {
   min-width: 980px;
-  min-height: 620px;
+  min-height: min(72vh, 820px);
   border: 1px solid var(--border);
   border-radius: 14px;
   background: rgba(19, 23, 27, 0.92);
@@ -343,13 +400,19 @@
 
 .comparison-panel {
   margin-bottom: 12px;
-  padding: 16px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-secondary);
 }
-.comparison-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.comparison-panel h3 { margin-top: 2px; font-size: 1rem; }
+.comparison-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.comparison-panel h3 { margin-top: 2px; font-size: 0.98rem; line-height: 1.3; }
 .comparison-panel h4 { margin: 18px 0 8px; color: var(--text-secondary); font-size: 0.8rem; }
 .comparison-metrics { display: grid; grid-template-columns: repeat(3, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 0; }
 .comparison-metrics div,
@@ -440,9 +503,14 @@
 .flowsheet-page.canvas-focus .flowsheet-sidebar { display: none; }
 .flowsheet-page.canvas-focus .flowsheet-stage { padding: 16px; }
 
+@media (max-width: 1400px) {
+  .tool-panels { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 1050px) {
   .flowsheet-workspace { grid-template-columns: 280px minmax(420px, 1fr); overflow: auto; }
   .inspector-sidebar { grid-column: 1 / -1; border: 1px solid var(--border); }
+  .tool-panels { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {

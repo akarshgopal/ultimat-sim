@@ -9,7 +9,8 @@
   const storage = (() => { try { return window.localStorage; } catch { return null; } })();
   const AUTOSAVE_KEY = 'molecular-foundry.autosave.v1';
   const SAVES_KEY = 'molecular-foundry.saves.v1';
-  const EMPIRE_KEY = 'molecular-foundry.empire.v1';
+  const NETWORK_KEY = 'molecular-foundry.network.v1';
+  const LEGACY_EMPIRE_KEY = 'molecular-foundry.empire.v1';
   const NODE_WIDTH = 220;
   const COLUMN_GAP = 120;
   let selectedNodeId = null;
@@ -19,8 +20,8 @@
   let baseline = null;
   let canvasZoom = 1;
   let site = null;
-  let empire = { plants: [], corridors: [] };
-  let empireResult = null;
+  let network = { plants: [], corridors: [] };
+  let networkResult = null;
   let solveError = '';
   let routeNote = '';
   let dragging = null;
@@ -365,15 +366,15 @@
   document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
   document.getElementById('loadCoastalMethane').addEventListener('click', () => loadCoastalMethane(0));
   document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
-  document.getElementById('loadDemoEmpire').addEventListener('click', loadDemoEmpire);
-  document.getElementById('addPlantToEmpire').addEventListener('click', () => {
-    const name = window.prompt('Name this plant in the empire:')?.trim();
+  document.getElementById('loadDemoNetwork').addEventListener('click', loadDemoNetwork);
+  document.getElementById('addPlantToNetwork').addEventListener('click', () => {
+    const name = window.prompt('Name this plant in the network:')?.trim();
     if (name) addCurrentPlant(name);
   });
-  document.getElementById('clearEmpire').addEventListener('click', clearEmpire);
-  document.getElementById('empirePlants').addEventListener('click', event => {
+  document.getElementById('clearNetwork').addEventListener('click', clearNetwork);
+  document.getElementById('networkPlants').addEventListener('click', event => {
     const id = event.target.closest('[data-open-plant]')?.dataset.openPlant;
-    if (id) openEmpirePlant(id);
+    if (id) openNetworkPlant(id);
   });
   document.getElementById('siteMonth').addEventListener('change', event => {
     if (!site) return;
@@ -686,56 +687,56 @@
   }
 
   function addCurrentPlant(name) {
-    empire.plants.push(plantSnapshot(name, {
+    network.plants.push(plantSnapshot(name, {
       graph: { nodes: graph.nodes, edges: graph.edges },
       operation: { setpoints },
       site,
       economics: projectEconomics,
     }));
-    refreshEmpire();
+    refreshNetwork();
     return true;
   }
 
-  function clearEmpire() {
-    empire = { plants: [], corridors: [] };
-    empireResult = null;
-    persistEmpire();
-    renderEmpire();
+  function clearNetwork() {
+    network = { plants: [], corridors: [] };
+    networkResult = null;
+    persistNetwork();
+    renderNetwork();
   }
 
-  function loadDemoEmpire() {
-    empire = clone(EmpireCase.createFuelsAndMineralsEmpire(6));
-    refreshEmpire();
-    const first = empire.plants[0];
-    if (first) openEmpirePlant(first.id);
+  function loadDemoNetwork() {
+    network = clone(NetworkCase.createFuelsAndMineralsNetwork(6));
+    refreshNetwork();
+    const first = network.plants[0];
+    if (first) openNetworkPlant(first.id);
   }
 
-  function openEmpirePlant(id) {
-    const plant = empire.plants.find(item => item.id === id);
+  function openNetworkPlant(id) {
+    const plant = network.plants.find(item => item.id === id);
     if (!plant) return false;
     loadCase(plant.definition, plant.definition.graph.nodes.find(node => node.unit === 'sabatier' || node.unit === 'ammonia')?.id);
     return true;
   }
 
-  function refreshEmpire() {
+  function refreshNetwork() {
     try {
-      empireResult = FlowsheetEmpire.evaluateEmpire(empire);
-      empire.plants = empireResult.plants.map(plant => ({
+      networkResult = FlowsheetNetwork.evaluateNetwork(network);
+      network.plants = networkResult.plants.map(plant => ({
         id: plant.id,
         name: plant.name,
         definition: plant.definition,
       }));
     } catch (error) {
-      empireResult = null;
+      networkResult = null;
       routeNote = error.message;
     }
-    persistEmpire();
-    renderEmpire();
+    persistNetwork();
+    renderNetwork();
   }
 
-  function persistEmpire() {
+  function persistNetwork() {
     if (!storage) return;
-    try { storage.setItem(EMPIRE_KEY, JSON.stringify({ plants: empire.plants, corridors: empire.corridors })); } catch { /* ignore */ }
+    try { storage.setItem(NETWORK_KEY, JSON.stringify({ plants: network.plants, corridors: network.corridors })); } catch { /* ignore */ }
   }
 
   function loadCase(definition, selection) {
@@ -1286,7 +1287,7 @@
   function node(id) { return graph.nodes.find(candidate => candidate.id === id); }
   function portName(port) { return portNames[port] || port.replace(/([a-z])([A-Z])/g, '$1 $2'); }
 
-  function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderEmpire(); }
+  function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); }
 
   function renderGraph() {
     renderCanvasZoom();
@@ -1388,7 +1389,7 @@
       monthLabel.hidden = true;
     }
     const hours = result?.horizon?.hours;
-    const land = site?.solarKWp && FlowsheetEmpire ? FlowsheetEmpire.pvLandHa(site.solarKWp) : 0;
+    const land = site?.solarKWp && FlowsheetNetwork ? FlowsheetNetwork.pvLandHa(site.solarKWp) : 0;
     document.getElementById('siteHorizon').textContent = [
       hours ? `${hours.filter(entry => entry.pv > 0).length} daylight hours · ${hours.filter(entry => entry.pv === 0).length} night hours · peak ${formatNumber(Math.max(...hours.map(entry => entry.pv)))} kWh PV · battery ${formatNumber(site?.storage?.batteryKWh || 0)} kWh` : '',
       land ? `${formatNumber(land)} ha PV land at 1.6 ha/MWp screening` : '',
@@ -1402,39 +1403,39 @@
     )).join(' · ');
   }
 
-  function renderEmpire() {
-    const plants = document.getElementById('empirePlants');
-    const status = document.getElementById('empireStatus');
-    const metrics = document.getElementById('empireMetrics');
-    const products = document.getElementById('empireProducts');
-    const corridors = document.getElementById('empireCorridors');
-    if (!empire.plants.length) {
-      status.textContent = 'Add sited plants. Each keeps its own physics solve; the empire rolls up materials, land, freight, and cash.';
+  function renderNetwork() {
+    const plants = document.getElementById('networkPlants');
+    const status = document.getElementById('networkStatus');
+    const metrics = document.getElementById('networkMetrics');
+    const products = document.getElementById('networkProducts');
+    const corridors = document.getElementById('networkCorridors');
+    if (!network.plants.length) {
+      status.textContent = 'Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.';
       plants.innerHTML = '';
       metrics.innerHTML = '';
       products.innerHTML = '';
       corridors.textContent = '';
       return;
     }
-    if (!empireResult) {
-      status.textContent = 'Empire solve failed.';
+    if (!networkResult) {
+      status.textContent = 'Network solve failed.';
       return;
     }
-    status.textContent = `${empireResult.plants.length} plants · ${formatNumber(empireResult.landHa)} ha PV land · freight ${formatMoney(empireResult.freight)}/year`;
-    plants.innerHTML = empireResult.plants.map(plant => {
+    status.textContent = `${networkResult.plants.length} plants · ${formatNumber(networkResult.landHa)} ha PV land · freight ${formatMoney(networkResult.freight)}/year`;
+    plants.innerHTML = networkResult.plants.map(plant => {
       const siteName = plant.definition.site?.name || 'Unspecified site';
-      return `<div class="empire-plant"><div><strong>${plant.name}</strong><small class="status-meta">${siteName}</small></div><div><button type="button" data-open-plant="${plant.id}">Open</button></div></div>`;
+      return `<div class="network-plant"><div><strong>${plant.name}</strong><small class="status-meta">${siteName}</small></div><div><button type="button" data-open-plant="${plant.id}">Open</button></div></div>`;
     }).join('');
     metrics.innerHTML = metricRows([
-      ['Empire CAPEX', formatMoney(empireResult.installedCapex)],
-      ['Annual revenue', formatMoney(empireResult.annualRevenue)],
-      ['Annual cost', formatMoney(empireResult.annualOperatingCost)],
-      ['Annual net cash', formatMoney(empireResult.annualNetCash)],
-      ['Empire NPV', formatMoney(empireResult.npv)],
+      ['Network CAPEX', formatMoney(networkResult.installedCapex)],
+      ['Annual revenue', formatMoney(networkResult.annualRevenue)],
+      ['Annual cost', formatMoney(networkResult.annualOperatingCost)],
+      ['Annual net cash', formatMoney(networkResult.annualNetCash)],
+      ['Network NPV', formatMoney(networkResult.npv)],
     ]);
-    products.innerHTML = metricRows(Object.entries(empireResult.slate).sort((left, right) => right[1] - left[1]).map(([substance, tonnes]) => [substance, `${formatNumber(tonnes)} t/year`]));
-    corridors.textContent = empireResult.corridors.length
-      ? empireResult.corridors.map(corridor => `${corridor.substance} ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatMoney(corridor.annualFreight)}/year`).join(' · ')
+    products.innerHTML = metricRows(Object.entries(networkResult.slate).sort((left, right) => right[1] - left[1]).map(([substance, tonnes]) => [substance, `${formatNumber(tonnes)} t/year`]));
+    corridors.textContent = networkResult.corridors.length
+      ? networkResult.corridors.map(corridor => `${corridor.substance} ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatMoney(corridor.annualFreight)}/year`).join(' · ')
       : 'No haul corridors yet. Plants trade with markets, not each other, until you add a corridor.';
   }
 
@@ -1626,17 +1627,25 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, loadDemoEmpire,
-    addCurrentPlant, openEmpirePlant, clearEmpire, replaceUnit, bindLocation,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, loadDemoNetwork,
+    addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation,
     saveNamed, loadNamed, captureBaseline, clearBaseline,
     solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },
-    get economics() { return currentEconomics; }, get site() { return site; }, get empire() { return empireResult; },
+    get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
   };
   refreshSaveOptions();
-  const savedEmpire = readJson(EMPIRE_KEY);
-  if (savedEmpire?.plants) empire = { plants: savedEmpire.plants, corridors: savedEmpire.corridors || [] };
-  if (empire.plants.length) refreshEmpire();
+  const savedNetwork = readJson(NETWORK_KEY) || readJson(LEGACY_EMPIRE_KEY);
+  if (savedNetwork?.plants) network = { plants: savedNetwork.plants, corridors: savedNetwork.corridors || [] };
+  if (network.plants.length) {
+    refreshNetwork();
+    if (storage && !readJson(NETWORK_KEY) && readJson(LEGACY_EMPIRE_KEY)) {
+      try {
+        storage.setItem(NETWORK_KEY, JSON.stringify({ plants: network.plants, corridors: network.corridors }));
+        storage.removeItem(LEGACY_EMPIRE_KEY);
+      } catch { /* ignore */ }
+    }
+  }
   if (restoreSnapshot(readJson(AUTOSAVE_KEY))) solveAndRender();
   else render();
 })();

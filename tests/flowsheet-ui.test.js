@@ -26,7 +26,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/empire.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/empire.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -291,14 +291,14 @@ test('coastal DAC swap stays runnable and compares against the captured baseline
   assert.ok(app.result.nodes.sabatier.activity <= baselineMethane + 1e-6);
 });
 
-test('fuels plus minerals empire rolls up two sited plants', () => {
+test('fuels plus minerals network rolls up two sited plants', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
-  app.loadDemoEmpire();
-  assert.equal(app.empire.plants.length, 2);
-  assert.ok(app.empire.slate.CH4 > 0);
-  assert.ok(app.empire.slate.NH3 > 0);
-  assert.match(context.__elements.get('empireProducts').innerHTML, /CH4/);
+  app.loadDemoNetwork();
+  assert.equal(app.network.plants.length, 2);
+  assert.ok(app.network.slate.CH4 > 0);
+  assert.ok(app.network.slate.NH3 > 0);
+  assert.match(context.__elements.get('networkProducts').innerHTML, /CH4/);
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
 });
 

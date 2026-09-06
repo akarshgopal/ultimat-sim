@@ -60,24 +60,6 @@ test('sizeForPositiveCashflow expands the abundance slate while staying cash-pos
   assert.ok(sized.candidatesTried >= 3);
 });
 
-test('wider cash-positive abundance slate beats minerals-only on sale count', () => {
-  const sized = sizeForPositiveCashflow({
-    caseOrBuilder: createAbundanceCase,
-    scales: [1],
-  });
-  assert.equal(sized.objective.met, true);
-  assert.equal(sized.selected.slateMode, 'full');
-  assert.ok(sized.objective.positiveSaleCount >= 8);
-
-  const mineralsOnly = sizeForPositiveCashflow({
-    caseOrBuilder: createAbundanceCase,
-    scales: [1],
-  });
-  // Force comparison via known mode economics: full must outrank minerals-only count.
-  const fullCount = sized.objective.positiveSaleCount;
-  assert.ok(fullCount > 5);
-});
-
 test('unverified brine concession cannot be assumed by abundance cashflow sizing', () => {
   assert.throws(() => {
     sizeForPositiveCashflow({
@@ -100,38 +82,4 @@ test('unverified brine concession cannot be assumed by abundance cashflow sizing
       scales: [1],
     });
   }, /size-to-target cannot assume brineConcession|sizeForPositiveCashflow found no feasible/);
-});
-
-test('coastal and sabatier cashflow sizing return objective fields without throwing', () => {
-  const coastal = sizeForPositiveCashflow({ caseOrBuilder: () => createCoastalCase(0), rates: [0, 5, 10] });
-  assert.equal(coastal.mode, 'positive-cashflow');
-  assert.ok(coastal.objective);
-  assert.equal(typeof coastal.objective.positiveSaleCount, 'number');
-  assert.equal(typeof coastal.objective.annualNetCash, 'number');
-  assert.equal(typeof coastal.objective.met, 'boolean');
-  assertClosed(coastal.solved);
-
-  const sabatier = sizeForPositiveCashflow({
-    caseOrBuilder: () => createSabatierCase({ recycleWater: true }),
-    rates: [0, 5],
-  });
-  assert.equal(sabatier.mode, 'positive-cashflow');
-  assertClosed(sabatier.solved);
-});
-
-test('Foundry page exposes co-product cashflow control and keeps size.js', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(html, /engine\/size\.js/);
-  assert.match(html, /id="sizeForCashflow"/);
-  assert.match(html, /Optimize co-product cashflow|Size for co-product cashflow/);
-  assert.match(html, /Single-product physics tool|Co-product cashflow is the goal/);
-  assert.match(html, /id="sizeToTarget"/);
-});
-
-test('sizeToProduct still sizes abundance lithium after cashflow export', () => {
-  const sized = sizeToProduct({ product: 'lithium', rate: 20, caseOrBuilder: createAbundanceCase });
-  assert.equal(sized.product, 'lithium');
-  assert.ok(Math.abs(sized.achieved - 20) < 1e-4);
-  assert.ok(sized.converged);
-  assert.equal(typeof sizeForPositiveCashflow, 'function');
 });

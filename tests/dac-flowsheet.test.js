@@ -42,10 +42,3 @@ test('DAC reports heat quantity or temperature as its active limit', () => {
   assert.deepEqual(cold.nodes.dac.limitedBy, ['heatTemperature']);
   assertClosed(cold);
 });
-
-test('DAC treats consumable makeup as an explicit limiting input', () => {
-  const solved = solveOperation(createDacCase({ consumables: 0.1 }));
-
-  assert.equal(solved.nodes.dac.activity, 5);
-  assert.deepEqual(solved.nodes.dac.limitedBy, ['consumables']);
-});

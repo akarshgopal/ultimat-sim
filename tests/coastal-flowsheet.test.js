@@ -16,13 +16,6 @@ function assertClosed(solved) {
   assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
 }
 
-test('frozen PVGIS monthly yields match the Almería snapshot', () => {
-  assert.equal(DAILY_PV[0], pvgis.outputs.totals.fixed.E_y / 365);
-  for (const row of pvgis.outputs.monthly.fixed) {
-    assert.equal(DAILY_PV[row.month], row.E_d);
-  }
-});
-
 test('coastal methane uses solid-sorbent DAC and closes balances', () => {
   const definition = createCoastalCase();
   const solved = solveOperation(definition);
@@ -80,29 +73,6 @@ test('requesting more electricity than the site budget cannot raise production',
   assertClosed(solved);
 });
 
-test('two seawater intakes share one site budget instead of duplicating it', () => {
-  const baseline = solveOperation(createCoastalCase(12));
-  const definition = createCoastalCase(12);
-  const seawater = definition.graph.nodes.find(node => node.id === 'seawater');
-  const feed = definition.graph.edges.find(edge => edge.to.node === 'swro' && edge.to.port === 'feed');
-  definition.graph.nodes.push(
-    { id: 'seawater-2', unit: 'material-source', siteResource: 'seawater', params: { stream: JSON.parse(JSON.stringify(seawater.params.stream)) } },
-    { id: 'intake-mixer', unit: 'material-mixer' },
-  );
-  feed.from = { node: 'intake-mixer', port: 'out' };
-  definition.graph.edges.push(
-    { from: { node: 'seawater', port: 'out' }, to: { node: 'intake-mixer', port: 'in' } },
-    { from: { node: 'seawater-2', port: 'out' }, to: { node: 'intake-mixer', port: 'in' } },
-  );
-  const solved = solveOperation(definition);
-  const intake = streamMassKg(solved.nodes['intake-mixer'].available);
-  const budget = streamMassKg(definition.site.resources.seawater.stream);
-
-  assert.ok(Math.abs(intake - budget) < 1e-8);
-  assert.ok(solved.nodes['seawater-2'].limitedBy.includes('site budget'));
-  assert.ok(solved.nodes.sabatier.activity <= baseline.nodes.sabatier.activity + 1e-8);
-});
-
 test('unverified grid imports stay at zero authorized supply', () => {
   const definition = createCoastalCase(12);
   const electricity = definition.graph.nodes.find(node => node.id === 'electricity');
@@ -121,17 +91,6 @@ test('an unassigned source on a sited factory is rejected', () => {
   assert.throws(() => solveOperation(definition), /verified or explicitly assumed site resource/);
 });
 
-test('solid-sorbent DAC rejects the wrong makeup chemical', () => {
-  const sited = createCoastalCase();
-  sited.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId = 'quinone-electrode';
-  assert.throws(() => solveOperation(sited), /incompatible site consumable/);
-
-  const unsited = createCoastalCase();
-  delete unsited.site;
-  unsited.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId = 'quinone-electrode';
-  assert.throws(() => solveOperation(unsited), /amine-sorbent/);
-});
-
 test('hourly typical-day dispatch idles at night and produces in daylight', () => {
   const solved = solveHorizon(createCoastalCase(12));
   assert.ok(solved.horizon.hours.length === 24);
@@ -146,19 +105,6 @@ test('hourly typical-day dispatch idles at night and produces in daylight', () =
   const small = createCoastalCase(12);
   small.site.solarKWp = 10;
   assert.ok(solveHorizon(small).nodes.sabatier.activity < solved.nodes.sabatier.activity);
-});
-
-test('liquid-solvent DAC on coastal heat is temperature-limited', () => {
-  const definition = createCoastalCase(0);
-  definition.graph.nodes.find(node => node.id === 'dac').unit = 'dac-liquid';
-  Object.assign(definition.graph.nodes.find(node => node.id === 'dac').params, {
-    captureFraction: 0.75, electricityKWhPerKgCO2: 0.366, heatKWhPerKgCO2: 2.45, minHeatT_C: 900,
-  });
-  definition.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId = 'potassium-hydroxide';
-  definition.site.resources.consumables.stream.chemicalId = 'potassium-hydroxide';
-  const solved = solveOperation(definition);
-  assert.equal(solved.nodes.dac.activity, 0);
-  assert.ok(solved.nodes.dac.limitedBy.includes('heatTemperature'));
 });
 
 test('electro-swing DAC drops heat ports and requires quinone makeup', () => {

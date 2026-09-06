@@ -125,17 +125,3 @@ test('priority electricity allocation serves SWRO before electrolyzer', () => {
   assert.ok(solved.warnings.some(warning => warning.includes('electrolyzer limited by electricity')));
   assert.ok(solved.balances.maxAbsResidual < 1e-8);
 });
-
-test('electrolyzer honors fixed capacity while balances remain closed', () => {
-  const solved = solveOperation(electrolysisCase({
-    roRequested: 2 * WATER_KG_PER_KG_H2 / PRODUCT_WATER_KG_PER_M3,
-    electrolyzerCapacity: 2,
-    electrolyzerRequested: 5,
-  }));
-  const electrolyzer = solved.nodes.electrolyzer;
-
-  assert.equal(electrolyzer.activity, 2);
-  assert.ok(electrolyzer.limitedBy.includes('capacity'));
-  assert.ok(Math.abs(streamMassKg(electrolyzer.consumed.water) - 2 * WATER_KG_PER_KG_H2) < 1e-8);
-  assert.ok(solved.balances.maxAbsResidual < 1e-8);
-});

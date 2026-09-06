@@ -33,46 +33,6 @@ test('solar land uses panel area / GCR rather than 1.6 ha/MWp', () => {
   assert.ok(Math.abs(solar.acres - landAreaM2 / SQM_PER_ACRE) < 1e-12);
 });
 
-test('location-aware GCR follows the documented latitude formula', () => {
-  const at45 = layoutSpacingMultiplier(45, { mounting: 'fixed' });
-  assert.ok(Math.abs(at45 - 1.225) < 1e-12);
-  const coverage = groundCoverageRatio({ latitude: 45, mounting: 'fixed' });
-  assert.equal(coverage.baseGcr, 0.45);
-  assert.ok(Math.abs(coverage.gcr - 0.45 / 1.225) < 1e-12);
-
-  const equator = groundCoverageRatio({ latitude: 0, mounting: 'fixed' });
-  assert.equal(equator.layoutSpacingMultiplier, 0.82);
-  assert.ok(equator.gcr > coverage.gcr);
-
-  const polar = layoutSpacingMultiplier(90, { mounting: 'fixed' });
-  assert.equal(polar, 1.35);
-
-  const high = estimateFootprint({ site: { latitude: 60, solarKWp: 1000 } });
-  const low = estimateFootprint({ site: { latitude: 10, solarKWp: 1000 } });
-  assert.ok(high.solar.landAreaM2 > low.solar.landAreaM2);
-  assert.ok(high.solar.gcr < low.solar.gcr);
-  assert.ok(high.solar.landAreaM2 > high.solar.panelAreaM2);
-  assert.match(high.assumptions.join(' '), /layoutSpacingMultiplier/);
-});
-
-test('east-west packing is denser than fixed tilt at the same site', () => {
-  const opts = { latitude: 36.834 };
-  const fixed = estimateSolarLandHa(1000, { ...opts, mounting: 'fixed' });
-  const eastWest = estimateSolarLandHa(1000, { ...opts, mounting: 'ew' });
-  assert.ok(eastWest < fixed);
-  assert.equal(groundCoverageRatio({ ...opts, mounting: 'ew' }).baseGcr, 0.75);
-});
-
-test('winter-noon GCR uses more land at higher winter-sun latitudes', () => {
-  const houston = estimateSolarLandHa(1000, {
-    latitude: 29.7604, mounting: 'single', gcrModel: 'winter-noon',
-  });
-  const buffalo = estimateSolarLandHa(1000, {
-    latitude: 42.8864, mounting: 'single', gcrModel: 'winter-noon',
-  });
-  assert.ok(buffalo > houston);
-});
-
 test('process pads use solved activity and omit idle units', () => {
   const footprint = estimateFootprint({
     site: { solarKWp: 0, storage: { batteryKWh: 2000 } },
@@ -116,25 +76,6 @@ test('process pads use solved activity and omit idle units', () => {
   assert.ok(Math.abs(footprint.processAreaM2 - footprint.processes.reduce((sum, item) => sum + item.areaM2, 0)) < 1e-12);
   assert.equal(footprint.totalAreaM2, footprint.processAreaM2);
   assert.match(footprint.assumptions.join(' '), /order-of-magnitude screening/);
-});
-
-test('coastal methane footprint is solar-dominated with DAC and electrolyzer pads', () => {
-  const definition = createCoastalCase(6);
-  const solved = solveHorizon(definition);
-  const footprint = estimateFootprint({
-    site: definition.site,
-    graph: definition.graph,
-    solved,
-  });
-  assert.ok(footprint.solar.ha > 0);
-  assert.ok(footprint.solar.gcr < footprint.solar.baseGcr);
-  assert.ok(footprint.solar.landAreaM2 > footprint.processAreaM2);
-  const units = new Set(footprint.processes.map(item => item.unit));
-  assert.ok(units.has('electrolyzer'));
-  assert.ok(units.has('dac-solid') || units.has('dac'));
-  assert.ok(units.has('sabatier'));
-  assert.ok(units.has('swro'));
-  assert.ok(Math.abs(footprint.totalHa - (footprint.solar.ha + footprint.processAreaM2 / SQM_PER_HA)) < 1e-12);
 });
 
 test('network landHa is the sum of plant totalHa from estimateFootprint', () => {

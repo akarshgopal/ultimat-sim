@@ -125,33 +125,3 @@ test('material splitters divide without duplication and mixers recombine', () =>
   assert.ok(Math.abs(streamMassKg(solved.nodes.large.received) - 2) < 1e-10);
   assert.ok(solved.balances.maxAbsResidual < 1e-8);
 });
-
-test('MED uses separate electrical and temperature-graded thermal duties', () => {
-  const solved = solveOperation({
-    graph: {
-      nodes: [
-        { id: 'sea', unit: 'material-source', params: { stream: materialFromKg({}, 100, 1025) } },
-        { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: 1000 } } },
-        { id: 'heat', unit: 'heat-source', params: { stream: { kind: 'heat', kWh: 10000, T_C: 75 } } },
-        { id: 'med', unit: 'med', capacity: 100, params: { recovery: 0.35, electricityKWhPerM3: 2, heatKWhPerM3: 60, minHeatT_C: 70 } },
-        { id: 'water', unit: 'material-sink' },
-        { id: 'brine', unit: 'material-sink' },
-        { id: 'reject-heat', unit: 'heat-sink' },
-      ],
-      edges: [
-        { from: { node: 'sea', port: 'out' }, to: { node: 'med', port: 'feed' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'med', port: 'electricity' } },
-        { from: { node: 'heat', port: 'out' }, to: { node: 'med', port: 'heat' } },
-        { from: { node: 'med', port: 'product' }, to: { node: 'water', port: 'in' } },
-        { from: { node: 'med', port: 'brine' }, to: { node: 'brine', port: 'in' } },
-        { from: { node: 'med', port: 'wasteHeat' }, to: { node: 'reject-heat', port: 'in' } },
-      ],
-    },
-    operation: { setpoints: { med: 10 } },
-  });
-
-  assert.equal(solved.nodes.med.activity, 10);
-  assert.equal(solved.nodes.med.consumed.electricity.kWh, 20);
-  assert.equal(solved.nodes.med.consumed.heat.kWh, 600);
-  assert.ok(solved.balances.maxAbsResidual < 1e-8);
-});

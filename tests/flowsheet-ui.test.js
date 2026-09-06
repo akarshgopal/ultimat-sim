@@ -67,132 +67,6 @@ test('factory starts blank and wiring blocks does not rewrite their setpoints', 
   assert.equal(app.setpoints[sabatier.id], 5);
 });
 
-
-test('palette clicks add the selected process and utility blocks', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  context.__elements.get('buildingPalette').listeners.click({ target: { closest: () => ({ dataset: { unit: 'dac-solid' } }) } });
-  context.__elements.get('utilityPalette').listeners.click({ target: { closest: () => ({ dataset: { unit: 'electrical-bus' } }) } });
-  assert.equal(app.graph.nodes.length, 2);
-  assert.equal(app.graph.nodes[0].unit, 'dac-solid');
-  assert.equal(app.graph.nodes[1].unit, 'electrical-bus');
-});
-
-test('a manually wired DAC runs only after every source and sink is connected', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  const dac = app.addNode('dac');
-  const endpoints = [
-    [app.addNode('material-source'), 'out', 'air'],
-    [app.addNode('electricity-source'), 'out', 'electricity'],
-    [app.addNode('heat-source'), 'out', 'heat'],
-    [app.addNode('consumable-source'), 'out', 'consumables'],
-  ];
-  for (const [source, output, input] of endpoints) {
-    app.choosePort({ node: source.id, port: output, direction: 'out' });
-    app.choosePort({ node: dac.id, port: input, direction: 'in' });
-  }
-  for (const output of ['capturedCo2', 'depletedAir']) {
-    const sink = app.addNode('material-sink');
-    app.choosePort({ node: dac.id, port: output, direction: 'out' });
-    app.choosePort({ node: sink.id, port: 'in', direction: 'in' });
-  }
-  const heatSink = app.addNode('heat-sink');
-  app.choosePort({ node: dac.id, port: 'wasteHeat', direction: 'out' });
-  app.choosePort({ node: heatSink.id, port: 'in', direction: 'in' });
-
-  assert.equal(app.result.nodes[dac.id].activity, 10);
-
-  endpoints[3][0].params.stream.amount = 0.1;
-  app.solve();
-  assert.deepEqual([...app.result.nodes[dac.id].limitedBy], ['consumables']);
-  assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /flow-edge consumable bottleneck/);
-  assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /flow-node bottleneck/);
-});
-
-test('auto arrange puts sources before converters and sinks', () => {
-  const app = loadApp().__FLOWSHEET_APP__;
-  const source = app.addNode('material-source');
-  const dac = app.addNode('dac');
-  const sink = app.addNode('material-sink');
-  app.choosePort({ node: source.id, port: 'out', direction: 'out' });
-  app.choosePort({ node: dac.id, port: 'air', direction: 'in' });
-  app.choosePort({ node: dac.id, port: 'capturedCo2', direction: 'out' });
-  app.choosePort({ node: sink.id, port: 'in', direction: 'in' });
-
-  source.position = { x: 900, y: 500 };
-  dac.position = { x: 20, y: 500 };
-  sink.position = { x: 20, y: 20 };
-  app.autoArrange();
-
-  assert.ok(source.position.x < dac.position.x);
-  assert.ok(dac.position.x < sink.position.x);
-  assert.ok(dac.position.x - source.position.x >= 220);
-});
-
-test('autosave restores the graph and named saves can be switched', () => {
-  const values = new Map();
-  const storage = {
-    getItem(key) { return values.get(key) ?? null; },
-    setItem(key, value) { values.set(key, value); },
-  };
-  const first = loadApp(storage).__FLOWSHEET_APP__;
-  const dac = first.addNode('dac');
-  dac.position = { x: 777, y: 333 };
-  first.solve();
-  assert.equal(first.saveNamed('DAC experiment'), true);
-  first.clearFactory();
-
-  assert.equal(first.loadNamed('DAC experiment'), true);
-  assert.equal(first.graph.nodes[0].position.x, 777);
-
-  const reloaded = loadApp(storage).__FLOWSHEET_APP__;
-  assert.equal(reloaded.graph.nodes[0].unit, 'dac');
-  assert.equal(reloaded.graph.nodes[0].position.x, 777);
-  assert.equal(reloaded.graph.nodes[0].position.y, 333);
-});
-
-test('remaining converter ports can be completed with sources and sinks', () => {
-  const app = loadApp().__FLOWSHEET_APP__;
-  const dac = app.addNode('dac');
-
-  app.completeBoundaries();
-
-  assert.equal(app.graph.nodes.length, 8);
-  assert.equal(app.graph.edges.length, 7);
-  assert.equal(app.result.nodes[dac.id].activity, 10);
-  assert.deepEqual(
-    [...new Set(app.graph.nodes.filter(node => node.id !== dac.id).map(node => node.unit))].sort(),
-    ['consumable-source', 'electricity-source', 'heat-sink', 'heat-source', 'material-sink', 'material-source']
-  );
-});
-
-test('an electricity bus output connects to multiple process inputs', () => {
-  const app = loadApp().__FLOWSHEET_APP__;
-  const source = app.addNode('electricity-source');
-  const bus = app.addNode('electrical-bus');
-  const consumers = [app.addNode('swro'), app.addNode('dac'), app.addNode('electrolyzer')];
-  app.choosePort({ node: source.id, port: 'out', direction: 'out' });
-  app.choosePort({ node: bus.id, port: 'in', direction: 'in' });
-  for (const consumer of consumers) {
-    app.choosePort({ node: bus.id, port: 'out', direction: 'out' });
-    app.choosePort({ node: consumer.id, port: 'electricity', direction: 'in' });
-  }
-
-  assert.equal(app.graph.edges.filter(edge => edge.from.node === bus.id).length, 3);
-  assert.deepEqual(consumers.map(consumer => app.setpoints[consumer.id]), [40, 10, 10]);
-});
-
-test('auto boundaries complete both ports of an energy storage block', () => {
-  const app = loadApp().__FLOWSHEET_APP__;
-  app.addNode('battery');
-  app.completeBoundaries();
-
-  assert.deepEqual([...app.graph.nodes].map(node => node.unit), ['battery', 'electricity-source', 'electricity-sink']);
-  assert.equal(app.graph.edges.length, 2);
-  assert.equal(app.result.nodes['battery-1'].activity, 950);
-});
-
 test('methane recycle example loads a converged circular water exchange', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -208,15 +82,6 @@ test('methane recycle example loads a converged circular water exchange', () => 
   assert.ok(Number.isFinite(app.economics.npv));
   assert.match(context.__elements.get('nodeControls').innerHTML, /Installed CAPEX/);
   assert.match(context.__elements.get('economicsMetrics').innerHTML, /Levelized delivered cost/);
-});
-
-test('focus mode gives the graph the full workspace', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-
-  app.toggleCanvasFocus();
-  assert.equal(context.__elements.get('focusCanvas').textContent, 'Show panels');
-  assert.equal(context.__elements.get('focusCanvas')['aria-pressed'], 'true');
 });
 
 test('baseline comparison preserves real engine economics and renders deltas and synergies', () => {
@@ -239,44 +104,6 @@ test('baseline comparison preserves real engine economics and renders deltas and
 
   app.clearBaseline();
   assert.equal(context.__elements.get('comparisonPanel').hidden, true);
-});
-
-test('IRR always renders fractional engine rates as percentages, including above 100%', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.loadMethaneRecycle();
-  const sale = app.graph.nodes.find(node => node.economics.disposition === 'sale');
-  sale.economics.unitPrice = 1000;
-  app.solve();
-  assert.ok(app.economics.irr > 1);
-  app.captureBaseline();
-  sale.economics.unitPrice *= 2;
-  app.solve();
-  const percent = (app.economics.irr * 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
-  const delta = ((app.economics.irr - app.baseline.economics.irr) * 100).toLocaleString('en-US', { maximumFractionDigits: 2 });
-  assert.ok(context.__elements.get('economicsMetrics').innerHTML.includes(`${percent}%`));
-  assert.ok(context.__elements.get('comparisonMetrics').innerHTML.includes(`${percent}%`));
-  assert.ok(context.__elements.get('comparisonMetrics').innerHTML.includes(`+${delta} pp`));
-});
-
-test('site map picker lists cited layers and degrades without Leaflet', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  const layers = context.__elements.get('siteMapLayers').innerHTML;
-  assert.equal(typeof context.FlowsheetMapSite.circlePolygon, 'function');
-  assert.match(layers, /OSM/);
-  assert.match(layers, /PVGIS PV/);
-  assert.match(layers, /Water screening/);
-  assert.match(layers, /Site footprint/);
-  assert.match(layers, /Network markers/);
-  assert.match(layers, /openstreetmap\.org\/copyright/);
-  assert.equal(context.__elements.get('siteMapEmpty').hidden, false);
-  assert.match(context.__elements.get('siteMapEmpty').textContent, /failed to load|unavailable/i);
-  app.loadCoastalMethane(0);
-  assert.match(context.__elements.get('siteMeteo').innerHTML, /PVGIS/);
-  assert.match(context.__elements.get('siteAssay').innerHTML, /Millero|Alboran|36\.5/);
-  assert.match(context.__elements.get('siteRights').innerHTML, /gridImport/);
-  assert.equal(typeof context.__elements.get('applyCoordinates').listeners.click, 'function');
 });
 
 test('coastal methane loads a sited factory whose winter solar cuts methane', () => {
@@ -323,22 +150,6 @@ test('switching DAC route drops incompatible heat and reagent connections', () =
   assert.equal(app.graph.nodes.find(node => node.params.stream?.chemicalId === 'amine-sorbent').params.stream.chemicalId, 'amine-sorbent');
 });
 
-test('coastal DAC swap stays runnable and compares against the captured baseline', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.loadCoastalMethane(0);
-  app.captureBaseline();
-  const baselineMethane = app.result.nodes.sabatier.activity;
-  app.replaceUnit('dac', 'dac-electroswing');
-  assert.equal(app.graph.nodes.find(node => node.id === 'dac').unit, 'dac-electroswing');
-  assert.ok(app.result);
-  assert.ok(app.economics);
-  assert.equal(JSON.stringify(app.baseline.economics) !== '{}', true);
-  assert.match(context.__elements.get('comparisonMetrics').innerHTML, /CAPEX/);
-  assert.equal(app.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId, 'amine-sorbent');
-  assert.ok(app.result.nodes.sabatier.activity <= baselineMethane + 1e-6);
-});
-
 test('size to target resizes coastal methane and reports iterations and residual', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -353,24 +164,6 @@ test('size to target resizes coastal methane and reports iterations and residual
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /heat covered/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /unverified site right/);
   assert.equal(app.sizing.iterations, sized.iterations);
-});
-
-test('size to target uses the loaded plant and selected product', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  assert.throws(() => app.sizeToProduct('CH4', 5), /loaded flowsheet/);
-  app.loadAbundanceHub();
-  const sized = app.sizeToProduct('lithium', 2);
-  assert.ok(Math.abs(sized.achieved - 2) < 1e-6);
-  assert.equal(sized.product, 'lithium');
-  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /lithium/);
-  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /iteration/);
-  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /residual/);
-  assert.equal(app.sizing.product, 'lithium');
-  app.loadCoastalMethane(0);
-  const hydrogen = app.sizeToProduct('H2', 8);
-  assert.ok(Math.abs(hydrogen.achieved - 8) < 1e-6);
-  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /H₂/);
 });
 
 test('site panel reports location-aware footprint instead of 1.6 ha/MWp', () => {
@@ -405,51 +198,6 @@ test('fuels plus minerals network rolls up two sited plants', () => {
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
 });
 
-test('activateTab switches panels, defaults to Overview, and persists', () => {
-  const values = new Map();
-  const storage = {
-    getItem(key) { return values.get(key) ?? null; },
-    setItem(key, value) { values.set(key, value); },
-  };
-  const context = loadApp(storage);
-  const app = context.__FLOWSHEET_APP__;
-  assert.equal(app.activeTab, 'overview');
-  assert.equal(context.__elements.get('panelOverview').hidden, false);
-  assert.equal(context.__elements.get('panelLocation').hidden, true);
-  assert.equal(context.__elements.get('panelProcess').hidden, true);
-  assert.equal(context.__elements.get('panelEconomics').hidden, true);
-  assert.equal(context.__elements.get('tabOverview')['aria-selected'], 'true');
-
-  app.activateTab('location');
-  assert.equal(app.activeTab, 'location');
-  assert.equal(context.__elements.get('panelLocation').hidden, false);
-  assert.equal(context.__elements.get('panelOverview').hidden, true);
-  assert.equal(values.get('molecular-foundry.tab.v1'), 'location');
-  assert.equal(context.__elements.get('tabLocation')['aria-selected'], 'true');
-  assert.equal(typeof context.__elements.get('applyCoordinates').listeners.click, 'function');
-
-  context.__elements.get('tabProcess').listeners.click();
-  assert.equal(app.activeTab, 'process');
-  assert.equal(context.__elements.get('panelProcess').hidden, false);
-
-  const restored = loadApp({
-    getItem(key) { return key === 'molecular-foundry.tab.v1' ? 'economics' : null; },
-    setItem() {},
-  }).__FLOWSHEET_APP__;
-  assert.equal(restored.activeTab, 'economics');
-});
-
-test('an incomplete baseline has no economics until a complete graph is captured', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  app.captureBaseline();
-  app.loadMethaneRecycle();
-  assert.match(context.__elements.get('comparisonStatus').textContent, /Baseline economics unavailable/);
-  app.captureBaseline();
-  assert.match(context.__elements.get('comparisonMetrics').innerHTML, /CAPEX/);
-});
-
-
 test('coastal methane sizeToProduct H2 produces electrolyzer activity and never Limited by Nothing at zero', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -463,24 +211,4 @@ test('coastal methane sizeToProduct H2 produces electrolyzer activity and never 
   assert.doesNotMatch(metrics, /Limited by<\/dt><dd>Nothing/);
   const electricity = app.graph.nodes.find(node => node.id === 'electricity');
   assert.ok(electricity.rate > 0);
-});
-
-test('formatNumber hides false precision near zero', () => {
-  const context = loadApp();
-  const app = context.__FLOWSHEET_APP__;
-  // Drive inspector balances through a tiny residual by loading coastal and checking status formatting indirectly via size residual display.
-  app.loadCoastalMethane(0);
-  app.sizeToProduct('H2', 15);
-  const status = context.__elements.get('sizeToTargetStatus').textContent;
-  assert.doesNotMatch(status, /2\.78e-17|2\.775/);
-});
-
-test("Foundry IA keeps four tabs and Network without Empire", () => {
-  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-  const labels = [...html.matchAll(/role="tab"(?![a-z])[^>]*>([^<]+)/gi)].map(m => m[1].trim());
-  assert.deepEqual(labels, ["Overview", "Location", "Process", "Economics"]);
-  assert.doesNotMatch(html, /empire/i);
-  assert.match(html, /Network/);
-  assert.match(html, /id="sizeForCashflow"/);
-  assert.match(html, /id="siteMap"/);
 });

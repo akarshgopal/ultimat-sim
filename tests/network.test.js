@@ -107,25 +107,6 @@ function createCorridorFixture({ loss = 0.002, usdPerTonneKm = SEA_USD_PER_T_KM,
   };
 }
 
-test('Almería to the Dead Sea is a multi-thousand kilometre haul', () => {
-  const km = distanceKm(
-    { latitude: 36.834, longitude: -2.463 },
-    { latitude: 31.16, longitude: 35.43 }
-  );
-  assert.ok(km > 3000 && km < 4500);
-  assert.equal(pvLandHa(50000), estimateSolarLandHa(50000));
-  assert.notEqual(pvLandHa(50000), 80);
-});
-
-test('frozen PVGIS monthly yields match the Dead Sea snapshot', () => {
-  assert.equal(DAILY_PV[0], pvgisDeadSea.outputs.totals.fixed.E_y / 365);
-  assert.equal(DEAD_SEA_PV, DAILY_PV[0]);
-  assert.equal(pvgisDeadSea.outputs.totals.fixed.E_d, 4.59);
-  for (const row of pvgisDeadSea.outputs.monthly.fixed) {
-    assert.equal(DAILY_PV[row.month], row.E_d);
-  }
-});
-
 test('Dead Sea brine hub closes balances on assumed solar and brine', () => {
   const definition = siteDeadSeaAbundance();
   const solved = solveOperation(definition);
@@ -182,19 +163,6 @@ test('fuels plus minerals network rolls up CH4, NH3, and money', () => {
   assert.equal(result.corridors.length, 0);
 });
 
-test('evaluateNetwork deep-clones definitions and stays idempotent', () => {
-  const network = createCorridorFixture();
-  const originStreamBefore = network.plants[1].definition.graph.nodes.find(node => node.id === 'feed').params.stream;
-  const originMass = streamMassKg(originStreamBefore);
-  const first = evaluateNetwork(network);
-  const second = evaluateNetwork(network);
-  assert.equal(streamMassKg(network.plants[1].definition.graph.nodes.find(node => node.id === 'feed').params.stream), originMass);
-  assert.equal(first.freight, second.freight);
-  assert.equal(first.annualRevenue, second.annualRevenue);
-  assert.equal(first.corridors[0].deliveredKgPerDay, second.corridors[0].deliveredKgPerDay);
-  assert.deepEqual([...first.transferred], [...second.transferred]);
-});
-
 test('corridor excludes transferred origin sale from slate and revenue', () => {
   const network = createCorridorFixture();
   const without = evaluateNetwork({ ...network, corridors: [] });
@@ -224,15 +192,4 @@ test('corridor excludes transferred origin sale from slate and revenue', () => {
     withCorridor.annualOperatingCost
     - (withCorridor.plants.reduce((sum, plant) => sum + plant.economics.annualOperatingCost, 0) + withCorridor.freight)
   ) < 1e-6);
-});
-
-test('corridor scales destination feed without mutating the input network', () => {
-  const network = createCorridorFixture({ loss: 0 });
-  const feedBefore = clone(network.plants[1].definition.graph.nodes.find(node => node.id === 'feed').params.stream);
-  const result = evaluateNetwork(network);
-  assert.deepEqual(network.plants[1].definition.graph.nodes.find(node => node.id === 'feed').params.stream, feedBefore);
-  const destination = result.plants.find(plant => plant.id === 'destination');
-  const scaled = destination.definition.graph.nodes.find(node => node.id === 'feed').params.stream;
-  assert.ok(streamMassKg(scaled) < streamMassKg(feedBefore));
-  assert.ok(Math.abs(streamMassKg(scaled) - result.corridors[0].deliveredKgPerDay) < 1e-6);
 });

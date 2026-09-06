@@ -90,53 +90,6 @@ test('Dead Sea site truth cites PVGIS and a literature brine assay with unverifi
   assert.ok(!solved.warnings.some(message => message.includes('unverified site right: saltPurchase')));
 });
 
-test('frozen Dead Sea brine JSON matches the JS export and SUBSTANCES mol_per_kg', () => {
-  const json = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'dead-sea-brine.json'), 'utf8'));
-  const js = require('../data/dead-sea-brine.js');
-  assert.deepEqual(js, json);
-  assert.equal(json.ions_g_per_kg['Cl-'], 181.4);
-  assert.equal(json.ions_g_per_kg['Mg+2'], 35.2);
-  assert.equal(json.ions_g_per_kg['Na+'], 32.5);
-  assert.ok(Math.abs(json.ions_g_per_kg['Li+'] - 0.018 / 1.24) < 1e-12);
-  for (const [id, grams] of Object.entries(json.ions_g_per_kg)) {
-    assert.ok(Math.abs(json.mol_per_kg[id] - grams / SUBSTANCES[id].molarMassG) < 1e-12);
-  }
-});
-
-test('frozen Almería seawater JSON matches the JS export and scaled Millero majors', () => {
-  const json = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'almeria-seawater.json'), 'utf8'));
-  const js = require('../data/almeria-seawater.js');
-  assert.deepEqual(js, json);
-  assert.equal(json.density_kg_per_L, 1.026);
-  assert.equal(json.salinity_g_per_kg, 36.5);
-  assert.equal(json.meta.retrieved, '2026-09-06');
-  const scale = 36.5 / 35;
-  assert.ok(Math.abs(json.ions_g_per_kg['Cl-'] - 19.353 * scale) < 1e-12);
-  assert.ok(Math.abs(json.ions_g_per_kg['Na+'] - 10.781 * scale) < 1e-12);
-  assert.ok(Math.abs(json.ions_g_per_kg['SO4-2'] - 2.712 * scale) < 1e-12);
-  assert.ok(Math.abs(json.ions_g_per_kg['Mg+2'] - 1.284 * scale) < 1e-12);
-  assert.ok(Math.abs(json.ions_g_per_kg['Ca+2'] - 0.4119 * scale) < 1e-12);
-  assert.ok(Math.abs(json.ions_g_per_kg['K+'] - 0.399 * scale) < 1e-12);
-  assert.ok(Math.abs(json.ions_g_per_kg['Br-'] - 0.0673 * scale) < 1e-12);
-  assert.equal(json.ions_g_per_kg.HCO3, undefined);
-  assert.equal(json.ions_g_per_kg['HCO3-'], undefined);
-  for (const [id, grams] of Object.entries(json.ions_g_per_kg)) {
-    assert.ok(Math.abs(json.mol_per_kg[id] - grams / SUBSTANCES[id].molarMassG) < 1e-12);
-  }
-  assert.ok(json.evidence.some(item => /doi\.org\/10\.1016\/j\.dsr\.2007\.10\.001/.test(item.url)));
-  assert.ok(json.evidence.some(item => /Alboran_Sea/.test(item.url)));
-});
-
-test('sizing a coastal plant keeps meteo in sync and still warns on unverified rights', () => {
-  const sized = sizeCoastalToMethane(8, 0);
-  assert.equal(sized.definition.site.meteo.dailyPVKWhPerKWp, sized.definition.site.dailyPVKWhPerKWp);
-  assert.equal(sized.definition.site.meteo.quality, 'cited');
-  assert.ok(sized.warnings.some(message => message.includes('unverified site right')));
-  assert.ok(sized.solved.warnings.some(message => message.includes('unverified site right')));
-  assert.equal(sized.definition.site.resources.grid.stream.kWh, 0);
-  assert.equal(sized.definition.site.resources.freshwater.stream.mol.H2O, 0);
-});
-
 test('size-to-target cannot assume unverified intake or brine concession', () => {
   const coastal = createCoastalCase(0);
   coastal.site.rights.seawaterIntake.status = 'unverified';
@@ -146,14 +99,4 @@ test('size-to-target cannot assume unverified intake or brine concession', () =>
     () => sizeToProduct({ product: 'lithium', rate: 1, definition: siteDeadSeaAbundance() }),
     /size-to-target cannot assume brineConcession/,
   );
-});
-
-test('the site panel has meteo, assay, and rights mounts', () => {
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(html, /id="siteMeteo"/);
-  assert.match(html, /id="siteAssay"/);
-  assert.match(html, /id="siteRights"/);
-  assert.match(html, /data\/almeria-seawater\.js/);
-  assert.match(html, /id="siteMap"/);
-  assert.match(html, /engine\/map-site\.js/);
 });

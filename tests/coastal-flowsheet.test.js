@@ -30,6 +30,17 @@ test('coastal methane uses solid-sorbent DAC and closes balances', () => {
   assert.equal(definition.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
   assert.equal(definition.site.resources.grid.quality, 'unverified');
   assert.equal(definition.site.resources.freshwater.quality, 'unverified');
+  assert.equal(definition.site.meteo.quality, 'cited');
+  assert.equal(definition.site.meteo.dailyPVKWhPerKWp, DAILY_PV[0]);
+  assert.equal(definition.site.assay.kind, 'seawater');
+  assert.equal(definition.site.assay.quality, 'cited');
+  assert.equal(definition.site.rights.seawaterIntake.status, 'assumed');
+  assert.equal(definition.site.rights.gridImport.status, 'unverified');
+  assert.equal(definition.site.rights.freshwater.status, 'unverified');
+  assert.ok(definition.site.meteo.cite.url.includes('re.jrc.ec.europa.eu'));
+  assert.ok(definition.site.assay.evidence.some(item => /noaa\.gov/.test(item.url)));
+  assert.ok(solved.warnings.some(message => message.includes('unverified site right: gridImport')));
+  assert.ok(solved.warnings.some(message => message.includes('unverified site right: freshwater')));
   assert.equal(solved.nodes.sabatier.activity, 5);
   assert.ok(solved.nodes['spent-media'].received.amount > 0);
   assert.equal(solved.nodes['spent-media'].received.chemicalId, 'amine-sorbent');

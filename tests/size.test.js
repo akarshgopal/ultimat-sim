@@ -40,6 +40,8 @@ test('sizeCoastalToMethane meets a methane target by growing PV and converters',
   assert.equal(sized.converged, true);
   assert.ok(Math.abs(sized.achieved - 20) < 1e-6);
   assert.ok(sized.definition.site.solarKWp > 37.5);
+  assert.equal(sized.definition.site.meteo.dailyPVKWhPerKWp, sized.definition.site.dailyPVKWhPerKWp);
+  assert.ok((sized.warnings || sized.solved.warnings).some(message => message.includes('unverified site right')));
   assert.ok(sized.definition.graph.nodes.find(node => node.id === 'sabatier').capacity >= 20 - 1e-9);
   assert.ok(sized.definition.graph.nodes.find(node => node.id === 'electrolyzer').capacity > 5);
   assert.ok(sized.definition.graph.nodes.find(node => node.id === 'dac').capacity > 20);

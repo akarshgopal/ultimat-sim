@@ -243,6 +243,9 @@ function applyDuties(definition, duties) {
       definition.site.resources.electricity.stream = { kind: 'electricity', kWh: electricityKWh };
       definition.site.resources.electricity.evidence = `PVGIS typical-day × ${duties.solarKWp} kWp`;
     }
+    if (definition.site.meteo && duties.yieldPerKWp > 0) {
+      definition.site.meteo.dailyPVKWhPerKWp = duties.yieldPerKWp;
+    }
   }
   for (const node of [air, seawater, electricity, heat, consumables]) syncSiteResource(definition, node);
 
@@ -351,6 +354,10 @@ function sizeToTarget(caseOrBuilder, target, opts = {}) {
   }
 
   const count = Math.min(iterations + 1, maxIterations);
+  const warnings = [...(solved.warnings || [])];
+  for (const warning of solver.unverifiedRightsWarnings?.(definition.site) || []) {
+    if (!warnings.includes(warning)) warnings.push(warning);
+  }
   return {
     definition,
     solved,
@@ -361,6 +368,7 @@ function sizeToTarget(caseOrBuilder, target, opts = {}) {
     consistency,
     converged: consistency < tolerance && (relativeGap(activity(solved, chain.sabatier), target) < tolerance || Boolean(duties?.capped)),
     history,
+    warnings,
   };
 }
 

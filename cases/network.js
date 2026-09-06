@@ -60,11 +60,58 @@ function siteDeadSeaAbundance() {
       },
       grid: { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' },
     },
+    meteo: {
+      dailyPVKWhPerKWp: DEAD_SEA_PV,
+      monthlyPVKWhPerKWp: DAILY_PV.slice(),
+      quality: 'cited',
+      source: 'PVGIS-SARAH3/ERA5',
+      retrieved: '2026-09-06',
+      cite: {
+        label: 'PVGIS-SARAH3 / ERA5, 2005–2023 monthly; annual E_y 1674.85 kWh/kWp; frozen 2026-09-06',
+        url: PVGIS_URL,
+      },
+    },
+    assay: {
+      kind: 'brine',
+      summary: 'Example concentrated Na–Cl–Mg–Ca–K–SO₄–Br–Li brine for screening; not a Dead Sea concession assay',
+      quality: 'screening',
+      evidence: [
+        { label: 'Dead Sea chemical composition (context, not this mol vector)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+      ],
+    },
+    rights: {
+      gridImport: {
+        status: 'unverified',
+        note: 'Unverified grid access; zero authorized imports',
+        evidence: [{ label: 'Dead Sea industrial geography (context, not an interconnection)', url: 'https://en.wikipedia.org/wiki/Dead_Sea' }],
+      },
+      freshwater: {
+        status: 'assumed',
+        note: 'Process water is assumed, not a Dead Sea freshwater right',
+        evidence: [{ label: 'Dead Sea water context', url: 'https://en.wikipedia.org/wiki/Dead_Sea' }],
+      },
+      seawaterIntake: {
+        status: 'unverified',
+        note: 'Inland brine hub; no seawater intake',
+      },
+      brineConcession: {
+        status: 'unverified',
+        note: 'Example brine feed is not a mineral concession',
+        evidence: [{ label: 'Dead Sea chemical composition (context, not this feed vector)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' }],
+      },
+      saltPurchase: {
+        status: 'assumed',
+        note: 'Purchased salt makeup assumed available; not a local quote',
+        evidence: [{ label: 'USGS salt statistics (commodity context, not a contract)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' }],
+      },
+    },
     evidence: [
       { label: 'Dead Sea industrial geography', url: 'https://en.wikipedia.org/wiki/Dead_Sea' },
       { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; annual E_y 1674.85 kWh/kWp', url: PVGIS_URL },
+      { label: 'Dead Sea chemical composition (screening assay context)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+      { label: 'USGS salt statistics (purchased-salt context)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
     ],
-    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Freshwater and purchased salt are explicit assumptions. Annual economics repeat this day 365 times.',
+    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Brine composition is a screening assay, not a concession. Freshwater and purchased salt are explicit assumptions. Grid and brine rights are unverified. Annual economics repeat this day 365 times.',
   };
   return definition;
 }

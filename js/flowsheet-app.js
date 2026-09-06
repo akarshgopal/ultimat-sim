@@ -7,6 +7,10 @@
     formatUncertainMoney,
     formatUncertainNumber,
     qualityChip,
+    rightsChip,
+    citeFrom,
+    unverifiedRightsWarnings,
+    RIGHT_KEYS,
     parseBand,
     citeMarkup,
   } = FlowsheetUncertainty;
@@ -653,6 +657,11 @@
     const kWh = daily * Number(site.solarKWp || 0);
     site.resources.electricity.stream = { kind: 'electricity', kWh };
     site.dailyPVKWhPerKWp = daily;
+    if (site.meteo) {
+      const monthly = site.meteo.monthlyPVKWhPerKWp;
+      const fromMonth = Array.isArray(monthly) ? monthly[site.month || 0] : null;
+      site.meteo.dailyPVKWhPerKWp = hours ? daily : (fromMonth || daily);
+    }
     for (const current of graph.nodes.filter(item => item.siteResource === 'electricity')) {
       current.rate = kWh;
       updateSourceStream(current);
@@ -680,6 +689,24 @@
       evidence: `PVGIS typical-day × ${solarKWp} kWp`,
     };
     site.dailyPVKWhPerKWp = daily;
+    site.meteo = {
+      dailyPVKWhPerKWp: daily,
+      monthlyPVKWhPerKWp: site.meteo?.monthlyPVKWhPerKWp,
+      quality: 'cited',
+      source: solar?.database || site.meteo?.source || 'PVGIS',
+      cite: solar?.url
+        ? { label: `${solar.database || 'PVGIS'} typical-day solar`, url: solar.url }
+        : site.meteo?.cite,
+    };
+    if (!site.rights) {
+      site.rights = {
+        gridImport: { status: 'unverified', note: 'Unverified grid access; zero authorized imports' },
+        freshwater: { status: 'unverified', note: 'Unverified freshwater access; zero authorized supply' },
+        seawaterIntake: { status: 'unverified', note: 'No seawater intake permit verified' },
+        brineConcession: { status: 'unverified', note: 'No brine or mineral concession verified' },
+        saltPurchase: { status: 'unverified', note: 'No salt purchase agreement verified' },
+      };
+    }
     for (const current of graph.nodes.filter(item => units[item.unit].kind === 'source')) {
       if (!current.siteResource) assignSiteResource(current);
       if (current.siteResource === 'electricity') {
@@ -1444,8 +1471,9 @@
       balanceStatus.className = `status-chip${result?.balances.maxAbsResidual < 1e-8 ? ' good' : result || pendingPort ? ' warn' : ''}`;
     }
     const warning = document.getElementById('warnings');
-    warning.hidden = !solveError && !routeNote && !pendingPort && missing.length === 0 && bottlenecks.length === 0;
-    warning.textContent = solveError || routeNote || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : '');
+    const siteRightWarnings = unverifiedRightsWarnings?.(site) || [];
+    warning.hidden = !solveError && !routeNote && !pendingPort && missing.length === 0 && bottlenecks.length === 0 && siteRightWarnings.length === 0;
+    warning.textContent = solveError || routeNote || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : siteRightWarnings.length ? siteRightWarnings.join(' · ') : '');
   }
 
   function footprintColor(unit) {
@@ -1562,9 +1590,13 @@
       ? `${hours.filter(entry => entry.pv > 0).length} daylight hours · ${hours.filter(entry => entry.pv === 0).length} night hours · peak ${formatNumber(Math.max(...hours.map(entry => entry.pv)))} kWh PV · battery ${formatNumber(site?.storage?.batteryKWh || 0)} kWh`
       : '';
     renderSiteFootprint();
+    renderSiteTruth();
     document.getElementById('siteResources').innerHTML = Object.entries(site?.resources || {}).map(([id, resource]) => {
       const quality = resource.quality || 'user-assumption';
-      return `<div class="${quality === 'unverified' ? 'unverified' : ''}"><dt>${id} <small>${quality}</small></dt><dd>${formatStream(resource.stream)}</dd></div>`;
+      const chip = quality === 'unverified'
+        ? rightsChip('unverified')
+        : qualityChip({ quality, sourceNote: resource.evidence });
+      return `<div class="${quality === 'unverified' ? 'unverified' : ''}"><dt>${id}${chip}</dt><dd>${formatStream(resource.stream)}</dd></div>`;
     }).join('');
     document.getElementById('siteEvidence').innerHTML = (site?.evidence || []).map(item => (
       item.url ? `<a href="${item.url}" target="_blank" rel="noreferrer">${item.label}</a>` : item.label
@@ -1575,9 +1607,59 @@
         const iters = lastSizing.iterations;
         const capNote = lastSizing.history?.some(step => step.capped) ? ' · cap-limited' : '';
         const convergeNote = lastSizing.converged ? '' : ' · not converged';
-        sizeStatus.textContent = `${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${capNote}${convergeNote}`;
+        const unverified = (lastSizing.warnings || lastSizing.solved?.warnings || [])
+          .filter(message => String(message).includes('unverified site right'));
+        const rightsNote = unverified.length
+          ? ` · ${unverified.length} unverified site right${unverified.length === 1 ? '' : 's'}`
+          : '';
+        sizeStatus.textContent = `${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${capNote}${convergeNote}${rightsNote}`;
       } else {
         sizeStatus.textContent = 'Demand sizes water, H₂, DAC, and PV. The operating solve stays physics-only.';
+      }
+    }
+  }
+
+  function renderSiteTruth() {
+    const meteoEl = document.getElementById('siteMeteo');
+    const assayEl = document.getElementById('siteAssay');
+    const rightsEl = document.getElementById('siteRights');
+    if (meteoEl) {
+      const meteo = site?.meteo;
+      if (!meteo) meteoEl.innerHTML = '';
+      else {
+        const quality = classifyQuality({
+          kind: 'meteo',
+          quality: meteo.quality,
+          sourceNote: meteo.cite?.label || meteo.source,
+        });
+        const daily = Number(meteo.dailyPVKWhPerKWp ?? site.dailyPVKWhPerKWp);
+        meteoEl.innerHTML = `<strong>Meteo</strong> ${formatUncertainNumber(daily, quality)} kWh/kWp·day ${qualityChip(quality)}${citeMarkup(citeFrom(meteo.cite))}`;
+      }
+    }
+    if (assayEl) {
+      const assay = site?.assay;
+      if (!assay) assayEl.innerHTML = '';
+      else {
+        const quality = classifyQuality({
+          kind: 'assay',
+          quality: assay.quality,
+          sourceNote: assay.summary,
+        });
+        assayEl.innerHTML = `<strong>Assay</strong> ${assay.summary || assay.kind || ''} ${qualityChip(quality)}${citeMarkup(citeFrom(assay.evidence))}`;
+      }
+    }
+    if (rightsEl) {
+      const rights = site?.rights;
+      if (!rights) rightsEl.innerHTML = '';
+      else {
+        const keys = RIGHT_KEYS || Object.keys(rights);
+        rightsEl.innerHTML = keys.map(key => {
+          const right = rights[key];
+          if (!right) return '';
+          const cites = citeFrom(right.evidence);
+          const title = right.note ? ` title="${right.note.replace(/"/g, '&quot;')}"` : '';
+          return `<span class="rights-item"${title}>${key}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
+        }).join('');
       }
     }
   }

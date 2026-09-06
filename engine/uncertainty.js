@@ -5,6 +5,10 @@
 })(globalThis, () => {
 const QUALITIES = Object.freeze(['cited', 'recoverable', 'assumption', 'derived', 'screening']);
 const QUALITY_SET = new Set(QUALITIES);
+const RIGHT_KEYS = Object.freeze([
+  'gridImport', 'freshwater', 'seawaterIntake', 'brineConcession', 'saltPurchase',
+]);
+const RIGHT_STATUSES = Object.freeze(['authorized', 'assumed', 'unverified']);
 
 const QUALITY_TITLES = Object.freeze({
   cited: 'Traced to a named source',
@@ -12,6 +16,12 @@ const QUALITY_TITLES = Object.freeze({
   assumption: 'Screening guess until replaced',
   derived: 'From stoichiometry or physical constants',
   screening: 'Order-of-magnitude screening, not a quote',
+});
+
+const RIGHT_TITLES = Object.freeze({
+  authorized: 'A named right or contract is on file',
+  assumed: 'Screening access until a right is verified',
+  unverified: 'No right verified; do not treat as available supply',
 });
 
 // Catalog intensities when a unit has no sourceNote of its own.
@@ -49,6 +59,7 @@ const BAND_IN_TEXT = new RegExp(String.raw`(\d+(?:\.\d+)?)\s*[–-]\s*(\d+(?:\.\
 function normalizeQuality(quality) {
   const raw = String(quality || '').toLowerCase().trim();
   if (raw === 'user-assumption') return 'assumption';
+  if (raw === 'literature-estimate') return 'recoverable';
   return QUALITY_SET.has(raw) ? raw : '';
 }
 
@@ -108,6 +119,13 @@ function classifyQuality(context = {}) {
     return 'screening';
   }
   if (kind === 'land' || kind === 'footprint' || kind === 'gcr') return 'assumption';
+  if (kind === 'meteo' || kind === 'site-meteo' || kind === 'pv-yield') {
+    if (/pvgis/i.test(note)) return 'cited';
+    return classifyFromNotes(context) || 'assumption';
+  }
+  if (kind === 'assay' || kind === 'site-assay') {
+    return classifyFromNotes(context) || 'assumption';
+  }
   if (kind === 'freight' || kind === 'corridor-freight') return 'cited';
   if (kind === 'money' || kind === 'capex' || kind === 'npv' || kind === 'revenue' || kind === 'opex' || kind === 'cash') {
     return 'screening';
@@ -224,6 +242,28 @@ function qualityChip(quality) {
   return `<span class="quality-chip quality-${q}" title="${title}">${q}</span>`;
 }
 
+function rightsChip(status) {
+  const s = RIGHT_STATUSES.includes(status) ? status : 'unverified';
+  const title = RIGHT_TITLES[s] || s;
+  return `<span class="quality-chip rights-chip rights-${s}" title="${title}">${s}</span>`;
+}
+
+function citeFrom(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(item => item && item.label);
+  if (typeof value === 'string') return [{ label: value }];
+  if (value.label) return [value];
+  return [];
+}
+
+function unverifiedRightsWarnings(site) {
+  const rights = site?.rights;
+  if (!rights || typeof rights !== 'object') return [];
+  return RIGHT_KEYS
+    .filter(key => rights[key]?.status === 'unverified')
+    .map(key => `unverified site right: ${key}`);
+}
+
 function citeMarkup(references) {
   const list = (references || []).filter(item => item && item.label);
   if (!list.length) return '';
@@ -237,10 +277,16 @@ function citeMarkup(references) {
 return {
   QUALITIES,
   QUALITY_TITLES,
+  RIGHT_KEYS,
+  RIGHT_STATUSES,
+  RIGHT_TITLES,
   classifyQuality,
   formatUncertainMoney,
   formatUncertainNumber,
   qualityChip,
+  rightsChip,
+  citeFrom,
+  unverifiedRightsWarnings,
   parseBand,
   citeMarkup,
 };

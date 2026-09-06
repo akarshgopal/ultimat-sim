@@ -249,6 +249,12 @@ test('coastal methane loads a sited factory whose winter solar cuts methane', ()
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
   assert.equal(app.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
   assert.match(context.__elements.get('siteResources').innerHTML, /unverified/);
+  assert.match(context.__elements.get('siteMeteo').innerHTML, /PVGIS/);
+  assert.match(context.__elements.get('siteMeteo').innerHTML, /quality-chip quality-cited/);
+  assert.match(context.__elements.get('siteAssay').innerHTML, /NaCl/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /rights-unverified/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /rights-assumed/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /gridImport/);
   assert.equal(app.site.month, 12);
   assert.equal(app.result.horizon.hours[0].methane, 0);
   assert.ok(app.result.horizon.hours.some(entry => entry.pv > 0 && entry.methane > 0));
@@ -301,6 +307,7 @@ test('size to target resizes coastal methane and reports iterations and residual
   assert.ok(Math.abs(sized.achieved - 15) < 1e-6);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /iteration/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /residual/);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /unverified site right/);
   assert.equal(app.sizing.iterations, sized.iterations);
 });
 

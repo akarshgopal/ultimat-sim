@@ -53,11 +53,11 @@ These distort “real” material–energy–land–money coupling the most when
 | `js/flowsheet-app.js` UI copy | “order-of-magnitude screening” | Site footprint note | **assumption** | Keep screening wording. |
 | `js/…` `solar-pv` | `capacityFactor: 0.24` | Default PV energy when not sited | **cited** | NREL ATB 2024 utility-scale PV Resource Class 8 mean AC CF 24.5% (GHI bin 4–4.25 kWh/m²/day, ILR=1.34), rounded. Inspector `sourceNote`. CAPEX 1560 unchanged. |
 | `js/…` `solar-pv` | `capexPerKW: 1560`, `fixedOMPerKWYear: 20`, `lifeYears: 30`, `discountRate: 0.07` | LCOE helper / installed economics | **cited** (NREL ATB URL on catalog) | 2024 ATB year pinned in CF `sourceNote`; CAPEX 1560 kept. |
-| `cases/coastal.js` | `DAILY_PV` monthly kWh/kWp; PVGIS URL + frozen JSON | Site electricity budget | **cited** | Already PVGIS-SARAH3/ERA5; keep retrieval date. |
+| `cases/coastal.js` | `DAILY_PV` monthly kWh/kWp; PVGIS URL + frozen JSON | Site electricity budget / `site.meteo` | **cited** | Already PVGIS-SARAH3/ERA5; keep retrieval date. First-class `site.meteo` plus root `dailyPVKWhPerKWp`. |
 | `cases/coastal.js` | `solarKWp = 37.5` | Example array size | **assumption** | Demo sizing only; document as scenario knob. |
 | `cases/coastal.js` / app PVGIS query | `loss=14`, `angle=30`, `aspect=0` | Yield request defaults | **recoverable** | Cite PVGIS default system loss / tilt convention. |
 | `cases/coastal.js`, `cases/network.js` | PV CAPEX `$1000/kWp`, O&M `$20/kWp·y`, life 25 y | Sited solar economics override | **assumption** | Prefer catalog/ATB 1560 unless labeled “round screening CAPEX”. |
-| `cases/network.js` | `DEAD_SEA_PV = 4.59` kWh/kWp·day (`1674.85/365`); monthly `DAILY_PV` frozen | Sizes Dead Sea hub PV | **cited** | PVGIS-SARAH3/ERA5 2005–2023 at 31.16°N, 35.43°E; frozen `data/pvgis-dead-sea.json` retrieved 2026-09-06. Same query params as coastal Almería. |
+| `cases/network.js` | `DEAD_SEA_PV = 4.59` kWh/kWp·day (`1674.85/365`); monthly `DAILY_PV` frozen | Sizes Dead Sea hub PV / `site.meteo` | **cited** | PVGIS-SARAH3/ERA5 2005–2023 at 31.16°N, 35.43°E; frozen `data/pvgis-dead-sea.json` retrieved 2026-09-06. Same query params as coastal Almería. |
 | `js/…` `nuclear-electricity` | CF 0.9; CAPEX 10717 / 5882 $/kW; O&M 300; var 15 $/MWh | Advanced nuclear presets | **assumption** (vendor pages cited for identity, not costs) | Keep “not vendor quotes”; cite DOE SMR cost study only for generic SMR row. |
 | `engine/network.js` | Earth radius `6371.0088` km | Haversine corridor distance | **derived** | WGS84 mean radius; optional cite. |
 
@@ -73,7 +73,7 @@ These distort “real” material–energy–land–money coupling the most when
 | `units.js` / catalog | `ionRejection: 0.99` (MED/MSF 0.995) | Salt passage | **recoverable** | Typical RO rejection; cite membrane handbook or Elimelech. |
 | catalog `med` | recovery 0.35; elec 2; heat 60 kWhₜₕ/m³; minHeat 70 °C; waste 40 °C | MED duties | **cited** | Ghaffour et al. 2013 MED band 1.5–2.5 kWh/m³ e; 145–390 MJ/m³ ≈ 40–108 kWhₜₕ/m³. Defaults kept. Recovery 0.35 typical in that review family. |
 | catalog `msf` | recovery 0.25; elec 3.5; heat 80; minHeat 90; waste 45 °C | MSF duties | **cited** | Ghaffour et al. 2013 MSF band 3–5 kWh/m³ e; 250–330 MJ/m³ ≈ 69–92 kWhₜₕ/m³. Defaults kept. Recovery 0.25 typical in that review family. |
-| `cases/coastal.js` | salinity 35 g/kg as NaCl; intake 0.1 m³/day | Feed composition / budget | **cited** (NOAA) + **assumption** (intake volume) | Keep NaCl proxy warning; site assay later. |
+| `cases/coastal.js` | salinity 35 g/kg as NaCl; intake 0.1 m³/day | Feed composition / budget | **cited** (NOAA assay) + **assumed** (intake right) | `site.assay` is the NaCl proxy; `site.rights.seawaterIntake` is assumed. |
 | `cases/sabatier.js` default SWRO | `feedDensityKgM3: 1000`, `ionRejection: 1` | Idealized fixture | **assumption** | Intentional test idealization; do not copy to coastal without note. |
 | material preset `seawater` | ~53500 mol H₂O + 550 Na/Cl | UI default seawater | **recoverable** | Align mol fractions with 35 g/kg + 1025 kg/m³ derivation. |
 
@@ -125,7 +125,7 @@ These distort “real” material–energy–land–money coupling the most when
 | --- | --- | --- | --- | --- |
 | brine-minerals | `electricityKWhPerKgBrine: 0.05` | Train power | **assumption** | USGS brine bulletin cited for commodities, not kWh — label OOM or find DLE/evaporation energy. |
 | recoveries | Li 0.9, Br 0.9, Mg 0.5, K 0.7, gypsum 0.7, salt 0.5 | Product yields | **assumption** | Optimistic screening; cite specific DLE / solar-pond recoveries per ion. |
-| abundance / preset brine assay | high Na/Cl/Mg/… Li⁺ 10 mol/day scale | Feed composition | **assumption** | “Example concentrated brine”; replace with Dead Sea / salar assay DOI. |
+| abundance / preset brine assay | high Na/Cl/Mg/… Li⁺ 10 mol/day scale | Feed composition | **screening** | Dead Sea `site.assay` labels this screening; Wikipedia composition is context, not this mol vector. |
 | abundance product prices | Li 5, Br₂ 3, NH₃ 0.6, NaOH 0.5, … $/kg | Revenue | **assumption** | Illustrative; cite USGS commodity summaries when hardening. |
 | purchase costs | brine 0.0002, salt 0.08, water 0.001, power 0.03 $/native-unit | OPEX | **assumption** | Same. |
 

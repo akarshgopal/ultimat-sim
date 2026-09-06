@@ -2,10 +2,14 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   QUALITIES,
+  RIGHT_KEYS,
+  RIGHT_STATUSES,
   classifyQuality,
   formatUncertainMoney,
   formatUncertainNumber,
   qualityChip,
+  rightsChip,
+  unverifiedRightsWarnings,
   parseBand,
   citeMarkup,
 } = require('../engine/uncertainty');
@@ -111,6 +115,49 @@ test('a literature range is shown only when a real band is supplied', () => {
   const sabatierBand = parseBand('screening ancillary load in a 0.4–1.5 kWh/kg band, not electrolysis');
   assert.deepEqual(sabatierBand, { low: 0.4, high: 1.5, unit: 'kWh/kg' });
   assert.equal(parseBand('GHI bin 4–4.25 kWh/m²/day, ILR=1.34'), null);
+});
+
+test('site meteo is cited for PVGIS and assay follows its declared class', () => {
+  assert.equal(classifyQuality({
+    kind: 'meteo',
+    quality: 'cited',
+    sourceNote: 'PVGIS-SARAH3 / ERA5, 2005–2023 monthly',
+  }), 'cited');
+  assert.equal(classifyQuality({
+    kind: 'meteo',
+    sourceNote: 'PVGIS-SARAH3 / ERA5 frozen yield',
+  }), 'cited');
+  assert.equal(classifyQuality({
+    kind: 'assay',
+    quality: 'cited',
+    sourceNote: '35 g/kg global ocean salinity represented as NaCl',
+  }), 'cited');
+  assert.equal(classifyQuality({
+    kind: 'assay',
+    quality: 'screening',
+    sourceNote: 'Example concentrated brine for screening; not a concession assay',
+  }), 'screening');
+  assert.equal(classifyQuality('literature-estimate'), 'recoverable');
+});
+
+test('rights chips and unverified warnings stay separate from quality classes', () => {
+  assert.deepEqual([...RIGHT_KEYS], [
+    'gridImport', 'freshwater', 'seawaterIntake', 'brineConcession', 'saltPurchase',
+  ]);
+  assert.deepEqual([...RIGHT_STATUSES], ['authorized', 'assumed', 'unverified']);
+  assert.match(rightsChip('authorized'), /rights-authorized/);
+  assert.match(rightsChip('assumed'), /rights-assumed/);
+  assert.match(rightsChip('unverified'), /rights-unverified/);
+  assert.equal(unverifiedRightsWarnings(null).length, 0);
+  assert.deepEqual(unverifiedRightsWarnings({
+    rights: {
+      gridImport: { status: 'unverified' },
+      freshwater: { status: 'assumed' },
+      seawaterIntake: { status: 'assumed' },
+      brineConcession: { status: 'unverified' },
+      saltPurchase: { status: 'authorized' },
+    },
+  }), ['unverified site right: gridImport', 'unverified site right: brineConcession']);
 });
 
 test('qualityChip renders a known class and citeMarkup keeps source links', () => {

@@ -55,6 +55,10 @@ An output port has one destination. Fan-out requires a splitter; fan-in requires
 ```text
 Case
   site          # named location with bounded, evidenced resource budgets
+    meteo       # daily/monthly PV yield, cite, quality
+    assay       # feed composition summary, quality, evidence
+    rights      # gridImport, freshwater, seawaterIntake, brineConcession, saltPurchase
+    resources   # named streams the solver clamps (unchanged contract)
   graph         # nodes and edges
   operation     # setpoints, following rules, split and priority policies
   period        # one representative day in v1
@@ -75,7 +79,9 @@ Edges do not repeat their stream type or disposition. Those are determined by th
 
 When `site` is present, every source block must name a `siteResource`. Resource presence is not access: an unverified grid or freshwater budget is explicit zero, not unlimited supply and not a silent free input. Two source blocks that share a resource draw from the same remaining quantity; the solver clamps rather than duplicating the budget. Composition, phase, temperature, and consumable identity on a source must match the named resource.
 
-The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield plus a 2023 hourly typical day (`data/pvgis-almeria-hourly.js`), global 35 g/kg seawater as NaCl, solid-sorbent DAC, and unverified grid/freshwater.
+`site.meteo`, `site.assay`, and `site.rights` are first-class site truth. They do not replace `resources` streams. `dailyPVKWhPerKWp` stays on the site root for sizing; `meteo` carries the same daily value plus the monthly series, a cite, and a quality class. Assay is a composition summary with quality and evidence URLs, not a second mol vector. Each right is `authorized`, `assumed`, or `unverified`. `solveOperation` and `sizeToTarget` warn on unverified rights; they do not invent authorized supply.
+
+The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield plus a 2023 hourly typical day (`data/pvgis-almeria-hourly.js`), global 35 g/kg seawater as a cited NaCl proxy assay, assumed seawater intake, and unverified grid/freshwater/brine/salt rights. The Dead Sea hub (`cases/network.js`) cites the same PVGIS family, labels brine as a screening assay, and marks freshwater and salt purchase as assumed.
 
 When `site.solar.typicalMonths` is present, `solveHorizon` runs 24 hourly operating solves. Daily setpoints are leftover demand, nameplate is capacity/24, and methane-chain setpoints stay stoichiometric so intermediate CO₂/H₂ is not orphaned. Site electricity is that hour's PV yield plus optional battery discharge. Other site budgets are remaining daily quantities. Night hours with no PV and no stored energy produce nothing.
 
@@ -137,7 +143,7 @@ Energy CAPEX, O&M, tariffs, capacity factors, and simple levelized costs are edi
 
 ### Uncertainty display
 
-The Foundry UI tags key outputs with quality classes from `docs/constants-audit.md` (`cited`, `recoverable`, `assumption`, `derived`, `screening`) via `engine/uncertainty.js`. LCOE is **cited** when the solar-pv catalog row uses NREL ATB; product cost is **screening**; site land is **assumption**; process intensities follow catalog `sourceNote` / references. Screening and assumption money uses a tilde and fewer significant figures. A numeric band is shown only when a source states a range. The UI never invents ± error bars.
+The Foundry UI tags key outputs with quality classes from `docs/constants-audit.md` (`cited`, `recoverable`, `assumption`, `derived`, `screening`) via `engine/uncertainty.js`. LCOE is **cited** when the solar-pv catalog row uses NREL ATB; product cost is **screening**; site land is **assumption**; process intensities follow catalog `sourceNote` / references. Site meteo and assay use the same classes; site rights use a separate `authorized` / `assumed` / `unverified` chip. Screening and assumption money uses a tilde and fewer significant figures. A numeric band is shown only when a source states a range. The UI never invents ± error bars.
 
 ## Unit contract
 

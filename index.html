@@ -48,7 +48,7 @@
         <label>kg/day <input id="sizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
         <button type="button" id="sizeToTarget">Size to target</button>
       </div>
-      <p class="status-meta" id="sizeToTargetStatus">Demand sizes the selected product. Water, converters, and PV follow. The operating solve stays physics-only.</p>
+      <p class="status-meta" id="sizeToTargetStatus">Size one sale stream to set duties; co-products and cashflow still matter. Water, converters, and PV follow. Physics-only solve.</p>
       <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
       <p class="status-meta" id="siteNotes"></p>
       <div id="siteMeteo" class="site-truth"></div>
@@ -105,6 +105,8 @@
         </div>
       </div>
       <p class="status-meta" id="economicsStatus">Complete the graph to calculate viability.</p>
+      <p class="economics-banner" id="economicsBanner" hidden></p>
+      <label class="economics-ack" id="economicsAckLabel"><input id="economicsAck" type="checkbox"> I understand these are screening figures, not bankable</label>
       <dl class="strip-metrics" id="economicsMetrics"></dl>
     </section>
   </div>
@@ -175,13 +177,14 @@
           <input id="canvasZoom" type="range" min="25" max="200" step="5" value="100" aria-label="Canvas zoom">
           <output id="canvasZoomValue" for="canvasZoom">100%</output>
           <button type="button" id="zoomIn" aria-label="Zoom canvas in">+</button>
+          <button type="button" id="zoomFit" aria-label="Fit graph to canvas">Fit</button>
           <button type="button" id="zoomReset">Reset</button>
         </div>
         <div class="flowsheet-canvas empty" id="flowsheetCanvas">
           <div class="empty-canvas">
             <span class="eyebrow">Blank factory</span>
-            <strong>Add a process block to begin</strong>
-            <p>Pick a block from the build menu, then click two compatible ports to connect them.</p>
+            <strong>Recommended path</strong>
+            <p>1) Set site coords or load a demo · 2) Add sources, process blocks, and sinks · 3) Connect ports · 4) Size to target · 5) Read economics for co-product cashflow. Shift-drag or middle-drag to pan; use Fit after loading a demo.</p>
           </div>
         </div>
       </div>

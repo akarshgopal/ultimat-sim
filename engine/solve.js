@@ -556,12 +556,17 @@ function solveHorizon(caseDefinition) {
       }
     }
     const sabatier = hourCase.graph.nodes.find(node => node.unit === 'sabatier');
-    if (sabatier && power > 0) {
+    const electrolyzer = hourCase.graph.nodes.find(node => node.unit === 'electrolyzer');
+    const swro = hourCase.graph.nodes.find(node => node.unit === 'swro');
+    const dac = hourCase.graph.nodes.find(node => String(node.unit).startsWith('dac'));
+    const dailySabatier = Number(caseDefinition.operation?.setpoints?.[sabatier?.id] ?? 0);
+    const sabatierCap = Number(caseDefinition.graph.nodes.find(item => item.id === sabatier?.id)?.capacity ?? 0);
+    const sabatierActive = Boolean(sabatier && dailySabatier > 0 && sabatierCap > 0);
+    const dailyH2 = Number(caseDefinition.operation?.setpoints?.[electrolyzer?.id] ?? 0);
+    const h2Led = Boolean(electrolyzer && dailyH2 > 0 && !sabatierActive);
+    if (sabatierActive && power > 0) {
       const h2 = 4 * 2.01588 / 16.04246;
       const co2 = 44.0095 / 16.04246;
-      const dac = hourCase.graph.nodes.find(node => String(node.unit).startsWith('dac'));
-      const electrolyzer = hourCase.graph.nodes.find(node => node.unit === 'electrolyzer');
-      const swro = hourCase.graph.nodes.find(node => node.unit === 'swro');
       const recovery = Number(swro?.params?.recovery ?? 0.45) || 0.45;
       // Alkaline system SEC fallback; Buttler & Spliethoff 2018. Coastal PEM cases pass 55 explicitly.
       const secH2 = Number(electrolyzer?.params?.secKWhPerKgH2 ?? 52);
@@ -577,6 +582,32 @@ function solveHorizon(caseDefinition) {
       if (dac) hourCase.operation.setpoints[dac.id] = methaneHour * co2;
       if (electrolyzer) hourCase.operation.setpoints[electrolyzer.id] = methaneHour * h2;
       if (swro) hourCase.operation.setpoints[swro.id] = methaneHour * h2 * 18.01528 / 2.01588 / 1000 / recovery;
+    } else if (h2Led && power > 0) {
+      const recovery = Number(swro?.params?.recovery ?? 0.45) || 0.45;
+      const secH2 = Number(electrolyzer?.params?.secKWhPerKgH2 ?? 52);
+      const secRo = Number(swro?.params?.secKWhPerM3 ?? 3.5);
+      const waterKgPerKgH2 = 18.01528 / 2.01588;
+      const swroM3PerKgH2 = swro ? waterKgPerKgH2 / 1000 / recovery : 0;
+      const kWhPerKgH2 = secH2 + swroM3PerKgH2 * secRo;
+      // Daily lump capacity (/24) cannot deliver a solar-sized daily H2 target in
+      // daylight-only hours. Allow catch-up up to remaining demand / sunLeft.
+      const catchUp = (remainingDemand[electrolyzer.id] || 0) / sunLeft;
+      const dailyCap = Number(caseDefinition.graph.nodes.find(item => item.id === electrolyzer.id)?.capacity ?? 0);
+      electrolyzer.capacity = Math.max(electrolyzer.capacity || 0, catchUp, dailyCap);
+      const h2Hour = Math.min(
+        catchUp,
+        electrolyzer.capacity,
+        kWhPerKgH2 > 0 ? power / kWhPerKgH2 : 0
+      );
+      hourCase.operation.setpoints[electrolyzer.id] = h2Hour;
+      if (swro) {
+        const swroCatch = h2Hour * swroM3PerKgH2;
+        const swroDaily = Number(caseDefinition.graph.nodes.find(item => item.id === swro.id)?.capacity ?? 0);
+        swro.capacity = Math.max(swro.capacity || 0, swroCatch, swroDaily);
+        hourCase.operation.setpoints[swro.id] = swroCatch;
+      }
+      if (sabatier) hourCase.operation.setpoints[sabatier.id] = 0;
+      if (dac) hourCase.operation.setpoints[dac.id] = 0;
     }
     const solved = solveOperation(hourCase);
     accumulateSolved(totals, solved);
@@ -595,9 +626,11 @@ function solveHorizon(caseDefinition) {
     soc = Math.max(0, soc - Math.max(0, supplied - pv));
     soc = Math.min(batteryKWh, soc + Math.min(Math.max(0, pv - supplied) * eta, powerKW));
     const methane = solved.nodes.sabatier?.activity || 0;
+    const h2 = solved.nodes.electrolyzer?.activity || 0;
     totals.horizon.hours.push({
       hour, pv, discharge, soc, supplied,
       methane,
+      h2,
       limited: Object.entries(solved.nodes)
         .filter(([, result]) => result.limitedBy?.length)
         .map(([id]) => id),
@@ -611,7 +644,7 @@ function solveHorizon(caseDefinition) {
   }
 
   totals.warnings = totals.warnings.concat(
-    totals.horizon.hours.filter(entry => entry.pv === 0 && entry.methane === 0).length === 24
+    totals.horizon.hours.filter(entry => entry.pv === 0 && entry.methane === 0 && (entry.h2 || 0) === 0).length === 24
       ? []
       : [`${totals.horizon.hours.filter(entry => entry.pv > 0).length} daylight hours on the selected typical day`]
   );

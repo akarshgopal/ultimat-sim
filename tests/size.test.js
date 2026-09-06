@@ -329,3 +329,29 @@ test('H2 sizing does not credit parked Sabatier waste heat', () => {
   assert.ok((heat.params.stream.kWh || 0) < 1e-9);
   assert.ok(Math.abs(sized.achieved - 10) < 1e-6);
 });
+
+
+const { solveHorizon } = require('../engine/solve');
+
+test('coastal H2 size closes mass balance and horizon produces hydrogen', () => {
+  const sized = sizeToProduct({ product: 'H2', rate: 15, caseOrBuilder: () => createCoastalCase(0) });
+  assert.equal(sized.product, 'H2');
+  assert.ok(Math.abs(sized.achieved - 15) < 1e-6);
+  assert.ok(sized.solved.balances.maxAbsResidual < 1e-6);
+  assert.ok(sized.definition.graph.nodes.some(node => node.id === 'hydrogen' && node.unit === 'material-sink'));
+  const edge = sized.definition.graph.edges.find(item => item.from.node === 'electrolyzer' && item.from.port === 'hydrogen');
+  assert.equal(edge.to.node, 'hydrogen');
+  const horizon = solveHorizon(sized.definition);
+  assert.ok(horizon.nodes.electrolyzer.activity > 1, `horizon H2 activity ${horizon.nodes.electrolyzer.activity}`);
+  assert.ok(horizon.nodes.electrolyzer.activity <= 15 + 1e-6);
+  if (horizon.nodes.electrolyzer.activity + 1e-6 < 15) {
+    assert.ok(horizon.nodes.electrolyzer.limitedBy.length, 'undersized horizon must name a binding constraint');
+  }
+});
+
+test('coastal CH4 size still produces methane on the horizon', () => {
+  const sized = sizeToProduct({ product: 'CH4', rate: 5, caseOrBuilder: () => createCoastalCase(0) });
+  assert.ok(Math.abs(sized.achieved - 5) < 1e-6);
+  const horizon = solveHorizon(sized.definition);
+  assert.ok(horizon.nodes.sabatier.activity > 0.5);
+});

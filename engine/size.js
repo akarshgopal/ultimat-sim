@@ -481,6 +481,64 @@ function applyDuties(definition, duties) {
   definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
 }
 
+function ensureHydrogenOfftake(definition, electrolyzer, sabatier) {
+  if (!electrolyzer) return;
+  const edges = definition.graph.edges || (definition.graph.edges = []);
+  const h2Edge = edges.find(edge => edge.from?.node === electrolyzer.id && edge.from?.port === 'hydrogen');
+  const sinkId = 'hydrogen';
+  let sink = nodeBy(definition, node => node.id === sinkId)
+    || nodeBy(definition, node => node.unit === 'material-sink' && /h2|hydrogen/i.test(node.id));
+  if (!sink) {
+    sink = { id: sinkId, unit: 'material-sink' };
+    definition.graph.nodes.push(sink);
+  }
+  const previousSink = h2Edge?.to?.node;
+  if (h2Edge) {
+    // Parked Sabatier must not swallow product H2 — sell/vent through a sink.
+    if (h2Edge.to?.node !== sink.id) h2Edge.to = { node: sink.id, port: 'in' };
+  } else {
+    edges.push({ from: { node: electrolyzer.id, port: 'hydrogen' }, to: { node: sink.id, port: 'in' } });
+  }
+  if (sabatier) {
+    // Sabatier.hydrogen is required; feed a zero stream so validation stays closed while parked.
+    const parkId = 'hydrogen-park';
+    let park = nodeBy(definition, node => node.id === parkId);
+    const parkStream = {
+      kind: 'material',
+      mol: { H2: 0 },
+      phase: 'gas',
+      T_C: 25,
+      P_bar: 1,
+    };
+    if (!park) {
+      park = {
+        id: parkId,
+        unit: 'material-source',
+        siteResource: parkId,
+        params: { stream: parkStream },
+      };
+      definition.graph.nodes.push(park);
+    } else {
+      park.siteResource = parkId;
+      park.params = park.params || {};
+      park.params.stream = parkStream;
+    }
+    if (definition.site) {
+      definition.site.resources = definition.site.resources || {};
+      definition.site.resources[parkId] = {
+        stream: parkStream,
+        quality: 'user-assumption',
+        evidence: 'Zero H2 feed to keep parked Sabatier ports valid while product H2 goes to offtake',
+      };
+    }
+    const sabH2 = edges.find(edge => edge.to?.node === sabatier.id && edge.to?.port === 'hydrogen');
+    if (sabH2) sabH2.from = { node: park.id, port: 'out' };
+    else if (previousSink === sabatier.id || !edges.some(edge => edge.to?.node === sabatier.id && edge.to?.port === 'hydrogen')) {
+      edges.push({ from: { node: park.id, port: 'out' }, to: { node: sabatier.id, port: 'hydrogen' } });
+    }
+  }
+}
+
 function applyH2Duties(definition, duties) {
   const chain = h2Chain(definition);
   const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
@@ -492,6 +550,7 @@ function applyH2Duties(definition, duties) {
   }
   parkConverter(definition, chain.sabatier);
   parkConverter(definition, chain.dac);
+  ensureHydrogenOfftake(definition, chain.electrolyzer, chain.sabatier);
 
   const water = chain.water
     || nodeBy(definition, node => node.id === 'seawater')

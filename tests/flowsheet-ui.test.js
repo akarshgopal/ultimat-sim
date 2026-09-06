@@ -417,9 +417,9 @@ test('site footprint and network rollup carry land and money quality chips', () 
   const network = context.__elements.get('networkMetrics').innerHTML;
   assert.match(network, /quality-chip quality-screening/);
   assert.match(network, /quality-chip quality-assumption/);
-  assert.match(network, /quality-chip quality-cited/);
   assert.match(network, /Land/);
   assert.match(network, /Freight/);
+  assert.match(network, /Not modeled \(no corridors\)/);
   assert.match(network, /UNCTAD/);
 });
 
@@ -481,4 +481,40 @@ test('an incomplete baseline has no economics until a complete graph is captured
   assert.match(context.__elements.get('comparisonStatus').textContent, /Baseline economics unavailable/);
   app.captureBaseline();
   assert.match(context.__elements.get('comparisonMetrics').innerHTML, /CAPEX/);
+});
+
+
+test('coastal methane sizeToProduct H2 produces electrolyzer activity and never Limited by Nothing at zero', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(0);
+  const sized = app.sizeToProduct('H2', 15);
+  assert.equal(sized.product, 'H2');
+  assert.ok(app.result.nodes.electrolyzer.activity > 1, `UI electrolyzer activity ${app.result.nodes.electrolyzer.activity}`);
+  const metrics = context.__elements.get('inspectorMetrics').innerHTML;
+  assert.match(metrics, /Achieved/);
+  assert.doesNotMatch(metrics, /Achieved<\/dt><dd>0[^<]*<\/dd>.*Limited by<\/dt><dd>Nothing/);
+  assert.doesNotMatch(metrics, /Limited by<\/dt><dd>Nothing/);
+  const electricity = app.graph.nodes.find(node => node.id === 'electricity');
+  assert.ok(electricity.rate > 0);
+});
+
+test('blank canvas and draft site copy guide onboarding', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.clearFactory();
+  const canvas = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(canvas, /Recommended path/);
+  assert.match(canvas, /Size to target/);
+  assert.match(context.__elements.get('siteName').textContent, /Draft site|Choose a site|Almer/);
+});
+
+test('formatNumber hides false precision near zero', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  // Drive inspector balances through a tiny residual by loading coastal and checking status formatting indirectly via size residual display.
+  app.loadCoastalMethane(0);
+  app.sizeToProduct('H2', 15);
+  const status = context.__elements.get('sizeToTargetStatus').textContent;
+  assert.doesNotMatch(status, /2\.78e-17|2\.775/);
 });

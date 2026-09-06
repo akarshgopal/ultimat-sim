@@ -400,7 +400,13 @@
   document.getElementById('zoomOut').addEventListener('click', () => setCanvasZoom(canvasZoom - 0.1));
   document.getElementById('zoomIn').addEventListener('click', () => setCanvasZoom(canvasZoom + 0.1));
   document.getElementById('zoomReset').addEventListener('click', () => setCanvasZoom(1));
+  document.getElementById('zoomFit')?.addEventListener('click', fitCanvas);
   document.getElementById('canvasZoom').addEventListener('input', event => setCanvasZoom(Number(event.target.value) / 100));
+  document.getElementById('economicsAck')?.addEventListener('change', event => {
+    setEconomicsAcknowledgment(event.target.checked);
+    renderEconomics();
+    renderNetwork();
+  });
   document.getElementById('captureBaseline').addEventListener('click', captureBaseline);
   document.getElementById('clearBaseline').addEventListener('click', clearBaseline);
   document.getElementById('projectLifeYears').addEventListener('input', handleProjectEconomics);
@@ -459,6 +465,23 @@
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
   canvas.addEventListener('wheel', handleCanvasWheel, { passive: false });
+
+  let canvasPan = null;
+  canvas.addEventListener('pointerdown', event => {
+    const middle = event.button === 1;
+    const shiftDrag = event.button === 0 && event.shiftKey;
+    if (!middle && !shiftDrag) return;
+    event.preventDefault();
+    canvasPan = { x: event.clientX, y: event.clientY, left: canvas.scrollLeft, top: canvas.scrollTop };
+    canvas.setPointerCapture?.(event.pointerId);
+  });
+  canvas.addEventListener('pointermove', event => {
+    if (!canvasPan) return;
+    canvas.scrollLeft = canvasPan.left - (event.clientX - canvasPan.x);
+    canvas.scrollTop = canvasPan.top - (event.clientY - canvasPan.y);
+  });
+  canvas.addEventListener('pointerup', () => { canvasPan = null; });
+  canvas.addEventListener('pointercancel', () => { canvasPan = null; });
   canvas.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
@@ -635,8 +658,8 @@
   function formatSizingResidual(value) {
     const residual = Number(value);
     if (!Number.isFinite(residual)) return '—';
-    if (residual === 0) return '0';
-    if (residual < 1e-4) return residual.toExponential(2);
+    if (Math.abs(residual) < 1e-9) return '0';
+    if (Math.abs(residual) < 1e-4) return residual.toExponential(2);
     return residual.toLocaleString('en-US', { maximumFractionDigits: 4 });
   }
 
@@ -973,6 +996,8 @@
     pendingPort = null;
     autoArrange();
     solveAndRender();
+    const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
+    schedule(() => fitCanvas());
   }
 
   function replaceUnit(nodeId, nextUnit) {
@@ -1193,6 +1218,7 @@
   }
 
   function startDrag(event) {
+    if (event.button === 1 || event.shiftKey) return;
     if (event.target.closest('[data-port]')) return;
     const nodeId = event.target.closest('[data-node]')?.dataset.node;
     if (!nodeId) return;
@@ -1237,6 +1263,26 @@
   function setCanvasZoom(value) {
     canvasZoom = clampZoom(value);
     renderGraph();
+    persistAutosave();
+  }
+
+  function fitCanvas() {
+    if (!graph.nodes.length) {
+      setCanvasZoom(1);
+      canvas.scrollTop = 0;
+      canvas.scrollLeft = 0;
+      return;
+    }
+    const maxX = Math.max(...graph.nodes.map(current => current.position.x + NODE_WIDTH));
+    const maxY = Math.max(...graph.nodes.map(current => current.position.y + nodeHeight(current)));
+    const pad = 48;
+    const availW = Math.max(240, canvas.clientWidth - pad);
+    const availH = Math.max(180, canvas.clientHeight - pad);
+    const zoom = clampZoom(Math.min(availW / Math.max(maxX, 1), availH / Math.max(maxY, 1), 1));
+    canvasZoom = zoom;
+    renderGraph();
+    canvas.scrollTop = 0;
+    canvas.scrollLeft = 0;
     persistAutosave();
   }
 
@@ -1457,8 +1503,13 @@
     if (graph.nodes.length && missingConnections().length === 0) {
       try {
         const solver = FlowsheetSolver.solveHorizon || FlowsheetSolver.solveOperation;
-        result = solver({ graph, operation: { setpoints }, site });
-        currentEconomics = FlowsheetEconomics.evaluateEconomics({ graph, operation: { setpoints }, economics: projectEconomics }, result);
+        const operation = {
+          setpoints,
+          ...(cleanedPriorities() ? { priorities: cleanedPriorities() } : {}),
+          ...(operationMeta.boundaryLimitedBy ? { boundaryLimitedBy: operationMeta.boundaryLimitedBy } : {}),
+        };
+        result = solver({ graph, operation, site });
+        currentEconomics = FlowsheetEconomics.evaluateEconomics({ graph, operation, economics: projectEconomics }, result);
         solveError = '';
       } catch (error) { solveError = error.message; }
     }
@@ -1496,7 +1547,7 @@
     renderCanvasZoom();
     if (!graph.nodes.length) {
       canvas.classList.add('empty');
-      canvas.innerHTML = '<div class="empty-canvas"><span class="eyebrow">Blank factory</span><strong>Add a process block to begin</strong><p>Pick a block from the build menu, then click two compatible ports to connect them.</p></div>';
+      canvas.innerHTML = '<div class="empty-canvas"><span class="eyebrow">Blank factory</span><strong>Recommended path</strong><p>1) Set site coords or load a demo · 2) Add sources, process blocks, and sinks · 3) Connect ports · 4) Size to target · 5) Read economics for co-product cashflow. Shift-drag or middle-drag to pan; use Fit after loading a demo.</p></div>';
       return;
     }
     canvas.classList.remove('empty');
@@ -1535,7 +1586,8 @@
       const cy = y + 66 + index * 24;
       const cx = direction === 'in' ? x : x + NODE_WIDTH;
       const selected = pendingPort?.node === current.id && pendingPort.port === port;
-      return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 13 : cx - 13}" y="${cy + 4}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port)}</text></g>`;
+      const portLabel = `${direction === 'in' ? 'Connect' : 'Connect'} ${portName(port)} ${direction === 'in' ? 'in' : 'out'}`;
+      return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0" aria-label="${portLabel}" title="${portLabel}"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 13 : cx - 13}" y="${cy + 4}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port)}</text></g>`;
     }).join('');
     return `<g class="flow-node${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}" data-node="${current.id}" tabindex="0">${bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : ''}<rect x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="10"/><text class="node-kind" x="${x + 16}" y="${y + 20}">${units[current.unit].kind}</text><text class="node-label" x="${x + 16}" y="${y + 42}">${current.label}</text><text class="node-value" x="${x + 16}" y="${y + height - 12}">${value}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
   }
@@ -1674,10 +1726,19 @@
     }
   }
 
+  function draftSiteLabel() {
+    const lat = document.getElementById('siteLatitude')?.value;
+    const lon = document.getElementById('siteLongitude')?.value;
+    if (lat !== undefined && lat !== '' && lon !== undefined && lon !== '') {
+      return `Draft site · ${lat}, ${lon} (apply location)`;
+    }
+    return 'Choose a site';
+  }
+
   function renderSite() {
     const panel = document.getElementById('sitePanel');
     panel.hidden = false;
-    document.getElementById('siteName').textContent = site?.name || 'No site selected';
+    document.getElementById('siteName').textContent = site?.name || draftSiteLabel();
     document.getElementById('siteNotes').textContent = site?.notes || '';
     document.getElementById('siteLatitude').value = site?.latitude ?? 36.834;
     document.getElementById('siteLongitude').value = site?.longitude ?? -2.463;
@@ -1805,7 +1866,11 @@
     const freightQuality = classifyQuality({ kind: 'freight' });
     const landQuality = classifyQuality({ kind: 'land' });
     const moneyQuality = classifyQuality({ kind: 'money' });
-    status.textContent = `${networkResult.plants.length} plants · ${formatHa(networkResult.landHa)} site footprint · freight ${formatUncertainMoney(networkResult.freight, freightQuality)}/year`;
+    const corridorCount = networkResult.corridors?.length || 0;
+    const freightLabel = corridorCount
+      ? `freight ${formatUncertainMoney(networkResult.freight, freightQuality)}/year`
+      : 'freight not modeled (no corridors)';
+    status.textContent = `${networkResult.plants.length} plants · ${formatHa(networkResult.landHa)} site footprint · ${freightLabel}`;
     const transferred = networkResult.transferred || new Set();
     plants.innerHTML = networkResult.plants.map(plant => {
       const siteName = plant.definition.site?.name || 'Unspecified site';
@@ -1816,13 +1881,14 @@
       const landText = plant.footprint ? `${formatHa(plant.footprint.totalHa)} footprint` : '';
       return `<div class="network-plant"><div class="network-plant-copy"><strong>${plant.name}</strong><small>${siteName}${landText ? ` · ${landText}` : ''}</small><small>${leadText}</small></div><button type="button" data-open-plant="${plant.id}">Open</button></div>`;
     }).join('');
+    const showBankable = corridorCount > 0 || economicsAcknowledgment();
     metrics.innerHTML = metricRows([
       ['CAPEX', formatUncertainMoney(networkResult.installedCapex, moneyQuality), { quality: moneyQuality }],
-      ['NPV', formatUncertainMoney(networkResult.npv, moneyQuality), { quality: moneyQuality }],
+      ['NPV', showBankable ? formatUncertainMoney(networkResult.npv, moneyQuality) : 'hidden until acknowledged / corridors', { quality: moneyQuality }],
       ['Net cash', formatUncertainMoney(networkResult.annualNetCash, moneyQuality), { quality: moneyQuality }],
       ['Revenue', formatUncertainMoney(networkResult.annualRevenue, moneyQuality), { quality: moneyQuality }],
       ['Cost', formatUncertainMoney(networkResult.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
-      ['Freight', `${formatUncertainMoney(networkResult.freight, freightQuality)}/year`, { quality: freightQuality, references: FREIGHT_CITES }],
+      ['Freight', corridorCount ? `${formatUncertainMoney(networkResult.freight, freightQuality)}/year` : 'Not modeled (no corridors)', { quality: corridorCount ? freightQuality : 'assumed', references: FREIGHT_CITES }],
       ['Land', formatUncertainHa(networkResult.landHa), { quality: landQuality }],
     ]);
     const ranked = Object.entries(networkResult.slate).sort((left, right) => right[1] - left[1]);
@@ -1833,7 +1899,7 @@
     }).join('');
     corridors.innerHTML = networkResult.corridors.length
       ? networkResult.corridors.map(corridor => `<div class="corridor-row">${corridor.substance} · ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatUncertainMoney(corridor.annualFreight, freightQuality)}/year ${qualityChip(freightQuality)}${citeMarkup(FREIGHT_CITES)}</div>`).join('')
-      : '<p class="status-meta">No haul corridors. Plants trade with markets until a corridor is added.</p>';
+      : '<p class="status-meta">No haul corridors — freight is not modeled (not a free logistics win). Add corridors or treat market offtake as an explicit assumption.</p>';
   }
 
   function renderInspector() {
@@ -1856,7 +1922,7 @@
     const metrics = nodeResult?.activity !== undefined ? [
       ['Achieved', `${formatNumber(nodeResult.activity)} ${catalog[current.unit].activityUnit}`],
       ['Requested', `${formatNumber(setpoints[current.id])} ${catalog[current.unit].activityUnit}`],
-      ['Limited by', nodeResult.limitedBy.join(', ') || 'Nothing'],
+      ['Limited by', formatLimitedBy(current, nodeResult)],
     ] : nodeResult?.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')]] : [];
     document.getElementById('inspectorMetrics').innerHTML = metricRows([...metrics, ...economicsRows(current)]);
     document.getElementById('streamList').innerHTML = Object.entries(units[current.unit].ports).map(([port, declaration]) => renderInspectorPort(current, port, declaration)).join('');
@@ -1988,31 +2054,69 @@
     return `<fieldset><legend>Destination economics</legend><label>Disposition<select name="economics" data-economics="disposition">${['sale', 'disposal', 'vent', 'reinjection'].map(value => `<option value="${value}"${economics.disposition === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>${field('unitPrice', 'Sale price / unit')}${field('annualDemandLimit', 'Annual demand limit', '1')}${field('disposalCost', 'Disposal cost / unit')}</fieldset>`;
   }
 
+  function economicsAcknowledgment() {
+    if (!storage) return false;
+    try { return storage.getItem('flowsheet-economics-ack') === '1'; } catch { return false; }
+  }
+
+  function setEconomicsAcknowledgment(value) {
+    if (!storage) return;
+    try { storage.setItem('flowsheet-economics-ack', value ? '1' : '0'); } catch { /* ignore */ }
+  }
+
+  function economicsGateReasons() {
+    const reasons = [];
+    const rights = unverifiedRightsWarnings?.(site) || [];
+    if (rights.length) reasons.push('site rights unverified');
+    if (network.plants.length && !(network.corridors || []).length) {
+      reasons.push('no haul corridors / market freight');
+    }
+    return reasons;
+  }
+
   function renderEconomics() {
     const metrics = document.getElementById('economicsMetrics');
     const status = document.getElementById('economicsStatus');
+    const banner = document.getElementById('economicsBanner');
+    const ack = document.getElementById('economicsAck');
     document.getElementById('projectLifeYears').value = projectEconomics.projectLifeYears;
     document.getElementById('discountRate').value = projectEconomics.discountRate * 100;
+    if (ack && ack.checked !== economicsAcknowledgment()) ack.checked = economicsAcknowledgment();
     if (!currentEconomics) {
       status.textContent = result ? `Economics unavailable: ${solveError}` : 'Complete the graph to calculate viability.';
       metrics.innerHTML = '';
+      if (banner) banner.hidden = true;
       return;
     }
     const moneyQuality = classifyQuality({ kind: 'money' });
     const productQuality = classifyQuality({ kind: 'product-cost' });
-    status.textContent = `${currentEconomics.periodDays} operating days/year · illustrative assumptions; edit any source, block, or destination in the inspector.`;
-    metrics.innerHTML = metricRows([
+    const gate = economicsGateReasons();
+    const showBankable = !gate.length || economicsAcknowledgment();
+    if (banner) {
+      banner.hidden = !gate.length;
+      banner.textContent = gate.length
+        ? `Screening — not bankable (${gate.join('; ')}). Acknowledge below to reveal IRR/NPV.`
+        : '';
+    }
+    status.textContent = `${currentEconomics.periodDays} operating days/year · screening co-product cashflow; edit assumptions in the inspector.`;
+    const rows = [
       ['Installed CAPEX', formatUncertainMoney(currentEconomics.installedCapex, moneyQuality), { quality: moneyQuality }],
       ['Annual revenue', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), { quality: moneyQuality }],
       ['Annual operating cost', formatUncertainMoney(currentEconomics.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
       ['Annual net cash', formatUncertainMoney(currentEconomics.annualNetCash, moneyQuality), { quality: moneyQuality }],
-      ['NPV', formatUncertainMoney(currentEconomics.npv, moneyQuality), { quality: moneyQuality }],
-      ['IRR', formatRate(currentEconomics.irr), { quality: moneyQuality }],
-      ['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatUncertainMoney(currentEconomics.levelizedDeliveredCost, productQuality)}/unit`, { quality: productQuality }],
-      ...(currentEconomics.sinks || []).filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0).map(sink => (
-        [`Sold ${sink.id}`, `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`, { quality: productQuality }]
-      )),
-    ]);
+    ];
+    if (showBankable) {
+      rows.push(['NPV', formatUncertainMoney(currentEconomics.npv, moneyQuality), { quality: moneyQuality }]);
+      rows.push(['IRR', formatRate(currentEconomics.irr), { quality: moneyQuality }]);
+    } else {
+      rows.push(['NPV', 'hidden until acknowledged', { quality: moneyQuality }]);
+      rows.push(['IRR', 'hidden until acknowledged', { quality: moneyQuality }]);
+    }
+    rows.push(['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatUncertainMoney(currentEconomics.levelizedDeliveredCost, productQuality)}/unit`, { quality: productQuality }]);
+    rows.push(...(currentEconomics.sinks || []).filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0).map(sink => (
+      [`Sold ${sink.id}`, `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`, { quality: productQuality }]
+    )));
+    metrics.innerHTML = metricRows(rows);
   }
 
   function renderInspectorPort(current, port, declaration) {
@@ -2048,7 +2152,32 @@
     return `${formatNumber(stream.kWh)} kWh/day${stream.kind === 'heat' ? ` @ ${stream.T_C}°C` : ''}`;
   }
 
-  function formatNumber(value) { return Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+  function formatLimitedBy(current, nodeResult) {
+    const limits = [...(nodeResult?.limitedBy || [])];
+    if (operationMeta.boundaryLimitedBy?.length) {
+      for (const item of operationMeta.boundaryLimitedBy) {
+        if (!limits.includes(item)) limits.push(item);
+      }
+    }
+    const requested = Number(setpoints[current.id]);
+    const achieved = Number(nodeResult?.activity);
+    if (limits.length) return limits.join(', ');
+    if (Number.isFinite(requested) && requested > 0 && Number.isFinite(achieved) && achieved <= requested * 1e-9) {
+      return 'unresolved constraint';
+    }
+    if (Number.isFinite(requested) && requested > 0 && Number.isFinite(achieved) && achieved + 1e-9 < requested) {
+      return 'below setpoint';
+    }
+    return 'none';
+  }
+
+  function formatNumber(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    if (Math.abs(n) < 1e-9) return '0';
+    if (Math.abs(n) > 0 && Math.abs(n) < 1e-4) return n.toExponential(2);
+    return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
   function formatUncertainHa(ha, quality = classifyQuality({ kind: 'land' })) {
     const value = Number(ha) || 0;
     if (value >= 1) return formatUncertainNumber(value, quality, { unit: 'ha' });
@@ -2126,7 +2255,7 @@
     completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, sizeToProduct, loadAbundanceHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation,
     saveNamed, loadNamed, captureBaseline, clearBaseline,
-    solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },
+    solve: solveAndRender, fitCanvas, get result() { return result; }, get baseline() { return baseline; },
     get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },
     get sizing() { return lastSizing; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },

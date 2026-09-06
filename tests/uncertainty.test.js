@@ -56,8 +56,26 @@ test('intensities follow catalog source notes', () => {
     unit: 'dac-electroswing',
     sourceNote: 'Voskian & Hatton 2019 cell work 40–90 kJ/mol CO₂ (0.25–0.57 kWh/kg).',
   }), 'cited');
-  assert.equal(classifyQuality({ kind: 'intensity', unit: 'swro', references: [{ label: 'Elimelech' }] }), 'recoverable');
-  assert.equal(classifyQuality({ kind: 'intensity', unit: 'sabatier' }), 'assumption');
+  assert.equal(classifyQuality({
+    kind: 'intensity',
+    unit: 'dac-liquid',
+    sourceNote: 'Keith et al. 2018 Carbon Engineering process. Capture fraction 0.75 is Keith et al. 2018 Table 1 74.5% rounded. KOH makeup 0.01 kg/kg CO₂ is screening, not a Keith table value.',
+  }), 'cited');
+  assert.equal(classifyQuality({
+    kind: 'intensity',
+    unit: 'swro',
+    sourceNote: 'Default 3.5 kWh/m³ is a plant-level SEC in the Elimelech & Phillip 2011 3–4 kWh/m³ band. Ghaffour et al. 2013 reports the same 3–4 kWh/m³ SWRO plant band.',
+    references: [{ label: 'Elimelech & Phillip 2011' }, { label: 'Ghaffour et al. 2013' }],
+  }), 'cited');
+  assert.equal(classifyQuality({ kind: 'intensity', unit: 'swro', references: [{ label: 'Elimelech' }] }), 'cited');
+  assert.equal(classifyQuality({ kind: 'intensity', unit: 'med', sourceNote: 'Ghaffour et al. 2013 MED band (1.5–2.5 kWh/m³ e).' }), 'cited');
+  assert.equal(classifyQuality({ kind: 'intensity', unit: 'msf', sourceNote: 'Ghaffour et al. 2013 MSF band (3–5 kWh/m³ e).' }), 'cited');
+  assert.equal(classifyQuality({ kind: 'intensity', unit: 'sabatier' }), 'screening');
+  assert.equal(classifyQuality({
+    kind: 'intensity',
+    unit: 'sabatier',
+    sourceNote: 'Default 1 kWh/kg CH₄ is a screening ancillary load in a 0.4–1.5 kWh/kg band, not electrolysis. Zapf (via Baier et al. 2018) gives 0.4 kWh/m³ SNG.',
+  }), 'screening');
   assert.equal(classifyQuality({ kind: 'intensity', sourceNote: 'stoichiometry from molar masses' }), 'derived');
 });
 
@@ -88,6 +106,10 @@ test('a literature range is shown only when a real band is supplied', () => {
   assert.deepEqual(voskian, { low: 0.25, high: 0.57, unit: 'kWh/kg' });
   const alkaline = parseBand('commercial alkaline band (~4.5–5.0 kWh/Nm³ ≈ 50–56 kWh/kg)');
   assert.deepEqual(alkaline, { low: 50, high: 56, unit: 'kWh/kg' });
+  const elimelech = parseBand('Elimelech & Phillip 2011 3–4 kWh/m³ band');
+  assert.deepEqual(elimelech, { low: 3, high: 4, unit: 'kWh/m³' });
+  const sabatierBand = parseBand('screening ancillary load in a 0.4–1.5 kWh/kg band, not electrolysis');
+  assert.deepEqual(sabatierBand, { low: 0.4, high: 1.5, unit: 'kWh/kg' });
   assert.equal(parseBand('GHI bin 4–4.25 kWh/m²/day, ILR=1.34'), null);
 });
 

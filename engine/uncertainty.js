@@ -18,15 +18,15 @@ const QUALITY_TITLES = Object.freeze({
 // Family citations without a page-pinned number stay recoverable;
 // commodity-only links and undocumented SECs stay assumption.
 const UNIT_INTENSITY_QUALITY = Object.freeze({
-  swro: 'recoverable',
-  med: 'recoverable',
-  msf: 'recoverable',
+  swro: 'cited',
+  med: 'cited',
+  msf: 'cited',
   electrolyzer: 'cited',
   dac: 'screening',
   'dac-solid': 'screening',
   'dac-liquid': 'cited',
   'dac-electroswing': 'cited',
-  sabatier: 'assumption',
+  sabatier: 'screening',
   asu: 'recoverable',
   ammonia: 'recoverable',
   'brine-minerals': 'assumption',
@@ -69,10 +69,10 @@ function classifyFromNotes(context = {}) {
   if (/\bscreening\b/i.test(note) && /assumption|not a plant quote|order-of-magnitude|illustrative/i.test(note)) {
     return 'screening';
   }
-  if (/\bscreening\b/i.test(note) && !/nrel\s*atb|buttler|keith et al|voskian|pvgis|unctad|scenario [ac]\b/i.test(note)) {
+  if (/\bscreening\b/i.test(note) && !/nrel\s*atb|buttler|keith et al|voskian|pvgis|unctad|elimelech|ghaffour|scenario [ac]\b/i.test(note)) {
     return 'screening';
   }
-  if (/nrel\s*atb|buttler|keith et al|voskian|pvgis|unctad|scenario [ac]\b|class 8/i.test(note)) {
+  if (/nrel\s*atb|buttler|keith et al|voskian|pvgis|unctad|elimelech|ghaffour|scenario [ac]\b|class 8/i.test(note)) {
     return 'cited';
   }
   if (/not vendor quotes|editable assumption|user-assumption|not a voyage quote/i.test(note)) {

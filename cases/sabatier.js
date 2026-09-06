@@ -54,7 +54,7 @@ const DEFAULT_PARAMS = {
     ionRejection: 1,
   },
   electrolyzer: { secKWhPerKgH2: 52 }, // Buttler & Spliethoff 2018 alkaline system SEC
-  sabatier: { electricityKWhPerKgCH4: 1 },
+  sabatier: { electricityKWhPerKgCH4: 1 }, // screening ancillary 0.4–1.5 kWh/kg; Zapf via Baier 2018, not electrolysis
 };
 
 function scaleMaterial(stream, targetKg) {

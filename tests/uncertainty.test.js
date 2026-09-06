@@ -3,6 +3,7 @@ const test = require('node:test');
 const {
   QUALITIES,
   RIGHT_KEYS,
+  RIGHT_KINDS,
   RIGHT_STATUSES,
   classifyQuality,
   formatUncertainMoney,
@@ -12,6 +13,8 @@ const {
   unverifiedRightsWarnings,
   parseBand,
   citeMarkup,
+  authorizeForStatus,
+  rightIsAuthorized,
 } = require('../engine/uncertainty');
 
 test('quality classes match the constants audit', () => {
@@ -130,7 +133,7 @@ test('site meteo is cited for PVGIS and assay follows its declared class', () =>
   assert.equal(classifyQuality({
     kind: 'assay',
     quality: 'cited',
-    sourceNote: '35 g/kg global ocean salinity represented as NaCl',
+    sourceNote: 'Alboran MAW ~36.5 g/kg, Millero/Pilson S=35 majors scaled 36.5/35',
   }), 'cited');
   assert.equal(classifyQuality({
     kind: 'assay',
@@ -142,8 +145,15 @@ test('site meteo is cited for PVGIS and assay follows its declared class', () =>
 
 test('rights chips and unverified warnings stay separate from quality classes', () => {
   assert.deepEqual([...RIGHT_KEYS], [
-    'gridImport', 'freshwater', 'seawaterIntake', 'brineConcession', 'saltPurchase',
+    'gridImport', 'freshwater', 'seawaterIntake', 'seawaterDischarge', 'brineConcession', 'saltPurchase',
   ]);
+  assert.equal(RIGHT_KINDS.seawaterDischarge, 'discharge');
+  assert.equal(RIGHT_KINDS.brineConcession, 'concession');
+  assert.equal(authorizeForStatus('authorized'), true);
+  assert.equal(authorizeForStatus('assumed'), true);
+  assert.equal(authorizeForStatus('unverified'), false);
+  assert.equal(rightIsAuthorized({ status: 'assumed', authorize: true }), true);
+  assert.equal(rightIsAuthorized({ status: 'unverified', authorize: false }), false);
   assert.deepEqual([...RIGHT_STATUSES], ['authorized', 'assumed', 'unverified']);
   assert.match(rightsChip('authorized'), /rights-authorized/);
   assert.match(rightsChip('assumed'), /rights-assumed/);
@@ -154,10 +164,11 @@ test('rights chips and unverified warnings stay separate from quality classes', 
       gridImport: { status: 'unverified' },
       freshwater: { status: 'assumed' },
       seawaterIntake: { status: 'assumed' },
+      seawaterDischarge: { status: 'unverified' },
       brineConcession: { status: 'unverified' },
       saltPurchase: { status: 'authorized' },
     },
-  }), ['unverified site right: gridImport', 'unverified site right: brineConcession']);
+  }), ['unverified site right: gridImport', 'unverified site right: seawaterDischarge', 'unverified site right: brineConcession']);
 });
 
 test('qualityChip renders a known class and citeMarkup keeps source links', () => {

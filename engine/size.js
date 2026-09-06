@@ -46,6 +46,51 @@ const PRODUCT_ALIASES = {
   lithium: 'lithium',
   salt: 'salt',
 };
+const RESOURCE_RIGHT_KEY = Object.freeze({
+  grid: 'gridImport',
+  freshwater: 'freshwater',
+  seawater: 'seawaterIntake',
+  brine: 'brineConcession',
+  salt: 'saltPurchase',
+  discharge: 'seawaterDischarge',
+});
+
+function rightIsAuthorized(right) {
+  if (!right) return true;
+  if (right.authorize === true) return true;
+  if (right.authorize === false) return false;
+  return right.status === 'authorized' || right.status === 'assumed';
+}
+
+function assertSizeMayAssume(definition, resourceIds) {
+  const rights = definition?.site?.rights;
+  if (!rights) return;
+  for (const resourceId of resourceIds) {
+    const key = RESOURCE_RIGHT_KEY[resourceId];
+    if (!key) continue;
+    const right = rights[key];
+    if (right && !rightIsAuthorized(right)) {
+      throw new Error(`size-to-target cannot assume ${key}`);
+    }
+  }
+}
+
+function withholdUnauthorizedSupply(definition) {
+  const site = definition?.site;
+  if (!site?.resources) return;
+  if (site.resources.grid && !rightIsAuthorized(site.rights?.gridImport)) {
+    site.resources.grid.stream = { kind: 'electricity', kWh: 0 };
+  }
+  if (site.resources.freshwater && !rightIsAuthorized(site.rights?.freshwater)) {
+    site.resources.freshwater.stream = {
+      kind: 'material',
+      mol: { H2O: 0 },
+      phase: 'liquid',
+      T_C: 25,
+      P_bar: 1,
+    };
+  }
+}
 
 function cloneDefinition(definition) {
   return JSON.parse(JSON.stringify(definition));
@@ -332,15 +377,17 @@ function estimateH2Duties(definition, h2Kg, caps) {
   ]);
 }
 
-function setMaterial(node, targetKg) {
+function setMaterial(node, targetKg, definition) {
   if (!node?.params?.stream || node.params.stream.kind !== 'material') return;
+  if (definition && targetKg > 0) assertSizeMayAssume(definition, [node.siteResource]);
   const current = streamMassKg(node.params.stream);
   if (!(current > 0)) return;
   node.params.stream = scaleStream(node.params.stream, Math.max(0, targetKg) / current);
 }
 
-function setElectricity(node, kWh) {
+function setElectricity(node, kWh, definition) {
   if (!node?.params?.stream) return;
+  if (definition && kWh > 0) assertSizeMayAssume(definition, [node.siteResource]);
   node.params.stream = { kind: 'electricity', kWh: Math.max(0, kWh) };
 }
 
@@ -377,7 +424,7 @@ function applyPowerAndSite(definition, duties) {
   const electricity = electricityNode(definition);
   const previousKWp = Number(definition.site?.solarKWp) || 0;
   const electricityKWh = duties.yieldPerKWp > 0 ? duties.solarKWp * duties.yieldPerKWp : duties.electricityKWh;
-  setElectricity(electricity, electricityKWh);
+  setElectricity(electricity, electricityKWh, definition);
   scaleSolarEconomics(electricity, previousKWp, duties.solarKWp || 0);
 
   if (definition.site) {
@@ -390,6 +437,7 @@ function applyPowerAndSite(definition, duties) {
     if (definition.site.meteo && duties.yieldPerKWp > 0) {
       definition.site.meteo.dailyPVKWhPerKWp = duties.yieldPerKWp;
     }
+    withholdUnauthorizedSupply(definition);
   }
   syncSiteResource(definition, electricity);
 }
@@ -419,8 +467,8 @@ function applyDuties(definition, duties) {
   const consumables = nodeBy(definition, node => node.id === 'consumables')
     || nodeBy(definition, node => node.unit === 'consumable-source');
 
-  if (duties.airKg > 0) setMaterial(air, duties.airKg);
-  if (duties.seawaterKg > 0) setMaterial(seawater, duties.seawaterKg);
+  if (duties.airKg > 0) setMaterial(air, duties.airKg, definition);
+  if (duties.seawaterKg > 0) setMaterial(seawater, duties.seawaterKg, definition);
   // Purchased residual is duties.heatKWh. Cascade is accounting-only (no HEN,
   // no edge rewrite), so the heat-source still delivers residual + covered
   // process demand. Always write, including 0, to avoid a stale heat budget.
@@ -449,7 +497,7 @@ function applyH2Duties(definition, duties) {
     || nodeBy(definition, node => node.id === 'seawater')
     || nodeBy(definition, node => node.siteResource === 'seawater');
   const heat = nodeBy(definition, node => node.id === 'heat') || nodeBy(definition, node => node.siteResource === 'heat');
-  if (duties.seawaterKg > 0) setMaterial(water, duties.seawaterKg);
+  if (duties.seawaterKg > 0) setMaterial(water, duties.seawaterKg, definition);
   setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
   applyPowerAndSite(definition, duties);
   syncSiteResource(definition, water);
@@ -576,7 +624,7 @@ function applyMineralDuties(definition, duties) {
   setpoints[minerals.id] = duties.brineKg;
   minerals.capacity = duties.brineKg;
   const brine = brineSource(definition, minerals);
-  if (duties.brineKg >= 0) setMaterial(brine, duties.brineKg);
+  if (duties.brineKg >= 0) setMaterial(brine, duties.brineKg, definition);
   applyPowerAndSite(definition, duties);
   syncSiteResource(definition, brine);
   definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];

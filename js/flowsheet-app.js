@@ -11,6 +11,7 @@
     citeFrom,
     unverifiedRightsWarnings,
     RIGHT_KEYS,
+    RIGHT_KINDS,
     parseBand,
     citeMarkup,
   } = FlowsheetUncertainty;
@@ -766,6 +767,13 @@
     if (!site.resources.grid) {
       site.resources.grid = { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' };
     }
+    if (!site.resources.freshwater) {
+      site.resources.freshwater = {
+        stream: { kind: 'material', mol: { H2O: 0 }, phase: 'liquid', T_C: 25, P_bar: 1 },
+        quality: 'unverified',
+        evidence: 'Unverified freshwater access; zero authorized supply',
+      };
+    }
     const daily = (FlowsheetSolver.hourlyProfile?.(site) || hours || []).reduce((sum, value) => sum + value, 0);
     site.resources.electricity = {
       stream: { kind: 'electricity', kWh: daily * solarKWp },
@@ -784,12 +792,19 @@
     };
     if (!site.rights) {
       site.rights = {
-        gridImport: { status: 'unverified', note: 'Unverified grid access; zero authorized imports' },
-        freshwater: { status: 'unverified', note: 'Unverified freshwater access; zero authorized supply' },
-        seawaterIntake: { status: 'unverified', note: 'No seawater intake permit verified' },
-        brineConcession: { status: 'unverified', note: 'No brine or mineral concession verified' },
-        saltPurchase: { status: 'unverified', note: 'No salt purchase agreement verified' },
+        gridImport: { kind: 'grid', status: 'unverified', authorize: false, note: 'Unverified grid access; zero authorized imports' },
+        freshwater: { kind: 'freshwater', status: 'unverified', authorize: false, note: 'Unverified freshwater access; zero authorized supply' },
+        seawaterIntake: { kind: 'intake', status: 'unverified', authorize: false, note: 'No seawater intake permit verified' },
+        seawaterDischarge: { kind: 'discharge', status: 'unverified', authorize: false, note: 'No seawater discharge permit verified' },
+        brineConcession: { kind: 'concession', status: 'unverified', authorize: false, note: 'No brine or mineral concession verified' },
+        saltPurchase: { kind: 'purchase', status: 'unverified', authorize: false, note: 'No salt purchase agreement verified' },
       };
+    }
+    if (site.rights.gridImport?.authorize === false) {
+      site.resources.grid.stream = { kind: 'electricity', kWh: 0 };
+    }
+    if (site.rights.freshwater?.authorize === false) {
+      site.resources.freshwater.stream = { kind: 'material', mol: { H2O: 0 }, phase: 'liquid', T_C: 25, P_bar: 1 };
     }
     for (const current of graph.nodes.filter(item => units[item.unit].kind === 'source')) {
       if (!current.siteResource) assignSiteResource(current);
@@ -1753,7 +1768,9 @@
           if (!right) return '';
           const cites = citeFrom(right.evidence);
           const title = right.note ? ` title="${right.note.replace(/"/g, '&quot;')}"` : '';
-          return `<span class="rights-item"${title}>${key}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
+          const kind = right.kind || RIGHT_KINDS?.[key] || '';
+          const kindMark = kind ? `<span class="rights-kind">${kind}</span>` : '';
+          return `<span class="rights-item"${title}>${key}${kindMark}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
         }).join('');
       }
     }

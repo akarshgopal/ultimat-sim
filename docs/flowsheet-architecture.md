@@ -135,6 +135,10 @@ SOEC and enhanced rock weathering are separate future units because their steam/
 
 Energy CAPEX, O&M, tariffs, capacity factors, and simple levelized costs are editable scenario assumptions. Radiant and Valar do not publish comparable commercial overnight-cost schedules, so their presets describe configuration and scale while using visibly labeled user-editable cost assumptions rather than vendor quotes.
 
+### Uncertainty display
+
+The Foundry UI tags key outputs with quality classes from `docs/constants-audit.md` (`cited`, `recoverable`, `assumption`, `derived`, `screening`) via `engine/uncertainty.js`. LCOE is **cited** when the solar-pv catalog row uses NREL ATB; product cost is **screening**; site land is **assumption**; process intensities follow catalog `sourceNote` / references. Screening and assumption money uses a tilde and fewer significant figures. A numeric band is shown only when a source states a range. The UI never invents ± error bars.
+
 ## Unit contract
 
 Every converter declares one activity basis:
@@ -350,6 +354,7 @@ engine/
   units.js       # initial catalog and physics
   footprint.js   # location-aware solar land and process pads
   size.js        # outer methane sizing loop (capacities + solarKWp)
+  uncertainty.js # quality tags and screening-precision formatters
 cases/
   dac.js         # Stage 3 DAC acceptance fixture
   sabatier.js    # Integrated air + water to methane fixture

@@ -110,6 +110,7 @@ test('sizeToTarget does not mutate the input case', () => {
 test('the Foundry page loads engine/size.js and the size-to-target control', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /engine\/size\.js/);
+  assert.match(html, /engine\/uncertainty\.js/);
   assert.match(html, /id="sizeToTarget"/);
   assert.match(html, /id="sizeTargetCh4"/);
   assert.match(html, /id="sizeToTargetStatus"/);

@@ -864,6 +864,81 @@
 .literature-links { margin-top: 8px; color: var(--text-muted); font-size: 0.68rem; line-height: 1.4; }
 .literature-links a { color: var(--electric); }
 
+.quality-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  vertical-align: middle;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  white-space: nowrap;
+}
+
+.quality-chip.quality-cited {
+  color: var(--success);
+  border-color: rgba(126, 169, 109, 0.45);
+  background: rgba(126, 169, 109, 0.12);
+}
+
+.quality-chip.quality-recoverable {
+  color: var(--electric);
+  border-color: rgba(95, 127, 184, 0.45);
+  background: rgba(95, 127, 184, 0.12);
+}
+
+.quality-chip.quality-assumption,
+.quality-chip.quality-screening {
+  color: var(--warning);
+  border-color: rgba(199, 154, 72, 0.5);
+  background: rgba(199, 154, 72, 0.12);
+}
+
+.quality-chip.quality-derived {
+  color: var(--text-secondary);
+  border-color: var(--border-light);
+}
+
+.quality-band,
+.number-cite {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.strip-metrics dd .quality-band,
+.strip-metrics dd .number-cite,
+.inspector-metrics dd .quality-band,
+.inspector-metrics dd .number-cite {
+  display: block;
+}
+
+.corridor-row .quality-band,
+.corridor-row .number-cite {
+  display: inline;
+  margin-left: 6px;
+}
+
+.number-cite a { color: var(--electric); }
+
+.status-meta .quality-chip {
+  margin-left: 0;
+  margin-right: 6px;
+}
+
+label output + .quality-chip {
+  margin-left: 6px;
+}
+
 .recipe-list { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .recipe-group {
   min-width: 0;

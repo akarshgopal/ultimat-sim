@@ -26,7 +26,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -347,6 +347,50 @@ test('product chrome uses Network and never Empire', () => {
   assert.match(css, /\.network-panel/);
 });
 
+test('economics panel tags screening money without fake plus/minus', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadMethaneRecycle();
+  const html = context.__elements.get('economicsMetrics').innerHTML;
+  assert.match(html, /quality-chip quality-screening/);
+  assert.match(html, /~/);
+  assert.match(html, /Levelized delivered cost/);
+  assert.doesNotMatch(html, /±|&plusmn;|\+\/-\s*\d/);
+  assert.equal(context.FlowsheetUncertainty.classifyQuality({ kind: 'product-cost' }), 'screening');
+});
+
+test('solar PV inspector cites NREL ATB next to LCOE', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.addNode('solar-pv');
+  const metrics = context.__elements.get('inspectorMetrics').innerHTML;
+  const controls = context.__elements.get('nodeControls').innerHTML;
+  assert.match(metrics, /Simple LCOE/);
+  assert.match(metrics, /quality-chip quality-cited/);
+  assert.match(metrics, /NREL 2024 ATB/);
+  assert.doesNotMatch(metrics, /±|&plusmn;|\+\/-\s*\d/);
+  assert.match(controls, /quality-chip quality-cited/);
+  assert.match(controls, /ATB 2024/);
+});
+
+test('site footprint and network rollup carry land and money quality chips', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(0);
+  const footprint = context.__elements.get('siteFootprintMetrics').innerHTML;
+  assert.match(footprint, /quality-chip quality-assumption/);
+  assert.match(footprint, /Solar land/);
+  assert.doesNotMatch(footprint, /±|&plusmn;|\+\/-\s*\d/);
+  app.loadDemoNetwork();
+  const network = context.__elements.get('networkMetrics').innerHTML;
+  assert.match(network, /quality-chip quality-screening/);
+  assert.match(network, /quality-chip quality-assumption/);
+  assert.match(network, /quality-chip quality-cited/);
+  assert.match(network, /Land/);
+  assert.match(network, /Freight/);
+  assert.match(network, /UNCTAD/);
+});
+
 test('inspector renders catalog sourceNote for electrolyzer and DAC energy', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -367,6 +411,9 @@ test('inspector renders catalog sourceNote for electrolyzer and DAC energy', () 
   assert.match(context.__elements.get('nodeControls').innerHTML, /ATB 2024/);
   assert.match(context.__elements.get('nodeControls').innerHTML, /Class 8/);
   assert.match(context.__elements.get('nodeControls').innerHTML, /24\.5%/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /quality-chip quality-cited/);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /engine\/uncertainty\.js/);
 });
 
 test('an incomplete baseline has no economics until a complete graph is captured', () => {

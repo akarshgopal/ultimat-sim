@@ -34,6 +34,7 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 - `engine/economics.js`: costs and cash flows computed from the solved graph. Both economics panels use this result directly; IRR is a fractional rate.
 - `engine/footprint.js`: post-solve solar land (efficiency × location-aware GCR) and screening process pads.
 - `engine/size.js`: outer methane sizing loop. Product demand sizes water, H₂, DAC, power, and `solarKWp`; `solveOperation` stays physics-only.
+- `engine/uncertainty.js`: quality tags (`cited` / `recoverable` / `assumption` / `derived` / `screening`) and screening-precision formatters. No fake error bars.
 - `cases/`: runnable reference plants.
 - `tests/*flowsheet*.test.js`: engine, economics, and browser-global/UI regression checks.
 - `scripts/`: local server, static build, CLI example, and deployment.
@@ -44,7 +45,7 @@ See [engine architecture](docs/flowsheet-architecture.md) for model contracts an
 
 ## Model limits
 
-The operating model uses representative-day flows and fixed installed capacities. It checks component/element, charge, electricity, and heat accounting, but does not provide full thermodynamic closure, hourly storage dispatch, or economic optimization. Automatic plant sizing is a separate outer loop (`engine/size.js`) that chooses capacities and `solarKWp` from a methane target, then calls the same operating solver. Process and cost presets are editable screening assumptions.
+The operating model uses representative-day flows and fixed installed capacities. It checks component/element, charge, electricity, and heat accounting, but does not provide full thermodynamic closure, hourly storage dispatch, or economic optimization. Automatic plant sizing is a separate outer loop (`engine/size.js`) that chooses capacities and `solarKWp` from a methane target, then calls the same operating solver. Process and cost presets are editable screening assumptions. Foundry money and land outputs carry quality chips; screening values use a tilde instead of fake precision.
 
 ## Running locally
 

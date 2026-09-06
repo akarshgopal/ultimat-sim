@@ -2,6 +2,18 @@
   const canvas = document.getElementById('flowsheetCanvas');
   const inspector = document.querySelector('.inspector-sidebar');
   const units = FlowsheetUnits.UNITS;
+  const {
+    classifyQuality,
+    formatUncertainMoney,
+    formatUncertainNumber,
+    qualityChip,
+    parseBand,
+    citeMarkup,
+  } = FlowsheetUncertainty;
+  const FREIGHT_CITES = [
+    { label: 'UNCTAD transport costs', url: 'https://unctad.org/publication/trade-and-transport-dataset' },
+    { label: 'World Bank freight logistics', url: 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf' },
+  ];
   const graph = { nodes: [], edges: [] };
   const setpoints = {};
   const projectEconomics = { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 };
@@ -1496,12 +1508,14 @@
     }
     if (svg) svg.innerHTML = footprintBarSvg(footprint);
     if (metrics) {
+      const landQuality = classifyQuality({ kind: 'land' });
+      const padQuality = classifyQuality({ kind: 'intensity', sourceNote: 'order-of-magnitude screening' });
       metrics.innerHTML = metricRows([
-        ['Solar land', `${formatHa(footprint.solar.ha)} · ${formatNumber(footprint.solar.acres)} acres`],
-        ['GCR', `${formatNumber(footprint.solar.gcr * 100)}% (base ${formatNumber(footprint.solar.baseGcr * 100)}%)`],
-        ['Panel area', `${formatNumber(footprint.solar.panelAreaM2)} m²`],
-        ['Process pads', `${formatNumber(footprint.processAreaM2)} m²`],
-        ['Total', `${formatHa(footprint.totalHa)} · ${formatNumber(footprint.totalAcres)} acres`],
+        ['Solar land', `${formatUncertainHa(footprint.solar.ha)} · ${formatUncertainNumber(footprint.solar.acres, landQuality)} acres`, { quality: landQuality }],
+        ['GCR', `${formatUncertainNumber(footprint.solar.gcr * 100, landQuality)}% (base ${formatUncertainNumber(footprint.solar.baseGcr * 100, landQuality)}%)`, { quality: landQuality }],
+        ['Panel area', `${formatUncertainNumber(footprint.solar.panelAreaM2, landQuality)} m²`, { quality: landQuality }],
+        ['Process pads', `${formatUncertainNumber(footprint.processAreaM2, padQuality)} m²`, { quality: padQuality }],
+        ['Total', `${formatUncertainHa(footprint.totalHa)} · ${formatUncertainNumber(footprint.totalAcres, landQuality)} acres`, { quality: landQuality }],
       ]);
     }
     if (pads) {
@@ -1582,7 +1596,10 @@
       status.textContent = 'Network solve failed.';
       return;
     }
-    status.textContent = `${networkResult.plants.length} plants · ${formatHa(networkResult.landHa)} site footprint · freight ${formatMoney(networkResult.freight)}/year`;
+    const freightQuality = classifyQuality({ kind: 'freight' });
+    const landQuality = classifyQuality({ kind: 'land' });
+    const moneyQuality = classifyQuality({ kind: 'money' });
+    status.textContent = `${networkResult.plants.length} plants · ${formatHa(networkResult.landHa)} site footprint · freight ${formatUncertainMoney(networkResult.freight, freightQuality)}/year`;
     const transferred = networkResult.transferred || new Set();
     plants.innerHTML = networkResult.plants.map(plant => {
       const siteName = plant.definition.site?.name || 'Unspecified site';
@@ -1594,12 +1611,13 @@
       return `<div class="network-plant"><div class="network-plant-copy"><strong>${plant.name}</strong><small>${siteName}${landText ? ` · ${landText}` : ''}</small><small>${leadText}</small></div><button type="button" data-open-plant="${plant.id}">Open</button></div>`;
     }).join('');
     metrics.innerHTML = metricRows([
-      ['CAPEX', formatMoney(networkResult.installedCapex)],
-      ['NPV', formatMoney(networkResult.npv)],
-      ['Net cash', formatMoney(networkResult.annualNetCash)],
-      ['Revenue', formatMoney(networkResult.annualRevenue)],
-      ['Cost', formatMoney(networkResult.annualOperatingCost)],
-      ['Land', formatHa(networkResult.landHa)],
+      ['CAPEX', formatUncertainMoney(networkResult.installedCapex, moneyQuality), { quality: moneyQuality }],
+      ['NPV', formatUncertainMoney(networkResult.npv, moneyQuality), { quality: moneyQuality }],
+      ['Net cash', formatUncertainMoney(networkResult.annualNetCash, moneyQuality), { quality: moneyQuality }],
+      ['Revenue', formatUncertainMoney(networkResult.annualRevenue, moneyQuality), { quality: moneyQuality }],
+      ['Cost', formatUncertainMoney(networkResult.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
+      ['Freight', `${formatUncertainMoney(networkResult.freight, freightQuality)}/year`, { quality: freightQuality, references: FREIGHT_CITES }],
+      ['Land', formatUncertainHa(networkResult.landHa), { quality: landQuality }],
     ]);
     const ranked = Object.entries(networkResult.slate).sort((left, right) => right[1] - left[1]);
     const peak = ranked[0]?.[1] || 1;
@@ -1608,7 +1626,7 @@
       return `<div class="${index === 0 ? 'lead' : ''}"><dt>${substance}</dt><dd><span class="product-bar" aria-hidden="true"><i style="width:${share}%"></i></span><strong>${formatNumber(tonnes)}</strong> <small>t/year</small></dd></div>`;
     }).join('');
     corridors.innerHTML = networkResult.corridors.length
-      ? networkResult.corridors.map(corridor => `<div class="corridor-row">${corridor.substance} · ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatMoney(corridor.annualFreight)}/year</div>`).join('')
+      ? networkResult.corridors.map(corridor => `<div class="corridor-row">${corridor.substance} · ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatUncertainMoney(corridor.annualFreight, freightQuality)}/year ${qualityChip(freightQuality)}${citeMarkup(FREIGHT_CITES)}</div>`).join('')
       : '<p class="status-meta">No haul corridors. Plants trade with markets until a corridor is added.</p>';
   }
 
@@ -1648,10 +1666,24 @@
     ]) : '';
   }
 
-  function literatureMarkup(definition) {
+  function literatureMarkup(definition, unitId) {
+    const quality = classifyQuality({
+      kind: 'intensity',
+      unit: unitId,
+      sourceNote: definition.sourceNote,
+      references: definition.references,
+      economicsNote: definition.economicsNote,
+    });
+    const chip = qualityChip(quality);
     const references = (definition.references || []).map(reference => `<a href="${reference.url}" target="_blank" rel="noreferrer">${reference.label}</a>`).join(' · ');
-    const sourceNote = definition.sourceNote ? `<p class="status-meta">${definition.sourceNote}</p>` : '';
-    return `${sourceNote}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}`;
+    const band = parseBand(definition.sourceNote);
+    const bandLine = band
+      ? `<p class="status-meta quality-band">Literature range ${formatUncertainNumber(band.low, 'cited')}–${formatUncertainNumber(band.high, 'cited')} ${band.unit}</p>`
+      : '';
+    const sourceNote = definition.sourceNote
+      ? `<p class="status-meta">${chip} ${definition.sourceNote}</p>`
+      : (chip ? `<p class="status-meta">${chip}</p>` : '');
+    return `${sourceNote}${bandLine}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}`;
   }
 
   function controlsFor(current) {
@@ -1660,8 +1692,18 @@
       const definition = catalog[current.unit];
       const preset = definition.presets ? `<label>Process type</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
       const route = DAC_ROUTES[current.unit] ? `<label>Process route<select name="dacRoute">${Object.entries(DAC_ROUTES).filter(([id]) => current.unit === 'dac' || id !== 'dac').map(([id, label]) => `<option value="${id}"${id === current.unit ? ' selected' : ''}>${label}</option>`).join('')}</select></label>` : '';
-      const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="processParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
-      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${route || preset || parameters ? `<fieldset><legend>Process assumptions</legend>${route}${preset}${parameters}${definition.chemicalId ? `<p class="status-meta">Makeup chemical: ${CONSUMABLE_CHEMICALS[definition.chemicalId] || definition.chemicalId}. Switching routes does not rewrite an existing supply.</p>` : ''}${literatureMarkup(definition)}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
+      const intensityQuality = classifyQuality({
+        kind: 'intensity',
+        unit: current.unit,
+        sourceNote: definition.sourceNote,
+        references: definition.references,
+      });
+      const parameters = (definition.controls || []).map(control => {
+        const energy = /kWh|secKWh/i.test(`${control.key} ${control.unit || ''}`);
+        const chip = energy ? qualityChip(intensityQuality) : '';
+        return `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output>${chip}</label><input name="processParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`;
+      }).join('');
+      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${route || preset || parameters ? `<fieldset><legend>Process assumptions</legend>${route}${preset}${parameters}${definition.chemicalId ? `<p class="status-meta">Makeup chemical: ${CONSUMABLE_CHEMICALS[definition.chemicalId] || definition.chemicalId}. Switching routes does not rewrite an existing supply.</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
     }
     if (kind === 'source') {
       const definition = catalog[current.unit];
@@ -1674,12 +1716,23 @@
       const chemical = current.unit === 'consumable-source' && !current.siteResource ? `<label>Makeup chemical<select name="chemicalId"><option value="">Unspecified</option>${Object.entries(CONSUMABLE_CHEMICALS).map(([id, label]) => `<option value="${id}"${id === current.chemicalId ? ' selected' : ''}>${label}</option>`).join('')}</select></label>` : '';
       const temperature = current.unit === 'heat-source' && !current.siteResource ? `<label>Temperature <output>${current.temperature} °C</output></label><input name="heatTemperature" type="range" min="20" max="1000" step="5" value="${current.temperature}">` : '';
       const processPreset = definition.presets ? `<label>Technology</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
-      const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="sourceParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
+      const intensityQuality = classifyQuality({
+        kind: 'intensity',
+        unit: current.unit,
+        sourceNote: definition.sourceNote,
+        references: definition.references,
+        economicsNote: definition.economicsNote,
+      });
+      const parameters = (definition.controls || []).map(control => {
+        const energy = /kWh|secKWh|capacityFactor/i.test(`${control.key} ${control.unit || ''}`);
+        const chip = energy ? qualityChip(intensityQuality) : '';
+        return `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output>${chip}</label><input name="sourceParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`;
+      }).join('');
       const rate = definition.controls && !definition.manualRateMax
         ? `<p class="status-meta">Available: ${formatNumber(current.rate)} ${unit}</p>`
         : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100 || 0.01}" value="${current.rate}">`;
       const capNote = budget != null ? `<p class="status-meta">${site.resources[current.siteResource]?.evidence || 'Capped by the named site resource. A second block sharing this resource cannot duplicate it.'}</p>` : (site && !current.siteResource ? '<p class="status-meta">Unassigned sources are unverified. They do not become unlimited supply.</p>' : '');
-      return `<fieldset><legend>Source settings</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
+      return `<fieldset><legend>Source settings</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }
@@ -1728,17 +1781,19 @@
       metrics.innerHTML = '';
       return;
     }
+    const moneyQuality = classifyQuality({ kind: 'money' });
+    const productQuality = classifyQuality({ kind: 'product-cost' });
     status.textContent = `${currentEconomics.periodDays} operating days/year · illustrative assumptions; edit any source, block, or destination in the inspector.`;
     metrics.innerHTML = metricRows([
-      ['Installed CAPEX', formatMoney(currentEconomics.installedCapex)],
-      ['Annual revenue', formatMoney(currentEconomics.annualRevenue)],
-      ['Annual operating cost', formatMoney(currentEconomics.annualOperatingCost)],
-      ['Annual net cash', formatMoney(currentEconomics.annualNetCash)],
-      ['NPV', formatMoney(currentEconomics.npv)],
-      ['IRR', formatRate(currentEconomics.irr)],
-      ['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatMoney(currentEconomics.levelizedDeliveredCost)}/unit`],
+      ['Installed CAPEX', formatUncertainMoney(currentEconomics.installedCapex, moneyQuality), { quality: moneyQuality }],
+      ['Annual revenue', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), { quality: moneyQuality }],
+      ['Annual operating cost', formatUncertainMoney(currentEconomics.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
+      ['Annual net cash', formatUncertainMoney(currentEconomics.annualNetCash, moneyQuality), { quality: moneyQuality }],
+      ['NPV', formatUncertainMoney(currentEconomics.npv, moneyQuality), { quality: moneyQuality }],
+      ['IRR', formatRate(currentEconomics.irr), { quality: moneyQuality }],
+      ['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatUncertainMoney(currentEconomics.levelizedDeliveredCost, productQuality)}/unit`, { quality: productQuality }],
       ...(currentEconomics.sinks || []).filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0).map(sink => (
-        [`Sold ${sink.id}`, `${formatNumber(sink.deliveredAmount / 1000)} t/year`]
+        [`Sold ${sink.id}`, `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`, { quality: productQuality }]
       )),
     ]);
   }
@@ -1775,15 +1830,24 @@
   }
 
   function formatNumber(value) { return Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+  function formatUncertainHa(ha, quality = classifyQuality({ kind: 'land' })) {
+    const value = Number(ha) || 0;
+    if (value >= 1) return formatUncertainNumber(value, quality, { unit: 'ha' });
+    if (value >= 0.001) return formatUncertainNumber(value, quality, { unit: 'ha' });
+    if (value > 0) return formatUncertainNumber(value * 10000, quality, { unit: 'm²' });
+    return formatUncertainNumber(0, quality, { unit: 'ha' });
+  }
   function economicsRows(current) {
     const params = current.params || {};
+    const definition = catalog[current.unit] || {};
+    const moneyQuality = classifyQuality({ kind: 'money' });
     if (current.unit === 'grid-electricity') return [
-      ['Electricity price', `$${formatNumber(params.pricePerMWh)}/MWh`],
-      ['Annual energy bill', formatMoney(current.rate * 365 / 1000 * params.pricePerMWh)],
-      ['Annual operational CO₂', `${formatNumber(current.rate * 365 / 1000 * params.kgCO2PerMWh)} kg`],
+      ['Electricity price', `${formatUncertainMoney(params.pricePerMWh, moneyQuality)}/MWh`, { quality: moneyQuality }],
+      ['Annual energy bill', formatUncertainMoney(current.rate * 365 / 1000 * params.pricePerMWh, moneyQuality), { quality: moneyQuality }],
+      ['Annual operational CO₂', `${formatUncertainNumber(current.rate * 365 / 1000 * params.kgCO2PerMWh, moneyQuality)} kg`, { quality: moneyQuality }],
     ];
     if (['battery', 'thermal-storage'].includes(current.unit)) return [
-      ['Installed storage CAPEX', formatMoney(current.capacity * params.capexPerKWh)],
+      ['Installed storage CAPEX', formatUncertainMoney(current.capacity * params.capexPerKWh, moneyQuality), { quality: moneyQuality }],
       ['Conversion loss', `${formatNumber((1 - params.efficiency) * 100)}%`],
     ];
     if (!Number.isFinite(params.capacityKW) || !Number.isFinite(params.capexPerKW)) return [];
@@ -1794,13 +1858,49 @@
     const capex = params.capacityKW * params.capexPerKW;
     const annualCost = capex * crf + params.capacityKW * Number(params.fixedOMPerKWYear || 0);
     const levelized = annualEnergy ? annualCost / (annualEnergy / 1000) + Number(params.variableCostPerMWh || 0) : 0;
+    const lcoeKind = current.unit === 'solar-thermal' ? 'lcoh' : 'lcoe';
+    const lcoeQuality = classifyQuality({
+      kind: lcoeKind,
+      unit: current.unit,
+      sourceNote: definition.sourceNote,
+      references: definition.references,
+      economicsNote: definition.economicsNote,
+    });
+    const intensityQuality = classifyQuality({
+      kind: 'intensity',
+      unit: current.unit,
+      sourceNote: definition.sourceNote,
+      references: definition.references,
+    });
+    const lcoeCites = lcoeQuality === 'cited' ? definition.references : [];
     return [
-      ['Installed CAPEX', formatMoney(capex)],
-      [current.unit === 'solar-thermal' ? 'Simple LCOH' : 'Simple LCOE', `$${formatNumber(levelized)}/MWh`],
-    ];
+      ['Installed CAPEX', formatUncertainMoney(capex, moneyQuality), { quality: moneyQuality }],
+      [
+        current.unit === 'solar-thermal' ? 'Simple LCOH' : 'Simple LCOE',
+        `${formatUncertainMoney(levelized, lcoeQuality)}/MWh`,
+        { quality: lcoeQuality, references: lcoeCites },
+      ],
+      current.unit === 'solar-pv'
+        ? ['Capacity factor', formatUncertainNumber(params.capacityFactor, intensityQuality), { quality: intensityQuality, references: intensityQuality === 'cited' ? definition.references : [] }]
+        : null,
+    ].filter(Boolean);
   }
   function formatMoney(value) { return `$${formatNumber(value)}`; }
-  function metricRows(rows) { return rows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join(''); }
+  function metricMetaMarkup(meta) {
+    if (!meta) return '';
+    if (typeof meta === 'string') return qualityChip(meta);
+    const quality = meta.quality || (meta.kind ? classifyQuality(meta) : '');
+    const chip = quality ? qualityChip(quality) : '';
+    const band = parseBand(meta.band);
+    const bandText = band
+      ? `<span class="quality-band">${formatUncertainNumber(band.low, 'cited')}–${formatUncertainNumber(band.high, 'cited')}${band.unit ? ` ${band.unit}` : ''}</span>`
+      : '';
+    const cite = meta.cite || citeMarkup(meta.references);
+    return `${chip}${bandText}${cite}`;
+  }
+  function metricRows(rows) {
+    return rows.map(([term, value, meta]) => `<div><dt>${term}</dt><dd>${value}${metricMetaMarkup(meta)}</dd></div>`).join('');
+  }
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,

@@ -26,7 +26,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -291,6 +291,21 @@ test('coastal DAC swap stays runnable and compares against the captured baseline
   assert.ok(app.result.nodes.sabatier.activity <= baselineMethane + 1e-6);
 });
 
+test('site panel reports location-aware footprint instead of 1.6 ha/MWp', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(0);
+  const horizon = context.__elements.get('siteHorizon').textContent;
+  const metrics = context.__elements.get('siteFootprintMetrics').innerHTML;
+  const note = context.__elements.get('siteFootprintNote').textContent;
+  assert.doesNotMatch(horizon, /1\.6 ha\/MWp/);
+  assert.match(metrics, /GCR/);
+  assert.match(metrics, /Solar land/);
+  assert.match(note, /order-of-magnitude screening/);
+  assert.equal(context.__elements.get('siteFootprint').hidden, false);
+  assert.match(context.__elements.get('siteFootprintPads').innerHTML, /Electrolyzer|DAC|Sabatier|SWRO/i);
+});
+
 test('fuels plus minerals network rolls up two sited plants', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -301,6 +316,10 @@ test('fuels plus minerals network rolls up two sited plants', () => {
   assert.match(context.__elements.get('networkProducts').innerHTML, /CH4/);
   assert.match(context.__elements.get('networkProducts').innerHTML, /lead/);
   assert.match(context.__elements.get('networkPlants').innerHTML, /Almería solar methane/);
+  assert.match(context.__elements.get('networkPlants').innerHTML, /footprint/);
+  assert.match(context.__elements.get('networkMetrics').innerHTML, /Land/);
+  assert.match(context.__elements.get('networkStatus').textContent, /site footprint/);
+  assert.doesNotMatch(context.__elements.get('networkStatus').textContent, /1\.6 ha\/MWp/);
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
 });
 

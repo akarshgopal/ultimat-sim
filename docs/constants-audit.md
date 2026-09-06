@@ -17,7 +17,7 @@
 
 - `docs/flowsheet-architecture.md` cites desalination, electrolysis, DAC, PV, battery, and heat sources at the *family* level.
 - Catalog entries often attach the same papers, but **engine defaults in `units.js` have no inline citations**, and several abundance SECs/recoveries cite only loosely related DOE/USGS pages.
-- **`engine/footprint.js` does not exist yet.** Network land use is still the crude `PV_HA_PER_MWP = 1.6`. Planned GCR / process-pad coefficients (archived TEA / `.footprint-prompt.txt`) are **not in production code** — listed below under solar/land as *planned* assumptions only.
+- **`engine/footprint.js` now estimates site land** from panel area ÷ location-aware GCR plus order-of-magnitude process pads. Coefficients remain screening assumptions (see solar/land).
 - Electrolyzer SEC is **inconsistent across layers**: `units.js` default `50`, catalog alkaline `52` / PEM `55`, coastal case forces `55` (DOE-linked).
 
 ---
@@ -30,7 +30,7 @@ These distort “real” material–energy–land–money coupling the most when
 2. **DAC `heatKWhPerKgCO2` (1.5 solid / 2.45 liquid)** — sets heat vs electricity trade and solar-thermal / nuclear coupling.
 3. **DAC `electricityKWhPerKgCO2` (0.5 / 0.366 / 0.45)** — competes with electrolyzer on the bus.
 4. **Site PV yield (`DAILY_PV` / `DEAD_SEA_PV` 5.4 / CF 0.24)** — caps every electrified process at a site.
-5. **`PV_HA_PER_MWP` = 1.6** — sole land footprint today; replace with efficiency×GCR model when `footprint.js` lands.
+5. **Solar GCR / panel efficiency (0.45 fixed, 20%)** — dominate site hectares; process pads are OOM floors.
 6. **SWRO `secKWhPerM3` = 3.5** — water–power coupling for coastal factories.
 7. **SWRO `recovery` = 0.45** — intake, brine disposal, and mineral feed volume.
 8. **DAC `captureFraction` (0.9 / 0.75 / 0.5)** — air handling mass and off-gas sinks.
@@ -48,10 +48,9 @@ These distort “real” material–energy–land–money coupling the most when
 
 | location | symbol/value | used for | class | proposed source or action |
 | --- | --- | --- | --- | --- |
-| `engine/network.js` | `PV_HA_PER_MWP = 1.6` | Network / UI PV land (ha) from `solarKWp` | **assumption** | Label screening; replace via `estimateSolarLandHa` (η≈20%, fixed-tilt GCR≈0.35–0.45 → ~1.1–1.6 ha/MWp). Cite NREL land-use / ATB layout notes. |
-| `js/flowsheet-app.js` UI copy | “1.6 ha/MWp screening” | Displays land metric | **assumption** | Keep “screening” wording until footprint module cites a source. |
-| *planned* `engine/footprint.js` | panelEfficiency 20%; baseGCR 0.45 (E–W 0.75); lat spacing multiplier | Solar land from panels÷GCR | **assumption** (not shipped) | Port from archived TEA with explicit assumptions array; cite NREL PV land-use. |
-| *planned* process pads | e.g. electrolyzer `max(24, kW×0.03)` m²; DAC `max(36, tCO₂/y×0.35)`; SWRO `max(16, m³/d×0.8)` | Process pad area | **assumption** (not shipped) | Keep OOM labels; do not present as surveyed footprints. |
+| `engine/footprint.js` | panelEfficiency 20%; baseGCR 0.45 (E–W 0.75); lat spacing multiplier | Solar land from panels÷GCR | **assumption** | Location-aware GCR documented in the module assumptions array; cite NREL PV land-use later. |
+| `engine/footprint.js` process pads | e.g. electrolyzer `max(24, kW×0.03)` m²; DAC `max(36, tCO₂/y×0.35)`; SWRO `max(16, m³/d×0.8)` | Process pad area | **assumption** | Keep OOM labels; do not present as surveyed footprints. |
+| `js/flowsheet-app.js` UI copy | “order-of-magnitude screening” | Site footprint note | **assumption** | Keep screening wording. |
 | `js/…` `solar-pv` | `capacityFactor: 0.24` | Default PV energy when not sited | **recoverable** | Map to NREL ATB 2024 utility-scale PV CF class already linked. |
 | `js/…` `solar-pv` | `capexPerKW: 1560`, `fixedOMPerKWYear: 20`, `lifeYears: 30`, `discountRate: 0.07` | LCOE helper / installed economics | **cited** (NREL ATB URL on catalog) | Pin ATB year/scenario (e.g. 2024 moderate) in comment. |
 | `cases/coastal.js` | `DAILY_PV` monthly kWh/kWp; PVGIS URL + frozen JSON | Site electricity budget | **cited** | Already PVGIS-SARAH3/ERA5; keep retrieval date. |
@@ -168,7 +167,7 @@ These distort “real” material–energy–land–money coupling the most when
 | Seawater desalination | Elimelech 2011; Ghaffour 2013 | SWRO 0.45 / 3.5; MED/MSF presets in catalog | Values plausible but not page-pinned; engine defaults uncited. |
 | Electrolysis | Buttler & Spliethoff 2018 | 50 / 52 / 55 depending on layer | **Inconsistent defaults**; PEM 55 also DOE-cited in coastal. |
 | DAC | IEA 2022; Keith 2018; Voskian 2019 | Solid screening 0.5/1.5/0.9; liquid nearer Keith; electroswing rough | Solid route still **assumption** despite citations. |
-| Electricity / storage / heat | NREL ATB; DOE heat/TES; NRC/Valar | PV/battery numbers ATB-linked; nuclear costs user-assumption; network land **not** ATB | Land still 1.6 ha/MWp; no GCR. |
+| Electricity / storage / heat | NREL ATB; DOE heat/TES; NRC/Valar | PV/battery numbers ATB-linked; nuclear costs user-assumption; land from `footprint.js` GCR | GCR/pads are screening; not ATB table-pinned. |
 | Abundance minerals / metals | USGS/DOE links on catalog | Recoveries & many SECs screening | Citations do not substantiate the numeric defaults. |
 
 ---

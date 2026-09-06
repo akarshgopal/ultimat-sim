@@ -7,6 +7,7 @@ const {
   evaluateNetwork,
   SEA_USD_PER_T_KM,
 } = require('../engine/network');
+const { estimateSolarLandHa } = require('../engine/footprint');
 const { createFuelsAndMineralsNetwork, siteDeadSeaAbundance } = require('../cases/network');
 const { solveOperation } = require('../engine/solve');
 const { streamMassKg } = require('../engine/model');
@@ -111,7 +112,8 @@ test('Almería to the Dead Sea is a multi-thousand kilometre haul', () => {
     { latitude: 31.16, longitude: 35.43 }
   );
   assert.ok(km > 3000 && km < 4500);
-  assert.ok(pvLandHa(50000) === 80);
+  assert.equal(pvLandHa(50000), estimateSolarLandHa(50000));
+  assert.notEqual(pvLandHa(50000), 80);
 });
 
 test('Dead Sea brine hub closes balances on assumed solar and brine', () => {
@@ -130,6 +132,11 @@ test('fuels plus minerals network rolls up CH4, NH3, and money', () => {
   assert.ok(result.slate.NH3 > 0);
   assert.ok(result.slate.Br2 > 0);
   assert.ok(result.landHa > 0);
+  const rolledLand = result.plants.reduce((sum, plant) => sum + plant.footprint.totalHa, 0);
+  assert.ok(Math.abs(result.landHa - rolledLand) < 1e-12);
+  const crude = result.plants.reduce((sum, plant) => sum + (Number(plant.definition.site?.solarKWp) || 0) / 1000 * 1.6, 0);
+  assert.notEqual(result.landHa, crude);
+  assert.ok(result.plants.every(plant => plant.footprint && plant.footprint.totalHa > 0));
   assert.ok(result.installedCapex > result.plants[0].economics.installedCapex);
   assert.equal(result.npv, result.npv);
   assert.ok(Number.isFinite(result.npv));

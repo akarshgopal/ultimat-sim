@@ -1378,6 +1378,96 @@
     warning.textContent = solveError || routeNote || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : '');
   }
 
+  function footprintColor(unit) {
+    return {
+      electrolyzer: 'var(--h2)',
+      dac: 'var(--co2)',
+      'dac-solid': 'var(--co2)',
+      'dac-liquid': 'var(--co2)',
+      'dac-electroswing': 'var(--co2)',
+      sabatier: 'var(--methane)',
+      methanol: 'var(--methane)',
+      swro: 'var(--electric)',
+      med: 'var(--electric)',
+      msf: 'var(--electric)',
+      desal: 'var(--electric)',
+      'brine-minerals': 'var(--warning)',
+      asu: 'var(--h2)',
+      ammonia: 'var(--h2)',
+      battery: 'var(--text-muted)',
+    }[unit] || 'var(--border-light)';
+  }
+
+  function formatHa(ha) {
+    const value = Number(ha) || 0;
+    if (value >= 1) return `${formatNumber(value)} ha`;
+    if (value >= 0.001) return `${value.toLocaleString('en-US', { maximumFractionDigits: 3 })} ha`;
+    if (value > 0) return `${formatNumber(value * 10000)} m²`;
+    return '0 ha';
+  }
+
+  function footprintBarSvg(footprint) {
+    const total = footprint.totalAreaM2;
+    if (!(total > 0)) return '';
+    const width = 160;
+    const height = 12;
+    const solarShare = footprint.solar.landAreaM2 / total;
+    let x = solarShare * width;
+    const solarRect = `<rect x="0" y="0" width="${Math.max(0, x)}" height="${height}" fill="var(--warning)" opacity="0.9"></rect>`;
+    const padRects = footprint.processes.map(item => {
+      const w = Math.max(item.areaM2 / total * width, footprint.processes.length ? 1.2 : 0);
+      const rect = `<rect x="${x}" y="0" width="${w}" height="${height}" fill="${footprintColor(item.unit)}" opacity="0.95"></rect>`;
+      x += w;
+      return rect;
+    }).join('');
+    return `${solarRect}${padRects}`;
+  }
+
+  function renderSiteFootprint() {
+    const panel = document.getElementById('siteFootprint');
+    const metrics = document.getElementById('siteFootprintMetrics');
+    const pads = document.getElementById('siteFootprintPads');
+    const note = document.getElementById('siteFootprintNote');
+    const svg = document.getElementById('siteFootprintSvg');
+    if (!panel || !FlowsheetFootprint) return;
+    if (!site) {
+      panel.hidden = true;
+      if (metrics) metrics.innerHTML = '';
+      if (pads) pads.innerHTML = '';
+      if (note) note.textContent = '';
+      if (svg) svg.innerHTML = '';
+      return;
+    }
+    const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
+    const hasArea = footprint.totalAreaM2 > 0;
+    panel.hidden = !hasArea;
+    if (!hasArea) {
+      if (metrics) metrics.innerHTML = '';
+      if (pads) pads.innerHTML = '';
+      if (note) note.textContent = '';
+      if (svg) svg.innerHTML = '';
+      return;
+    }
+    if (svg) svg.innerHTML = footprintBarSvg(footprint);
+    if (metrics) {
+      metrics.innerHTML = metricRows([
+        ['Solar land', `${formatHa(footprint.solar.ha)} · ${formatNumber(footprint.solar.acres)} acres`],
+        ['GCR', `${formatNumber(footprint.solar.gcr * 100)}% (base ${formatNumber(footprint.solar.baseGcr * 100)}%)`],
+        ['Panel area', `${formatNumber(footprint.solar.panelAreaM2)} m²`],
+        ['Process pads', `${formatNumber(footprint.processAreaM2)} m²`],
+        ['Total', `${formatHa(footprint.totalHa)} · ${formatNumber(footprint.totalAcres)} acres`],
+      ]);
+    }
+    if (pads) {
+      pads.innerHTML = footprint.processes
+        .map(item => `<li><span class="pad-swatch" style="background:${footprintColor(item.unit)}"></span>${item.label} · ${formatNumber(item.areaM2)} m²</li>`)
+        .join('');
+    }
+    if (note) {
+      note.textContent = 'Process pads are order-of-magnitude screening, not equipment layouts. Solar land is panel area ÷ location-aware GCR.';
+    }
+  }
+
   function renderSite() {
     const panel = document.getElementById('sitePanel');
     panel.hidden = false;
@@ -1396,11 +1486,10 @@
       monthLabel.hidden = true;
     }
     const hours = result?.horizon?.hours;
-    const land = site?.solarKWp && FlowsheetNetwork ? FlowsheetNetwork.pvLandHa(site.solarKWp) : 0;
-    document.getElementById('siteHorizon').textContent = [
-      hours ? `${hours.filter(entry => entry.pv > 0).length} daylight hours · ${hours.filter(entry => entry.pv === 0).length} night hours · peak ${formatNumber(Math.max(...hours.map(entry => entry.pv)))} kWh PV · battery ${formatNumber(site?.storage?.batteryKWh || 0)} kWh` : '',
-      land ? `${formatNumber(land)} ha PV land at 1.6 ha/MWp screening` : '',
-    ].filter(Boolean).join(' · ');
+    document.getElementById('siteHorizon').textContent = hours
+      ? `${hours.filter(entry => entry.pv > 0).length} daylight hours · ${hours.filter(entry => entry.pv === 0).length} night hours · peak ${formatNumber(Math.max(...hours.map(entry => entry.pv)))} kWh PV · battery ${formatNumber(site?.storage?.batteryKWh || 0)} kWh`
+      : '';
+    renderSiteFootprint();
     document.getElementById('siteResources').innerHTML = Object.entries(site?.resources || {}).map(([id, resource]) => {
       const quality = resource.quality || 'user-assumption';
       return `<div class="${quality === 'unverified' ? 'unverified' : ''}"><dt>${id} <small>${quality}</small></dt><dd>${formatStream(resource.stream)}</dd></div>`;
@@ -1436,7 +1525,7 @@
       status.textContent = 'Network solve failed.';
       return;
     }
-    status.textContent = `${networkResult.plants.length} plants · ${formatNumber(networkResult.landHa)} ha PV land · freight ${formatMoney(networkResult.freight)}/year`;
+    status.textContent = `${networkResult.plants.length} plants · ${formatHa(networkResult.landHa)} site footprint · freight ${formatMoney(networkResult.freight)}/year`;
     const transferred = networkResult.transferred || new Set();
     plants.innerHTML = networkResult.plants.map(plant => {
       const siteName = plant.definition.site?.name || 'Unspecified site';
@@ -1444,7 +1533,8 @@
         .filter(item => item.plantId === plant.id && item.tonnesPerYear && !transferred.has(`${item.plantId}:${item.nodeId}`))
         .sort((left, right) => right.tonnesPerYear - left.tonnesPerYear)[0];
       const leadText = lead ? `${lead.substance} · ${formatNumber(lead.tonnesPerYear)} t/year` : 'No sale products';
-      return `<div class="network-plant"><div class="network-plant-copy"><strong>${plant.name}</strong><small>${siteName}</small><small>${leadText}</small></div><button type="button" data-open-plant="${plant.id}">Open</button></div>`;
+      const landText = plant.footprint ? `${formatHa(plant.footprint.totalHa)} footprint` : '';
+      return `<div class="network-plant"><div class="network-plant-copy"><strong>${plant.name}</strong><small>${siteName}${landText ? ` · ${landText}` : ''}</small><small>${leadText}</small></div><button type="button" data-open-plant="${plant.id}">Open</button></div>`;
     }).join('');
     metrics.innerHTML = metricRows([
       ['CAPEX', formatMoney(networkResult.installedCapex)],
@@ -1452,6 +1542,7 @@
       ['Net cash', formatMoney(networkResult.annualNetCash)],
       ['Revenue', formatMoney(networkResult.annualRevenue)],
       ['Cost', formatMoney(networkResult.annualOperatingCost)],
+      ['Land', formatHa(networkResult.landHa)],
     ]);
     const ranked = Object.entries(networkResult.slate).sort((left, right) => right[1] - left[1]);
     const peak = ranked[0]?.[1] || 1;

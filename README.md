@@ -19,7 +19,8 @@ The root app now provides:
 - Integrated methane + water-recycle, evidence-backed coastal methane, and ammonia + brine industrial-hub examples. The coastal case binds Almería PVGIS solar, seawater intake, and unverified grid/freshwater to the plant, then dispatches a 24-hour typical day so night hours produce nothing unless a battery is assumed. The abundance hub couples brine-derived bromide with chlor-alkali chlorine, then uses chlor-alkali hydrogen with ASU nitrogen for ammonia.
 - Distinct DAC routes (solid-sorbent, liquid-solvent, electro-swing) with different heat and reagent contracts. Switching a route keeps compatible connections, does not rewrite an existing makeup chemical, and stays comparable against a captured baseline.
 - A location bar: coordinates plus PV kWp fetch or reuse PVGIS typical-day solar and bind it to the current factory. Unverified grid and freshwater stay explicit zeros until assigned.
-- A network rollup: multiple sited plants, product slate in t/year, PV land, optional haul corridors, and combined CAPEX/NPV. The fuels + minerals demo places solar methane at Almería and a brine/ammonia hub on the Dead Sea.
+- Location-aware site footprint: solar land from panel area ÷ GCR (latitude-adjusted row spacing), plus order-of-magnitude process pads for active units. Network `landHa` is the sum of those site totals, not a flat 1.6 ha/MWp.
+- A network rollup: multiple sited plants, product slate in t/year, land, optional haul corridors, and combined CAPEX/NPV. The fuels + minerals demo places solar methane at Almería and a brine/ammonia hub on the Dead Sea.
 
 The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`, `index.html`, and `flowsheet.css`.
 
@@ -30,6 +31,7 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 - `engine/units.js`: process catalog and unit physics.
 - `engine/solve.js`: operation, resource allocation, recycles, and balance diagnostics.
 - `engine/economics.js`: costs and cash flows computed from the solved graph. Both economics panels use this result directly; IRR is a fractional rate.
+- `engine/footprint.js`: post-solve solar land (efficiency × location-aware GCR) and screening process pads.
 - `cases/`: runnable reference plants.
 - `tests/*flowsheet*.test.js`: engine, economics, and browser-global/UI regression checks.
 - `scripts/`: local server, static build, CLI example, and deployment.

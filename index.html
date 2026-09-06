@@ -39,6 +39,13 @@
       <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
       <p class="status-meta" id="siteNotes"></p>
       <p class="status-meta" id="siteHorizon"></p>
+      <div id="siteFootprint" class="site-footprint" hidden>
+        <h4>Site footprint</h4>
+        <svg id="siteFootprintSvg" class="footprint-svg" viewBox="0 0 160 12" aria-hidden="true"></svg>
+        <dl class="strip-metrics" id="siteFootprintMetrics"></dl>
+        <ul class="footprint-pads" id="siteFootprintPads"></ul>
+        <p class="status-meta" id="siteFootprintNote"></p>
+      </div>
       <dl class="strip-metrics" id="siteResources"></dl>
       <p class="literature-links" id="siteEvidence"></p>
     </section>
@@ -184,6 +191,7 @@
   <script src="engine/units.js"></script>
   <script src="engine/solve.js"></script>
   <script src="engine/economics.js"></script>
+  <script src="engine/footprint.js"></script>
   <script src="engine/network.js"></script>
   <script src="data/pvgis-almeria-hourly.js"></script>
   <script src="cases/sabatier.js"></script>

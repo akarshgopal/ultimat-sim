@@ -149,6 +149,48 @@
 
 .tool-panel .status-meta { margin-top: 4px; }
 
+.site-footprint { margin-top: 8px; }
+.site-footprint h4 {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.footprint-svg {
+  display: block;
+  width: 100%;
+  height: 12px;
+  margin: 0 0 6px;
+  border-radius: 3px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+.site-footprint .strip-metrics { margin-top: 4px; }
+.footprint-pads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+.footprint-pads li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.pad-swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--border-light);
+  flex: 0 0 auto;
+}
+
 .tool-panel-head .network-actions,
 .tool-panel-head .project-assumptions { margin-top: 0; }
 

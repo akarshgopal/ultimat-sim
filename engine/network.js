@@ -2,17 +2,18 @@
   const api = factory(
     typeof require === 'function' ? require('./model') : root.FlowsheetModel,
     typeof require === 'function' ? require('./solve') : root.FlowsheetSolver,
-    typeof require === 'function' ? require('./economics') : root.FlowsheetEconomics
+    typeof require === 'function' ? require('./economics') : root.FlowsheetEconomics,
+    typeof require === 'function' ? require('./footprint') : root.FlowsheetFootprint
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FlowsheetNetwork = api;
-})(globalThis, (model, solver, economics) => {
+})(globalThis, (model, solver, economics, footprint) => {
 const { scaleStream, streamMassKg } = model;
 const { evaluateEconomics } = economics;
+const { estimateFootprint, pvLandHa } = footprint;
 
 const SEA_USD_PER_T_KM = 0.012;
 const ROAD_USD_PER_T_KM = 0.08;
-const PV_HA_PER_MWP = 1.6;
 
 function cloneDefinition(definition) {
   return JSON.parse(JSON.stringify(definition));
@@ -29,10 +30,6 @@ function distanceKm(from, to) {
   return 6371.0088 * 2 * Math.atan2(Math.sqrt(chord), Math.sqrt(1 - chord));
 }
 
-function pvLandHa(solarKWp) {
-  return Math.max(0, Number(solarKWp) || 0) / 1000 * PV_HA_PER_MWP;
-}
-
 function dominantSubstance(stream) {
   if (stream?.kind !== 'material' || !stream.mol) return null;
   return Object.entries(stream.mol).sort((left, right) => right[1] - left[1])[0]?.[0] || null;
@@ -44,7 +41,13 @@ function solvePlant(definition) {
     : solver.solveOperation;
   const solved = solve(definition);
   const plantEconomics = evaluateEconomics(definition, solved);
-  return { definition, solved, economics: plantEconomics };
+  const plantFootprint = estimateFootprint({
+    site: definition.site,
+    graph: definition.graph,
+    solved,
+    params: definition.site?.footprint,
+  });
+  return { definition, solved, economics: plantEconomics, footprint: plantFootprint };
 }
 
 function plantProducts(plant) {
@@ -104,7 +107,12 @@ function applyCorridor(corridor, plants) {
     );
   }
   const resolved = solvePlant(to.definition);
-  Object.assign(to, { definition: resolved.definition, solved: resolved.solved, economics: resolved.economics });
+  Object.assign(to, {
+    definition: resolved.definition,
+    solved: resolved.solved,
+    economics: resolved.economics,
+    footprint: resolved.footprint,
+  });
   return {
     id: corridor.id || `${corridor.from.plant}:${corridor.from.node}->${corridor.to.plant}:${corridor.to.node}`,
     from: { plant: corridor.from.plant, node: corridor.from.node },
@@ -132,6 +140,7 @@ function evaluateNetwork(network = {}) {
       definition: resolved.definition,
       solved: resolved.solved,
       economics: resolved.economics,
+      footprint: resolved.footprint,
     };
   });
 
@@ -159,7 +168,7 @@ function evaluateNetwork(network = {}) {
     slate[product.substance] = (slate[product.substance] || 0) + product.tonnesPerYear;
   }
 
-  const landHa = plants.reduce((sum, plant) => sum + pvLandHa(plant.definition.site?.solarKWp), 0);
+  const landHa = plants.reduce((sum, plant) => sum + (plant.footprint?.totalHa || 0), 0);
   const freight = corridors.reduce((sum, corridor) => sum + corridor.annualFreight, 0);
   const installedCapex = plants.reduce((sum, plant) => sum + plant.economics.installedCapex, 0);
   const plantRevenue = plants.reduce((sum, plant) => sum + plant.economics.annualRevenue, 0);
@@ -194,9 +203,9 @@ function evaluateNetwork(network = {}) {
 return {
   SEA_USD_PER_T_KM,
   ROAD_USD_PER_T_KM,
-  PV_HA_PER_MWP,
   distanceKm,
   pvLandHa,
+  estimateFootprint,
   solvePlant,
   plantProducts,
   evaluateNetwork,

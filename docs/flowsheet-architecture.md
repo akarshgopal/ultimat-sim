@@ -79,7 +79,9 @@ The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARA
 
 When `site.solar.typicalMonths` is present, `solveHorizon` runs 24 hourly operating solves. Daily setpoints are leftover demand, nameplate is capacity/24, and methane-chain setpoints stay stoichiometric so intermediate CO₂/H₂ is not orphaned. Site electricity is that hour's PV yield plus optional battery discharge. Other site budgets are remaining daily quantities. Night hours with no PV and no stored energy produce nothing.
 
-A network is a set of sited plants plus optional haul corridors. `engine/network.js` solves each plant with the same physics engine, then rolls up product tonnes, PV land, freight, and cash. A corridor moves a sold material to another plant's purchased source, applying distance, loss, and $/t-km. Corridor hauls are internal transfers: origin sales are excluded from the network slate and external revenue; destination economics after re-solve count normally; freight remains in network OPEX. Prices still never enter a unit equation.
+Site land is estimated after the physics solve in `engine/footprint.js`: PV area from panel efficiency and a location-aware ground-coverage ratio (`layoutSpacingMultiplier = clamp(1 + k·(|lat|/45 − 0.5), 0.82, 1.35)`, then `GCR = clamp(baseGCR / multiplier, 0.05, 0.95)`; default fixed-tilt base GCR 0.45, k = 0.45), plus order-of-magnitude process pads from solved activity. Pads are screening geometry, not surveyed layouts or a restored TEA map. Network `landHa` is the sum of each plant’s total hectares.
+
+A network is a set of sited plants plus optional haul corridors. `engine/network.js` solves each plant with the same physics engine, then rolls up product tonnes, site land, freight, and cash. A corridor moves a sold material to another plant's purchased source, applying distance, loss, and $/t-km. Corridor hauls are internal transfers: origin sales are excluded from the network slate and external revenue; destination economics after re-solve count normally; freight remains in network OPEX. Prices still never enter a unit equation.
 
 ## Substances and streams
 
@@ -346,6 +348,7 @@ engine/
   model.js       # substances, stream helpers, graph validation
   solve.js       # operating solve only
   units.js       # initial catalog and physics
+  footprint.js   # location-aware solar land and process pads
 cases/
   dac.js         # Stage 3 DAC acceptance fixture
   sabatier.js    # Integrated air + water to methane fixture

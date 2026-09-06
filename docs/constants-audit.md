@@ -1,0 +1,192 @@
+# Hardcoded constants audit (flowsheet branch)
+
+**Scope:** Read-only inventory of numeric assumptions that drive physics, sizing, footprint, and economics in Molecular Foundry.  
+**Date:** 2026-09-06 · **Branch:** `flowsheet`  
+**Method:** Grep/read of `engine/`, `js/flowsheet-app.js`, `cases/`, and `docs/flowsheet-architecture.md`. No engine behavior changed.
+
+**Classes**
+
+| Class | Meaning |
+| --- | --- |
+| **cited** | DOI/URL/reference already attached in code, catalog `references`, or case `evidence` *and* the value is intended to come from that source (even if the paper is a family citation rather than a page-precise quote). |
+| **recoverable** | Known literature / handbook / ATB value that should be cited next (or mapped to a specific table row). |
+| **assumption** | Screening guess; must stay labeled as such in UI/docs until replaced. |
+| **derived** | From stoichiometry, molar masses, or geometric/physical constants; OK if the formula is clear. |
+
+**Gaps vs architecture literature table**
+
+- `docs/flowsheet-architecture.md` cites desalination, electrolysis, DAC, PV, battery, and heat sources at the *family* level.
+- Catalog entries often attach the same papers, but **engine defaults in `units.js` have no inline citations**, and several abundance SECs/recoveries cite only loosely related DOE/USGS pages.
+- **`engine/footprint.js` does not exist yet.** Network land use is still the crude `PV_HA_PER_MWP = 1.6`. Planned GCR / process-pad coefficients (archived TEA / `.footprint-prompt.txt`) are **not in production code** — listed below under solar/land as *planned* assumptions only.
+- Electrolyzer SEC is **inconsistent across layers**: `units.js` default `50`, catalog alkaline `52` / PEM `55`, coastal case forces `55` (DOE-linked).
+
+---
+
+## Top 15 highest-leverage numbers to fix first
+
+These distort “real” material–energy–land–money coupling the most when wrong:
+
+1. **Electrolyzer `secKWhPerKgH2` (50 / 52 / 55)** — dominates chain electricity for H₂ / CH₄ / NH₃ routes; reconcile defaults and cite one basis per technology.
+2. **DAC `heatKWhPerKgCO2` (1.5 solid / 2.45 liquid)** — sets heat vs electricity trade and solar-thermal / nuclear coupling.
+3. **DAC `electricityKWhPerKgCO2` (0.5 / 0.366 / 0.45)** — competes with electrolyzer on the bus.
+4. **Site PV yield (`DAILY_PV` / `DEAD_SEA_PV` 5.4 / CF 0.24)** — caps every electrified process at a site.
+5. **`PV_HA_PER_MWP` = 1.6** — sole land footprint today; replace with efficiency×GCR model when `footprint.js` lands.
+6. **SWRO `secKWhPerM3` = 3.5** — water–power coupling for coastal factories.
+7. **SWRO `recovery` = 0.45** — intake, brine disposal, and mineral feed volume.
+8. **DAC `captureFraction` (0.9 / 0.75 / 0.5)** — air handling mass and off-gas sinks.
+9. **DAC `consumablesPerKgCO2` (0.02 / 0.01 / 0.005)** — OPEX and spent-media logistics.
+10. **Sabatier `electricityKWhPerKgCH4` = 1** — undocumented compression/ancillary load on the methane chain.
+11. **Freight `SEA_USD_PER_T_KM` / `ROAD_USD_PER_T_KM` (0.012 / 0.08)** — network OPEX and inter-plant coupling.
+12. **Corridor `loss` default 0.002** — delivered mass vs origin production.
+13. **Project `discountRate` 0.08 / `projectLifeYears` 20** — NPV/IRR of every demo.
+14. **Brine mineral recoveries (Li/Br 0.9, Mg/salt 0.5, K/gypsum 0.7)** — abundance product slate.
+15. **Product / purchase prices (CH₄ $1/kg, Li $5/kg, power $0.03/kWh, etc.)** — economic signal of coupling; all illustrative today.
+
+---
+
+## Solar / land
+
+| location | symbol/value | used for | class | proposed source or action |
+| --- | --- | --- | --- | --- |
+| `engine/network.js` | `PV_HA_PER_MWP = 1.6` | Network / UI PV land (ha) from `solarKWp` | **assumption** | Label screening; replace via `estimateSolarLandHa` (η≈20%, fixed-tilt GCR≈0.35–0.45 → ~1.1–1.6 ha/MWp). Cite NREL land-use / ATB layout notes. |
+| `js/flowsheet-app.js` UI copy | “1.6 ha/MWp screening” | Displays land metric | **assumption** | Keep “screening” wording until footprint module cites a source. |
+| *planned* `engine/footprint.js` | panelEfficiency 20%; baseGCR 0.45 (E–W 0.75); lat spacing multiplier | Solar land from panels÷GCR | **assumption** (not shipped) | Port from archived TEA with explicit assumptions array; cite NREL PV land-use. |
+| *planned* process pads | e.g. electrolyzer `max(24, kW×0.03)` m²; DAC `max(36, tCO₂/y×0.35)`; SWRO `max(16, m³/d×0.8)` | Process pad area | **assumption** (not shipped) | Keep OOM labels; do not present as surveyed footprints. |
+| `js/…` `solar-pv` | `capacityFactor: 0.24` | Default PV energy when not sited | **recoverable** | Map to NREL ATB 2024 utility-scale PV CF class already linked. |
+| `js/…` `solar-pv` | `capexPerKW: 1560`, `fixedOMPerKWYear: 20`, `lifeYears: 30`, `discountRate: 0.07` | LCOE helper / installed economics | **cited** (NREL ATB URL on catalog) | Pin ATB year/scenario (e.g. 2024 moderate) in comment. |
+| `cases/coastal.js` | `DAILY_PV` monthly kWh/kWp; PVGIS URL + frozen JSON | Site electricity budget | **cited** | Already PVGIS-SARAH3/ERA5; keep retrieval date. |
+| `cases/coastal.js` | `solarKWp = 37.5` | Example array size | **assumption** | Demo sizing only; document as scenario knob. |
+| `cases/coastal.js` / app PVGIS query | `loss=14`, `angle=30`, `aspect=0` | Yield request defaults | **recoverable** | Cite PVGIS default system loss / tilt convention. |
+| `cases/coastal.js`, `cases/network.js` | PV CAPEX `$1000/kWp`, O&M `$20/kWp·y`, life 25 y | Sited solar economics override | **assumption** | Prefer catalog/ATB 1560 unless labeled “round screening CAPEX”. |
+| `cases/network.js` | `DEAD_SEA_PV = 5.4` kWh/kWp·day | Sizes Dead Sea hub PV | **assumption** | Replace with PVGIS/TMY for 31.16°N, 35.43°E; keep screening label until then. |
+| `js/…` `nuclear-electricity` | CF 0.9; CAPEX 10717 / 5882 $/kW; O&M 300; var 15 $/MWh | Advanced nuclear presets | **assumption** (vendor pages cited for identity, not costs) | Keep “not vendor quotes”; cite DOE SMR cost study only for generic SMR row. |
+| `engine/network.js` | Earth radius `6371.0088` km | Haversine corridor distance | **derived** | WGS84 mean radius; optional cite. |
+
+---
+
+## Desal / water
+
+| location | symbol/value | used for | class | proposed source or action |
+| --- | --- | --- | --- | --- |
+| `units.js` / catalog `swro` | `recovery: 0.45` | Freshwater vs feed | **recoverable** | Elimelech & Phillip 2011 / Ghaffour 2013 already on catalog — quote typical SWRO recovery band. |
+| `units.js` / catalog | `secKWhPerM3: 3.5` (high-recovery preset 4.5) | SWRO electricity | **recoverable** | Same papers; note modern large plants often ~2.5–4 kWh/m³. |
+| `units.js` / catalog | `feedDensityKgM3: 1025`, `productDensityKgM3: 1000` | m³ ↔ kg | **recoverable** / **derived** | ~seawater density at 25 °C; product ≈ pure water. |
+| `units.js` / catalog | `ionRejection: 0.99` (MED/MSF 0.995) | Salt passage | **recoverable** | Typical RO rejection; cite membrane handbook or Elimelech. |
+| catalog `med` | recovery 0.35; elec 2; heat 60 kWhₜₕ/m³; minHeat 70 °C; waste 40 °C | MED duties | **recoverable** | Ghaffour et al. 2013 already linked — pin table values. |
+| catalog `msf` | recovery 0.25; elec 3.5; heat 80; minHeat 90; waste 45 °C | MSF duties | **recoverable** | Same. |
+| `cases/coastal.js` | salinity 35 g/kg as NaCl; intake 0.1 m³/day | Feed composition / budget | **cited** (NOAA) + **assumption** (intake volume) | Keep NaCl proxy warning; site assay later. |
+| `cases/sabatier.js` default SWRO | `feedDensityKgM3: 1000`, `ionRejection: 1` | Idealized fixture | **assumption** | Intentional test idealization; do not copy to coastal without note. |
+| material preset `seawater` | ~53500 mol H₂O + 550 Na/Cl | UI default seawater | **recoverable** | Align mol fractions with 35 g/kg + 1025 kg/m³ derivation. |
+
+---
+
+## Electrolysis
+
+| location | symbol/value | used for | class | proposed source or action |
+| --- | --- | --- | --- | --- |
+| `units.js` default | `secKWhPerKgH2: 50` | Engine fallback SEC | **recoverable** | Align with catalog; cite Buttler & Spliethoff 2018 alkaline band. |
+| catalog alkaline / PEM | 52 / 55 kWh/kg H₂ | Presets | **cited** (Buttler on catalog; DOE PEM on coastal) | Document which number is system vs stack. |
+| `cases/coastal.js` | forces PEM 55 | Coastal methane | **cited** | DOE 2022 PEM status URL already present. |
+| `cases/sabatier.js` default | 50 | Fixture default | **assumption** / mismatch | Sync with catalog alkaline or label fixture. |
+| `units.js` | `waterKgPerKgH2 = M_H2O / M_H2`; O₂ = H₂/2 | Stoichiometry | **derived** | Clear from molar masses in `model.js`. |
+
+---
+
+## DAC
+
+| location | symbol/value | used for | class | proposed source or action |
+| --- | --- | --- | --- | --- |
+| generic / `dac-solid` | capture 0.9; elec 0.5; heat 1.5 kWh/kg; minHeat 80 °C; makeup 0.02; waste 40 °C | Default solid-sorbent screening | **assumption** (IEA/Keith linked as family refs; coastal explicitly calls heat/capture/makeup screening) | Either map to a published solid-sorbent contingency or keep **assumption** badges in inspector. |
+| `dac-liquid` | capture 0.75; elec 0.366; heat 2.45; minHeat 900 °C; makeup 0.01 | CE-like liquid solvent | **recoverable** / near-**cited** | Keith et al. 2018 Joule — verify each figure against paper tables. |
+| `dac-electroswing` | capture 0.5; elec 0.45; makeup 0.005; no heat | ESDAC | **recoverable** | Voskian & Hatton 2019 — pin experimental vs projected SEC. |
+| coastal / app air | 422.45 ppm (2024) or preset 428 ppm; O₂/N₂ simplified | Air feed | **cited** (ESSD / coastal evidence) | Keep dry-air simplification note. |
+| `cases/sabatier.js` gas presets | flue 4% / 13% CO₂ | Optional richer feeds | **recoverable** | Cite EPA/IEA flue CO₂ ranges. |
+
+---
+
+## Synthesis
+
+| location | symbol/value | used for | class | proposed source or action |
+| --- | --- | --- | --- | --- |
+| Sabatier stoich | CO₂ + 4 H₂ → CH₄ + 2 H₂O | Mass balances | **derived** | Already documented in architecture. |
+| Sabatier | `electricityKWhPerKgCH4: 1` (catalog & cases) | Ancillary power | **assumption** | Cite compression/recycle duty study or label screening. |
+| ASU | N₂ recovery 0.98; O₂ 0.95; `0.25` kWh/kg N₂ | Air separation | **recoverable** | Replace vague DOE R&D link with cryogenic ASU SEC literature (~0.2–0.4 kWh/kg N₂). |
+| ammonia | `0.6` kWh/kg NH₃ (+ stoich 0.5 N₂, 1.5 H₂) | Haber–Bosch power beyond H₂ | **recoverable** | Cite IEA/DOE ammonia energy; clarify this excludes electrolysis. |
+| chlor-alkali | `2.5` kWh/kg NaOH; 1:1:0.5:0.5 stoich | Membrane cell screening | **recoverable** | DOE chlor-alkali profile already linked — extract SEC. |
+| bromine recovery | `0.2` kWh/kg Br₂; 2 NaBr + Cl₂ | Br₂ production | **assumption** | USGS link is geography/context only; find process energy. |
+| aluminium | `14` kWh/kg Al | Hall–Héroult | **recoverable** | DOE aluminium roadmap cited — confirm modern SEC ~13–15. |
+| hydrogen DRI | `0.7` kWh/kg Fe (+ 1.5 H₂ stoich) | Direct electricity beside H₂ | **assumption** | Cite HYBRIT/IEA DRI; separate H₂ demand (derived) from power. |
+| titanium Kroll | `8` kWh/kg Ti | Process power | **assumption** | USGS titanium cite is commodity, not SEC — find Kroll energy. |
+
+---
+
+## Minerals / mining
+
+| location | symbol/value | used for | class | proposed source or action |
+| --- | --- | --- | --- | --- |
+| brine-minerals | `electricityKWhPerKgBrine: 0.05` | Train power | **assumption** | USGS brine bulletin cited for commodities, not kWh — label OOM or find DLE/evaporation energy. |
+| recoveries | Li 0.9, Br 0.9, Mg 0.5, K 0.7, gypsum 0.7, salt 0.5 | Product yields | **assumption** | Optimistic screening; cite specific DLE / solar-pond recoveries per ion. |
+| abundance / preset brine assay | high Na/Cl/Mg/… Li⁺ 10 mol/day scale | Feed composition | **assumption** | “Example concentrated brine”; replace with Dead Sea / salar assay DOI. |
+| abundance product prices | Li 5, Br₂ 3, NH₃ 0.6, NaOH 0.5, … $/kg | Revenue | **assumption** | Illustrative; cite USGS commodity summaries when hardening. |
+| purchase costs | brine 0.0002, salt 0.08, water 0.001, power 0.03 $/native-unit | OPEX | **assumption** | Same. |
+
+---
+
+## Heat
+
+| location | symbol/value | used for | class | proposed source or action |
+| --- | --- | --- | --- | --- |
+| MED/MSF/DAC waste heat T | 40–100 °C defaults | Reject heat grade | **assumption** | Screening reject temperature for cascade eligibility. |
+| coastal heat budget | 30 kWh/day @ 100 °C | DAC heat supply | **assumption** | Explicitly noted unverified in site notes. |
+| `solar-thermal` | sunHours 6; T 150 °C; CAPEX 1000 $/kWₜₕ | Process heat source | **assumption** (DOE process-heat page linked) | Map to DOE/NREL CSP or flat-plate cost & yield. |
+| `thermal-storage` | η 0.95; ΔT loss 5 °C; CAPEX 30 $/kWhₜₕ | Heat shift | **assumption** | Cite DOE TES ranges. |
+| `battery` | η 0.95; CAPEX 400 $/kWh | Electrical storage | **recoverable** | NREL ATB battery URL already on catalog — pin 2024 case. |
+| coastal `storage.efficiency` | 0.9 | Horizon battery default | **assumption** | Align with catalog 0.95 or document RTE vs one-way. |
+
+---
+
+## Economics / freight
+
+| location | symbol/value | used for | class | proposed source or action |
+| --- | --- | --- | --- | --- |
+| `economics.js` / app / cases | `periodDays: 365`, `projectLifeYears: 20`, `discountRate: 0.08` | DCF defaults | **assumption** | Finance convention; document; allow site override. |
+| `network.js` | `SEA_USD_PER_T_KM = 0.012`, `ROAD_USD_PER_T_KM = 0.08` | Corridor freight | **assumption** / **recoverable** | Cite UNCTAD/World Bank freight or IMO bulk rates; keep mode split. |
+| `network.js` | corridor `loss ?? 0.002` | Transit mass loss | **assumption** | Commodity-specific loss factors; default is screening. |
+| sabatier case CAPEX lumps | DAC 16425, electrolyzer 21000, Sabatier 14000, SWRO 1000 | Installed costs at demo scale | **assumption** | Scale-inconsistent with $/kW catalog; label toy CAPEX or derive from rates × capacity. |
+| fixed O&M | 3–4% of CAPEX (cases); converter UI default 3% | Annual O&M | **assumption** | Common TEA rule of thumb — cite ATB O&M fractions where applicable. |
+| electrolyzer `assetLifeYears: 10` | Replacement in cash flows | **recoverable** | Stack life literature / DOE H2 targets. |
+| grid | `pricePerMWh: 100`, `kgCO2PerMWh: 400` | Import tariff / emissions display | **assumption** | Site-specific; cite EIA/EMBER when used. |
+| methane sale | `unitPrice: 1` $/kg | Revenue | **assumption** | ~$28/MMBtu order — label illustrative vs HHV gas price. |
+| Earth / period math | kg/day × 365 → t/y | Annualization | **derived** | Clear; note leap years ignored. |
+
+---
+
+## Literature table vs code (summary)
+
+| Architecture family | Papers listed | What code actually uses | Gap |
+| --- | --- | --- | --- |
+| Seawater desalination | Elimelech 2011; Ghaffour 2013 | SWRO 0.45 / 3.5; MED/MSF presets in catalog | Values plausible but not page-pinned; engine defaults uncited. |
+| Electrolysis | Buttler & Spliethoff 2018 | 50 / 52 / 55 depending on layer | **Inconsistent defaults**; PEM 55 also DOE-cited in coastal. |
+| DAC | IEA 2022; Keith 2018; Voskian 2019 | Solid screening 0.5/1.5/0.9; liquid nearer Keith; electroswing rough | Solid route still **assumption** despite citations. |
+| Electricity / storage / heat | NREL ATB; DOE heat/TES; NRC/Valar | PV/battery numbers ATB-linked; nuclear costs user-assumption; network land **not** ATB | Land still 1.6 ha/MWp; no GCR. |
+| Abundance minerals / metals | USGS/DOE links on catalog | Recoveries & many SECs screening | Citations do not substantiate the numeric defaults. |
+
+---
+
+## Derived constants (OK; low priority)
+
+| location | symbol/value | used for | class | notes |
+| --- | --- | --- | --- | --- |
+| `engine/model.js` | IUPAC-style molar masses | All mass conversions | **derived** | Keep registry; optional cite IUPAC. |
+| electrolyzer / sabatier / reaction blocks | Stoichiometric coefficients | Balances | **derived** | Documented. |
+| coastal / sabatier helpers | `H2_KG_PER_KG_CH4`, etc. | Setpoint sizing | **derived** | From molar masses. |
+
+---
+
+## Recommended next actions (documentation / citation only — not this pass)
+
+1. Single source of truth for electrolyzer SEC presets; engine default = catalog alkaline.
+2. Add inline `basis` / DOI fields on every catalog `params` default (not only menu `references`).
+3. When adding `footprint.js`, mark every pad coefficient **assumption** and retire naked `1.6` or derive it from η×GCR with a citation.
+4. Split “family citation present” vs “number traced to table X” in UI literature links.
+5. Mark all case `unitPrice` / lump CAPEX as `quality: 'user-assumption'` in site evidence where missing.

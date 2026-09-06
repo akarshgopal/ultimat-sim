@@ -34,7 +34,7 @@ Prices never enter a unit equation or a conservation balance. A later optimizer 
 ## Principles
 
 1. Elemental material balances close before money exists.
-2. Electricity and heat are explicit edges, not hidden utility deductions.
+2. Electricity and heat are explicit edges, not hidden utility deductions. After the operating solve, `engine/heat.js` runs a greedy temperature-feasible cascade (converter `wasteHeat` outlets vs `consumed.heat` sinks). That pass is accounting of recoverable duty versus residual external heat, not heat-exchanger-network synthesis, and it does not mutate the graph or `balances.heatKWh`.
 3. If material or energy crosses a unit boundary, it is on an edge.
 4. Units see only their inlet streams, physical parameters, installed capacity, and requested activity.
 5. Installed capacity is an input to an operating solve. Automatic plant sizing is a separate outer calculation.
@@ -81,7 +81,7 @@ When `site` is present, every source block must name a `siteResource`. Resource 
 
 `site.meteo`, `site.assay`, and `site.rights` are first-class site truth. They do not replace `resources` streams. `dailyPVKWhPerKWp` stays on the site root for sizing; `meteo` carries the same daily value plus the monthly series, a cite, and a quality class. Assay is a composition summary with quality and evidence URLs, not a second mol vector. Each right is `authorized`, `assumed`, or `unverified`. `solveOperation` and `sizeToTarget` warn on unverified rights; they do not invent authorized supply.
 
-The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield plus a 2023 hourly typical day (`data/pvgis-almeria-hourly.js`), global 35 g/kg seawater as a cited NaCl proxy assay, assumed seawater intake, and unverified grid/freshwater/brine/salt rights. The Dead Sea hub (`cases/network.js`) cites the same PVGIS family, labels brine as a screening assay, and marks freshwater and salt purchase as assumed.
+The first sited example is `cases/coastal.js`: Almería coast, frozen PVGIS-SARAH3/ERA5 monthly PV yield plus a 2023 hourly typical day (`data/pvgis-almeria-hourly.js`), global 35 g/kg seawater as a cited NaCl proxy assay, assumed seawater intake, and unverified grid/freshwater/brine/salt rights. The Dead Sea hub (`cases/network.js`) cites the same PVGIS family, uses a frozen open-water ion assay (`data/dead-sea-brine.json`), and marks freshwater and salt purchase as assumed. A literature assay is not a mineral concession.
 
 When `site.solar.typicalMonths` is present, `solveHorizon` runs 24 hourly operating solves. Daily setpoints are leftover demand, nameplate is capacity/24, and methane-chain setpoints stay stoichiometric so intermediate CO₂/H₂ is not orphaned. Site electricity is that hour's PV yield plus optional battery discharge. Other site budgets are remaining daily quantities. Night hours with no PV and no stored energy produce nothing.
 
@@ -238,8 +238,11 @@ hydrogen, electricity, and capacity can each constrain it. The integrated
 case connects DAC and electrolysis directly and closes carbon, hydrogen,
 oxygen, electricity, and DAC heat balances.
 
-Reaction heat recovery, compression detail, conversion losses, and recycle
-are deferred rather than hidden inside the first unit.
+Sabatier reports methanation reject heat on an explicit `wasteHeat` port
+(2.86 kWh/kg CH4 from 165 kJ/mol; screening 250 °C). The post-solve cascade
+can match that duty to colder sinks such as DAC; it does not delete the
+external heat-source node. Compression detail, conversion losses, and a
+full HEN remain out of scope. Recycle is the next stage.
 
 ### Stage 5: recycle
 
@@ -272,11 +275,12 @@ Graph validation rejects:
 Every solve returns:
 
 ```text
-streams        solved edge flows
-nodes          activity, capacity utilization, limiting inputs
-balances       element, charge, electricity, and heat residuals
-warnings       fidelity notes and unmet requests
-convergence    converged, iterations, largest residual
+streams           solved edge flows
+nodes             activity, capacity utilization, limiting inputs
+balances          element, charge, electricity, and heat residuals
+heatIntegration   post-solve T-feasible matches; covered / residual / unrecovered kWh
+warnings          fidelity notes and unmet requests
+convergence       converged, iterations, largest residual
 ```
 
 Balance residuals are assertions in tests and visible diagnostics in the UI.
@@ -357,6 +361,7 @@ Historical Stage 4 layout (see the README for the current code map):
 engine/
   model.js       # substances, stream helpers, graph validation
   solve.js       # operating solve only
+  heat.js        # post-solve temperature-feasible heat cascade
   units.js       # initial catalog and physics
   footprint.js   # location-aware solar land and process pads
   size.js        # outer methane sizing loop (capacities + solarKWp)

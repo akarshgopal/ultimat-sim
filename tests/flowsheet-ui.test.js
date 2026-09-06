@@ -26,7 +26,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -259,6 +259,9 @@ test('coastal methane loads a sited factory whose winter solar cuts methane', ()
   assert.equal(app.result.horizon.hours[0].methane, 0);
   assert.ok(app.result.horizon.hours.some(entry => entry.pv > 0 && entry.methane > 0));
   assert.ok(app.result.nodes.sabatier.activity > 0);
+  assert.ok(app.result.heatIntegration);
+  assert.ok(app.result.heatIntegration.coveredKWh > 0);
+  assert.match(context.__elements.get('balanceList').innerHTML, /Heat covered/);
 });
 
 test('switching DAC route drops incompatible heat and reagent connections', () => {

@@ -40,7 +40,8 @@ test('Almería site truth keeps resource streams and cites PV plus NaCl', () => 
   assert.ok(!solved.warnings.some(message => message.includes('unverified site right: seawaterIntake')));
 });
 
-test('Dead Sea site truth cites PVGIS and labels brine screening with unverified concession', () => {
+test('Dead Sea site truth cites PVGIS and a literature brine assay with unverified concession', () => {
+  const { SUBSTANCES, streamMassKg } = require('../engine/model');
   const definition = siteDeadSeaAbundance();
   const { site } = definition;
   assert.equal(site.meteo.dailyPVKWhPerKWp, DEAD_SEA_PV);
@@ -48,17 +49,39 @@ test('Dead Sea site truth cites PVGIS and labels brine screening with unverified
   assert.equal(site.meteo.quality, 'cited');
   assert.match(site.meteo.cite.url, /lat=31\.16/);
   assert.equal(site.assay.kind, 'brine');
-  assert.equal(site.assay.quality, 'screening');
-  assert.ok(site.assay.evidence.some(item => /Dead_Sea/.test(item.url)));
+  assert.equal(site.assay.quality, 'cited');
+  assert.ok(site.assay.evidence.some(item => /Dead_Sea/.test(item.url) || /doi\.org\/10\.1016\/j\.mineng\.2021\.107038/.test(item.url)));
   assertRight(site.rights.freshwater, 'assumed');
   assertRight(site.rights.saltPurchase, 'assumed');
   assertRight(site.rights.gridImport, 'unverified');
   assertRight(site.rights.brineConcession, 'unverified');
+  assert.match(site.rights.brineConcession.note, /not a mineral concession/i);
   assertRight(site.rights.seawaterIntake, 'unverified');
-  assert.ok(site.resources.brine.stream.mol['Li+'] > 0);
+  const brine = site.resources.brine.stream;
+  assert.ok(brine.mol['Mg+2'] > 0);
+  assert.ok(brine.mol['Cl-'] > 0);
+  assert.ok(brine.mol['Li+'] > 0);
+  const mgKg = brine.mol['Mg+2'] * SUBSTANCES['Mg+2'].molarMassG / 1000;
+  const naKg = brine.mol['Na+'] * SUBSTANCES['Na+'].molarMassG / 1000;
+  assert.ok(mgKg > naKg, 'Dead Sea open water is Mg-rich relative to Na');
+  assert.ok(streamMassKg(brine) > 0);
   const solved = solveOperation(definition);
   assert.ok(solved.warnings.some(message => message.includes('unverified site right: brineConcession')));
   assert.ok(!solved.warnings.some(message => message.includes('unverified site right: saltPurchase')));
+});
+
+test('frozen Dead Sea brine JSON matches the JS export and SUBSTANCES mol_per_kg', () => {
+  const { SUBSTANCES } = require('../engine/model');
+  const json = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'dead-sea-brine.json'), 'utf8'));
+  const js = require('../data/dead-sea-brine.js');
+  assert.deepEqual(js, json);
+  assert.equal(json.ions_g_per_kg['Cl-'], 181.4);
+  assert.equal(json.ions_g_per_kg['Mg+2'], 35.2);
+  assert.equal(json.ions_g_per_kg['Na+'], 32.5);
+  assert.ok(Math.abs(json.ions_g_per_kg['Li+'] - 0.018 / 1.24) < 1e-12);
+  for (const [id, grams] of Object.entries(json.ions_g_per_kg)) {
+    assert.ok(Math.abs(json.mol_per_kg[id] - grams / SUBSTANCES[id].molarMassG) < 1e-12);
+  }
 });
 
 test('sizing a coastal plant keeps meteo in sync and still warns on unverified rights', () => {

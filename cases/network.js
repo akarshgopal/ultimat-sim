@@ -40,8 +40,8 @@ function siteDeadSeaAbundance() {
       },
       brine: {
         stream: clone(node('brine').params.stream),
-        quality: 'literature-estimate',
-        evidence: 'Example concentrated brine assay for screening; not a mineral concession',
+        quality: 'cited',
+        evidence: 'Dead Sea open-water ion assay from frozen data/dead-sea-brine.json (Wikipedia chemistry + Alsabbagh 2021 Li). Daily mass is 1e5 kg; not a mineral concession',
       },
       salt: {
         stream: clone(node('salt-feed').params.stream),
@@ -73,10 +73,11 @@ function siteDeadSeaAbundance() {
     },
     assay: {
       kind: 'brine',
-      summary: 'Example concentrated Na–Cl–Mg–Ca–K–SO₄–Br–Li brine for screening; not a Dead Sea concession assay',
-      quality: 'screening',
+      summary: 'Dead Sea open-water ion assay from frozen data (early-1980s surface majors; Li+ 18 mg/L). Not a mineral concession assay',
+      quality: 'cited',
       evidence: [
-        { label: 'Dead Sea chemical composition (context, not this mol vector)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+        { label: 'Wikipedia: Dead Sea chemical composition (early-1980s surface)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+        { label: 'Alsabbagh et al. 2021 Li+ 18 mg/L Dead Sea water', url: 'https://doi.org/10.1016/j.mineng.2021.107038' },
       ],
     },
     rights: {
@@ -96,8 +97,10 @@ function siteDeadSeaAbundance() {
       },
       brineConcession: {
         status: 'unverified',
-        note: 'Example brine feed is not a mineral concession',
-        evidence: [{ label: 'Dead Sea chemical composition (context, not this feed vector)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' }],
+        note: 'Literature assay is not a mineral concession',
+        evidence: [
+          { label: 'Wikipedia: Dead Sea chemical composition (assay context, not a concession)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+        ],
       },
       saltPurchase: {
         status: 'assumed',
@@ -108,10 +111,11 @@ function siteDeadSeaAbundance() {
     evidence: [
       { label: 'Dead Sea industrial geography', url: 'https://en.wikipedia.org/wiki/Dead_Sea' },
       { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; annual E_y 1674.85 kWh/kWp', url: PVGIS_URL },
-      { label: 'Dead Sea chemical composition (screening assay context)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+      { label: 'Dead Sea chemical composition (early-1980s surface majors)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+      { label: 'Alsabbagh et al. 2021: Li+ 18 mg/L Dead Sea water', url: 'https://doi.org/10.1016/j.mineng.2021.107038' },
       { label: 'USGS salt statistics (purchased-salt context)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
     ],
-    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Brine composition is a screening assay, not a concession. Freshwater and purchased salt are explicit assumptions. Grid and brine rights are unverified. Annual economics repeat this day 365 times.',
+    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Brine composition is the frozen Dead Sea open-water ion assay (data/dead-sea-brine.json); a literature assay is not a mineral concession. Freshwater and purchased salt are explicit assumptions. Grid and brine rights are unverified. Annual economics repeat this day 365 times.',
   };
   return definition;
 }

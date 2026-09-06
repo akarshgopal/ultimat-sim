@@ -16,9 +16,9 @@
 **Gaps vs architecture literature table**
 
 - `docs/flowsheet-architecture.md` cites desalination, electrolysis, DAC, PV, battery, and heat sources at the *family* level.
-- Catalog entries often attach the same papers, but **engine defaults in `units.js` have no inline citations**, and several abundance SECs/recoveries cite only loosely related DOE/USGS pages.
+- Catalog entries often attach the same papers, but **several engine defaults in `units.js` still lack inline citations** (items 1–3 now cited). Abundance SECs/recoveries often cite only loosely related DOE/USGS pages.
 - **`engine/footprint.js` now estimates site land** from panel area ÷ location-aware GCR plus order-of-magnitude process pads. Coefficients remain screening assumptions (see solar/land).
-- Electrolyzer SEC is **inconsistent across layers**: `units.js` default `50`, catalog alkaline `52` / PEM `55`, coastal case forces `55` (DOE-linked).
+- Electrolyzer SEC defaults are aligned on alkaline **52** kWh/kg H₂ (Buttler 2018); catalog PEM **55** and coastal PEM **55** (DOE) stay as technology-specific overrides.
 
 ---
 
@@ -26,9 +26,9 @@
 
 These distort “real” material–energy–land–money coupling the most when wrong:
 
-1. **Electrolyzer `secKWhPerKgH2` (50 / 52 / 55)** — dominates chain electricity for H₂ / CH₄ / NH₃ routes; reconcile defaults and cite one basis per technology.
-2. **DAC `heatKWhPerKgCO2` (1.5 solid / 2.45 liquid)** — sets heat vs electricity trade and solar-thermal / nuclear coupling.
-3. **DAC `electricityKWhPerKgCO2` (0.5 / 0.366 / 0.45)** — competes with electrolyzer on the bus.
+1. **Electrolyzer `secKWhPerKgH2` (52 alkaline / 55 PEM)** — **cited** (Buttler & Spliethoff 2018). Engine, catalog alkaline, Sabatier, and horizon fallbacks are 52; PEM preset and coastal remain 55.
+2. **DAC `heatKWhPerKgCO2` (1.5 solid / 2.45 liquid)** — solid **assumption** (IEA 2022 family, 5.4 GJ/t); liquid **cited** (Keith 2018 Scenario A, 8.81 GJ/t → 2.45 kWh/kg). Electroswing has no heat.
+3. **DAC `electricityKWhPerKgCO2` (0.5 / 0.366 / 0.45)** — solid **assumption** (IEA family, 1.8 GJ/t); liquid **cited** (Keith 2018 Scenario C, 366 kWh/t); electroswing **cited** (Voskian & Hatton 2019 cell-work band).
 4. **Site PV yield (`DAILY_PV` / `DEAD_SEA_PV` 5.4 / CF 0.24)** — caps every electrified process at a site.
 5. **Solar GCR / panel efficiency (0.45 fixed, 20%)** — dominate site hectares; process pads are OOM floors.
 6. **SWRO `secKWhPerM3` = 3.5** — water–power coupling for coastal factories.
@@ -83,10 +83,10 @@ These distort “real” material–energy–land–money coupling the most when
 
 | location | symbol/value | used for | class | proposed source or action |
 | --- | --- | --- | --- | --- |
-| `units.js` default | `secKWhPerKgH2: 50` | Engine fallback SEC | **recoverable** | Align with catalog; cite Buttler & Spliethoff 2018 alkaline band. |
-| catalog alkaline / PEM | 52 / 55 kWh/kg H₂ | Presets | **cited** (Buttler on catalog; DOE PEM on coastal) | Document which number is system vs stack. |
+| `units.js` default | `secKWhPerKgH2: 52` | Engine fallback SEC | **cited** | Buttler & Spliethoff 2018 alkaline system band; catalog `sourceNote` + inspector. |
+| catalog alkaline / PEM | 52 / 55 kWh/kg H₂ | Presets | **cited** (Buttler on catalog; DOE PEM on coastal) | System-level SEC, not stack-only; PEM 55 kept. |
 | `cases/coastal.js` | forces PEM 55 | Coastal methane | **cited** | DOE 2022 PEM status URL already present. |
-| `cases/sabatier.js` default | 50 | Fixture default | **assumption** / mismatch | Sync with catalog alkaline or label fixture. |
+| `cases/sabatier.js` / `solve.js` fallback | 52 | Fixture + horizon SEC | **cited** | Synced with catalog alkaline / units.js. |
 | `units.js` | `waterKgPerKgH2 = M_H2O / M_H2`; O₂ = H₂/2 | Stoichiometry | **derived** | Clear from molar masses in `model.js`. |
 
 ---
@@ -95,9 +95,9 @@ These distort “real” material–energy–land–money coupling the most when
 
 | location | symbol/value | used for | class | proposed source or action |
 | --- | --- | --- | --- | --- |
-| generic / `dac-solid` | capture 0.9; elec 0.5; heat 1.5 kWh/kg; minHeat 80 °C; makeup 0.02; waste 40 °C | Default solid-sorbent screening | **assumption** (IEA/Keith linked as family refs; coastal explicitly calls heat/capture/makeup screening) | Either map to a published solid-sorbent contingency or keep **assumption** badges in inspector. |
-| `dac-liquid` | capture 0.75; elec 0.366; heat 2.45; minHeat 900 °C; makeup 0.01 | CE-like liquid solvent | **recoverable** / near-**cited** | Keith et al. 2018 Joule — verify each figure against paper tables. |
-| `dac-electroswing` | capture 0.5; elec 0.45; makeup 0.005; no heat | ESDAC | **recoverable** | Voskian & Hatton 2019 — pin experimental vs projected SEC. |
+| generic / `dac-solid` | capture 0.9; elec 0.5; heat 1.5 kWh/kg; minHeat 80 °C; makeup 0.02; waste 40 °C | Default solid-sorbent screening | **assumption** | IEA DAC 2022 S-DAC family: 0.5 kWh/kg e = 1.8 GJ/t; 1.5 kWh/kg th = 5.4 GJ/t; 7.2 GJ/t at the low end of 7.2–9.5. Inspector `sourceNote` labels screening. |
+| `dac-liquid` | capture 0.75; elec 0.366; heat 2.45; minHeat 900 °C; makeup 0.01 | CE-like liquid solvent | **cited** | Keith et al. 2018: Scenario A heat 8.81 GJ/t → 2.45 kWh/kg; Scenario C elec 366 kWh/t → 0.366 kWh/kg. Mixed-scenario vectors. |
+| `dac-electroswing` | capture 0.5; elec 0.45; makeup 0.005; no heat | ESDAC | **cited** | Voskian & Hatton 2019 cell work 40–90 kJ/mol CO₂ (0.25–0.57 kWh/kg); 0.45 is in-band (~71 kJ/mol). No heat; BOP not included. |
 | coastal / app air | 422.45 ppm (2024) or preset 428 ppm; O₂/N₂ simplified | Air feed | **cited** (ESSD / coastal evidence) | Keep dry-air simplification note. |
 | `cases/sabatier.js` gas presets | flue 4% / 13% CO₂ | Optional richer feeds | **recoverable** | Cite EPA/IEA flue CO₂ ranges. |
 
@@ -165,8 +165,8 @@ These distort “real” material–energy–land–money coupling the most when
 | Architecture family | Papers listed | What code actually uses | Gap |
 | --- | --- | --- | --- |
 | Seawater desalination | Elimelech 2011; Ghaffour 2013 | SWRO 0.45 / 3.5; MED/MSF presets in catalog | Values plausible but not page-pinned; engine defaults uncited. |
-| Electrolysis | Buttler & Spliethoff 2018 | 50 / 52 / 55 depending on layer | **Inconsistent defaults**; PEM 55 also DOE-cited in coastal. |
-| DAC | IEA 2022; Keith 2018; Voskian 2019 | Solid screening 0.5/1.5/0.9; liquid nearer Keith; electroswing rough | Solid route still **assumption** despite citations. |
+| Electrolysis | Buttler & Spliethoff 2018 | Default / alkaline 52; PEM 55 | **cited**; PEM 55 also DOE-cited in coastal. |
+| DAC | IEA 2022; Keith 2018; Voskian 2019 | Solid screening 0.5/1.5 with IEA GJ/t note; liquid Keith A heat / C elec; electroswing 0.45 in 40–90 kJ/mol | Solid energy remains **assumption**; liquid and electroswing **cited**. |
 | Electricity / storage / heat | NREL ATB; DOE heat/TES; NRC/Valar | PV/battery numbers ATB-linked; nuclear costs user-assumption; land from `footprint.js` GCR | GCR/pads are screening; not ATB table-pinned. |
 | Abundance minerals / metals | USGS/DOE links on catalog | Recoveries & many SECs screening | Citations do not substantiate the numeric defaults. |
 
@@ -184,8 +184,8 @@ These distort “real” material–energy–land–money coupling the most when
 
 ## Recommended next actions (documentation / citation only — not this pass)
 
-1. Single source of truth for electrolyzer SEC presets; engine default = catalog alkaline.
-2. Add inline `basis` / DOI fields on every catalog `params` default (not only menu `references`).
+1. ~~Single source of truth for electrolyzer SEC presets; engine default = catalog alkaline.~~ Done: 52 kWh/kg H₂ (Buttler 2018) with inspector `sourceNote`.
+2. Add inline `basis` / DOI fields on remaining catalog `params` defaults (electrolyzer + DAC energy now have `sourceNote`).
 3. When adding `footprint.js`, mark every pad coefficient **assumption** and retire naked `1.6` or derive it from η×GCR with a citation.
 4. Split “family citation present” vs “number traced to table X” in UI literature links.
 5. Mark all case `unitPrice` / lump CAPEX as `quality: 'user-assumption'` in site evidence where missing.

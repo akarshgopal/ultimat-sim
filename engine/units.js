@@ -153,7 +153,8 @@ function electrolyzer({ inlets, requestedActivity, capacity, params = {} }) {
   const electricity = validateStream(inlets.electricity, 'electricity');
   const requested = nonnegative(requestedActivity, 'requestedActivity');
   const installed = nonnegative(capacity, 'capacity');
-  const sec = nonnegative(Number(params.secKWhPerKgH2 ?? 50), 'secKWhPerKgH2');
+  // Alkaline system SEC; Buttler & Spliethoff 2018 commercial band (~4.5–5.0 kWh/Nm³ ≈ 52 kWh/kg H2).
+  const sec = nonnegative(Number(params.secKWhPerKgH2 ?? 52), 'secKWhPerKgH2');
   const waterKgPerKgH2 = SUBSTANCES.H2O.molarMassG / SUBSTANCES.H2.molarMassG;
 
   if (water.phase !== 'liquid') throw new Error('Electrolyzer water must be liquid');
@@ -208,6 +209,7 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
   const requested = nonnegative(requestedActivity, 'requestedActivity');
   const installed = nonnegative(capacity, 'capacity');
   const captureFraction = Number(params.captureFraction ?? 0.9);
+  // Solid-sorbent screening (IEA DAC 2022 family): 0.5 kWh/kg e = 1.8 GJ/t; 1.5 kWh/kg th = 5.4 GJ/t.
   const electricityKWhPerKgCO2 = nonnegative(
     Number(params.electricityKWhPerKgCO2 ?? 0.5),
     'electricityKWhPerKgCO2'

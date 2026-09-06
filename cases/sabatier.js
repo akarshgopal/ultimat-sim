@@ -53,7 +53,7 @@ const DEFAULT_PARAMS = {
     productDensityKgM3: 1000,
     ionRejection: 1,
   },
-  electrolyzer: { secKWhPerKgH2: 50 },
+  electrolyzer: { secKWhPerKgH2: 52 }, // Buttler & Spliethoff 2018 alkaline system SEC
   sabatier: { electricityKWhPerKgCH4: 1 },
 };
 

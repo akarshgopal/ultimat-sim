@@ -46,6 +46,7 @@
         <button type="button" id="applyCoordinates">Apply location</button>
       </div>
       <div class="site-size">
+        <button type="button" id="sizeForCashflow">Size for co-product cashflow</button>
         <label>Product
           <select id="sizeProduct" aria-label="Size-to-target product">
             <option value="CH4">CH₄</option>
@@ -57,7 +58,7 @@
         <label>kg/day <input id="sizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
         <button type="button" id="sizeToTarget">Size to target</button>
       </div>
-      <p class="status-meta" id="sizeToTargetStatus">Size one sale stream to set duties; co-products and cashflow still matter. Water, converters, and PV follow. Physics-only solve.</p>
+      <p class="status-meta" id="sizeToTargetStatus">Co-product cashflow is the goal: maximize sale products while plant net cash stays positive. Size-to-target remains a single-product physics tool.</p>
       <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
       <p class="status-meta" id="siteNotes"></p>
       <div id="siteMeteo" class="site-truth"></div>

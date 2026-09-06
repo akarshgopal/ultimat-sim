@@ -431,6 +431,13 @@
       /* sizeToProduct writes the status line */
     }
   });
+  document.getElementById('sizeForCashflow')?.addEventListener('click', () => {
+    try {
+      sizeForPositiveCashflow();
+    } catch {
+      /* sizeForPositiveCashflow writes the status line */
+    }
+  });
   document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
   document.getElementById('loadDemoNetwork').addEventListener('click', loadDemoNetwork);
   document.getElementById('addPlantToNetwork').addEventListener('click', () => {
@@ -670,6 +677,10 @@
   function loadCoastalMethane(month = 0) {
     lastSizing = null;
     loadCase(CoastalCase.createCoastalCase(month), 'sabatier');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'Coastal plant loaded. Co-product cashflow ranks CH₄/H₂ setpoints for positive plant net cash; size-to-target remains available.';
+    }
   }
 
   function formatSizingResidual(value) {
@@ -771,6 +782,43 @@
     } catch (error) {
       lastSizing = null;
       if (status) status.textContent = error.message;
+      throw error;
+    }
+  }
+
+
+  function formatCashflowMoney(value) {
+    if (!Number.isFinite(value)) return '—';
+    const abs = Math.abs(value);
+    const digits = abs >= 1000 ? 0 : abs >= 10 ? 1 : 2;
+    return `${value < 0 ? '-' : ''}$${abs.toLocaleString(undefined, { maximumFractionDigits: digits })}`;
+  }
+
+  function sizeForPositiveCashflow(opts = {}) {
+    const status = document.getElementById('sizeToTargetStatus');
+    if (!globalThis.FlowsheetSize?.sizeForPositiveCashflow) {
+      if (status) status.textContent = 'Cashflow sizing engine is not loaded.';
+      throw new Error('Cashflow sizing engine is not loaded');
+    }
+    if (!graph.nodes.length) {
+      const error = new Error('Co-product cashflow sizing needs a loaded flowsheet');
+      writeSizeStatus(error);
+      throw error;
+    }
+    try {
+      lastSizing = FlowsheetSize.sizeForPositiveCashflow({
+        definition: currentCaseDefinition(),
+        ...opts,
+      });
+      const focus = selectionForProduct(lastSizing.selected?.product || 'lithium', lastSizing.definition)
+        || selectionForProduct('CH4', lastSizing.definition)
+        || lastSizing.definition.graph.nodes.find(node => node.unit === 'brine-minerals')?.id
+        || lastSizing.definition.graph.nodes.find(node => node.unit === 'sabatier')?.id;
+      loadCase(lastSizing.definition, focus);
+      return lastSizing;
+    } catch (error) {
+      lastSizing = null;
+      writeSizeStatus(error);
       throw error;
     }
   }
@@ -913,6 +961,8 @@
   function loadAbundanceHub() {
     lastSizing = null;
     loadCase(AbundanceCase.createAbundanceCase(), 'minerals');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) status.textContent = 'Dead Sea hub loaded. Size for co-product cashflow expands the mineral/chemical slate while keeping plant net cash positive.';
   }
 
   function plantSnapshot(name, definition) {
@@ -2070,7 +2120,14 @@
     )).join(' · ');
     const sizeStatus = document.getElementById('sizeToTargetStatus');
     if (sizeStatus) {
-      if (lastSizing) {
+      if (lastSizing?.mode === 'positive-cashflow') {
+        const obj = lastSizing.objective || {};
+        const selected = lastSizing.selected || {};
+        const slate = selected.slateMode || selected.product || 'slate';
+        const scale = selected.scale != null ? ` · scale ${selected.scale}×` : (selected.rate != null ? ` · ${selected.rate} kg/day` : '');
+        const metNote = obj.met ? '' : ' · objective not met';
+        sizeStatus.textContent = `${obj.positiveSaleCount || 0} positive-sale products · net cash ${formatCashflowMoney(obj.annualNetCash)} · ${slate}${scale}${metNote}`;
+      } else if (lastSizing) {
         const iters = lastSizing.iterations;
         const capNote = lastSizing.history?.some(step => step.capped) ? ' · cap-limited' : '';
         const convergeNote = lastSizing.converged ? '' : ' · not converged';
@@ -2085,7 +2142,7 @@
           : '';
         sizeStatus.textContent = `${product} · ${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${heatNote}${capNote}${convergeNote}${rightsNote}`;
       } else {
-        sizeStatus.textContent = 'Demand sizes the selected product. Water, converters, and PV follow. The operating solve stays physics-only.';
+        sizeStatus.textContent = 'Co-product cashflow is the goal: maximize sale products while plant net cash stays positive. Size-to-target remains a single-product physics tool.';
       }
     }
   }
@@ -2552,7 +2609,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, sizeToProduct, loadAbundanceHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation,
     saveNamed, loadNamed, captureBaseline, clearBaseline,
     solve: solveAndRender, fitCanvas, get result() { return result; }, get baseline() { return baseline; },

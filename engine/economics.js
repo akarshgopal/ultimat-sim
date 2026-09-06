@@ -200,5 +200,47 @@ function approximateIRR(cashFlows) {
   return null;
 }
 
-return { approximateIRR, evaluateEconomics, netPresentValue };
+
+// Co-product cashflow score (post-solve dollars only).
+// Revenue-proportional OPEX: A_i = (R_i / R) * C when R > 0.
+// CM_i = R_i - A_i = R_i * (1 - C/R). So every active sale product is
+// positive-cash iff annualNetCash = R - C > 0. positiveSaleCount is then
+// the number of sale sinks with R_i > 0 when net cash > 0, else 0.
+function scorePositiveCashflow(economics = {}) {
+  const sinks = Array.isArray(economics.sinks) ? economics.sinks : [];
+  const annualOperatingCost = number(economics.annualOperatingCost, 0);
+  const saleSinks = sinks.filter(sink => sink && sink.disposition === 'sale');
+  const revenueTotal = saleSinks.reduce((sum, sink) => sum + number(sink.annualRevenue, 0), 0);
+  const annualNetCash = economics.annualNetCash != null
+    ? number(economics.annualNetCash, 0)
+    : revenueTotal - annualOperatingCost;
+  const products = saleSinks.map(sink => {
+    const annualRevenue = number(sink.annualRevenue, 0);
+    const allocatedOpex = revenueTotal > 0 ? (annualRevenue / revenueTotal) * annualOperatingCost : 0;
+    const contributionMargin = annualRevenue - allocatedOpex;
+    return {
+      id: sink.id,
+      annualRevenue,
+      allocatedOpex,
+      contributionMargin,
+      positive: contributionMargin > 0,
+      deliveredAmount: number(sink.deliveredAmount, 0),
+    };
+  });
+  const active = products.filter(product => product.annualRevenue > 0);
+  const met = annualNetCash > 0 && active.length > 0;
+  const positiveSaleCount = met ? active.length : 0;
+  return {
+    name: 'maximize-positive-sale-count',
+    formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. CM_i=R_i-(R_i/R)*C; sign(CM_i)=sign(R-C) when R_i>0.',
+    positiveSaleCount,
+    annualNetCash,
+    annualRevenue: revenueTotal,
+    annualOperatingCost,
+    met,
+    products,
+  };
+}
+
+return { approximateIRR, evaluateEconomics, netPresentValue, scorePositiveCashflow };
 });

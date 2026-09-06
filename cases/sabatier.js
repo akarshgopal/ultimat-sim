@@ -54,7 +54,11 @@ const DEFAULT_PARAMS = {
     ionRejection: 1,
   },
   electrolyzer: { secKWhPerKgH2: 52 }, // Buttler & Spliethoff 2018 alkaline system SEC
-  sabatier: { electricityKWhPerKgCH4: 1 }, // screening ancillary 0.4–1.5 kWh/kg; Zapf via Baier 2018, not electrolysis
+  sabatier: {
+    electricityKWhPerKgCH4: 1, // screening ancillary 0.4–1.5 kWh/kg; Zapf via Baier 2018, not electrolysis
+    heatKWhPerKgCH4: 2.86, // 165 kJ/mol CH4 / 3.6 / 16.04; standard enthalpy of methanation
+    wasteHeatT_C: 250, // screening reject T
+  },
 };
 
 function scaleMaterial(stream, targetKg) {
@@ -188,6 +192,7 @@ function createSabatierCase(overrides = {}) {
         { from: { node: 'dac', port: 'capturedCo2' }, to: { node: 'sabatier', port: 'co2' } },
         { from: { node: 'dac', port: 'depletedAir' }, to: { node: 'depleted-air', port: 'in' } },
         { from: { node: 'dac', port: 'wasteHeat' }, to: { node: 'waste-heat', port: 'in' } },
+        { from: { node: 'sabatier', port: 'wasteHeat' }, to: { node: 'waste-heat', port: 'in' } },
         ...(recycleWater ? [
           { from: { node: 'swro', port: 'product' }, to: { node: 'water-mixer', port: 'in' } },
           {

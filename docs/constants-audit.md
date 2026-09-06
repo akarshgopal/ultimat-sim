@@ -125,7 +125,7 @@ These distort “real” material–energy–land–money coupling the most when
 | --- | --- | --- | --- | --- |
 | brine-minerals | `electricityKWhPerKgBrine: 0.05` | Train power | **assumption** | USGS brine bulletin cited for commodities, not kWh — label OOM or find DLE/evaporation energy. |
 | recoveries | Li 0.9, Br 0.9, Mg 0.5, K 0.7, gypsum 0.7, salt 0.5 | Product yields | **assumption** | Optimistic screening; cite specific DLE / solar-pond recoveries per ion. |
-| abundance / preset brine assay | high Na/Cl/Mg/… Li⁺ 10 mol/day scale | Feed composition | **screening** | Dead Sea `site.assay` labels this screening; Wikipedia composition is context, not this mol vector. |
+| abundance / Dead Sea brine assay | Wikipedia early-1980s surface ions (Cl 181.4, Mg 35.2, Na 32.5, … g/kg); Li⁺ 18 mg/L | Feed composition | **cited** | Frozen `data/dead-sea-brine.json` retrieved 2026-09-06. Majors from Wikipedia Dead Sea chemistry. Li from Alsabbagh et al. 2021 (DOI 10.1016/j.mineng.2021.107038) converted at 1.24 kg/L → 0.018/1.24 ≈ 0.0145 g/kg. Daily feed 1e5 kg. Literature assay is not a mineral concession. |
 | abundance product prices | Li 5, Br₂ 3, NH₃ 0.6, NaOH 0.5, … $/kg | Revenue | **assumption** | Illustrative; cite USGS commodity summaries when hardening. |
 | purchase costs | brine 0.0002, salt 0.08, water 0.001, power 0.03 $/native-unit | OPEX | **assumption** | Same. |
 
@@ -136,6 +136,8 @@ These distort “real” material–energy–land–money coupling the most when
 | location | symbol/value | used for | class | proposed source or action |
 | --- | --- | --- | --- | --- |
 | MED/MSF/DAC waste heat T | 40–100 °C defaults | Reject heat grade | **assumption** | Screening reject temperature for cascade eligibility. |
+| Sabatier `heatKWhPerKgCH4` 2.86; `wasteHeatT_C` 250 °C | Recoverable methanation reject | **derived** (enthalpy) / **assumption** (T) | 165 kJ/mol CH₄ / 3.6 / 16.04 ≈ 2.86 kWh/kg. 250 °C is a screening reject T, not a measured outlet. Cascade-eligible vs DAC `minHeatT_C` 80 °C. |
+| `engine/heat.js` cascade | Covered / residual demand / unrecovered waste | **derived** | Post-solve T-feasible greedy match of converter `wasteHeat` onto `consumed.heat`. Not HEN synthesis. Does not change `balances.heatKWh` or remove the external heat-source node. |
 | coastal heat budget | 30 kWh/day @ 100 °C | DAC heat supply | **assumption** | Explicitly noted unverified in site notes. |
 | `solar-thermal` | sunHours 6; T 150 °C; CAPEX 1000 $/kWₜₕ | Process heat source | **assumption** (DOE process-heat page linked) | Map to DOE/NREL CSP or flat-plate cost & yield. |
 | `thermal-storage` | η 0.95; ΔT loss 5 °C; CAPEX 30 $/kWhₜₕ | Heat shift | **assumption** | Cite DOE TES ranges. |

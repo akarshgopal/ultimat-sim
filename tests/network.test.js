@@ -141,7 +141,7 @@ test('Dead Sea brine hub closes balances on assumed solar and brine', () => {
   assert.equal(definition.site.meteo.dailyPVKWhPerKWp, DEAD_SEA_PV);
   assert.deepEqual(definition.site.meteo.monthlyPVKWhPerKWp, DAILY_PV);
   assert.equal(definition.site.assay.kind, 'brine');
-  assert.equal(definition.site.assay.quality, 'screening');
+  assert.equal(definition.site.assay.quality, 'cited');
   assert.ok(definition.site.assay.evidence.some(item => /Dead_Sea/.test(item.url)));
   assert.equal(definition.site.rights.freshwater.status, 'assumed');
   assert.equal(definition.site.rights.saltPurchase.status, 'assumed');

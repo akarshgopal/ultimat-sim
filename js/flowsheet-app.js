@@ -169,8 +169,12 @@
     sabatier: {
       label: 'Sabatier', capacity: 100, rate: 5, activityUnit: 'kg CH₄/day',
       palette: { section: 'building', order: 6, glyph: 'CH₄', tone: 'methane', description: 'CO₂ + H₂ → methane' },
-      params: { electricityKWhPerKgCH4: 1 },
-      sourceNote: 'Default 1 kWh/kg CH₄ is a screening ancillary load in a 0.4–1.5 kWh/kg band, not electrolysis. Zapf (via Baier et al. 2018) gives 0.4 kWh/m³ SNG to heat the 1:4 CO₂/H₂ feed to 300 °C (~0.56 kWh/kg at 0.717 kg/m³). Compression and recycle sit above that heat-up; 1 kWh/kg is in-band screening, not a plant quote.',
+      params: { electricityKWhPerKgCH4: 1, heatKWhPerKgCH4: 2.86, wasteHeatT_C: 250 },
+      controls: [
+        { key: 'heatKWhPerKgCH4', label: 'Reject heat', min: 0, max: 5, step: 0.01, unit: 'kWhₜₕ/kg CH₄' },
+        { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 80, max: 400, step: 5, unit: '°C' },
+      ],
+      sourceNote: 'Default 1 kWh/kg CH₄ is a screening ancillary load in a 0.4–1.5 kWh/kg band, not electrolysis. Zapf (via Baier et al. 2018) gives 0.4 kWh/m³ SNG to heat the 1:4 CO₂/H₂ feed to 300 °C (~0.56 kWh/kg at 0.717 kg/m³). Compression and recycle sit above that heat-up; 1 kWh/kg is in-band screening, not a plant quote. Reject heat 2.86 kWh/kg CH₄ is 165 kJ/mol methanation enthalpy (165/3.6/16.04); 250 °C is a screening reject T, not a measured outlet.',
       references: [{ label: 'Baier et al. 2018 (citing Zapf 2017)', url: 'https://doi.org/10.3389/fenrg.2018.00005' }],
     },
     asu: {
@@ -1218,7 +1222,7 @@
     if (from.direction !== 'out' || to.direction !== 'in') solveError = 'Connect an output port to an input port.';
     else if (fromDeclaration.kind !== toDeclaration.kind) solveError = `Cannot connect ${fromDeclaration.kind} to ${toDeclaration.kind}.`;
     else if ((edgeAt(from) >= 0 && !['junction', 'splitter'].includes(units[node(from.node).unit].kind))
-      || (edgeAt(to) >= 0 && units[node(to.node).unit].kind !== 'mixer')) solveError = 'That port is already connected. Disconnect it first.';
+      || (edgeAt(to) >= 0 && units[node(to.node).unit].kind !== 'mixer' && node(to.node).unit !== 'heat-sink')) solveError = 'That port is already connected. Disconnect it first.';
     else graph.edges.push({ from: { node: from.node, port: from.port }, to: { node: to.node, port: to.port }, ...(units[node(from.node).unit].kind === 'splitter' ? { weight: 1 } : {}) });
     pendingPort = null;
     solveAndRender();
@@ -1753,9 +1757,19 @@
     document.getElementById('exchangeList').innerHTML = exchanges.length
       ? exchanges.map(stream => `<div class="recipe-flow"><strong>${stream.label || 'Recovered stream'}</strong><span class="species">${node(stream.from.node).label} → ${node(stream.to.node).label} · ${formatStream(stream.stream)}</span></div>`).join('')
       : '<p class="status-meta">No circular exchanges.</p>';
+    const heat = result?.heatIntegration;
     document.getElementById('balanceList').innerHTML = result ? metricRows([
       ...Object.entries(result.balances.elements).map(([element, value]) => [element, `${formatNumber(value)} mol`]),
       ['Electricity', `${formatNumber(result.balances.electricityKWh)} kWh`], ['Heat', `${formatNumber(result.balances.heatKWh)} kWh`],
+      ...(heat ? [
+        ['Heat covered', `${formatNumber(heat.coveredKWh)} kWh`],
+        ['Heat residual demand', `${formatNumber(heat.residualDemandKWh)} kWh`],
+        ['Unrecovered waste heat', `${formatNumber(heat.unrecoveredWasteKWh)} kWh`],
+        ...(heat.matches || []).map(match => [
+          `${match.from} → ${match.to}`,
+          `${formatNumber(match.kWh)} kWh @ ${formatNumber(match.T_C)} °C`,
+        ]),
+      ] : []),
       ['Recycle solve', result.convergence.converged ? `${result.convergence.iterations} iterations` : 'Did not converge'],
     ]) : '';
   }
@@ -1895,7 +1909,9 @@
 
   function renderInspectorPort(current, port, declaration) {
     const edgeIndexes = edgeIndexesAt({ node: current.id, port, direction: declaration.direction });
-    const multi = declaration.direction === 'in' ? units[current.unit].kind === 'mixer' : ['junction', 'splitter'].includes(units[current.unit].kind);
+    const multi = declaration.direction === 'in'
+      ? (units[current.unit].kind === 'mixer' || current.unit === 'heat-sink')
+      : ['junction', 'splitter'].includes(units[current.unit].kind);
     const boundaryAllowed = declaration.direction === 'in'
       ? (edgeIndexes.length === 0 || multi)
       : Boolean(catalog[`${declaration.kind}-sink`]) && (edgeIndexes.length === 0 || multi);

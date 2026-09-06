@@ -332,6 +332,10 @@ function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
   const electricityKWhPerKgCH4 = nonnegative(Number(
     params.electricityKWhPerKgCH4 ?? params.secKWhPerKgCH4 ?? 0
   ), 'electricityKWhPerKgCH4');
+  // Standard enthalpy of methanation: CO2 + 4 H2 → CH4 + 2 H2O ≈ 165 kJ/mol CH4
+  // → 165/3.6/16.04 ≈ 2.86 kWh/kg CH4. wasteHeatT_C 250 °C is a screening reject T.
+  const heatKWhPerKgCH4 = nonnegative(Number(params.heatKWhPerKgCH4 ?? 2.86), 'heatKWhPerKgCH4');
+  const wasteHeatT_C = Number(params.wasteHeatT_C ?? 250);
 
   if (co2.phase !== 'gas' || hydrogen.phase !== 'gas') {
     throw new Error('Sabatier feeds must be gas');
@@ -397,6 +401,11 @@ function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
         phase: 'liquid',
         T_C: outputT_C,
         P_bar: outputP_bar,
+      },
+      wasteHeat: {
+        kind: 'heat',
+        kWh: activity * heatKWhPerKgCH4,
+        T_C: wasteHeatT_C,
       },
     },
     limitedBy,
@@ -754,6 +763,7 @@ const UNITS = Object.freeze({
       electricity: { direction: 'in', kind: 'electricity', required: true },
       methane: { direction: 'out', kind: 'material', required: true },
       water: { direction: 'out', kind: 'material', required: true },
+      wasteHeat: { direction: 'out', kind: 'heat', required: true },
     },
     evaluate: sabatier,
   },

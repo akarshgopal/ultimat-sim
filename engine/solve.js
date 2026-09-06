@@ -1,11 +1,12 @@
 (function exposeSolver(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('./model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('./units') : root.FlowsheetUnits
+    typeof require === 'function' ? require('./units') : root.FlowsheetUnits,
+    typeof require === 'function' ? require('./heat') : root.FlowsheetHeat
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FlowsheetSolver = api;
-})(globalThis, (model, units) => {
+})(globalThis, (model, units, heat) => {
 const {
   chargeAmount,
   cloneStream,
@@ -16,6 +17,7 @@ const {
   validateStream,
 } = model;
 const { UNITS } = units;
+const { cascadeHeat } = heat;
 
 function solveOperation(caseDefinition) {
   const { nodes, edges } = caseDefinition.graph;
@@ -56,6 +58,7 @@ function solveOperation(caseDefinition) {
 
   const streams = edges.map(edge => ({ ...edge, stream: cloneStream(solved.edgeStreams.get(edge)) }));
   const balances = calculateBalances(nodes, edges, solved.edgeStreams, solved.nodeResults);
+  const heatIntegration = collectHeatIntegration(caseDefinition, solved.nodeResults);
   const warnings = nodes
     .filter(node => solved.nodeResults[node.id]?.limitedBy?.length)
     .map(node => `${node.id} limited by ${solved.nodeResults[node.id].limitedBy.join(', ')}`);
@@ -68,6 +71,7 @@ function solveOperation(caseDefinition) {
     streams,
     nodes: solved.nodeResults,
     balances,
+    heatIntegration,
     warnings,
     convergence: {
       converged,
@@ -179,7 +183,10 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map()) 
       incoming.map(edge => [edge.to.port, cloneStream(edgeStreams.get(edge))])
     );
     if (unit.kind === 'sink') {
-      nodeResults[node.id] = { received: inlets.in };
+      const incomingStreams = incoming.map(edge => cloneStream(edgeStreams.get(edge)));
+      nodeResults[node.id] = {
+        received: incomingStreams.length > 1 ? mixHeat(incomingStreams) : incomingStreams[0],
+      };
       continue;
     }
     const result = unit.evaluate({
@@ -252,7 +259,7 @@ function validateGraph(nodes, edges) {
 
     const outputEndpoint = `out:${edge.from.node}:${edge.from.port}`;
     const inputEndpoint = `in:${edge.to.node}:${edge.to.port}`;
-    if (connections.has(inputEndpoint) && UNITS[toNode.unit].kind !== 'mixer') {
+    if (connections.has(inputEndpoint) && !allowsFanIn(toNode)) {
       throw new Error(`Port has multiple connections: ${inputEndpoint.split(':').slice(1).join('.')}`);
     }
     if (connections.has(outputEndpoint) && !['junction', 'splitter'].includes(UNITS[fromNode.unit].kind)) {
@@ -364,6 +371,43 @@ function calculateBalances(nodes, edges, edgeStreams, nodeResults) {
     Math.abs(heatKWh)
   );
   return { elements, chargeMol, electricityKWh, heatKWh, maxAbsResidual };
+}
+
+function allowsFanIn(node) {
+  return UNITS[node.unit].kind === 'mixer' || node.unit === 'heat-sink';
+}
+
+function collectHeatIntegration(caseDefinition, nodeResults) {
+  const sources = [];
+  const sinks = [];
+  for (const node of caseDefinition.graph?.nodes || []) {
+    const result = nodeResults?.[node.id];
+    if (!result) continue;
+    const waste = result.outlets?.wasteHeat;
+    if (waste?.kind === 'heat' && waste.kWh > 0) {
+      sources.push({ id: node.id, kWh: waste.kWh, T_C: waste.T_C });
+    }
+    const consumedHeat = result.consumed?.heat;
+    if (consumedHeat?.kind === 'heat' && consumedHeat.kWh > 0) {
+      sinks.push({
+        id: node.id,
+        demandKWh: consumedHeat.kWh,
+        minT_C: Number(node.params?.minHeatT_C ?? 0),
+      });
+    }
+  }
+  return cascadeHeat({ sources, sinks });
+}
+
+function mixHeat(streams) {
+  if (streams.some(stream => stream.kind !== 'heat')) {
+    throw new Error('Heat sink fan-in requires heat streams');
+  }
+  const kWh = streams.reduce((sum, stream) => sum + stream.kWh, 0);
+  const T_C = kWh
+    ? streams.reduce((sum, stream) => sum + stream.T_C * stream.kWh, 0) / kWh
+    : streams[0].T_C;
+  return { kind: 'heat', kWh, T_C };
 }
 
 function add(target, values) {
@@ -571,6 +615,7 @@ function solveHorizon(caseDefinition) {
       ? []
       : [`${totals.horizon.hours.filter(entry => entry.pv > 0).length} daylight hours on the selected typical day`]
   );
+  totals.heatIntegration = collectHeatIntegration(caseDefinition, totals.nodes);
   return totals;
 }
 

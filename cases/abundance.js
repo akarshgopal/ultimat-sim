@@ -1,15 +1,27 @@
 (function exposeAbundanceCase(root, factory) {
-  const api = factory(typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel);
+  const api = factory(
+    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
+    typeof require === 'function' ? require('../data/dead-sea-brine.js') : root.DeadSeaBrine
+  );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.AbundanceCase = api;
-})(globalThis, model => {
+})(globalThis, (model, assay) => {
 const { SUBSTANCES, streamMassKg } = model;
+const MASS_KG_PER_DAY = 100000;
+
+function brineFromAssay(deadSeaAssay, massKg) {
+  const gPerKg = deadSeaAssay.ions_g_per_kg;
+  const molPerKg = deadSeaAssay.mol_per_kg;
+  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
+  const mol = {
+    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
+  };
+  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
+  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
+}
 
 function createAbundanceCase() {
-  const brine = {
-    kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1,
-    mol: { H2O: 5350000, 'Na+': 110000, 'Cl-': 129810, 'Mg+2': 8000, 'Ca+2': 2000, 'K+': 4000, 'SO4-2': 2000, 'Br-': 200, 'Li+': 10 },
-  };
+  const brine = brineFromAssay(assay, MASS_KG_PER_DAY);
   const bromideRecovery = 0.9;
   const bromineMol = brine.mol['Br-'] * bromideRecovery / 2;
   const bromineKg = bromineMol * SUBSTANCES.Br2.molarMassG / 1000;
@@ -35,10 +47,10 @@ function createAbundanceCase() {
         { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: powerKWh } }, economics: { unitCost: 0.03 } },
         { id: 'power-bus', unit: 'electrical-bus' },
         { id: 'minerals', unit: 'brine-minerals', capacity: streamMassKg(brine), params: { electricityKWhPerKgBrine: 0.05, lithiumRecovery: 0.9, bromideRecovery, magnesiumRecovery: 0.5, potashRecovery: 0.7, gypsumRecovery: 0.7, saltRecovery: 0.5 }, economics: { installedCapex: 500000, fixedOMPercent: 4, variableOM: 0.01, assetLifeYears: 20 } },
-        { id: 'chlor-alkali', unit: 'chlor-alkali', capacity: 100, params: { electricityKWhPerKg: 2.5 }, economics: { installedCapex: 100000, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 } },
-        { id: 'bromine-recovery', unit: 'bromine-recovery', capacity: 100, params: { electricityKWhPerKg: 0.2 }, economics: { installedCapex: 75000, fixedOMPercent: 4, variableOM: 0.03, assetLifeYears: 20 } },
-        { id: 'asu', unit: 'asu', capacity: 100, params: { nitrogenRecovery: 0.98, oxygenRecovery: 0.95, electricityKWhPerKgN2: 0.25 }, economics: { installedCapex: 50000, fixedOMPercent: 4, variableOM: 0.02, assetLifeYears: 20 } },
-        { id: 'ammonia', unit: 'ammonia', capacity: 100, params: { electricityKWhPerKg: 0.6 }, economics: { installedCapex: 100000, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 } },
+        { id: 'chlor-alkali', unit: 'chlor-alkali', capacity: causticKg, params: { electricityKWhPerKg: 2.5 }, economics: { installedCapex: 100000, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 } },
+        { id: 'bromine-recovery', unit: 'bromine-recovery', capacity: bromineKg, params: { electricityKWhPerKg: 0.2 }, economics: { installedCapex: 75000, fixedOMPercent: 4, variableOM: 0.03, assetLifeYears: 20 } },
+        { id: 'asu', unit: 'asu', capacity: nitrogenKg, params: { nitrogenRecovery: 0.98, oxygenRecovery: 0.95, electricityKWhPerKgN2: 0.25 }, economics: { installedCapex: 50000, fixedOMPercent: 4, variableOM: 0.02, assetLifeYears: 20 } },
+        { id: 'ammonia', unit: 'ammonia', capacity: ammoniaKg, params: { electricityKWhPerKg: 0.6 }, economics: { installedCapex: 100000, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 } },
         ...outputs.map(id => ({ id, unit: 'material-sink', economics: { disposition: id === 'raffinate' ? 'reinjection' : 'sale', unitPrice: { lithium: 5, magnesium: 0.2, potash: 0.3, gypsum: 0.05, salt: 0.08 }[id] || 0, annualDemandLimit: 1e12 } })),
         { id: 'caustic', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.5, annualDemandLimit: 1e12 } },
         { id: 'bromine', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 3, annualDemandLimit: 1e12 } },

@@ -309,7 +309,10 @@
   margin: 4px 0 2px;
 }
 .site-size label { color: var(--text-muted); font-size: 0.7rem; margin: 0; }
-.site-size input { width: 76px; margin: 2px 0 0; padding: 5px 6px; }
+.site-size input,
+.site-size select { margin: 2px 0 0; padding: 5px 6px; }
+.site-size input { width: 76px; }
+.site-size select { min-width: 92px; }
 .site-size button {
   padding: 6px 8px;
   color: var(--text-secondary);

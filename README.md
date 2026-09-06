@@ -20,7 +20,7 @@ The root app now provides:
 - Distinct DAC routes (solid-sorbent, liquid-solvent, electro-swing) with different heat and reagent contracts. Switching a route keeps compatible connections, does not rewrite an existing makeup chemical, and stays comparable against a captured baseline.
 - A location bar: coordinates plus PV kWp fetch or reuse PVGIS typical-day solar and bind it to the current factory. Site panels show meteo cites, assay summaries, and rights chips (`authorized` / `assumed` / `unverified`). Unverified grid and freshwater stay explicit zeros until assigned; solve and size warn on unverified rights.
 - Location-aware site footprint: solar land from panel area ÷ GCR (latitude-adjusted row spacing), plus order-of-magnitude process pads for active units. Network `landHa` is the sum of those site totals, not a flat 1.6 ha/MWp.
-- Iterative size-to-target: a methane demand sizes desal, H₂, DAC, and PV until the operating solve is consistent. The coastal demo remains a one-shot 37.5 kWp example until Size to target is used.
+- Iterative size-to-target: pick CH₄, H₂, lithium, or salt and a kg/day rate. The outer loop sizes the loaded plant (desal, electrolyzer, DAC/Sabatier, brine minerals, and PV as needed) until the operating solve is consistent. The coastal demo remains a one-shot 37.5 kWp methane example until Size to target is used.
 - A network rollup: multiple sited plants, product slate in t/year, land, optional haul corridors, and combined CAPEX/NPV. The fuels + minerals demo places solar methane at Almería and a brine/ammonia hub on the Dead Sea.
 
 The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`, `index.html`, and `flowsheet.css`.
@@ -34,7 +34,7 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 - `engine/heat.js`: post-solve temperature-feasible heat cascade (not HEN synthesis).
 - `engine/economics.js`: costs and cash flows computed from the solved graph. Both economics panels use this result directly; IRR is a fractional rate.
 - `engine/footprint.js`: post-solve solar land (efficiency × location-aware GCR) and screening process pads.
-- `engine/size.js`: outer methane sizing loop. Product demand sizes water, H₂, DAC, power, and `solarKWp`; `solveOperation` stays physics-only.
+- `engine/size.js`: outer product sizing loop (`sizeToProduct`). CH₄, H₂, lithium, or salt demand sizes water, converters, brine, power, and `solarKWp`; `solveOperation` stays physics-only. `sizeToTarget` is the CH₄ wrapper.
 - `engine/uncertainty.js`: quality tags (`cited` / `recoverable` / `assumption` / `derived` / `screening`) and screening-precision formatters. No fake error bars.
 - `cases/`: runnable reference plants.
 - `tests/*flowsheet*.test.js`: engine, economics, and browser-global/UI regression checks.
@@ -46,7 +46,7 @@ See [engine architecture](docs/flowsheet-architecture.md) for model contracts an
 
 ## Model limits
 
-The operating model uses representative-day flows and fixed installed capacities. It checks component/element, charge, electricity, and heat accounting, but does not provide full thermodynamic closure, hourly storage dispatch, or economic optimization. Automatic plant sizing is a separate outer loop (`engine/size.js`) that chooses capacities and `solarKWp` from a methane target, then calls the same operating solver. Process and cost presets are editable screening assumptions. Foundry money and land outputs carry quality chips; screening values use a tilde instead of fake precision.
+The operating model uses representative-day flows and fixed installed capacities. It checks component/element, charge, electricity, and heat accounting, but does not provide full thermodynamic closure, hourly storage dispatch, or economic optimization. Automatic plant sizing is a separate outer loop (`engine/size.js`) that chooses capacities and `solarKWp` from a product target (CH₄, H₂, lithium, or salt), then calls the same operating solver. Process and cost presets are editable screening assumptions. Foundry money and land outputs carry quality chips; screening values use a tilde instead of fake precision.
 
 ## Running locally
 

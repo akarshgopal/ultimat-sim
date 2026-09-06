@@ -37,10 +37,18 @@
         <button type="button" id="applyCoordinates">Apply location</button>
       </div>
       <div class="site-size">
-        <label>CH₄ kg/day <input id="sizeTargetCh4" type="number" min="0" step="0.5" value="5"></label>
+        <label>Product
+          <select id="sizeProduct" aria-label="Size-to-target product">
+            <option value="CH4">CH₄</option>
+            <option value="H2">H₂</option>
+            <option value="lithium">Lithium</option>
+            <option value="salt">Salt</option>
+          </select>
+        </label>
+        <label>kg/day <input id="sizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
         <button type="button" id="sizeToTarget">Size to target</button>
       </div>
-      <p class="status-meta" id="sizeToTargetStatus">Demand sizes water, H₂, DAC, and PV. The operating solve stays physics-only.</p>
+      <p class="status-meta" id="sizeToTargetStatus">Demand sizes the selected product. Water, converters, and PV follow. The operating solve stays physics-only.</p>
       <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
       <p class="status-meta" id="siteNotes"></p>
       <div id="siteMeteo" class="site-truth"></div>

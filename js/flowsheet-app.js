@@ -44,6 +44,8 @@
   let suppressClick = false;
   let canvasFocused = false;
   let lastSizing = null;
+  let operationMeta = {};
+  const SIZE_PRODUCT_LABELS = { CH4: 'CH₄', H2: 'H₂', lithium: 'lithium', salt: 'salt' };
 
   const catalog = {
     swro: {
@@ -406,11 +408,12 @@
   document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
   document.getElementById('loadCoastalMethane').addEventListener('click', () => loadCoastalMethane(0));
   document.getElementById('sizeToTarget').addEventListener('click', () => {
-    const target = Number(document.getElementById('sizeTargetCh4').value);
+    const product = document.getElementById('sizeProduct')?.value || 'CH4';
+    const rate = Number(document.getElementById('sizeTargetRate').value);
     try {
-      sizeCoastalToMethane(target, site?.month ?? 0);
+      sizeToProduct(product, rate);
     } catch {
-      /* sizeCoastalToMethane writes the status line */
+      /* sizeToProduct writes the status line */
     }
   });
   document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
@@ -613,10 +616,13 @@
     selectedNodeId = null;
     pendingPort = null;
     site = null;
+    lastSizing = null;
+    operationMeta = {};
     solveAndRender();
   }
 
   function loadMethaneRecycle() {
+    lastSizing = null;
     loadCase(SabatierCase.createSabatierCase({ recycleWater: true }), 'sabatier');
   }
 
@@ -631,6 +637,80 @@
     if (residual === 0) return '0';
     if (residual < 1e-4) return residual.toExponential(2);
     return residual.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  }
+
+  function currentCaseDefinition() {
+    const priorities = cleanedPriorities();
+    return {
+      graph: { nodes: graph.nodes, edges: graph.edges },
+      operation: {
+        setpoints,
+        ...(priorities ? { priorities } : {}),
+        ...(operationMeta.boundaryLimitedBy ? { boundaryLimitedBy: operationMeta.boundaryLimitedBy } : {}),
+      },
+      ...(site ? { site } : {}),
+      economics: projectEconomics,
+    };
+  }
+
+  function cleanedPriorities() {
+    const priorities = operationMeta.priorities;
+    if (!priorities) return null;
+    const connected = id => new Set(graph.edges.filter(edge => edge.from.node === id).map(edge => edge.to.node));
+    const ids = new Set(graph.nodes.map(node => node.id));
+    const cleaned = {};
+    for (const [bus, order] of Object.entries(priorities)) {
+      if (!ids.has(bus) || !Array.isArray(order)) continue;
+      const consumers = connected(bus);
+      const next = order.filter(id => consumers.has(id));
+      if (next.length) cleaned[bus] = next;
+    }
+    return Object.keys(cleaned).length ? cleaned : null;
+  }
+
+  function selectionForProduct(product, definition) {
+    const nodes = definition?.graph?.nodes || [];
+    if (product === 'CH4') return nodes.find(node => node.unit === 'sabatier')?.id;
+    if (product === 'H2') return nodes.find(node => node.unit === 'electrolyzer')?.id;
+    if (product === 'lithium' || product === 'salt') return nodes.find(node => node.unit === 'brine-minerals')?.id;
+    return nodes[0]?.id;
+  }
+
+  function writeSizeStatus(error) {
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status && error) status.textContent = error.message || String(error);
+  }
+
+  function sizeToProduct(product, rate, opts = {}) {
+    const status = document.getElementById('sizeToTargetStatus');
+    if (!globalThis.FlowsheetSize?.sizeToProduct) {
+      if (status) status.textContent = 'Sizing engine is not loaded.';
+      throw new Error('Sizing engine is not loaded');
+    }
+    if (!graph.nodes.length) {
+      const error = new Error('Size to target needs a loaded flowsheet');
+      writeSizeStatus(error);
+      throw error;
+    }
+    if (!Number.isFinite(rate) || rate < 0) {
+      const error = new Error('Product rate must be a non-negative kg/day');
+      writeSizeStatus(error);
+      throw error;
+    }
+    try {
+      lastSizing = FlowsheetSize.sizeToProduct({
+        product,
+        rate,
+        definition: currentCaseDefinition(),
+        ...opts,
+      });
+      loadCase(lastSizing.definition, selectionForProduct(lastSizing.product, lastSizing.definition));
+      return lastSizing;
+    } catch (error) {
+      lastSizing = null;
+      writeSizeStatus(error);
+      throw error;
+    }
   }
 
   function sizeCoastalToMethane(target, month = 0, opts = {}) {
@@ -776,6 +856,7 @@
   }
 
   function loadAbundanceHub() {
+    lastSizing = null;
     loadCase(AbundanceCase.createAbundanceCase(), 'minerals');
   }
 
@@ -842,6 +923,12 @@
 
   function loadCase(definition, selection) {
     site = definition.site || null;
+    operationMeta = {
+      priorities: definition.operation?.priorities ? clone(definition.operation.priorities) : undefined,
+      boundaryLimitedBy: definition.operation?.boundaryLimitedBy
+        ? clone(definition.operation.boundaryLimitedBy)
+        : undefined,
+    };
     Object.assign(projectEconomics, definition.economics || {});
     graph.nodes.length = 0;
     graph.edges.length = 0;
@@ -1616,9 +1703,10 @@
         const rightsNote = unverified.length
           ? ` · ${unverified.length} unverified site right${unverified.length === 1 ? '' : 's'}`
           : '';
-        sizeStatus.textContent = `${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${capNote}${convergeNote}${rightsNote}`;
+        const product = SIZE_PRODUCT_LABELS[lastSizing.product] || lastSizing.product || 'CH₄';
+        sizeStatus.textContent = `${product} · ${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${capNote}${convergeNote}${rightsNote}`;
       } else {
-        sizeStatus.textContent = 'Demand sizes water, H₂, DAC, and PV. The operating solve stays physics-only.';
+        sizeStatus.textContent = 'Demand sizes the selected product. Water, converters, and PV follow. The operating solve stays physics-only.';
       }
     }
   }
@@ -2015,7 +2103,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, loadAbundanceHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, sizeToProduct, loadAbundanceHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation,
     saveNamed, loadNamed, captureBaseline, clearBaseline,
     solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },

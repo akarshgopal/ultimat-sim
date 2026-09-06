@@ -3,10 +3,59 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
+const { SUBSTANCES, streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
-const { sizeToTarget, sizeCoastalToMethane } = require('../engine/size');
+const { sizeToTarget, sizeCoastalToMethane, sizeToProduct } = require('../engine/size');
 const { createCoastalCase } = require('../cases/coastal');
 const { createSabatierCase } = require('../cases/sabatier');
+const { createAbundanceCase } = require('../cases/abundance');
+
+const WATER_KG_PER_KG_H2 = SUBSTANCES.H2O.molarMassG / SUBSTANCES.H2.molarMassG;
+
+function electrolysisCase({ electricity = 2000, h2 = 5 } = {}) {
+  const feed = {
+    kind: 'material',
+    mol: {
+      H2O: 100 * 1025 * 0.965 * 1000 / SUBSTANCES.H2O.molarMassG,
+      'Na+': 100 * 1025 * 0.035 * 1000 / SUBSTANCES.NaCl.molarMassG,
+      'Cl-': 100 * 1025 * 0.035 * 1000 / SUBSTANCES.NaCl.molarMassG,
+    },
+    phase: 'liquid',
+    T_C: 25,
+    P_bar: 1,
+  };
+  const swro = h2 * WATER_KG_PER_KG_H2 / 1000;
+  return {
+    graph: {
+      nodes: [
+        { id: 'sea', unit: 'material-source', params: { stream: feed } },
+        { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: electricity } } },
+        { id: 'ro', unit: 'swro', capacity: 100, params: { recovery: 0.45, secKWhPerM3: 3.5, feedDensityKgM3: 1025, productDensityKgM3: 1000, ionRejection: 1 } },
+        { id: 'electrical-bus', unit: 'electrical-bus' },
+        { id: 'electrolyzer', unit: 'electrolyzer', capacity: 100, params: { secKWhPerKgH2: 52 } },
+        { id: 'brine', unit: 'material-sink' },
+        { id: 'h2', unit: 'material-sink' },
+        { id: 'o2', unit: 'material-sink' },
+        { id: 'water-reject', unit: 'material-sink' },
+      ],
+      edges: [
+        { from: { node: 'sea', port: 'out' }, to: { node: 'ro', port: 'feed' } },
+        { from: { node: 'power', port: 'out' }, to: { node: 'electrical-bus', port: 'in' } },
+        { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'ro', port: 'electricity' } },
+        { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'electrolyzer', port: 'electricity' } },
+        { from: { node: 'ro', port: 'product' }, to: { node: 'electrolyzer', port: 'water' } },
+        { from: { node: 'ro', port: 'brine' }, to: { node: 'brine', port: 'in' } },
+        { from: { node: 'electrolyzer', port: 'hydrogen' }, to: { node: 'h2', port: 'in' } },
+        { from: { node: 'electrolyzer', port: 'oxygen' }, to: { node: 'o2', port: 'in' } },
+        { from: { node: 'electrolyzer', port: 'waterReject' }, to: { node: 'water-reject', port: 'in' } },
+      ],
+    },
+    operation: {
+      setpoints: { ro: swro, electrolyzer: h2 },
+      priorities: { 'electrical-bus': ['ro', 'electrolyzer'] },
+    },
+  };
+}
 
 function assertClosed(solved) {
   assert.ok(solved.balances.maxAbsResidual < 1e-8);
@@ -114,8 +163,10 @@ test('the Foundry page loads engine/size.js and the size-to-target control', () 
   assert.match(html, /engine\/size\.js/);
   assert.match(html, /engine\/uncertainty\.js/);
   assert.match(html, /id="sizeToTarget"/);
-  assert.match(html, /id="sizeTargetCh4"/);
+  assert.match(html, /id="sizeProduct"/);
+  assert.match(html, /id="sizeTargetRate"/);
   assert.match(html, /id="sizeToTargetStatus"/);
+  assert.doesNotMatch(html, /id="sizeTargetCh4"/);
 });
 
 test('a zero methane target sizes the plant to idle', () => {
@@ -124,4 +175,96 @@ test('a zero methane target sizes the plant to idle', () => {
   assert.ok(sized.residual < 1e-8);
   assert.equal(sized.definition.site.solarKWp, 0);
   assertClosed(sized.solved);
+});
+
+test('sizeToProduct CH4 matches sizeToTarget on the coastal plant', () => {
+  const wrapped = sizeToTarget(() => createCoastalCase(0), 12);
+  const general = sizeToProduct({ product: 'methane', rate: 12, caseOrBuilder: () => createCoastalCase(0) });
+  assert.equal(general.product, 'CH4');
+  assert.equal(general.rate, 12);
+  assert.equal(wrapped.achieved, general.achieved);
+  assert.equal(wrapped.iterations, general.iterations);
+  assert.equal(wrapped.definition.site.solarKWp, general.definition.site.solarKWp);
+  assert.ok(Math.abs(general.achieved - 12) < 1e-6);
+  assertClosed(general.solved);
+});
+
+test('sizeToProduct meets an H2 target on an electrolyzer-led desal plant', () => {
+  const sized = sizeToProduct({ product: 'h2', rate: 15, definition: electrolysisCase() });
+  assert.equal(sized.product, 'H2');
+  assert.ok(sized.iterations >= 1);
+  assert.ok(sized.residual < 1e-6);
+  assert.equal(sized.converged, true);
+  assert.ok(Math.abs(sized.achieved - 15) < 1e-6);
+  assert.ok(sized.definition.graph.nodes.find(node => node.id === 'electrolyzer').capacity >= 15 - 1e-9);
+  assert.ok(sized.definition.graph.nodes.find(node => node.id === 'ro').capacity > 0.1);
+  assertClosed(sized.solved);
+  assert.equal(moneyKeys(sized.history).length, 0);
+});
+
+test('sizeToProduct H2 parks Sabatier and DAC on a coastal methane plant', () => {
+  const sized = sizeToProduct({ product: 'H2', rate: 10, caseOrBuilder: () => createCoastalCase(0) });
+  assert.ok(Math.abs(sized.achieved - 10) < 1e-6);
+  assert.equal(sized.definition.graph.nodes.find(node => node.id === 'sabatier').capacity, 0);
+  assert.equal(sized.definition.graph.nodes.find(node => node.id === 'dac').capacity, 0);
+  assert.equal(sized.definition.operation.setpoints.sabatier, 0);
+  assert.equal(sized.definition.operation.setpoints.dac, 0);
+  assert.ok(sized.definition.graph.nodes.find(node => node.id === 'electrolyzer').capacity >= 10 - 1e-9);
+  assert.ok(sized.definition.site.solarKWp > 0);
+  assert.ok(sized.residual < 1e-6);
+});
+
+test('sizeToProduct lithium scales the abundance brine train', () => {
+  const sized = sizeToProduct({ product: 'LiCl', rate: 20, caseOrBuilder: createAbundanceCase });
+  assert.equal(sized.product, 'lithium');
+  assert.ok(sized.iterations >= 1);
+  assert.ok(sized.residual < 1e-6);
+  assert.equal(sized.converged, true);
+  assert.ok(Math.abs(sized.achieved - 20) < 1e-6);
+  const brine = sized.definition.graph.nodes.find(node => node.id === 'brine');
+  assert.ok(streamMassKg(brine.params.stream) > 100000);
+  assert.ok(sized.definition.graph.nodes.find(node => node.id === 'minerals').capacity > 100000);
+  assert.equal(moneyKeys(sized.history).length, 0);
+});
+
+test('sizeToProduct salt meets a Dead Sea salt target', () => {
+  const sized = sizeToProduct({ product: 'salt', rate: 8000, definition: createAbundanceCase() });
+  assert.equal(sized.product, 'salt');
+  assert.ok(Math.abs(sized.achieved - 8000) < 1e-4);
+  assert.ok(sized.residual < 1e-6);
+  assert.equal(moneyKeys(sized.history).length, 0);
+});
+
+test('sizeToProduct throws on invalid product, rate, or missing converter', () => {
+  assert.throws(
+    () => sizeToProduct({ product: 'gold', rate: 1, definition: createCoastalCase() }),
+    /Unknown product/,
+  );
+  assert.throws(
+    () => sizeToProduct({ product: 'H2', rate: -1, definition: electrolysisCase() }),
+    /non-negative/,
+  );
+  assert.throws(
+    () => sizeToProduct({ product: 'CH4', rate: 1 }),
+    /case definition or builder/,
+  );
+  assert.throws(
+    () => sizeToProduct({ product: 'lithium', rate: 1, definition: createCoastalCase() }),
+    /brine-minerals/,
+  );
+  assert.throws(
+    () => sizeToProduct({ product: 'H2', rate: 1, definition: createAbundanceCase() }),
+    /electrolyzer/,
+  );
+  assert.throws(
+    () => sizeToProduct({ product: 'CH4', rate: 1, definition: electrolysisCase() }),
+    /Sabatier/,
+  );
+});
+
+test('sizeToProduct does not mutate the input case', () => {
+  const original = createAbundanceCase();
+  const snapshot = JSON.stringify(original);
+  sizeToProduct({ product: 'lithium', rate: 1, definition: original });
+  assert.equal(JSON.stringify(original), snapshot);
 });

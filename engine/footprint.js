@@ -186,7 +186,7 @@ function padElectrolyzer(node, solved) {
   const activity = activityOf(solved, node.id);
   if (!(activity > 0)) return 0;
   const consumed = consumedElectricityKWh(solved, node.id);
-  const sec = finiteNumber(node.params?.secKWhPerKgH2, 50);
+  const sec = finiteNumber(node.params?.secKWhPerKgH2, 52);
   const dailyKWh = Number.isFinite(consumed) && consumed > 0 ? consumed : activity * sec;
   const allocKW = dailyKWh / 24;
   return Math.max(24, allocKW * 0.03);

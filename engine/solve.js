@@ -510,7 +510,8 @@ function solveHorizon(caseDefinition) {
       const electrolyzer = hourCase.graph.nodes.find(node => node.unit === 'electrolyzer');
       const swro = hourCase.graph.nodes.find(node => node.unit === 'swro');
       const recovery = Number(swro?.params?.recovery ?? 0.45) || 0.45;
-      const secH2 = Number(electrolyzer?.params?.secKWhPerKgH2 ?? 55);
+      // Alkaline system SEC fallback; Buttler & Spliethoff 2018. Coastal PEM cases pass 55 explicitly.
+      const secH2 = Number(electrolyzer?.params?.secKWhPerKgH2 ?? 52);
       const secDac = Number(dac?.params?.electricityKWhPerKgCO2 ?? 0.5);
       const secRo = Number(swro?.params?.secKWhPerM3 ?? 3.5);
       const secCh4 = Number(sabatier.params?.electricityKWhPerKgCH4 ?? 1);

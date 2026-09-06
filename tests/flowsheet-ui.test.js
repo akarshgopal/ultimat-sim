@@ -334,6 +334,24 @@ test('product chrome uses Network and never Empire', () => {
   assert.match(css, /\.network-panel/);
 });
 
+test('inspector renders catalog sourceNote for electrolyzer and DAC energy', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.addNode('electrolyzer');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Buttler & Spliethoff 2018/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /52 kWh\/kg H/);
+  app.addNode('dac-solid');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /IEA DAC 2022/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /1\.8 GJ\/t/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /5\.4 GJ\/t/);
+  app.addNode('dac-liquid');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Scenario A/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Scenario C/);
+  app.addNode('dac-electroswing');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /40–90 kJ\/mol/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Balance-of-plant/);
+});
+
 test('an incomplete baseline has no economics until a complete graph is captured', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;

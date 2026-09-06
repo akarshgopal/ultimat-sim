@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 test('flowsheet engine runs through browser globals', () => {
   const context = vm.createContext({});
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/dac.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/dac.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
 
@@ -25,4 +25,9 @@ test('flowsheet engine runs through browser globals', () => {
   const coastal = context.FlowsheetSolver.solveOperation(context.CoastalCase.createCoastalCase(12));
   assert.ok(coastal.nodes.sabatier.activity < 5);
   assert.ok(coastal.balances.maxAbsResidual < 1e-8);
+
+  const sized = context.FlowsheetSize.sizeCoastalToMethane(8, 12);
+  assert.ok(Math.abs(sized.achieved - 8) < 1e-6);
+  assert.ok(sized.iterations >= 1);
+  assert.match(String(sized.residual), /./);
 });

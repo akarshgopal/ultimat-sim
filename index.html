@@ -36,6 +36,11 @@
         <label>Battery kWh <input id="siteBatteryKWh" type="number" min="0" step="1" value="0"></label>
         <button type="button" id="applyCoordinates">Apply location</button>
       </div>
+      <div class="site-size">
+        <label>CH₄ kg/day <input id="sizeTargetCh4" type="number" min="0" step="0.5" value="5"></label>
+        <button type="button" id="sizeToTarget">Size to target</button>
+      </div>
+      <p class="status-meta" id="sizeToTargetStatus">Demand sizes water, H₂, DAC, and PV. The operating solve stays physics-only.</p>
       <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
       <p class="status-meta" id="siteNotes"></p>
       <p class="status-meta" id="siteHorizon"></p>
@@ -192,6 +197,7 @@
   <script src="engine/solve.js"></script>
   <script src="engine/economics.js"></script>
   <script src="engine/footprint.js"></script>
+  <script src="engine/size.js"></script>
   <script src="engine/network.js"></script>
   <script src="data/pvgis-almeria-hourly.js"></script>
   <script src="cases/sabatier.js"></script>

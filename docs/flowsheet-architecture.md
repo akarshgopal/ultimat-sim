@@ -184,7 +184,7 @@ There is no `demand | resource | fixed` sizing mode. A unit can follow downstrea
 
 ```js
 solveOperation(caseDefinition)
-sizeToTarget(caseDefinition, target) // later outer calculation
+sizeToTarget(caseDefinition, target) // outer sizing loop; see engine/size.js
 optimizeEconomics(caseDefinition)    // later still
 ```
 
@@ -349,6 +349,7 @@ engine/
   solve.js       # operating solve only
   units.js       # initial catalog and physics
   footprint.js   # location-aware solar land and process pads
+  size.js        # outer methane sizing loop (capacities + solarKWp)
 cases/
   dac.js         # Stage 3 DAC acceptance fixture
   sabatier.js    # Integrated air + water to methane fixture
@@ -364,9 +365,32 @@ tests/
 
 Cases can remain JavaScript fixtures until serialization or a shareable URL requires JSON.
 
+## Automatic plant sizing
+
+Installed capacity remains an input to `solveOperation`. `engine/size.js` is the outer design loop that chooses those capacities from a product target:
+
+```text
+CH4 kg/day
+  -> stoich H2, CO2, electrolysis water, desal feed
+  -> electricity and heat duties
+  -> solarKWp = electricity / dailyPVKWhPerKWp
+  -> source budgets (air, seawater, heat, consumables, PV kWh)
+  -> solveOperation
+  -> recycle water and actual converter duties
+  -> repeat until residual < tolerance or maxIterations
+```
+
+`sizeToTarget(caseOrBuilder, targetKgCH4PerDay, { caps, maxIterations, tolerance })` clones the case, never mutates the caller, and returns `{ definition, solved, iterations, residual, consistency, converged, history }`. Each history step records physical duties (`ch4`, `h2`, `co2`, `swro`, `electricityKWh`, `solarKWp`, `landHa`, …). Prices, CAPEX, OPEX, NPV, and IRR are not convergence signals; land hectares are a physical consequence from `engine/footprint.js`. Optional `caps` (`sabatier`, `electrolyzer`, `dac`, `swro`, `solarKWp`) clamp the design and set `operation.boundaryLimitedBy` to `sizing cap` when they bind.
+
+`sizeCoastalToMethane(target, month, opts)` runs that loop on `createCoastalCase(month)`. The one-shot coastal fixture keeps `solarKWp = 37.5` and still clamps methane from the electricity budget. The Foundry site panel **Size to target** control calls the outer loop and shows iteration count and residual.
+
+The sizing residual is the max of demand miss (`|achieved CH4 − target| / max(1, target)`) and consistency (setpoint vs solved H2 / DAC / SWRO / electricity). The loop stops when the plant is internally consistent, even if a cap prevented the requested demand.
+
+This loop sizes a representative day. `solveHorizon` still dispatches that day hourly, so night hours produce nothing unless a battery is assumed.
+
 ## Non-goals for the first release
 
-- automatic plant sizing or economic optimization
+- economic optimization of the sized plant
 - full thermodynamic properties or phase equilibrium
 - heat-exchanger-network synthesis
 - full 8760-hour year simulation (the current horizon is a 24-hour typical day per selected month, with optional same-day battery carry)

@@ -26,7 +26,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -289,6 +289,19 @@ test('coastal DAC swap stays runnable and compares against the captured baseline
   assert.match(context.__elements.get('comparisonMetrics').innerHTML, /CAPEX/);
   assert.equal(app.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId, 'amine-sorbent');
   assert.ok(app.result.nodes.sabatier.activity <= baselineMethane + 1e-6);
+});
+
+test('size to target resizes coastal methane and reports iterations and residual', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(12);
+  const before = app.site.solarKWp;
+  const sized = app.sizeCoastalToMethane(15, 12);
+  assert.ok(app.site.solarKWp > before);
+  assert.ok(Math.abs(sized.achieved - 15) < 1e-6);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /iteration/);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /residual/);
+  assert.equal(app.sizing.iterations, sized.iterations);
 });
 
 test('site panel reports location-aware footprint instead of 1.6 ha/MWp', () => {

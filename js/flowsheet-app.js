@@ -27,6 +27,7 @@
   let dragging = null;
   let suppressClick = false;
   let canvasFocused = false;
+  let lastSizing = null;
 
   const catalog = {
     swro: {
@@ -372,6 +373,14 @@
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
   document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
   document.getElementById('loadCoastalMethane').addEventListener('click', () => loadCoastalMethane(0));
+  document.getElementById('sizeToTarget').addEventListener('click', () => {
+    const target = Number(document.getElementById('sizeTargetCh4').value);
+    try {
+      sizeCoastalToMethane(target, site?.month ?? 0);
+    } catch {
+      /* sizeCoastalToMethane writes the status line */
+    }
+  });
   document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
   document.getElementById('loadDemoNetwork').addEventListener('click', loadDemoNetwork);
   document.getElementById('addPlantToNetwork').addEventListener('click', () => {
@@ -580,7 +589,37 @@
   }
 
   function loadCoastalMethane(month = 0) {
+    lastSizing = null;
     loadCase(CoastalCase.createCoastalCase(month), 'sabatier');
+  }
+
+  function formatSizingResidual(value) {
+    const residual = Number(value);
+    if (!Number.isFinite(residual)) return '—';
+    if (residual === 0) return '0';
+    if (residual < 1e-4) return residual.toExponential(2);
+    return residual.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  }
+
+  function sizeCoastalToMethane(target, month = 0, opts = {}) {
+    const status = document.getElementById('sizeToTargetStatus');
+    if (!globalThis.FlowsheetSize?.sizeCoastalToMethane) {
+      if (status) status.textContent = 'Sizing engine is not loaded.';
+      throw new Error('Sizing engine is not loaded');
+    }
+    if (!Number.isFinite(target) || target < 0) {
+      if (status) status.textContent = 'Methane target must be a non-negative kg/day.';
+      throw new Error('Methane target must be a non-negative kg/day');
+    }
+    try {
+      lastSizing = FlowsheetSize.sizeCoastalToMethane(target, month, opts);
+      loadCase(lastSizing.definition, 'sabatier');
+      return lastSizing;
+    } catch (error) {
+      lastSizing = null;
+      if (status) status.textContent = error.message;
+      throw error;
+    }
   }
 
   function refreshSiteElectricity() {
@@ -1504,6 +1543,17 @@
     document.getElementById('siteEvidence').innerHTML = (site?.evidence || []).map(item => (
       item.url ? `<a href="${item.url}" target="_blank" rel="noreferrer">${item.label}</a>` : item.label
     )).join(' · ');
+    const sizeStatus = document.getElementById('sizeToTargetStatus');
+    if (sizeStatus) {
+      if (lastSizing) {
+        const iters = lastSizing.iterations;
+        const capNote = lastSizing.history?.some(step => step.capped) ? ' · cap-limited' : '';
+        const convergeNote = lastSizing.converged ? '' : ' · not converged';
+        sizeStatus.textContent = `${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${capNote}${convergeNote}`;
+      } else {
+        sizeStatus.textContent = 'Demand sizes water, H₂, DAC, and PV. The operating solve stays physics-only.';
+      }
+    }
   }
 
   function renderNetwork() {
@@ -1754,11 +1804,12 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, loadAbundanceHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation,
     saveNamed, loadNamed, captureBaseline, clearBaseline,
     solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },
     get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },
+    get sizing() { return lastSizing; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
   };
   refreshSaveOptions();

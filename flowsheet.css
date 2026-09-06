@@ -265,6 +265,26 @@
 }
 .site-location button:hover,
 .site-location button:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
+.site-size {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: end;
+  margin: 4px 0 2px;
+}
+.site-size label { color: var(--text-muted); font-size: 0.7rem; margin: 0; }
+.site-size input { width: 76px; margin: 2px 0 0; padding: 5px 6px; }
+.site-size button {
+  padding: 6px 8px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.site-size button:hover,
+.site-size button:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
 
 .network-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .network-actions button {

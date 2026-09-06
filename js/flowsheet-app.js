@@ -63,6 +63,13 @@
   let siteMapTilesFailed = false;
   let siteMapLayersReady = false;
   const SIZE_PRODUCT_LABELS = { CH4: 'CH₄', H2: 'H₂', lithium: 'lithium', salt: 'salt' };
+  const PALETTE_CATEGORIES = {
+    Water: ['swro', 'med', 'msf'],
+    Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
+    Fuels: ['electrolyzer', 'sabatier', 'asu', 'ammonia'],
+    Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery', 'aluminium-smelter', 'hydrogen-dri', 'titanium-kroll'],
+    Power: ['solar-pv', 'nuclear-electricity', 'battery', 'solar-thermal', 'thermal-storage'],
+  };
   const MapSite = typeof FlowsheetMapSite !== 'undefined' ? FlowsheetMapSite : null;
 
   const catalog = {
@@ -396,16 +403,25 @@
   };
   const SITE_MONTHS = ['Annual average', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+  function paletteCard(unit, definition) {
+    const { glyph, tone, title, description } = definition.palette;
+    return `<button type="button" class="building-card" data-unit="${unit}"><span class="building-glyph${tone ? ` ${tone}` : ''}">${glyph}</span><span><strong>${title || definition.label}</strong><small>${description}</small></span><b>Add</b></button>`;
+  }
+
   function renderPalettes() {
-    for (const [id, section] of [['buildingPalette', 'building'], ['utilityPalette', 'utility']]) {
-      document.getElementById(id).innerHTML = Object.entries(catalog)
-        .filter(([, definition]) => definition.palette?.section === section)
-        .sort(([, left], [, right]) => left.palette.order - right.palette.order)
-        .map(([unit, definition]) => {
-          const { glyph, tone, title, description } = definition.palette;
-          return `<button type="button" class="building-card" data-unit="${unit}"><span class="building-glyph${tone ? ` ${tone}` : ''}">${glyph}</span><span><strong>${title || definition.label}</strong><small>${description}</small></span><b>Add</b></button>`;
-        }).join('');
-    }
+    const grouped = Object.entries(PALETTE_CATEGORIES).map(([name, units]) => {
+      const cards = units
+        .filter(unit => catalog[unit]?.palette?.section === 'building')
+        .map(unit => paletteCard(unit, catalog[unit]))
+        .join('');
+      return cards ? `<details class="palette-category"><summary>${name}</summary>${cards}</details>` : '';
+    }).join('');
+    document.getElementById('buildingPalette').innerHTML = grouped;
+    document.getElementById('utilityPalette').innerHTML = Object.entries(catalog)
+      .filter(([, definition]) => definition.palette?.section === 'utility')
+      .sort(([, left], [, right]) => left.palette.order - right.palette.order)
+      .map(([unit, definition]) => paletteCard(unit, definition))
+      .join('');
   }
 
   renderPalettes();
@@ -2208,8 +2224,10 @@
     const note = document.getElementById('siteFootprintNote');
     const svg = document.getElementById('siteFootprintSvg');
     if (!panel || !FlowsheetFootprint) return;
+    const details = panel.closest?.('details');
     if (!site) {
       panel.hidden = true;
+      if (details) details.hidden = true;
       if (metrics) metrics.innerHTML = '';
       if (pads) pads.innerHTML = '';
       if (note) note.textContent = '';
@@ -2219,6 +2237,7 @@
     const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
     const hasArea = footprint.totalAreaM2 > 0;
     panel.hidden = !hasArea;
+    if (details) details.hidden = !hasArea;
     if (!hasArea) {
       if (metrics) metrics.innerHTML = '';
       if (pads) pads.innerHTML = '';
@@ -2336,6 +2355,8 @@
         const daily = Number(meteo.dailyPVKWhPerKWp ?? site.dailyPVKWhPerKWp);
         meteoEl.innerHTML = `<strong>Meteo</strong> ${formatUncertainNumber(daily, quality)} kWh/kWp·day ${qualityChip(quality)}${citeMarkup(citeFrom(meteo.cite))}`;
       }
+      const meteoDetails = meteoEl.closest?.('details');
+      if (meteoDetails) meteoDetails.hidden = !meteoEl.innerHTML;
     }
     if (assayEl) {
       const assay = site?.assay;
@@ -2348,6 +2369,8 @@
         });
         assayEl.innerHTML = `<strong>Assay</strong> ${assay.summary || assay.kind || ''} ${qualityChip(quality)}${citeMarkup(citeFrom(assay.evidence))}`;
       }
+      const assayDetails = assayEl.closest?.('details');
+      if (assayDetails) assayDetails.hidden = !assayEl.innerHTML;
     }
     if (rightsEl) {
       const rights = site?.rights;
@@ -2364,6 +2387,8 @@
           return `<span class="rights-item"${title}>${key}${kindMark}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
         }).join('');
       }
+      const rightsDetails = rightsEl.closest?.('details');
+      if (rightsDetails) rightsDetails.hidden = !rightsEl.innerHTML;
     }
   }
 
@@ -2381,6 +2406,8 @@
     if (empty) panel.classList.add('is-empty');
     else panel.classList.remove('is-empty');
     body.hidden = empty;
+    const details = body.closest?.('details');
+    if (details) details.hidden = empty;
     if (empty) {
       status.textContent = 'Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.';
       plants.innerHTML = '';
@@ -2436,7 +2463,7 @@
     const current = node(selectedNodeId);
     if (!current) {
       document.getElementById('inspectorTitle').textContent = 'Nothing selected';
-      document.getElementById('inspectorKind').textContent = 'Select a block on the canvas to configure it.';
+      document.getElementById('inspectorKind').textContent = 'Select a block.';
       document.getElementById('nodeControls').innerHTML = '';
       document.getElementById('inspectorMetrics').innerHTML = '';
       document.getElementById('streamList').innerHTML = '<p class="status-meta">No ports yet.</p>';
@@ -2495,7 +2522,8 @@
     const sourceNote = definition.sourceNote
       ? `<p class="status-meta">${chip} ${definition.sourceNote}</p>`
       : (chip ? `<p class="status-meta">${chip}</p>` : '');
-    return `${sourceNote}${bandLine}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}`;
+    const body = `${sourceNote}${bandLine}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}`;
+    return body ? `<details class="more-section"><summary>Literature</summary>${body}</details>` : '';
   }
 
   function controlsFor(current) {

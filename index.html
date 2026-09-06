@@ -68,24 +68,32 @@
           <h3 id="overviewActionsHeading">Next step</h3>
           <div class="overview-actions">
             <button type="button" class="primary-action" id="sizeForCashflow">Size for co-product cashflow</button>
-            <label>Product
-              <select id="sizeProduct" aria-label="Size-to-target product">
-                <option value="CH4">CH₄</option>
-                <option value="H2">H₂</option>
-                <option value="lithium">Lithium</option>
-                <option value="salt">Salt</option>
-              </select>
-            </label>
-            <label>kg/day <input id="sizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
-            <button type="button" id="sizeToTarget">Size to target</button>
           </div>
-          <p class="status-meta" id="sizeToTargetStatus">Co-product cashflow is the goal: maximize sale products while plant net cash stays positive. Size-to-target remains a single-product physics tool.</p>
-          <div class="overview-demos" role="group" aria-label="Load demo">
-            <button type="button" id="loadMethaneRecycle">Methane + water recycle</button>
-            <button type="button" id="loadCoastalMethane">Coastal methane</button>
-            <button type="button" id="loadAbundanceHub">Ammonia + brine hub</button>
-            <button type="button" id="loadDemoNetwork">Fuels + minerals network</button>
-          </div>
+          <details class="more-section" id="sizeToTargetDetails">
+            <summary>Size to a single product</summary>
+            <div class="overview-actions">
+              <label>Product
+                <select id="sizeProduct" aria-label="Size-to-target product">
+                  <option value="CH4">CH₄</option>
+                  <option value="H2">H₂</option>
+                  <option value="lithium">Lithium</option>
+                  <option value="salt">Salt</option>
+                </select>
+              </label>
+              <label>kg/day <input id="sizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
+              <button type="button" id="sizeToTarget">Size to target</button>
+            </div>
+            <p class="status-meta" id="sizeToTargetStatus">Co-product cashflow is the goal: maximize sale products while plant net cash stays positive. Size-to-target remains a single-product physics tool.</p>
+          </details>
+          <details class="demo-menu" id="overviewDemoMenu">
+            <summary>Load demo</summary>
+            <div class="demo-menu-actions overview-demos" role="group" aria-label="Load demo">
+              <button type="button" id="loadMethaneRecycle">Methane + water recycle</button>
+              <button type="button" id="loadCoastalMethane">Coastal methane</button>
+              <button type="button" id="loadAbundanceHub">Ammonia + brine hub</button>
+              <button type="button" id="loadDemoNetwork">Fuels + minerals network</button>
+            </div>
+          </details>
         </section>
       </div>
     </section>
@@ -100,25 +108,41 @@
           <label id="siteMonthLabel" hidden>Typical day <select id="siteMonth"></select></label>
         </div>
         <div class="site-map-panel" id="siteMapPanel">
-          <div class="site-map-layers" id="siteMapLayers" role="group" aria-label="Map layers"></div>
+          <details class="more-section" id="siteMapLayerDetails">
+            <summary>Map layers</summary>
+            <div class="site-map-layers" id="siteMapLayers" role="group" aria-label="Map layers"></div>
+            <p class="status-meta">Screening overlays, not site truth.</p>
+          </details>
           <div class="site-map-shell">
             <div class="site-map" id="siteMap" role="application" aria-label="Site location map"></div>
-            <div class="site-map-empty" id="siteMapEmpty" hidden>Map unavailable. Enter latitude and longitude, then Apply location.</div>
+            <div class="site-map-empty" id="siteMapEmpty" hidden>Map unavailable. Apply latitude and longitude below.</div>
           </div>
-          <p class="status-meta" id="siteMapStatus">Click the map to set the plant location. Screening layers cite OSM, PVGIS, water, footprint, and network plants; they do not replace site meteo, assay, or rights.</p>
+          <p class="status-meta" id="siteMapStatus">Click the map to set location.</p>
         </div>
-        <div class="site-location">
-          <label>Lat <input id="siteLatitude" type="number" step="0.001" value="36.834"></label>
-          <label>Lon <input id="siteLongitude" type="number" step="0.001" value="-2.463"></label>
-          <label>PV kWp <input id="siteSolarKWp" type="number" min="0" step="0.5" value="37.5"></label>
-          <label>Battery kWh <input id="siteBatteryKWh" type="number" min="0" step="1" value="0"></label>
-          <button type="button" id="applyCoordinates">Apply location</button>
-        </div>
-        <p class="status-meta" id="siteFetchStatus">Coordinates suggest PVGIS solar. Other supplies stay unverified until assigned.</p>
+        <details class="more-section" id="siteLocationDetails">
+          <summary>Coordinates</summary>
+          <div class="site-location">
+            <label>Lat <input id="siteLatitude" type="number" step="0.001" value="36.834"></label>
+            <label>Lon <input id="siteLongitude" type="number" step="0.001" value="-2.463"></label>
+            <label>PV kWp <input id="siteSolarKWp" type="number" min="0" step="0.5" value="37.5"></label>
+            <label>Battery kWh <input id="siteBatteryKWh" type="number" min="0" step="1" value="0"></label>
+            <button type="button" id="applyCoordinates">Apply location</button>
+          </div>
+          <p class="status-meta" id="siteFetchStatus">PVGIS solar from coordinates. Other supplies stay unverified until assigned.</p>
+        </details>
         <p class="status-meta" id="siteNotes"></p>
-        <div id="siteMeteo" class="site-truth"></div>
-        <div id="siteAssay" class="site-truth"></div>
-        <div id="siteRights" class="site-rights"></div>
+        <details class="more-section" id="siteMeteoDetails">
+          <summary>Meteo</summary>
+          <div id="siteMeteo" class="site-truth"></div>
+        </details>
+        <details class="more-section" id="siteAssayDetails">
+          <summary>Assay</summary>
+          <div id="siteAssay" class="site-truth"></div>
+        </details>
+        <details class="more-section" id="siteRightsDetails">
+          <summary>Rights</summary>
+          <div id="siteRights" class="site-rights"></div>
+        </details>
         <p class="status-meta" id="siteHorizon"></p>
         <dl class="strip-metrics" id="siteResources"></dl>
         <p class="literature-links" id="siteEvidence"></p>
@@ -131,7 +155,7 @@
           <div class="sidebar-heading">
             <span class="eyebrow">Build</span>
             <h2>Process blocks</h2>
-            <p>Each click adds an independent block. Connect ports on the canvas.</p>
+            <p>Click a block, then connect ports.</p>
           </div>
           <div class="building-palette" id="buildingPalette"></div>
           <h3 class="palette-heading">Sources and destinations</h3>
@@ -139,7 +163,7 @@
           <button type="button" class="clear-factory" id="clearFactory">Clear canvas</button>
           <div class="model-note">
             <span class="eyebrow">Factory rules</span>
-            <p>Click one port, then a compatible port. Connections route flow; they never change a block's requested rate.</p>
+            <p>Click a port, then a compatible port. Wiring does not change setpoints.</p>
           </div>
         </aside>
 
@@ -163,8 +187,13 @@
               <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
               <button type="button" id="autoArrange">Arrange</button>
               <button type="button" id="focusCanvas" aria-pressed="false">Focus canvas</button>
-              <button type="button" id="captureBaseline">Capture baseline</button>
-              <button type="button" id="clearBaseline">Clear baseline</button>
+              <details class="save-menu" id="baselineMenu">
+                <summary>Baseline</summary>
+                <div class="snapshot-controls">
+                  <button type="button" id="captureBaseline">Capture baseline</button>
+                  <button type="button" id="clearBaseline">Clear baseline</button>
+                </div>
+              </details>
               <details class="save-menu">
                 <summary>Saved factories</summary>
                 <div class="snapshot-controls">
@@ -210,7 +239,7 @@
           <div class="sidebar-heading">
             <span class="eyebrow">Inspector</span>
             <h2 id="inspectorTitle">Nothing selected</h2>
-            <p id="inspectorKind">Select a block on the canvas to configure it.</p>
+            <p id="inspectorKind">Select a block.</p>
           </div>
           <div id="nodeControls"></div>
           <dl class="inspector-metrics" id="inspectorMetrics"></dl>
@@ -253,28 +282,33 @@
             </div>
           </div>
           <p class="status-meta" id="networkStatus">Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.</p>
-          <div id="networkBody" class="network-body" hidden>
-            <div class="network-plants-block">
-              <h4>Plants</h4>
-              <div id="networkPlants" class="network-plants"></div>
+          <details class="more-section network-detail">
+            <summary>Network detail</summary>
+            <div id="networkBody" class="network-body" hidden>
+              <div class="network-plants-block">
+                <h4>Plants</h4>
+                <div id="networkPlants" class="network-plants"></div>
+              </div>
+              <div class="network-rollup">
+                <h4>Rollup</h4>
+                <dl class="strip-metrics" id="networkMetrics"></dl>
+                <h4>Product slate · t/year</h4>
+                <dl class="product-slate" id="networkProducts"></dl>
+                <div id="networkCorridors" class="network-haul"></div>
+              </div>
             </div>
-            <div class="network-rollup">
-              <h4>Rollup</h4>
-              <dl class="strip-metrics" id="networkMetrics"></dl>
-              <h4>Product slate · t/year</h4>
-              <dl class="product-slate" id="networkProducts"></dl>
-              <div id="networkCorridors" class="network-haul"></div>
-            </div>
-          </div>
+          </details>
         </section>
 
-        <div id="siteFootprint" class="site-footprint tool-panel" hidden>
-          <h4>Site footprint</h4>
-          <svg id="siteFootprintSvg" class="footprint-svg" viewBox="0 0 160 12" aria-hidden="true"></svg>
-          <dl class="strip-metrics" id="siteFootprintMetrics"></dl>
-          <ul class="footprint-pads" id="siteFootprintPads"></ul>
-          <p class="status-meta" id="siteFootprintNote"></p>
-        </div>
+        <details class="more-section footprint-details">
+          <summary>Site footprint</summary>
+          <div id="siteFootprint" class="site-footprint tool-panel" hidden>
+            <svg id="siteFootprintSvg" class="footprint-svg" viewBox="0 0 160 12" aria-hidden="true"></svg>
+            <dl class="strip-metrics" id="siteFootprintMetrics"></dl>
+            <ul class="footprint-pads" id="siteFootprintPads"></ul>
+            <p class="status-meta" id="siteFootprintNote"></p>
+          </div>
+        </details>
       </div>
     </section>
   </div>

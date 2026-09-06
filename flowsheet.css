@@ -330,7 +330,8 @@
   align-items: start;
 }
 
-.economics-layout .site-footprint {
+.economics-layout .site-footprint,
+.economics-layout .footprint-details {
   grid-column: 1 / -1;
 }
 
@@ -814,7 +815,7 @@
 
 .building-palette {
   display: grid;
-  gap: 6px;
+  gap: 2px;
   margin-bottom: 8px;
 }
 
@@ -949,9 +950,9 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  max-width: min(640px, 100%);
+  max-width: min(560px, 100%);
 }
 .snapshot-controls { display: grid; gap: 6px; }
 .snapshot-controls select { min-width: 120px; }
@@ -1001,6 +1002,10 @@
   width: 100%;
   text-align: left;
   white-space: normal;
+}
+.save-menu .snapshot-controls button {
+  width: 100%;
+  text-align: left;
 }
 
 .canvas-frame {
@@ -1360,3 +1365,76 @@ label output + .quality-chip {
   position: relative;
   z-index: 6;
 }
+
+.more-section,
+.palette-category {
+  margin: 2px 0;
+  border: 0;
+  background: transparent;
+}
+
+.more-section > summary,
+.palette-category > summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  padding: 5px 0;
+  user-select: none;
+}
+
+.more-section > summary::-webkit-details-marker,
+.palette-category > summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-section > summary:hover,
+.more-section > summary:focus-visible,
+.palette-category > summary:hover,
+.palette-category > summary:focus-visible {
+  color: var(--electric);
+  outline: none;
+}
+
+.palette-category > summary {
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+}
+
+.palette-category .building-card { margin-top: 4px; }
+
+.flowsheet-page fieldset .more-section {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.overview-actions-block .more-section,
+.overview-actions-block .demo-menu {
+  margin-top: 10px;
+}
+
+.overview-actions-block .demo-menu { display: inline-block; }
+
+.more-section:has(> .site-truth:empty),
+.more-section:has(> .site-rights:empty),
+.more-section.network-detail:has(#networkBody[hidden]),
+.more-section.footprint-details:has(#siteFootprint[hidden]) {
+  display: none;
+}
+
+.footprint-details {
+  padding: 8px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.footprint-details > summary {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.64rem;
+}
+
+.network-detail { margin-top: 6px; }

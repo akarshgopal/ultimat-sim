@@ -630,3 +630,97 @@ test('formatNumber hides false precision near zero', () => {
   const status = context.__elements.get('sizeToTargetStatus').textContent;
   assert.doesNotMatch(status, /2\.78e-17|2\.775/);
 });
+
+function detailsOpeningTag(html, id) {
+  const match = html.match(new RegExp(`<details\\b[^>]*\\sid="${id}"[^>]*>`));
+  assert.ok(match, `details#${id} exists`);
+  return match[0];
+}
+
+function assertClosedDetailsId(html, id) {
+  const tag = detailsOpeningTag(html, id);
+  assert.doesNotMatch(tag, /\sopen(\s|>|=)/, `${id} starts closed`);
+}
+
+test('secondary Foundry controls start collapsed behind closed details', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const overview = html.slice(html.indexOf('id="panelOverview"'), html.indexOf('id="panelLocation"'));
+  const location = html.slice(html.indexOf('id="panelLocation"'), html.indexOf('id="panelProcess"'));
+  const process = html.slice(html.indexOf('id="panelProcess"'), html.indexOf('id="panelEconomics"'));
+  const economics = html.slice(html.indexOf('id="panelEconomics"'));
+
+  assertClosedDetailsId(html, 'sizeToTargetDetails');
+  assertClosedDetailsId(html, 'overviewDemoMenu');
+  assertClosedDetailsId(html, 'siteMapLayerDetails');
+  assertClosedDetailsId(html, 'siteLocationDetails');
+  assertClosedDetailsId(html, 'siteMeteoDetails');
+  assertClosedDetailsId(html, 'siteAssayDetails');
+  assertClosedDetailsId(html, 'siteRightsDetails');
+  assertClosedDetailsId(html, 'processDemoMenu');
+  assertClosedDetailsId(html, 'baselineMenu');
+
+  const sizeChunk = overview.slice(overview.indexOf('id="sizeToTargetDetails"'));
+  assert.match(sizeChunk, /id="sizeToTarget"/);
+  assert.match(sizeChunk, /id="sizeProduct"/);
+  assert.match(sizeChunk, /id="sizeTargetRate"/);
+  assert.match(sizeChunk, /id="sizeToTargetStatus"/);
+  assert.ok(overview.indexOf('id="sizeForCashflow"') < overview.indexOf('id="sizeToTargetDetails"'));
+
+  const demoChunk = overview.slice(overview.indexOf('id="overviewDemoMenu"'));
+  assert.match(demoChunk, /id="loadMethaneRecycle"/);
+  assert.match(demoChunk, /id="loadCoastalMethane"/);
+  assert.match(demoChunk, /id="loadAbundanceHub"/);
+  assert.match(demoChunk, /id="loadDemoNetwork"/);
+
+  const layerClose = location.indexOf('</details>', location.indexOf('id="siteMapLayerDetails"'));
+  assert.ok(location.indexOf('id="siteName"') < location.indexOf('id="siteMapLayerDetails"'));
+  assert.ok(location.indexOf('id="siteMap"') > layerClose);
+  assert.match(location, /class="site-location"/);
+  assert.match(location, /id="siteMapLayers"/);
+  assert.match(location, /id="applyCoordinates"/);
+  assert.match(location, /id="siteMeteo"/);
+  assert.match(location, /id="siteAssay"/);
+  assert.match(location, /id="siteRights"/);
+
+  assert.match(process, /id="captureBaseline"/);
+  assert.match(process, /id="clearBaseline"/);
+  assert.match(process, /id="flowsheetCanvas"/);
+
+  assert.match(economics, /id="economicsBanner"/);
+  assert.match(economics, /id="economicsAck"/);
+  assert.match(economics, /<details class="more-section network-detail">/);
+  assert.match(economics, /<details class="more-section footprint-details">/);
+  assert.doesNotMatch(economics, /<details class="more-section network-detail" open/);
+  assert.doesNotMatch(economics, /<details class="more-section footprint-details" open/);
+  assert.ok(economics.indexOf('id="economicsAck"') < economics.indexOf('class="more-section network-detail"'));
+  assert.match(economics, /id="networkBody"/);
+  assert.match(economics, /id="siteFootprint"/);
+});
+
+test('building palette groups units into closed category details', () => {
+  const context = loadApp();
+  const palette = context.__elements.get('buildingPalette').innerHTML;
+  for (const name of ['Water', 'Carbon', 'Fuels', 'Minerals', 'Power']) {
+    assert.match(palette, new RegExp(`<details class="palette-category"><summary>${name}</summary>`));
+  }
+  assert.doesNotMatch(palette, /<details class="palette-category" open/);
+  for (const unit of ['swro', 'med', 'msf', 'dac-solid', 'dac-liquid', 'dac-electroswing', 'electrolyzer', 'sabatier', 'brine-minerals', 'solar-pv', 'nuclear-electricity']) {
+    assert.match(palette, new RegExp(`data-unit="${unit}"`));
+  }
+  context.__elements.get('buildingPalette').listeners.click({
+    target: { closest: () => ({ dataset: { unit: 'sabatier' } }) },
+  });
+  assert.equal(context.__FLOWSHEET_APP__.graph.nodes[0].unit, 'sabatier');
+});
+
+test('inspector literature stays in the DOM behind closed details', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.addNode('electrolyzer');
+  const html = context.__elements.get('nodeControls').innerHTML;
+  assert.match(html, /<details class="more-section">/);
+  assert.match(html, /<summary>Literature<\/summary>/);
+  assert.match(html, /Buttler & Spliethoff 2018/);
+  assert.match(html, /52 kWh\/kg H/);
+  assert.doesNotMatch(html, /<details[^>]*\sopen/);
+});

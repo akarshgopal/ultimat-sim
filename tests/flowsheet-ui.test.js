@@ -350,6 +350,10 @@ test('inspector renders catalog sourceNote for electrolyzer and DAC energy', () 
   app.addNode('dac-electroswing');
   assert.match(context.__elements.get('nodeControls').innerHTML, /40–90 kJ\/mol/);
   assert.match(context.__elements.get('nodeControls').innerHTML, /Balance-of-plant/);
+  app.addNode('solar-pv');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /ATB 2024/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Class 8/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /24\.5%/);
 });
 
 test('an incomplete baseline has no economics until a complete graph is captured', () => {

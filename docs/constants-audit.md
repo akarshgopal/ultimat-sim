@@ -16,7 +16,7 @@
 **Gaps vs architecture literature table**
 
 - `docs/flowsheet-architecture.md` cites desalination, electrolysis, DAC, PV, battery, and heat sources at the *family* level.
-- Catalog entries often attach the same papers, but **several engine defaults in `units.js` still lack inline citations** (items 1–3 now cited). Abundance SECs/recoveries often cite only loosely related DOE/USGS pages.
+- Catalog entries often attach the same papers, but **several engine defaults in `units.js` still lack inline citations** (items 1–3, 4, 11 now cited). Abundance SECs/recoveries often cite only loosely related DOE/USGS pages.
 - **`engine/footprint.js` now estimates site land** from panel area ÷ location-aware GCR plus order-of-magnitude process pads. Coefficients remain screening assumptions (see solar/land).
 - Electrolyzer SEC defaults are aligned on alkaline **52** kWh/kg H₂ (Buttler 2018); catalog PEM **55** and coastal PEM **55** (DOE) stay as technology-specific overrides.
 
@@ -29,15 +29,15 @@ These distort “real” material–energy–land–money coupling the most when
 1. **Electrolyzer `secKWhPerKgH2` (52 alkaline / 55 PEM)** — **cited** (Buttler & Spliethoff 2018). Engine, catalog alkaline, Sabatier, and horizon fallbacks are 52; PEM preset and coastal remain 55.
 2. **DAC `heatKWhPerKgCO2` (1.5 solid / 2.45 liquid)** — solid **assumption** (IEA 2022 family, 5.4 GJ/t); liquid **cited** (Keith 2018 Scenario A, 8.81 GJ/t → 2.45 kWh/kg). Electroswing has no heat.
 3. **DAC `electricityKWhPerKgCO2` (0.5 / 0.366 / 0.45)** — solid **assumption** (IEA family, 1.8 GJ/t); liquid **cited** (Keith 2018 Scenario C, 366 kWh/t); electroswing **cited** (Voskian & Hatton 2019 cell-work band).
-4. **Site PV yield (`DAILY_PV` / `DEAD_SEA_PV` 5.4 / CF 0.24)** — caps every electrified process at a site.
-5. **Solar GCR / panel efficiency (0.45 fixed, 20%)** — dominate site hectares; process pads are OOM floors.
+4. **Site PV yield (`DAILY_PV` / `DEAD_SEA_PV` 4.59 / CF 0.24)** — coastal **cited** (PVGIS-SARAH3/ERA5 frozen 2026-09-05); Dead Sea **cited** (PVGIS frozen 2026-09-06, E_y 1674.85 → 4.59 kWh/kWp·day); catalog CF 0.24 **cited** (NREL ATB 2024 Class 8 mean 24.5% rounded).
+5. **Solar GCR / panel efficiency (0.45 fixed, 20%)** — dominate site hectares; process pads are OOM floors. GCR remains **assumption**.
 6. **SWRO `secKWhPerM3` = 3.5** — water–power coupling for coastal factories.
 7. **SWRO `recovery` = 0.45** — intake, brine disposal, and mineral feed volume.
 8. **DAC `captureFraction` (0.9 / 0.75 / 0.5)** — air handling mass and off-gas sinks.
 9. **DAC `consumablesPerKgCO2` (0.02 / 0.01 / 0.005)** — OPEX and spent-media logistics.
 10. **Sabatier `electricityKWhPerKgCH4` = 1** — undocumented compression/ancillary load on the methane chain.
-11. **Freight `SEA_USD_PER_T_KM` / `ROAD_USD_PER_T_KM` (0.012 / 0.08)** — network OPEX and inter-plant coupling.
-12. **Corridor `loss` default 0.002** — delivered mass vs origin production.
+11. **Freight `SEA_USD_PER_T_KM` / `ROAD_USD_PER_T_KM` (0.012 / 0.08)** — **cited** (UNCTAD developing-import band ~0.011 $/t·km; WB long-haul ~0.04–0.06 vs corridor up to ~0.20). Screening corridor rates, not voyage quotes.
+12. **Corridor `loss` default 0.002** — **assumption** / screening; delivered mass vs origin production. No literature default invented.
 13. **Project `discountRate` 0.08 / `projectLifeYears` 20** — NPV/IRR of every demo.
 14. **Brine mineral recoveries (Li/Br 0.9, Mg/salt 0.5, K/gypsum 0.7)** — abundance product slate.
 15. **Product / purchase prices (CH₄ $1/kg, Li $5/kg, power $0.03/kWh, etc.)** — economic signal of coupling; all illustrative today.
@@ -51,13 +51,13 @@ These distort “real” material–energy–land–money coupling the most when
 | `engine/footprint.js` | panelEfficiency 20%; baseGCR 0.45 (E–W 0.75); lat spacing multiplier | Solar land from panels÷GCR | **assumption** | Location-aware GCR documented in the module assumptions array; cite NREL PV land-use later. |
 | `engine/footprint.js` process pads | e.g. electrolyzer `max(24, kW×0.03)` m²; DAC `max(36, tCO₂/y×0.35)`; SWRO `max(16, m³/d×0.8)` | Process pad area | **assumption** | Keep OOM labels; do not present as surveyed footprints. |
 | `js/flowsheet-app.js` UI copy | “order-of-magnitude screening” | Site footprint note | **assumption** | Keep screening wording. |
-| `js/…` `solar-pv` | `capacityFactor: 0.24` | Default PV energy when not sited | **recoverable** | Map to NREL ATB 2024 utility-scale PV CF class already linked. |
-| `js/…` `solar-pv` | `capexPerKW: 1560`, `fixedOMPerKWYear: 20`, `lifeYears: 30`, `discountRate: 0.07` | LCOE helper / installed economics | **cited** (NREL ATB URL on catalog) | Pin ATB year/scenario (e.g. 2024 moderate) in comment. |
+| `js/…` `solar-pv` | `capacityFactor: 0.24` | Default PV energy when not sited | **cited** | NREL ATB 2024 utility-scale PV Resource Class 8 mean AC CF 24.5% (GHI bin 4–4.25 kWh/m²/day, ILR=1.34), rounded. Inspector `sourceNote`. CAPEX 1560 unchanged. |
+| `js/…` `solar-pv` | `capexPerKW: 1560`, `fixedOMPerKWYear: 20`, `lifeYears: 30`, `discountRate: 0.07` | LCOE helper / installed economics | **cited** (NREL ATB URL on catalog) | 2024 ATB year pinned in CF `sourceNote`; CAPEX 1560 kept. |
 | `cases/coastal.js` | `DAILY_PV` monthly kWh/kWp; PVGIS URL + frozen JSON | Site electricity budget | **cited** | Already PVGIS-SARAH3/ERA5; keep retrieval date. |
 | `cases/coastal.js` | `solarKWp = 37.5` | Example array size | **assumption** | Demo sizing only; document as scenario knob. |
 | `cases/coastal.js` / app PVGIS query | `loss=14`, `angle=30`, `aspect=0` | Yield request defaults | **recoverable** | Cite PVGIS default system loss / tilt convention. |
 | `cases/coastal.js`, `cases/network.js` | PV CAPEX `$1000/kWp`, O&M `$20/kWp·y`, life 25 y | Sited solar economics override | **assumption** | Prefer catalog/ATB 1560 unless labeled “round screening CAPEX”. |
-| `cases/network.js` | `DEAD_SEA_PV = 5.4` kWh/kWp·day | Sizes Dead Sea hub PV | **assumption** | Replace with PVGIS/TMY for 31.16°N, 35.43°E; keep screening label until then. |
+| `cases/network.js` | `DEAD_SEA_PV = 4.59` kWh/kWp·day (`1674.85/365`); monthly `DAILY_PV` frozen | Sizes Dead Sea hub PV | **cited** | PVGIS-SARAH3/ERA5 2005–2023 at 31.16°N, 35.43°E; frozen `data/pvgis-dead-sea.json` retrieved 2026-09-06. Same query params as coastal Almería. |
 | `js/…` `nuclear-electricity` | CF 0.9; CAPEX 10717 / 5882 $/kW; O&M 300; var 15 $/MWh | Advanced nuclear presets | **assumption** (vendor pages cited for identity, not costs) | Keep “not vendor quotes”; cite DOE SMR cost study only for generic SMR row. |
 | `engine/network.js` | Earth radius `6371.0088` km | Haversine corridor distance | **derived** | WGS84 mean radius; optional cite. |
 
@@ -149,8 +149,8 @@ These distort “real” material–energy–land–money coupling the most when
 | location | symbol/value | used for | class | proposed source or action |
 | --- | --- | --- | --- | --- |
 | `economics.js` / app / cases | `periodDays: 365`, `projectLifeYears: 20`, `discountRate: 0.08` | DCF defaults | **assumption** | Finance convention; document; allow site override. |
-| `network.js` | `SEA_USD_PER_T_KM = 0.012`, `ROAD_USD_PER_T_KM = 0.08` | Corridor freight | **assumption** / **recoverable** | Cite UNCTAD/World Bank freight or IMO bulk rates; keep mode split. |
-| `network.js` | corridor `loss ?? 0.002` | Transit mass loss | **assumption** | Commodity-specific loss factors; default is screening. |
+| `network.js` | `SEA_USD_PER_T_KM = 0.012`, `ROAD_USD_PER_T_KM = 0.08` | Corridor freight | **cited** | Sea: UNCTAD Trade-and-Transport Dataset developing-economy import intensity ~0.011 $/t·km (developed ~0.019). Road: WB/Arvis industrial long-haul ~0.04–0.06 vs LLDC/corridor up to ~0.20 (Central America ~0.17). Screening OOM, not a voyage quote. Values kept. |
+| `network.js` | corridor `loss ?? 0.002` | Transit mass loss | **assumption** | Screening default; not a literature factor. Commodity-specific losses later. |
 | sabatier case CAPEX lumps | DAC 16425, electrolyzer 21000, Sabatier 14000, SWRO 1000 | Installed costs at demo scale | **assumption** | Scale-inconsistent with $/kW catalog; label toy CAPEX or derive from rates × capacity. |
 | fixed O&M | 3–4% of CAPEX (cases); converter UI default 3% | Annual O&M | **assumption** | Common TEA rule of thumb — cite ATB O&M fractions where applicable. |
 | electrolyzer `assetLifeYears: 10` | Replacement in cash flows | **recoverable** | Stack life literature / DOE H2 targets. |
@@ -167,7 +167,7 @@ These distort “real” material–energy–land–money coupling the most when
 | Seawater desalination | Elimelech 2011; Ghaffour 2013 | SWRO 0.45 / 3.5; MED/MSF presets in catalog | Values plausible but not page-pinned; engine defaults uncited. |
 | Electrolysis | Buttler & Spliethoff 2018 | Default / alkaline 52; PEM 55 | **cited**; PEM 55 also DOE-cited in coastal. |
 | DAC | IEA 2022; Keith 2018; Voskian 2019 | Solid screening 0.5/1.5 with IEA GJ/t note; liquid Keith A heat / C elec; electroswing 0.45 in 40–90 kJ/mol | Solid energy remains **assumption**; liquid and electroswing **cited**. |
-| Electricity / storage / heat | NREL ATB; DOE heat/TES; NRC/Valar | PV/battery numbers ATB-linked; nuclear costs user-assumption; land from `footprint.js` GCR | GCR/pads are screening; not ATB table-pinned. |
+| Electricity / storage / heat | NREL ATB; DOE heat/TES; NRC/Valar; PVGIS | PV CF 0.24 = ATB 2024 Class 8 (24.5% rounded); coastal + Dead Sea PVGIS frozen; nuclear costs user-assumption; land from `footprint.js` GCR | GCR/pads remain screening. |
 | Abundance minerals / metals | USGS/DOE links on catalog | Recoveries & many SECs screening | Citations do not substantiate the numeric defaults. |
 
 ---
@@ -185,7 +185,8 @@ These distort “real” material–energy–land–money coupling the most when
 ## Recommended next actions (documentation / citation only — not this pass)
 
 1. ~~Single source of truth for electrolyzer SEC presets; engine default = catalog alkaline.~~ Done: 52 kWh/kg H₂ (Buttler 2018) with inspector `sourceNote`.
-2. Add inline `basis` / DOI fields on remaining catalog `params` defaults (electrolyzer + DAC energy now have `sourceNote`).
+2. Add inline `basis` / DOI fields on remaining catalog `params` defaults (electrolyzer, DAC energy, and solar-pv CF now have `sourceNote`).
+   - ~~Dead Sea screening 5.4 kWh/kWp·day / catalog CF unpinned / freight uncited.~~ Done: PVGIS frozen 4.59 (2026-09-06); ATB 2024 Class 8 CF 0.24; UNCTAD/WB freight 0.012/0.08. Corridor loss 0.002 remains **assumption**.
 3. When adding `footprint.js`, mark every pad coefficient **assumption** and retire naked `1.6` or derive it from η×GCR with a citation.
 4. Split “family citation present” vs “number traced to table X” in UI literature links.
 5. Mark all case `unitPrice` / lump CAPEX as `quality: 'user-assumption'` in site evidence where missing.

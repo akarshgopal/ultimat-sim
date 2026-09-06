@@ -8,7 +8,10 @@
   else root.NetworkCase = api;
 })(globalThis, (coastal, abundance, model) => {
 const { streamMassKg } = model;
-const DEAD_SEA_PV = 5.4;
+const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.43&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
+// Frozen PVGIS response: data/pvgis-dead-sea.json, retrieved 2026-09-06.
+const DAILY_PV = [1674.85 / 365, 3.68, 4.05, 4.56, 4.9, 4.94, 5.05, 5.06, 5.13, 5.13, 4.63, 4.14, 3.77];
+const DEAD_SEA_PV = DAILY_PV[0]; // 4.59 kWh/kWp·day = E_y 1674.85 / 365
 
 function siteDeadSeaAbundance() {
   const definition = abundance.createAbundanceCase();
@@ -23,7 +26,7 @@ function siteDeadSeaAbundance() {
   node('air').siteResource = 'air';
   node('power').economics = { installedCapex: solarKWp * 1000, fixedOM: solarKWp * 20, assetLifeYears: 25 };
   definition.site = {
-    id: 'dead-sea-2026-09-05',
+    id: 'dead-sea-pvgis-2026-09-06',
     name: 'Dead Sea industrial shore',
     latitude: 31.16,
     longitude: 35.43,
@@ -33,7 +36,7 @@ function siteDeadSeaAbundance() {
       electricity: {
         stream: clone(node('power').params.stream),
         quality: 'literature-estimate',
-        evidence: 'Screening 5.4 kWh/kWp-day desert PV to cover the hub; not a local TMY or permit',
+        evidence: 'PVGIS-SARAH3/ERA5 annual average 4.59 kWh/kWp·day (E_y 1674.85) × array sized to the hub load',
       },
       brine: {
         stream: clone(node('brine').params.stream),
@@ -59,9 +62,9 @@ function siteDeadSeaAbundance() {
     },
     evidence: [
       { label: 'Dead Sea industrial geography', url: 'https://en.wikipedia.org/wiki/Dead_Sea' },
-      { label: 'Desert PV screening yield, not site-measured TMY', url: 'https://re.jrc.ec.europa.eu/pvg_tools/en/' },
+      { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; annual E_y 1674.85 kWh/kWp', url: PVGIS_URL },
     ],
-    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at 5.4 kWh/kWp-day. Freshwater and purchased salt are explicit assumptions. Annual economics repeat this day 365 times.',
+    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Freshwater and purchased salt are explicit assumptions. Annual economics repeat this day 365 times.',
   };
   return definition;
 }
@@ -76,5 +79,5 @@ function createFuelsAndMineralsNetwork(month = 6) {
   };
 }
 
-return { DEAD_SEA_PV, siteDeadSeaAbundance, createFuelsAndMineralsNetwork };
+return { DEAD_SEA_PV, DAILY_PV, siteDeadSeaAbundance, createFuelsAndMineralsNetwork };
 });

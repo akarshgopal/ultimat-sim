@@ -212,6 +212,7 @@
       controls: [{ key: 'electricityKWhPerKg', label: 'Process electricity', min: 0, max: 30, step: 0.5, unit: 'kWh/kg Ti' }],
       references: [{ label: 'USGS Kroll process', url: 'https://www.usgs.gov/publications/titanium-2013' }],
     },
+    // NREL ATB 2024 utility-scale PV, base-year CF table, Resource Class 8: mean AC CF 24.5% (GHI bin 4–4.25 kWh/m²/day, ILR=1.34). Catalog default 0.24 is that class rounded. CAPEX 1560 kept.
     'solar-pv': {
       label: 'Solar PV', sourceUnit: 'kWh/day',
       palette: { section: 'building', order: 20, glyph: 'PV', description: 'Capacity × resource → electricity' },
@@ -222,6 +223,7 @@
         { key: 'capexPerKW', label: 'Installed CAPEX', min: 300, max: 3000, step: 10, unit: '$/kW' },
         { key: 'fixedOMPerKWYear', label: 'Fixed O&M', min: 0, max: 100, step: 1, unit: '$/kW-y' },
       ],
+      sourceNote: 'NREL ATB 2024 utility-scale PV Resource Class 8 mean AC CF is 24.5% (GHI bin 4–4.25 kWh/m²/day, ILR=1.34); catalog default 0.24 is that class rounded. 2024 ATB base-year CF table. CAPEX 1560 unchanged.',
       references: [{ label: 'NREL 2024 ATB', url: 'https://atb.nrel.gov/electricity/2024/utility-scale_pv' }],
     },
     'grid-electricity': {

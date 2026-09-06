@@ -8,9 +8,10 @@ const {
   SEA_USD_PER_T_KM,
 } = require('../engine/network');
 const { estimateSolarLandHa } = require('../engine/footprint');
-const { createFuelsAndMineralsNetwork, siteDeadSeaAbundance } = require('../cases/network');
+const { createFuelsAndMineralsNetwork, siteDeadSeaAbundance, DAILY_PV, DEAD_SEA_PV } = require('../cases/network');
 const { solveOperation } = require('../engine/solve');
 const { streamMassKg } = require('../engine/model');
+const pvgisDeadSea = require('../data/pvgis-dead-sea.json');
 
 function waterStream(mol = 1000) {
   return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol: { H2O: mol } };
@@ -116,10 +117,39 @@ test('Almería to the Dead Sea is a multi-thousand kilometre haul', () => {
   assert.notEqual(pvLandHa(50000), 80);
 });
 
+test('frozen PVGIS monthly yields match the Dead Sea snapshot', () => {
+  assert.equal(DAILY_PV[0], pvgisDeadSea.outputs.totals.fixed.E_y / 365);
+  assert.equal(DEAD_SEA_PV, DAILY_PV[0]);
+  assert.equal(pvgisDeadSea.outputs.totals.fixed.E_d, 4.59);
+  for (const row of pvgisDeadSea.outputs.monthly.fixed) {
+    assert.equal(DAILY_PV[row.month], row.E_d);
+  }
+});
+
 test('Dead Sea brine hub closes balances on assumed solar and brine', () => {
   const definition = siteDeadSeaAbundance();
   const solved = solveOperation(definition);
+  assert.equal(definition.site.id, 'dead-sea-pvgis-2026-09-06');
+  assert.equal(definition.site.dailyPVKWhPerKWp, DEAD_SEA_PV);
+  assert.equal(definition.site.resources.electricity.quality, 'literature-estimate');
+  assert.match(definition.site.resources.electricity.evidence, /PVGIS-SARAH3\/ERA5/);
+  assert.doesNotMatch(definition.site.resources.electricity.evidence, /5\.4|desert PV screening/i);
+  assert.doesNotMatch(definition.site.notes, /5\.4|desert PV/i);
+  assert.ok(definition.site.evidence.some(item => /PVGIS-SARAH3/.test(item.label)));
   assert.equal(definition.site.resources.grid.quality, 'unverified');
+  assert.equal(definition.site.meteo.quality, 'cited');
+  assert.equal(definition.site.meteo.dailyPVKWhPerKWp, DEAD_SEA_PV);
+  assert.deepEqual(definition.site.meteo.monthlyPVKWhPerKWp, DAILY_PV);
+  assert.equal(definition.site.assay.kind, 'brine');
+  assert.equal(definition.site.assay.quality, 'screening');
+  assert.ok(definition.site.assay.evidence.some(item => /Dead_Sea/.test(item.url)));
+  assert.equal(definition.site.rights.freshwater.status, 'assumed');
+  assert.equal(definition.site.rights.saltPurchase.status, 'assumed');
+  assert.equal(definition.site.rights.gridImport.status, 'unverified');
+  assert.equal(definition.site.rights.brineConcession.status, 'unverified');
+  assert.ok(solved.warnings.some(message => message.includes('unverified site right: gridImport')));
+  assert.ok(solved.warnings.some(message => message.includes('unverified site right: brineConcession')));
+  assert.ok(!solved.warnings.some(message => message.includes('unverified site right: freshwater')));
   assert.ok(solved.nodes.ammonia.activity > 0);
   assert.ok(solved.nodes['bromine-recovery'].activity > 0);
   assert.ok(solved.balances.maxAbsResidual < 1e-8);

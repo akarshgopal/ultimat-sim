@@ -2,6 +2,22 @@
   const canvas = document.getElementById('flowsheetCanvas');
   const inspector = document.querySelector('.inspector-sidebar');
   const units = FlowsheetUnits.UNITS;
+  const {
+    classifyQuality,
+    formatUncertainMoney,
+    formatUncertainNumber,
+    qualityChip,
+    rightsChip,
+    citeFrom,
+    unverifiedRightsWarnings,
+    RIGHT_KEYS,
+    parseBand,
+    citeMarkup,
+  } = FlowsheetUncertainty;
+  const FREIGHT_CITES = [
+    { label: 'UNCTAD transport costs', url: 'https://unctad.org/publication/trade-and-transport-dataset' },
+    { label: 'World Bank freight logistics', url: 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf' },
+  ];
   const graph = { nodes: [], edges: [] };
   const setpoints = {};
   const projectEconomics = { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 };
@@ -27,6 +43,7 @@
   let dragging = null;
   let suppressClick = false;
   let canvasFocused = false;
+  let lastSizing = null;
 
   const catalog = {
     swro: {
@@ -42,7 +59,11 @@
         { key: 'secKWhPerM3', label: 'Electricity', min: 2, max: 8, step: 0.1, unit: 'kWh/m³' },
         { key: 'ionRejection', label: 'Ion rejection', min: 0.95, max: 1, step: 0.001 },
       ],
-      references: [{ label: 'Elimelech & Phillip 2011', url: 'https://doi.org/10.1126/science.1200488' }],
+      sourceNote: 'Default 3.5 kWh/m³ is a plant-level SEC in the Elimelech & Phillip 2011 3–4 kWh/m³ band (RO stage plus intake, pretreatment, posttreatment, and brine discharge). Recovery 0.45 is the low end of the 45–55% range in which most SWRO plants operate. Ghaffour et al. 2013 reports the same 3–4 kWh/m³ SWRO plant band with energy recovery.',
+      references: [
+        { label: 'Elimelech & Phillip 2011', url: 'https://doi.org/10.1126/science.1200488' },
+        { label: 'Ghaffour et al. 2013', url: 'https://doi.org/10.1016/j.apenergy.2012.12.073' },
+      ],
     },
     med: {
       label: 'MED', capacity: 100, rate: 40, activityUnit: 'm³ water/day',
@@ -55,6 +76,7 @@
         { key: 'minHeatT_C', label: 'Minimum heat', min: 50, max: 100, step: 1, unit: '°C' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 80, step: 1, unit: '°C' },
       ],
+      sourceNote: 'Default 2 kWh/m³ electricity and 60 kWhₜₕ/m³ heat sit in the Ghaffour et al. 2013 MED band (1.5–2.5 kWh/m³ e; 145–390 MJ/m³ ≈ 40–108 kWhₜₕ/m³). Recovery 0.35 is a typical MED ratio in that review family.',
       references: [{ label: 'Ghaffour et al. 2013', url: 'https://doi.org/10.1016/j.apenergy.2012.12.073' }],
     },
     msf: {
@@ -68,6 +90,7 @@
         { key: 'minHeatT_C', label: 'Minimum heat', min: 75, max: 130, step: 1, unit: '°C' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 100, step: 1, unit: '°C' },
       ],
+      sourceNote: 'Default 3.5 kWh/m³ electricity and 80 kWhₜₕ/m³ heat sit in the Ghaffour et al. 2013 MSF band (3–5 kWh/m³ e; 250–330 MJ/m³ ≈ 69–92 kWhₜₕ/m³). Recovery 0.25 is a typical MSF ratio in that review family.',
       references: [{ label: 'Ghaffour et al. 2013', url: 'https://doi.org/10.1016/j.apenergy.2012.12.073' }],
     },
     electrolyzer: {
@@ -92,7 +115,7 @@
         { key: 'consumablesPerKgCO2', label: 'Consumables', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
       ],
-      sourceNote: 'Screening assumption in the IEA DAC 2022 solid-sorbent family, not a plant quote. Electricity 0.5 kWh/kg CO₂ = 1.8 GJ/t; heat 1.5 kWh/kg CO₂ = 5.4 GJ/t (×3.6 MJ/kWh). Combined 7.2 GJ/t sits at the low end of IEA S-DAC 7.2–9.5 GJ/t with a 25/75 electricity/heat split.',
+      sourceNote: 'Screening assumption in the IEA DAC 2022 solid-sorbent family, not a plant quote. Electricity 0.5 kWh/kg CO₂ = 1.8 GJ/t; heat 1.5 kWh/kg CO₂ = 5.4 GJ/t (×3.6 MJ/kWh). Combined 7.2 GJ/t sits at the low end of IEA S-DAC 7.2–9.5 GJ/t with a 25/75 electricity/heat split. Capture fraction 0.9 and amine makeup 0.02 kg/kg CO₂ are screening, not IEA table values.',
       references: [
         { label: 'Keith et al. 2018', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
         { label: 'IEA DAC 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
@@ -110,7 +133,7 @@
         { key: 'consumablesPerKgCO2', label: 'Amine makeup', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
       ],
-      sourceNote: 'Screening assumption in the IEA DAC 2022 solid-sorbent family, not a plant quote. Electricity 0.5 kWh/kg CO₂ = 1.8 GJ/t; heat 1.5 kWh/kg CO₂ = 5.4 GJ/t (×3.6 MJ/kWh). Combined 7.2 GJ/t sits at the low end of IEA S-DAC 7.2–9.5 GJ/t with a 25/75 electricity/heat split.',
+      sourceNote: 'Screening assumption in the IEA DAC 2022 solid-sorbent family, not a plant quote. Electricity 0.5 kWh/kg CO₂ = 1.8 GJ/t; heat 1.5 kWh/kg CO₂ = 5.4 GJ/t (×3.6 MJ/kWh). Combined 7.2 GJ/t sits at the low end of IEA S-DAC 7.2–9.5 GJ/t with a 25/75 electricity/heat split. Capture fraction 0.9 and amine makeup 0.02 kg/kg CO₂ are screening, not IEA table values.',
       references: [
         { label: 'IEA DAC 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
         { label: 'Keith et al. 2018', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
@@ -128,7 +151,7 @@
         { key: 'consumablesPerKgCO2', label: 'KOH makeup', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
       ],
-      sourceNote: 'Keith et al. 2018 Carbon Engineering process. Heat 2.45 kWh/kg CO₂ = 8.82 GJ/t from Scenario A (8.81 GJ/t NG; 8.81/3.6 = 2.447 kWh/kg). Electricity 0.366 kWh/kg CO₂ = 366 kWh/t = 1.32 GJ/t from Scenario C purchased power. Mixed-scenario vectors, not one Keith plant configuration.',
+      sourceNote: 'Keith et al. 2018 Carbon Engineering process. Heat 2.45 kWh/kg CO₂ = 8.82 GJ/t from Scenario A (8.81 GJ/t NG; 8.81/3.6 = 2.447 kWh/kg). Electricity 0.366 kWh/kg CO₂ = 366 kWh/t = 1.32 GJ/t from Scenario C purchased power. Mixed-scenario vectors, not one Keith plant configuration. Capture fraction 0.75 is Keith et al. 2018 Table 1 74.5% rounded. KOH makeup 0.01 kg/kg CO₂ is screening, not a Keith table value.',
       references: [{ label: 'Keith et al. 2018 Carbon Engineering process', url: 'https://doi.org/10.1016/j.joule.2018.05.006' }],
     },
     'dac-electroswing': {
@@ -140,10 +163,16 @@
         { key: 'electricityKWhPerKgCO2', label: 'Electricity', min: 0.05, max: 1.5, step: 0.01, unit: 'kWh/kg CO₂' },
         { key: 'consumablesPerKgCO2', label: 'Electrode makeup', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
       ],
-      sourceNote: 'Voskian & Hatton 2019 cell work 40–90 kJ/mol CO₂ (0.25–0.57 kWh/kg at 44.01 g/mol). Default 0.45 kWh/kg sits in that range (~71 kJ/mol). No heat. Balance-of-plant (fans, compression) is not included.',
+      sourceNote: 'Voskian & Hatton 2019 cell work 40–90 kJ/mol CO₂ (0.25–0.57 kWh/kg at 44.01 g/mol). Default 0.45 kWh/kg sits in that range (~71 kJ/mol). No heat. Balance-of-plant (fans, compression) is not included. Capture fraction 0.5 and electrode makeup 0.005 kg/kg CO₂ are screening, not Voskian table values.',
       references: [{ label: 'Voskian & Hatton 2019', url: 'https://doi.org/10.1039/C9EE02412C' }],
     },
-    sabatier: { label: 'Sabatier', capacity: 100, rate: 5, activityUnit: 'kg CH₄/day', palette: { section: 'building', order: 6, glyph: 'CH₄', tone: 'methane', description: 'CO₂ + H₂ → methane' }, params: { electricityKWhPerKgCH4: 1 } },
+    sabatier: {
+      label: 'Sabatier', capacity: 100, rate: 5, activityUnit: 'kg CH₄/day',
+      palette: { section: 'building', order: 6, glyph: 'CH₄', tone: 'methane', description: 'CO₂ + H₂ → methane' },
+      params: { electricityKWhPerKgCH4: 1 },
+      sourceNote: 'Default 1 kWh/kg CH₄ is a screening ancillary load in a 0.4–1.5 kWh/kg band, not electrolysis. Zapf (via Baier et al. 2018) gives 0.4 kWh/m³ SNG to heat the 1:4 CO₂/H₂ feed to 300 °C (~0.56 kWh/kg at 0.717 kg/m³). Compression and recycle sit above that heat-up; 1 kWh/kg is in-band screening, not a plant quote.',
+      references: [{ label: 'Baier et al. 2018 (citing Zapf 2017)', url: 'https://doi.org/10.3389/fenrg.2018.00005' }],
+    },
     asu: {
       label: 'Air separation unit', capacity: 1000, rate: 100, activityUnit: 'kg N₂/day',
       palette: { section: 'building', order: 7, glyph: 'ASU', tone: 'hydrogen', description: 'Air + power → N₂ + O₂' },
@@ -212,6 +241,7 @@
       controls: [{ key: 'electricityKWhPerKg', label: 'Process electricity', min: 0, max: 30, step: 0.5, unit: 'kWh/kg Ti' }],
       references: [{ label: 'USGS Kroll process', url: 'https://www.usgs.gov/publications/titanium-2013' }],
     },
+    // NREL ATB 2024 utility-scale PV, base-year CF table, Resource Class 8: mean AC CF 24.5% (GHI bin 4–4.25 kWh/m²/day, ILR=1.34). Catalog default 0.24 is that class rounded. CAPEX 1560 kept.
     'solar-pv': {
       label: 'Solar PV', sourceUnit: 'kWh/day',
       palette: { section: 'building', order: 20, glyph: 'PV', description: 'Capacity × resource → electricity' },
@@ -222,6 +252,7 @@
         { key: 'capexPerKW', label: 'Installed CAPEX', min: 300, max: 3000, step: 10, unit: '$/kW' },
         { key: 'fixedOMPerKWYear', label: 'Fixed O&M', min: 0, max: 100, step: 1, unit: '$/kW-y' },
       ],
+      sourceNote: 'NREL ATB 2024 utility-scale PV Resource Class 8 mean AC CF is 24.5% (GHI bin 4–4.25 kWh/m²/day, ILR=1.34); catalog default 0.24 is that class rounded. 2024 ATB base-year CF table. CAPEX 1560 unchanged.',
       references: [{ label: 'NREL 2024 ATB', url: 'https://atb.nrel.gov/electricity/2024/utility-scale_pv' }],
     },
     'grid-electricity': {
@@ -370,6 +401,14 @@
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
   document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
   document.getElementById('loadCoastalMethane').addEventListener('click', () => loadCoastalMethane(0));
+  document.getElementById('sizeToTarget').addEventListener('click', () => {
+    const target = Number(document.getElementById('sizeTargetCh4').value);
+    try {
+      sizeCoastalToMethane(target, site?.month ?? 0);
+    } catch {
+      /* sizeCoastalToMethane writes the status line */
+    }
+  });
   document.getElementById('loadAbundanceHub').addEventListener('click', loadAbundanceHub);
   document.getElementById('loadDemoNetwork').addEventListener('click', loadDemoNetwork);
   document.getElementById('addPlantToNetwork').addEventListener('click', () => {
@@ -578,7 +617,37 @@
   }
 
   function loadCoastalMethane(month = 0) {
+    lastSizing = null;
     loadCase(CoastalCase.createCoastalCase(month), 'sabatier');
+  }
+
+  function formatSizingResidual(value) {
+    const residual = Number(value);
+    if (!Number.isFinite(residual)) return '—';
+    if (residual === 0) return '0';
+    if (residual < 1e-4) return residual.toExponential(2);
+    return residual.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  }
+
+  function sizeCoastalToMethane(target, month = 0, opts = {}) {
+    const status = document.getElementById('sizeToTargetStatus');
+    if (!globalThis.FlowsheetSize?.sizeCoastalToMethane) {
+      if (status) status.textContent = 'Sizing engine is not loaded.';
+      throw new Error('Sizing engine is not loaded');
+    }
+    if (!Number.isFinite(target) || target < 0) {
+      if (status) status.textContent = 'Methane target must be a non-negative kg/day.';
+      throw new Error('Methane target must be a non-negative kg/day');
+    }
+    try {
+      lastSizing = FlowsheetSize.sizeCoastalToMethane(target, month, opts);
+      loadCase(lastSizing.definition, 'sabatier');
+      return lastSizing;
+    } catch (error) {
+      lastSizing = null;
+      if (status) status.textContent = error.message;
+      throw error;
+    }
   }
 
   function refreshSiteElectricity() {
@@ -588,6 +657,11 @@
     const kWh = daily * Number(site.solarKWp || 0);
     site.resources.electricity.stream = { kind: 'electricity', kWh };
     site.dailyPVKWhPerKWp = daily;
+    if (site.meteo) {
+      const monthly = site.meteo.monthlyPVKWhPerKWp;
+      const fromMonth = Array.isArray(monthly) ? monthly[site.month || 0] : null;
+      site.meteo.dailyPVKWhPerKWp = hours ? daily : (fromMonth || daily);
+    }
     for (const current of graph.nodes.filter(item => item.siteResource === 'electricity')) {
       current.rate = kWh;
       updateSourceStream(current);
@@ -615,6 +689,24 @@
       evidence: `PVGIS typical-day × ${solarKWp} kWp`,
     };
     site.dailyPVKWhPerKWp = daily;
+    site.meteo = {
+      dailyPVKWhPerKWp: daily,
+      monthlyPVKWhPerKWp: site.meteo?.monthlyPVKWhPerKWp,
+      quality: 'cited',
+      source: solar?.database || site.meteo?.source || 'PVGIS',
+      cite: solar?.url
+        ? { label: `${solar.database || 'PVGIS'} typical-day solar`, url: solar.url }
+        : site.meteo?.cite,
+    };
+    if (!site.rights) {
+      site.rights = {
+        gridImport: { status: 'unverified', note: 'Unverified grid access; zero authorized imports' },
+        freshwater: { status: 'unverified', note: 'Unverified freshwater access; zero authorized supply' },
+        seawaterIntake: { status: 'unverified', note: 'No seawater intake permit verified' },
+        brineConcession: { status: 'unverified', note: 'No brine or mineral concession verified' },
+        saltPurchase: { status: 'unverified', note: 'No salt purchase agreement verified' },
+      };
+    }
     for (const current of graph.nodes.filter(item => units[item.unit].kind === 'source')) {
       if (!current.siteResource) assignSiteResource(current);
       if (current.siteResource === 'electricity') {
@@ -1379,8 +1471,9 @@
       balanceStatus.className = `status-chip${result?.balances.maxAbsResidual < 1e-8 ? ' good' : result || pendingPort ? ' warn' : ''}`;
     }
     const warning = document.getElementById('warnings');
-    warning.hidden = !solveError && !routeNote && !pendingPort && missing.length === 0 && bottlenecks.length === 0;
-    warning.textContent = solveError || routeNote || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : '');
+    const siteRightWarnings = unverifiedRightsWarnings?.(site) || [];
+    warning.hidden = !solveError && !routeNote && !pendingPort && missing.length === 0 && bottlenecks.length === 0 && siteRightWarnings.length === 0;
+    warning.textContent = solveError || routeNote || (pendingPort ? `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)} — choose a compatible ${pendingPort.direction === 'out' ? 'input' : 'output'}.` : missing.length ? `Connect ${missing.slice(0, 4).join(' · ')}${missing.length > 4 ? ` · +${missing.length - 4} more` : ''}` : bottlenecks.length ? `Bottleneck: ${bottlenecks.join(' · ')}` : siteRightWarnings.length ? siteRightWarnings.join(' · ') : '');
   }
 
   function footprintColor(unit) {
@@ -1455,12 +1548,14 @@
     }
     if (svg) svg.innerHTML = footprintBarSvg(footprint);
     if (metrics) {
+      const landQuality = classifyQuality({ kind: 'land' });
+      const padQuality = classifyQuality({ kind: 'intensity', sourceNote: 'order-of-magnitude screening' });
       metrics.innerHTML = metricRows([
-        ['Solar land', `${formatHa(footprint.solar.ha)} · ${formatNumber(footprint.solar.acres)} acres`],
-        ['GCR', `${formatNumber(footprint.solar.gcr * 100)}% (base ${formatNumber(footprint.solar.baseGcr * 100)}%)`],
-        ['Panel area', `${formatNumber(footprint.solar.panelAreaM2)} m²`],
-        ['Process pads', `${formatNumber(footprint.processAreaM2)} m²`],
-        ['Total', `${formatHa(footprint.totalHa)} · ${formatNumber(footprint.totalAcres)} acres`],
+        ['Solar land', `${formatUncertainHa(footprint.solar.ha)} · ${formatUncertainNumber(footprint.solar.acres, landQuality)} acres`, { quality: landQuality }],
+        ['GCR', `${formatUncertainNumber(footprint.solar.gcr * 100, landQuality)}% (base ${formatUncertainNumber(footprint.solar.baseGcr * 100, landQuality)}%)`, { quality: landQuality }],
+        ['Panel area', `${formatUncertainNumber(footprint.solar.panelAreaM2, landQuality)} m²`, { quality: landQuality }],
+        ['Process pads', `${formatUncertainNumber(footprint.processAreaM2, padQuality)} m²`, { quality: padQuality }],
+        ['Total', `${formatUncertainHa(footprint.totalHa)} · ${formatUncertainNumber(footprint.totalAcres, landQuality)} acres`, { quality: landQuality }],
       ]);
     }
     if (pads) {
@@ -1495,13 +1590,78 @@
       ? `${hours.filter(entry => entry.pv > 0).length} daylight hours · ${hours.filter(entry => entry.pv === 0).length} night hours · peak ${formatNumber(Math.max(...hours.map(entry => entry.pv)))} kWh PV · battery ${formatNumber(site?.storage?.batteryKWh || 0)} kWh`
       : '';
     renderSiteFootprint();
+    renderSiteTruth();
     document.getElementById('siteResources').innerHTML = Object.entries(site?.resources || {}).map(([id, resource]) => {
       const quality = resource.quality || 'user-assumption';
-      return `<div class="${quality === 'unverified' ? 'unverified' : ''}"><dt>${id} <small>${quality}</small></dt><dd>${formatStream(resource.stream)}</dd></div>`;
+      const chip = quality === 'unverified'
+        ? rightsChip('unverified')
+        : qualityChip({ quality, sourceNote: resource.evidence });
+      return `<div class="${quality === 'unverified' ? 'unverified' : ''}"><dt>${id}${chip}</dt><dd>${formatStream(resource.stream)}</dd></div>`;
     }).join('');
     document.getElementById('siteEvidence').innerHTML = (site?.evidence || []).map(item => (
       item.url ? `<a href="${item.url}" target="_blank" rel="noreferrer">${item.label}</a>` : item.label
     )).join(' · ');
+    const sizeStatus = document.getElementById('sizeToTargetStatus');
+    if (sizeStatus) {
+      if (lastSizing) {
+        const iters = lastSizing.iterations;
+        const capNote = lastSizing.history?.some(step => step.capped) ? ' · cap-limited' : '';
+        const convergeNote = lastSizing.converged ? '' : ' · not converged';
+        const unverified = (lastSizing.warnings || lastSizing.solved?.warnings || [])
+          .filter(message => String(message).includes('unverified site right'));
+        const rightsNote = unverified.length
+          ? ` · ${unverified.length} unverified site right${unverified.length === 1 ? '' : 's'}`
+          : '';
+        sizeStatus.textContent = `${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${capNote}${convergeNote}${rightsNote}`;
+      } else {
+        sizeStatus.textContent = 'Demand sizes water, H₂, DAC, and PV. The operating solve stays physics-only.';
+      }
+    }
+  }
+
+  function renderSiteTruth() {
+    const meteoEl = document.getElementById('siteMeteo');
+    const assayEl = document.getElementById('siteAssay');
+    const rightsEl = document.getElementById('siteRights');
+    if (meteoEl) {
+      const meteo = site?.meteo;
+      if (!meteo) meteoEl.innerHTML = '';
+      else {
+        const quality = classifyQuality({
+          kind: 'meteo',
+          quality: meteo.quality,
+          sourceNote: meteo.cite?.label || meteo.source,
+        });
+        const daily = Number(meteo.dailyPVKWhPerKWp ?? site.dailyPVKWhPerKWp);
+        meteoEl.innerHTML = `<strong>Meteo</strong> ${formatUncertainNumber(daily, quality)} kWh/kWp·day ${qualityChip(quality)}${citeMarkup(citeFrom(meteo.cite))}`;
+      }
+    }
+    if (assayEl) {
+      const assay = site?.assay;
+      if (!assay) assayEl.innerHTML = '';
+      else {
+        const quality = classifyQuality({
+          kind: 'assay',
+          quality: assay.quality,
+          sourceNote: assay.summary,
+        });
+        assayEl.innerHTML = `<strong>Assay</strong> ${assay.summary || assay.kind || ''} ${qualityChip(quality)}${citeMarkup(citeFrom(assay.evidence))}`;
+      }
+    }
+    if (rightsEl) {
+      const rights = site?.rights;
+      if (!rights) rightsEl.innerHTML = '';
+      else {
+        const keys = RIGHT_KEYS || Object.keys(rights);
+        rightsEl.innerHTML = keys.map(key => {
+          const right = rights[key];
+          if (!right) return '';
+          const cites = citeFrom(right.evidence);
+          const title = right.note ? ` title="${right.note.replace(/"/g, '&quot;')}"` : '';
+          return `<span class="rights-item"${title}>${key}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
+        }).join('');
+      }
+    }
   }
 
   function renderNetwork() {
@@ -1530,7 +1690,10 @@
       status.textContent = 'Network solve failed.';
       return;
     }
-    status.textContent = `${networkResult.plants.length} plants · ${formatHa(networkResult.landHa)} site footprint · freight ${formatMoney(networkResult.freight)}/year`;
+    const freightQuality = classifyQuality({ kind: 'freight' });
+    const landQuality = classifyQuality({ kind: 'land' });
+    const moneyQuality = classifyQuality({ kind: 'money' });
+    status.textContent = `${networkResult.plants.length} plants · ${formatHa(networkResult.landHa)} site footprint · freight ${formatUncertainMoney(networkResult.freight, freightQuality)}/year`;
     const transferred = networkResult.transferred || new Set();
     plants.innerHTML = networkResult.plants.map(plant => {
       const siteName = plant.definition.site?.name || 'Unspecified site';
@@ -1542,12 +1705,13 @@
       return `<div class="network-plant"><div class="network-plant-copy"><strong>${plant.name}</strong><small>${siteName}${landText ? ` · ${landText}` : ''}</small><small>${leadText}</small></div><button type="button" data-open-plant="${plant.id}">Open</button></div>`;
     }).join('');
     metrics.innerHTML = metricRows([
-      ['CAPEX', formatMoney(networkResult.installedCapex)],
-      ['NPV', formatMoney(networkResult.npv)],
-      ['Net cash', formatMoney(networkResult.annualNetCash)],
-      ['Revenue', formatMoney(networkResult.annualRevenue)],
-      ['Cost', formatMoney(networkResult.annualOperatingCost)],
-      ['Land', formatHa(networkResult.landHa)],
+      ['CAPEX', formatUncertainMoney(networkResult.installedCapex, moneyQuality), { quality: moneyQuality }],
+      ['NPV', formatUncertainMoney(networkResult.npv, moneyQuality), { quality: moneyQuality }],
+      ['Net cash', formatUncertainMoney(networkResult.annualNetCash, moneyQuality), { quality: moneyQuality }],
+      ['Revenue', formatUncertainMoney(networkResult.annualRevenue, moneyQuality), { quality: moneyQuality }],
+      ['Cost', formatUncertainMoney(networkResult.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
+      ['Freight', `${formatUncertainMoney(networkResult.freight, freightQuality)}/year`, { quality: freightQuality, references: FREIGHT_CITES }],
+      ['Land', formatUncertainHa(networkResult.landHa), { quality: landQuality }],
     ]);
     const ranked = Object.entries(networkResult.slate).sort((left, right) => right[1] - left[1]);
     const peak = ranked[0]?.[1] || 1;
@@ -1556,7 +1720,7 @@
       return `<div class="${index === 0 ? 'lead' : ''}"><dt>${substance}</dt><dd><span class="product-bar" aria-hidden="true"><i style="width:${share}%"></i></span><strong>${formatNumber(tonnes)}</strong> <small>t/year</small></dd></div>`;
     }).join('');
     corridors.innerHTML = networkResult.corridors.length
-      ? networkResult.corridors.map(corridor => `<div class="corridor-row">${corridor.substance} · ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatMoney(corridor.annualFreight)}/year</div>`).join('')
+      ? networkResult.corridors.map(corridor => `<div class="corridor-row">${corridor.substance} · ${formatNumber(corridor.km)} km ${corridor.mode} · ${formatUncertainMoney(corridor.annualFreight, freightQuality)}/year ${qualityChip(freightQuality)}${citeMarkup(FREIGHT_CITES)}</div>`).join('')
       : '<p class="status-meta">No haul corridors. Plants trade with markets until a corridor is added.</p>';
   }
 
@@ -1596,10 +1760,24 @@
     ]) : '';
   }
 
-  function literatureMarkup(definition) {
+  function literatureMarkup(definition, unitId) {
+    const quality = classifyQuality({
+      kind: 'intensity',
+      unit: unitId,
+      sourceNote: definition.sourceNote,
+      references: definition.references,
+      economicsNote: definition.economicsNote,
+    });
+    const chip = qualityChip(quality);
     const references = (definition.references || []).map(reference => `<a href="${reference.url}" target="_blank" rel="noreferrer">${reference.label}</a>`).join(' · ');
-    const sourceNote = definition.sourceNote ? `<p class="status-meta">${definition.sourceNote}</p>` : '';
-    return `${sourceNote}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}`;
+    const band = parseBand(definition.sourceNote);
+    const bandLine = band
+      ? `<p class="status-meta quality-band">Literature range ${formatUncertainNumber(band.low, 'cited')}–${formatUncertainNumber(band.high, 'cited')} ${band.unit}</p>`
+      : '';
+    const sourceNote = definition.sourceNote
+      ? `<p class="status-meta">${chip} ${definition.sourceNote}</p>`
+      : (chip ? `<p class="status-meta">${chip}</p>` : '');
+    return `${sourceNote}${bandLine}${references ? `<p class="literature-links">Basis: ${references}</p>` : ''}`;
   }
 
   function controlsFor(current) {
@@ -1608,8 +1786,19 @@
       const definition = catalog[current.unit];
       const preset = definition.presets ? `<label>Process type</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
       const route = DAC_ROUTES[current.unit] ? `<label>Process route<select name="dacRoute">${Object.entries(DAC_ROUTES).filter(([id]) => current.unit === 'dac' || id !== 'dac').map(([id, label]) => `<option value="${id}"${id === current.unit ? ' selected' : ''}>${label}</option>`).join('')}</select></label>` : '';
-      const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="processParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
-      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${route || preset || parameters ? `<fieldset><legend>Process assumptions</legend>${route}${preset}${parameters}${definition.chemicalId ? `<p class="status-meta">Makeup chemical: ${CONSUMABLE_CHEMICALS[definition.chemicalId] || definition.chemicalId}. Switching routes does not rewrite an existing supply.</p>` : ''}${literatureMarkup(definition)}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
+      const intensityQuality = classifyQuality({
+        kind: 'intensity',
+        unit: current.unit,
+        sourceNote: definition.sourceNote,
+        references: definition.references,
+      });
+      const parameters = (definition.controls || []).map(control => {
+        const energy = /kWh|secKWh/i.test(`${control.key} ${control.unit || ''}`);
+        const chip = energy ? qualityChip(intensityQuality) : '';
+        return `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output>${chip}</label><input name="processParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`;
+      }).join('');
+      const hasAssumptions = route || preset || parameters || definition.sourceNote || (definition.references && definition.references.length);
+      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${hasAssumptions ? `<fieldset><legend>Process assumptions</legend>${route}${preset}${parameters}${definition.chemicalId ? `<p class="status-meta">Makeup chemical: ${CONSUMABLE_CHEMICALS[definition.chemicalId] || definition.chemicalId}. Switching routes does not rewrite an existing supply.</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
     }
     if (kind === 'source') {
       const definition = catalog[current.unit];
@@ -1622,12 +1811,23 @@
       const chemical = current.unit === 'consumable-source' && !current.siteResource ? `<label>Makeup chemical<select name="chemicalId"><option value="">Unspecified</option>${Object.entries(CONSUMABLE_CHEMICALS).map(([id, label]) => `<option value="${id}"${id === current.chemicalId ? ' selected' : ''}>${label}</option>`).join('')}</select></label>` : '';
       const temperature = current.unit === 'heat-source' && !current.siteResource ? `<label>Temperature <output>${current.temperature} °C</output></label><input name="heatTemperature" type="range" min="20" max="1000" step="5" value="${current.temperature}">` : '';
       const processPreset = definition.presets ? `<label>Technology</label><select name="processPreset">${Object.entries(definition.presets).map(([id, item]) => `<option value="${id}"${id === current.processPreset ? ' selected' : ''}>${item.label}</option>`).join('')}<option value="custom"${current.processPreset === 'custom' ? ' selected' : ''}>Custom</option></select>` : '';
-      const parameters = (definition.controls || []).map(control => `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="sourceParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`).join('');
+      const intensityQuality = classifyQuality({
+        kind: 'intensity',
+        unit: current.unit,
+        sourceNote: definition.sourceNote,
+        references: definition.references,
+        economicsNote: definition.economicsNote,
+      });
+      const parameters = (definition.controls || []).map(control => {
+        const energy = /kWh|secKWh|capacityFactor/i.test(`${control.key} ${control.unit || ''}`);
+        const chip = energy ? qualityChip(intensityQuality) : '';
+        return `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output>${chip}</label><input name="sourceParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`;
+      }).join('');
       const rate = definition.controls && !definition.manualRateMax
         ? `<p class="status-meta">Available: ${formatNumber(current.rate)} ${unit}</p>`
         : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100 || 0.01}" value="${current.rate}">`;
       const capNote = budget != null ? `<p class="status-meta">${site.resources[current.siteResource]?.evidence || 'Capped by the named site resource. A second block sharing this resource cannot duplicate it.'}</p>` : (site && !current.siteResource ? '<p class="status-meta">Unassigned sources are unverified. They do not become unlimited supply.</p>' : '');
-      return `<fieldset><legend>Source settings</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
+      return `<fieldset><legend>Source settings</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }
@@ -1676,17 +1876,19 @@
       metrics.innerHTML = '';
       return;
     }
+    const moneyQuality = classifyQuality({ kind: 'money' });
+    const productQuality = classifyQuality({ kind: 'product-cost' });
     status.textContent = `${currentEconomics.periodDays} operating days/year · illustrative assumptions; edit any source, block, or destination in the inspector.`;
     metrics.innerHTML = metricRows([
-      ['Installed CAPEX', formatMoney(currentEconomics.installedCapex)],
-      ['Annual revenue', formatMoney(currentEconomics.annualRevenue)],
-      ['Annual operating cost', formatMoney(currentEconomics.annualOperatingCost)],
-      ['Annual net cash', formatMoney(currentEconomics.annualNetCash)],
-      ['NPV', formatMoney(currentEconomics.npv)],
-      ['IRR', formatRate(currentEconomics.irr)],
-      ['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatMoney(currentEconomics.levelizedDeliveredCost)}/unit`],
+      ['Installed CAPEX', formatUncertainMoney(currentEconomics.installedCapex, moneyQuality), { quality: moneyQuality }],
+      ['Annual revenue', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), { quality: moneyQuality }],
+      ['Annual operating cost', formatUncertainMoney(currentEconomics.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
+      ['Annual net cash', formatUncertainMoney(currentEconomics.annualNetCash, moneyQuality), { quality: moneyQuality }],
+      ['NPV', formatUncertainMoney(currentEconomics.npv, moneyQuality), { quality: moneyQuality }],
+      ['IRR', formatRate(currentEconomics.irr), { quality: moneyQuality }],
+      ['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatUncertainMoney(currentEconomics.levelizedDeliveredCost, productQuality)}/unit`, { quality: productQuality }],
       ...(currentEconomics.sinks || []).filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0).map(sink => (
-        [`Sold ${sink.id}`, `${formatNumber(sink.deliveredAmount / 1000)} t/year`]
+        [`Sold ${sink.id}`, `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`, { quality: productQuality }]
       )),
     ]);
   }
@@ -1723,15 +1925,24 @@
   }
 
   function formatNumber(value) { return Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+  function formatUncertainHa(ha, quality = classifyQuality({ kind: 'land' })) {
+    const value = Number(ha) || 0;
+    if (value >= 1) return formatUncertainNumber(value, quality, { unit: 'ha' });
+    if (value >= 0.001) return formatUncertainNumber(value, quality, { unit: 'ha' });
+    if (value > 0) return formatUncertainNumber(value * 10000, quality, { unit: 'm²' });
+    return formatUncertainNumber(0, quality, { unit: 'ha' });
+  }
   function economicsRows(current) {
     const params = current.params || {};
+    const definition = catalog[current.unit] || {};
+    const moneyQuality = classifyQuality({ kind: 'money' });
     if (current.unit === 'grid-electricity') return [
-      ['Electricity price', `$${formatNumber(params.pricePerMWh)}/MWh`],
-      ['Annual energy bill', formatMoney(current.rate * 365 / 1000 * params.pricePerMWh)],
-      ['Annual operational CO₂', `${formatNumber(current.rate * 365 / 1000 * params.kgCO2PerMWh)} kg`],
+      ['Electricity price', `${formatUncertainMoney(params.pricePerMWh, moneyQuality)}/MWh`, { quality: moneyQuality }],
+      ['Annual energy bill', formatUncertainMoney(current.rate * 365 / 1000 * params.pricePerMWh, moneyQuality), { quality: moneyQuality }],
+      ['Annual operational CO₂', `${formatUncertainNumber(current.rate * 365 / 1000 * params.kgCO2PerMWh, moneyQuality)} kg`, { quality: moneyQuality }],
     ];
     if (['battery', 'thermal-storage'].includes(current.unit)) return [
-      ['Installed storage CAPEX', formatMoney(current.capacity * params.capexPerKWh)],
+      ['Installed storage CAPEX', formatUncertainMoney(current.capacity * params.capexPerKWh, moneyQuality), { quality: moneyQuality }],
       ['Conversion loss', `${formatNumber((1 - params.efficiency) * 100)}%`],
     ];
     if (!Number.isFinite(params.capacityKW) || !Number.isFinite(params.capexPerKW)) return [];
@@ -1742,21 +1953,58 @@
     const capex = params.capacityKW * params.capexPerKW;
     const annualCost = capex * crf + params.capacityKW * Number(params.fixedOMPerKWYear || 0);
     const levelized = annualEnergy ? annualCost / (annualEnergy / 1000) + Number(params.variableCostPerMWh || 0) : 0;
+    const lcoeKind = current.unit === 'solar-thermal' ? 'lcoh' : 'lcoe';
+    const lcoeQuality = classifyQuality({
+      kind: lcoeKind,
+      unit: current.unit,
+      sourceNote: definition.sourceNote,
+      references: definition.references,
+      economicsNote: definition.economicsNote,
+    });
+    const intensityQuality = classifyQuality({
+      kind: 'intensity',
+      unit: current.unit,
+      sourceNote: definition.sourceNote,
+      references: definition.references,
+    });
+    const lcoeCites = lcoeQuality === 'cited' ? definition.references : [];
     return [
-      ['Installed CAPEX', formatMoney(capex)],
-      [current.unit === 'solar-thermal' ? 'Simple LCOH' : 'Simple LCOE', `$${formatNumber(levelized)}/MWh`],
-    ];
+      ['Installed CAPEX', formatUncertainMoney(capex, moneyQuality), { quality: moneyQuality }],
+      [
+        current.unit === 'solar-thermal' ? 'Simple LCOH' : 'Simple LCOE',
+        `${formatUncertainMoney(levelized, lcoeQuality)}/MWh`,
+        { quality: lcoeQuality, references: lcoeCites },
+      ],
+      current.unit === 'solar-pv'
+        ? ['Capacity factor', formatUncertainNumber(params.capacityFactor, intensityQuality), { quality: intensityQuality, references: intensityQuality === 'cited' ? definition.references : [] }]
+        : null,
+    ].filter(Boolean);
   }
   function formatMoney(value) { return `$${formatNumber(value)}`; }
-  function metricRows(rows) { return rows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join(''); }
+  function metricMetaMarkup(meta) {
+    if (!meta) return '';
+    if (typeof meta === 'string') return qualityChip(meta);
+    const quality = meta.quality || (meta.kind ? classifyQuality(meta) : '');
+    const chip = quality ? qualityChip(quality) : '';
+    const band = parseBand(meta.band);
+    const bandText = band
+      ? `<span class="quality-band">${formatUncertainNumber(band.low, 'cited')}–${formatUncertainNumber(band.high, 'cited')}${band.unit ? ` ${band.unit}` : ''}</span>`
+      : '';
+    const cite = meta.cite || citeMarkup(meta.references);
+    return `${chip}${bandText}${cite}`;
+  }
+  function metricRows(rows) {
+    return rows.map(([term, value, meta]) => `<div><dt>${term}</dt><dd>${value}${metricMetaMarkup(meta)}</dd></div>`).join('');
+  }
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadAbundanceHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, loadAbundanceHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation,
     saveNamed, loadNamed, captureBaseline, clearBaseline,
     solve: solveAndRender, get result() { return result; }, get baseline() { return baseline; },
     get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },
+    get sizing() { return lastSizing; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
   };
   refreshSaveOptions();

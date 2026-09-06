@@ -63,6 +63,7 @@ function solveOperation(caseDefinition) {
     warnings.push(`plant limited by ${limit}`);
   }
   if (!converged) warnings.push('recycle did not converge');
+  for (const warning of unverifiedRightsWarnings(caseDefinition.site)) warnings.push(warning);
   return {
     streams,
     nodes: solved.nodeResults,
@@ -80,6 +81,14 @@ function streamAmount(stream) {
   if (stream.kind === 'material') return streamMassKg(stream);
   if (stream.kind === 'consumable') return stream.amount;
   return stream.kWh;
+}
+
+function unverifiedRightsWarnings(site) {
+  const rights = site?.rights;
+  if (!rights || typeof rights !== 'object') return [];
+  return Object.entries(rights)
+    .filter(([, right]) => right?.status === 'unverified')
+    .map(([key]) => `unverified site right: ${key}`);
 }
 
 function siteBudgets(site) {
@@ -565,5 +574,5 @@ function solveHorizon(caseDefinition) {
   return totals;
 }
 
-return { solveOperation, solveHorizon, hourlyProfile, validateGraph };
+return { solveOperation, solveHorizon, hourlyProfile, validateGraph, unverifiedRightsWarnings };
 });

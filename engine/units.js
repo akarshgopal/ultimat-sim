@@ -21,6 +21,7 @@ function swro({ inlets, requestedActivity, capacity, params = {} }) {
   const electricity = validateStream(inlets.electricity, 'electricity');
   const requested = nonnegative(requestedActivity, 'requestedActivity');
   const installed = nonnegative(capacity, 'capacity');
+  // Plant SEC 3.5 kWh/m³ and recovery 0.45 sit in Elimelech & Phillip 2011 (plant ~3–4 kWh/m³; most SWRO at 45–55%).
   const recovery = Number(params.recovery ?? 0.45);
   const sec = nonnegative(Number(params.secKWhPerM3 ?? 3.5), 'secKWhPerM3');
   const density = nonnegative(Number(params.feedDensityKgM3 ?? 1025), 'feedDensityKgM3');
@@ -96,6 +97,7 @@ function thermalDesalination({ inlets, requestedActivity, capacity, params = {} 
   const heat = validateStream(inlets.heat, 'heat');
   const requested = nonnegative(requestedActivity, 'requestedActivity');
   const installed = nonnegative(capacity, 'capacity');
+  // MED-like defaults. Ghaffour et al. 2013 typical MED ~1.5–2.5 kWh/m³ e and ~40–108 kWh_th/m³; MSF catalog overrides.
   const recovery = Number(params.recovery ?? 0.35);
   const electricitySEC = nonnegative(Number(params.electricityKWhPerM3 ?? 2), 'electricityKWhPerM3');
   const heatSEC = nonnegative(Number(params.heatKWhPerM3 ?? 60), 'heatKWhPerM3');
@@ -208,6 +210,7 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
   const consumables = validateStream(inlets.consumables, 'consumable');
   const requested = nonnegative(requestedActivity, 'requestedActivity');
   const installed = nonnegative(capacity, 'capacity');
+  // Solid-sorbent screening 0.9; liquid 0.75 is Keith 2018 Table 1 74.5% rounded; electroswing 0.5 screening.
   const captureFraction = Number(params.captureFraction ?? 0.9);
   // Solid-sorbent screening (IEA DAC 2022 family): 0.5 kWh/kg e = 1.8 GJ/t; 1.5 kWh/kg th = 5.4 GJ/t.
   const electricityKWhPerKgCO2 = nonnegative(
@@ -219,6 +222,7 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
     'heatKWhPerKgCO2'
   );
   const minHeatT_C = Number(params.minHeatT_C ?? 80);
+  // Screening makeup: 0.02 solid / 0.01 liquid / 0.005 electroswing kg/kg CO2 — not IEA/Keith/Voskian table values.
   const consumablesPerKgCO2 = nonnegative(Number(params.consumablesPerKgCO2 ?? 0.02), 'consumablesPerKgCO2');
 
   if (air.phase !== 'gas') throw new Error('DAC air feed must be gas');
@@ -324,6 +328,7 @@ function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
   const electricity = validateStream(inlets.electricity, 'electricity');
   const requested = nonnegative(requestedActivity, 'requestedActivity');
   const installed = nonnegative(capacity, 'capacity');
+  // Screening ancillary SEC (not electrolysis). Catalog default 1 kWh/kg CH4 sits in a 0.4–1.5 kWh/kg band; Zapf via Baier et al. 2018 quotes 0.4 kWh/m³ SNG heat-up.
   const electricityKWhPerKgCH4 = nonnegative(Number(
     params.electricityKWhPerKgCH4 ?? params.secKWhPerKgCH4 ?? 0
   ), 'electricityKWhPerKgCH4');

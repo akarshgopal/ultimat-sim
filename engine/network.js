@@ -12,7 +12,12 @@ const { scaleStream, streamMassKg } = model;
 const { evaluateEconomics } = economics;
 const { estimateFootprint, pvLandHa } = footprint;
 
+// Sea 0.012 $/t·km sits in the UNCTAD Trade-and-Transport Dataset multimodal transport-cost intensity band for developing-economy imports (~0.011 $/t·km) vs developed (~0.019 $/t·km). Screening order-of-magnitude for bulk corridors, not a voyage quote.
+// https://unctad.org/publication/trade-and-transport-dataset
+// https://unctad.org/system/files/official-document/stat2025d1_en.pdf
 const SEA_USD_PER_T_KM = 0.012;
+// Road 0.08 $/t·km sits between World Bank industrial-economy long-haul ~0.04–0.06 $/t·km and high LLDC/corridor rates up to ~0.20 (Arvis et al. / WB "How to Decrease Freight Logistics Costs in Developing Countries"; Central America main routes ~0.17).
+// https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf
 const ROAD_USD_PER_T_KM = 0.08;
 
 function cloneDefinition(definition) {
@@ -84,6 +89,7 @@ function applyCorridor(corridor, plants) {
   }
   const km = distanceKm(from.definition.site, to.definition.site);
   if (km == null) throw new Error('Corridors need sited plants with coordinates');
+  // Corridor mass-loss default 0.002 is a screening assumption, not a literature default.
   const loss = Number(corridor.loss ?? 0.002);
   const rate = Number(corridor.usdPerTonneKm ?? (corridor.mode === 'road' ? ROAD_USD_PER_T_KM : SEA_USD_PER_T_KM));
   const kgPerDay = streamMassKg(received);

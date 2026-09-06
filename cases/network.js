@@ -8,7 +8,10 @@
   else root.NetworkCase = api;
 })(globalThis, (coastal, abundance, model) => {
 const { streamMassKg } = model;
-const DEAD_SEA_PV = 5.4;
+const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.43&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
+// Frozen PVGIS response: data/pvgis-dead-sea.json, retrieved 2026-09-06.
+const DAILY_PV = [1674.85 / 365, 3.68, 4.05, 4.56, 4.9, 4.94, 5.05, 5.06, 5.13, 5.13, 4.63, 4.14, 3.77];
+const DEAD_SEA_PV = DAILY_PV[0]; // 4.59 kWh/kWp·day = E_y 1674.85 / 365
 
 function siteDeadSeaAbundance() {
   const definition = abundance.createAbundanceCase();
@@ -23,7 +26,7 @@ function siteDeadSeaAbundance() {
   node('air').siteResource = 'air';
   node('power').economics = { installedCapex: solarKWp * 1000, fixedOM: solarKWp * 20, assetLifeYears: 25 };
   definition.site = {
-    id: 'dead-sea-2026-09-05',
+    id: 'dead-sea-pvgis-2026-09-06',
     name: 'Dead Sea industrial shore',
     latitude: 31.16,
     longitude: 35.43,
@@ -33,7 +36,7 @@ function siteDeadSeaAbundance() {
       electricity: {
         stream: clone(node('power').params.stream),
         quality: 'literature-estimate',
-        evidence: 'Screening 5.4 kWh/kWp-day desert PV to cover the hub; not a local TMY or permit',
+        evidence: 'PVGIS-SARAH3/ERA5 annual average 4.59 kWh/kWp·day (E_y 1674.85) × array sized to the hub load',
       },
       brine: {
         stream: clone(node('brine').params.stream),
@@ -57,11 +60,58 @@ function siteDeadSeaAbundance() {
       },
       grid: { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' },
     },
+    meteo: {
+      dailyPVKWhPerKWp: DEAD_SEA_PV,
+      monthlyPVKWhPerKWp: DAILY_PV.slice(),
+      quality: 'cited',
+      source: 'PVGIS-SARAH3/ERA5',
+      retrieved: '2026-09-06',
+      cite: {
+        label: 'PVGIS-SARAH3 / ERA5, 2005–2023 monthly; annual E_y 1674.85 kWh/kWp; frozen 2026-09-06',
+        url: PVGIS_URL,
+      },
+    },
+    assay: {
+      kind: 'brine',
+      summary: 'Example concentrated Na–Cl–Mg–Ca–K–SO₄–Br–Li brine for screening; not a Dead Sea concession assay',
+      quality: 'screening',
+      evidence: [
+        { label: 'Dead Sea chemical composition (context, not this mol vector)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+      ],
+    },
+    rights: {
+      gridImport: {
+        status: 'unverified',
+        note: 'Unverified grid access; zero authorized imports',
+        evidence: [{ label: 'Dead Sea industrial geography (context, not an interconnection)', url: 'https://en.wikipedia.org/wiki/Dead_Sea' }],
+      },
+      freshwater: {
+        status: 'assumed',
+        note: 'Process water is assumed, not a Dead Sea freshwater right',
+        evidence: [{ label: 'Dead Sea water context', url: 'https://en.wikipedia.org/wiki/Dead_Sea' }],
+      },
+      seawaterIntake: {
+        status: 'unverified',
+        note: 'Inland brine hub; no seawater intake',
+      },
+      brineConcession: {
+        status: 'unverified',
+        note: 'Example brine feed is not a mineral concession',
+        evidence: [{ label: 'Dead Sea chemical composition (context, not this feed vector)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' }],
+      },
+      saltPurchase: {
+        status: 'assumed',
+        note: 'Purchased salt makeup assumed available; not a local quote',
+        evidence: [{ label: 'USGS salt statistics (commodity context, not a contract)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' }],
+      },
+    },
     evidence: [
       { label: 'Dead Sea industrial geography', url: 'https://en.wikipedia.org/wiki/Dead_Sea' },
-      { label: 'Desert PV screening yield, not site-measured TMY', url: 'https://re.jrc.ec.europa.eu/pvg_tools/en/' },
+      { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; annual E_y 1674.85 kWh/kWp', url: PVGIS_URL },
+      { label: 'Dead Sea chemical composition (screening assay context)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' },
+      { label: 'USGS salt statistics (purchased-salt context)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
     ],
-    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at 5.4 kWh/kWp-day. Freshwater and purchased salt are explicit assumptions. Annual economics repeat this day 365 times.',
+    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Brine composition is a screening assay, not a concession. Freshwater and purchased salt are explicit assumptions. Grid and brine rights are unverified. Annual economics repeat this day 365 times.',
   };
   return definition;
 }
@@ -76,5 +126,5 @@ function createFuelsAndMineralsNetwork(month = 6) {
   };
 }
 
-return { DEAD_SEA_PV, siteDeadSeaAbundance, createFuelsAndMineralsNetwork };
+return { DEAD_SEA_PV, DAILY_PV, siteDeadSeaAbundance, createFuelsAndMineralsNetwork };
 });

@@ -55,6 +55,50 @@ function createCoastalCase(month = 0) {
   definition.site = {
     id: 'almeria-pvgis-2026-09-05', name: 'Almería coast · Spain', latitude: 36.834, longitude: -2.463,
     month, solarKWp, dailyPVKWhPerKWp: DAILY_PV[month], resources, evidence: EVIDENCE,
+    meteo: {
+      dailyPVKWhPerKWp: DAILY_PV[month],
+      monthlyPVKWhPerKWp: DAILY_PV.slice(),
+      quality: 'cited',
+      source: 'PVGIS-SARAH3/ERA5',
+      retrieved: '2026-09-05',
+      cite: {
+        label: 'PVGIS-SARAH3 / ERA5, 2005–2023 monthly; frozen 2026-09-05',
+        url: PVGIS_URL,
+      },
+    },
+    assay: {
+      kind: 'seawater',
+      summary: '35 g/kg global ocean salinity represented as NaCl; not an Almería water assay',
+      quality: 'cited',
+      evidence: [
+        { label: 'NOAA: why is the ocean salty (35 g/kg NaCl proxy)', url: 'https://oceanservice.noaa.gov/facts/whysalty.html' },
+      ],
+    },
+    rights: {
+      gridImport: {
+        status: 'unverified',
+        note: 'Unverified grid access; zero authorized imports',
+        evidence: [{ label: 'Red Eléctrica de España (context, not a connection agreement)', url: 'https://www.ree.es/en' }],
+      },
+      freshwater: {
+        status: 'unverified',
+        note: 'Unverified freshwater access; zero authorized supply',
+        evidence: [{ label: 'Spain MITECO water (context, not a concession)', url: 'https://www.miteco.gob.es/en/agua.html' }],
+      },
+      seawaterIntake: {
+        status: 'assumed',
+        note: 'Assumed 0.1 m³/day intake; no Almería intake or discharge permit on file',
+        evidence: [{ label: 'NOAA ocean salinity context for the NaCl proxy feed', url: 'https://oceanservice.noaa.gov/facts/whysalty.html' }],
+      },
+      brineConcession: {
+        status: 'unverified',
+        note: 'No brine or mineral concession at this coastal methane site',
+      },
+      saltPurchase: {
+        status: 'unverified',
+        note: 'No salt purchase agreement; the plant does not buy salt',
+      },
+    },
     solar: HOURLY ? {
       typicalMonths: HOURLY.typicalMonths,
       annualTypical: HOURLY.annualTypical,
@@ -63,7 +107,7 @@ function createCoastalCase(month = 0) {
       url: HOURLY.url,
     } : null,
     storage: { batteryKWh: 0, powerKW: 0, efficiency: 0.9, initialKWh: 0 },
-    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. No mineral assay or grid tariff verified. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
+    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is a NaCl proxy, not a local assay. Grid and freshwater rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
   };
   definition.operation.boundaryLimitedBy = target < 5 ? ['site solar electricity'] : [];
   return definition;

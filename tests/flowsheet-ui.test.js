@@ -26,7 +26,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/network.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'data/pvgis-almeria-hourly.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -249,6 +249,12 @@ test('coastal methane loads a sited factory whose winter solar cuts methane', ()
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
   assert.equal(app.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
   assert.match(context.__elements.get('siteResources').innerHTML, /unverified/);
+  assert.match(context.__elements.get('siteMeteo').innerHTML, /PVGIS/);
+  assert.match(context.__elements.get('siteMeteo').innerHTML, /quality-chip quality-cited/);
+  assert.match(context.__elements.get('siteAssay').innerHTML, /NaCl/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /rights-unverified/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /rights-assumed/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /gridImport/);
   assert.equal(app.site.month, 12);
   assert.equal(app.result.horizon.hours[0].methane, 0);
   assert.ok(app.result.horizon.hours.some(entry => entry.pv > 0 && entry.methane > 0));
@@ -289,6 +295,20 @@ test('coastal DAC swap stays runnable and compares against the captured baseline
   assert.match(context.__elements.get('comparisonMetrics').innerHTML, /CAPEX/);
   assert.equal(app.graph.nodes.find(node => node.id === 'consumables').params.stream.chemicalId, 'amine-sorbent');
   assert.ok(app.result.nodes.sabatier.activity <= baselineMethane + 1e-6);
+});
+
+test('size to target resizes coastal methane and reports iterations and residual', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(12);
+  const before = app.site.solarKWp;
+  const sized = app.sizeCoastalToMethane(15, 12);
+  assert.ok(app.site.solarKWp > before);
+  assert.ok(Math.abs(sized.achieved - 15) < 1e-6);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /iteration/);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /residual/);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /unverified site right/);
+  assert.equal(app.sizing.iterations, sized.iterations);
 });
 
 test('site panel reports location-aware footprint instead of 1.6 ha/MWp', () => {
@@ -334,6 +354,50 @@ test('product chrome uses Network and never Empire', () => {
   assert.match(css, /\.network-panel/);
 });
 
+test('economics panel tags screening money without fake plus/minus', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadMethaneRecycle();
+  const html = context.__elements.get('economicsMetrics').innerHTML;
+  assert.match(html, /quality-chip quality-screening/);
+  assert.match(html, /~/);
+  assert.match(html, /Levelized delivered cost/);
+  assert.doesNotMatch(html, /±|&plusmn;|\+\/-\s*\d/);
+  assert.equal(context.FlowsheetUncertainty.classifyQuality({ kind: 'product-cost' }), 'screening');
+});
+
+test('solar PV inspector cites NREL ATB next to LCOE', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.addNode('solar-pv');
+  const metrics = context.__elements.get('inspectorMetrics').innerHTML;
+  const controls = context.__elements.get('nodeControls').innerHTML;
+  assert.match(metrics, /Simple LCOE/);
+  assert.match(metrics, /quality-chip quality-cited/);
+  assert.match(metrics, /NREL 2024 ATB/);
+  assert.doesNotMatch(metrics, /±|&plusmn;|\+\/-\s*\d/);
+  assert.match(controls, /quality-chip quality-cited/);
+  assert.match(controls, /ATB 2024/);
+});
+
+test('site footprint and network rollup carry land and money quality chips', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(0);
+  const footprint = context.__elements.get('siteFootprintMetrics').innerHTML;
+  assert.match(footprint, /quality-chip quality-assumption/);
+  assert.match(footprint, /Solar land/);
+  assert.doesNotMatch(footprint, /±|&plusmn;|\+\/-\s*\d/);
+  app.loadDemoNetwork();
+  const network = context.__elements.get('networkMetrics').innerHTML;
+  assert.match(network, /quality-chip quality-screening/);
+  assert.match(network, /quality-chip quality-assumption/);
+  assert.match(network, /quality-chip quality-cited/);
+  assert.match(network, /Land/);
+  assert.match(network, /Freight/);
+  assert.match(network, /UNCTAD/);
+});
+
 test('inspector renders catalog sourceNote for electrolyzer and DAC energy', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
@@ -344,12 +408,44 @@ test('inspector renders catalog sourceNote for electrolyzer and DAC energy', () 
   assert.match(context.__elements.get('nodeControls').innerHTML, /IEA DAC 2022/);
   assert.match(context.__elements.get('nodeControls').innerHTML, /1\.8 GJ\/t/);
   assert.match(context.__elements.get('nodeControls').innerHTML, /5\.4 GJ\/t/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Capture fraction 0\.9/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /amine makeup 0\.02/);
   app.addNode('dac-liquid');
   assert.match(context.__elements.get('nodeControls').innerHTML, /Scenario A/);
   assert.match(context.__elements.get('nodeControls').innerHTML, /Scenario C/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Table 1 74\.5%/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /KOH makeup 0\.01/);
   app.addNode('dac-electroswing');
   assert.match(context.__elements.get('nodeControls').innerHTML, /40–90 kJ\/mol/);
   assert.match(context.__elements.get('nodeControls').innerHTML, /Balance-of-plant/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Capture fraction 0\.5/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /electrode makeup 0\.005/);
+  app.addNode('swro');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Elimelech & Phillip 2011/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /3–4 kWh\/m/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /45–55%/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Ghaffour et al\. 2013/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /quality-chip quality-cited/);
+  app.addNode('med');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Ghaffour et al\. 2013 MED band/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /1\.5–2\.5 kWh\/m/);
+  app.addNode('msf');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Ghaffour et al\. 2013 MSF band/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /3–5 kWh\/m/);
+  app.addNode('sabatier');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /0\.4–1\.5 kWh\/kg/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /not electrolysis/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Zapf/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Baier et al\. 2018/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /quality-chip quality-screening/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /fenrg\.2018\.00005/);
+  app.addNode('solar-pv');
+  assert.match(context.__elements.get('nodeControls').innerHTML, /ATB 2024/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /Class 8/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /24\.5%/);
+  assert.match(context.__elements.get('nodeControls').innerHTML, /quality-chip quality-cited/);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /engine\/uncertainty\.js/);
 });
 
 test('an incomplete baseline has no economics until a complete graph is captured', () => {

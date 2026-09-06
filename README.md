@@ -16,10 +16,11 @@ The root app now provides:
 - A generic post-solve economics fold: source purchases, installed CAPEX, fixed and variable O&M, sale/disposal destinations, demand caps, replacements, delivered cost, NPV, and IRR.
 - Editable economic assumptions on every source, converter, and destination, including zero-cost inputs for in-the-limit experiments.
 - Captured-baseline scenario comparison and a synergy ledger for avoided purchases, avoided disposal, and added product revenue.
-- Integrated methane + water-recycle, evidence-backed coastal methane, and ammonia + brine industrial-hub examples. The coastal case binds Almería PVGIS solar, seawater intake, and unverified grid/freshwater to the plant, then dispatches a 24-hour typical day so night hours produce nothing unless a battery is assumed. The abundance hub couples brine-derived bromide with chlor-alkali chlorine, then uses chlor-alkali hydrogen with ASU nitrogen for ammonia.
+- Integrated methane + water-recycle, evidence-backed coastal methane, and ammonia + brine industrial-hub examples. The coastal case binds Almería PVGIS solar, a cited NaCl seawater assay, assumed intake, and unverified grid/freshwater to the plant, then dispatches a 24-hour typical day so night hours produce nothing unless a battery is assumed. The Dead Sea hub cites the same PVGIS family, labels brine as a screening assay, and marks freshwater and salt as assumed. The abundance hub couples brine-derived bromide with chlor-alkali chlorine, then uses chlor-alkali hydrogen with ASU nitrogen for ammonia.
 - Distinct DAC routes (solid-sorbent, liquid-solvent, electro-swing) with different heat and reagent contracts. Switching a route keeps compatible connections, does not rewrite an existing makeup chemical, and stays comparable against a captured baseline.
-- A location bar: coordinates plus PV kWp fetch or reuse PVGIS typical-day solar and bind it to the current factory. Unverified grid and freshwater stay explicit zeros until assigned.
+- A location bar: coordinates plus PV kWp fetch or reuse PVGIS typical-day solar and bind it to the current factory. Site panels show meteo cites, assay summaries, and rights chips (`authorized` / `assumed` / `unverified`). Unverified grid and freshwater stay explicit zeros until assigned; solve and size warn on unverified rights.
 - Location-aware site footprint: solar land from panel area ÷ GCR (latitude-adjusted row spacing), plus order-of-magnitude process pads for active units. Network `landHa` is the sum of those site totals, not a flat 1.6 ha/MWp.
+- Iterative size-to-target: a methane demand sizes desal, H₂, DAC, and PV until the operating solve is consistent. The coastal demo remains a one-shot 37.5 kWp example until Size to target is used.
 - A network rollup: multiple sited plants, product slate in t/year, land, optional haul corridors, and combined CAPEX/NPV. The fuels + minerals demo places solar methane at Almería and a brine/ammonia hub on the Dead Sea.
 
 The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`, `index.html`, and `flowsheet.css`.
@@ -32,6 +33,8 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 - `engine/solve.js`: operation, resource allocation, recycles, and balance diagnostics.
 - `engine/economics.js`: costs and cash flows computed from the solved graph. Both economics panels use this result directly; IRR is a fractional rate.
 - `engine/footprint.js`: post-solve solar land (efficiency × location-aware GCR) and screening process pads.
+- `engine/size.js`: outer methane sizing loop. Product demand sizes water, H₂, DAC, power, and `solarKWp`; `solveOperation` stays physics-only.
+- `engine/uncertainty.js`: quality tags (`cited` / `recoverable` / `assumption` / `derived` / `screening`) and screening-precision formatters. No fake error bars.
 - `cases/`: runnable reference plants.
 - `tests/*flowsheet*.test.js`: engine, economics, and browser-global/UI regression checks.
 - `scripts/`: local server, static build, CLI example, and deployment.
@@ -42,7 +45,7 @@ See [engine architecture](docs/flowsheet-architecture.md) for model contracts an
 
 ## Model limits
 
-The operating model uses representative-day flows and fixed installed capacities. It checks component/element, charge, electricity, and heat accounting, but does not provide full thermodynamic closure, hourly storage dispatch, automatic plant sizing, or economic optimization. Process and cost presets are editable screening assumptions.
+The operating model uses representative-day flows and fixed installed capacities. It checks component/element, charge, electricity, and heat accounting, but does not provide full thermodynamic closure, hourly storage dispatch, or economic optimization. Automatic plant sizing is a separate outer loop (`engine/size.js`) that chooses capacities and `solarKWp` from a methane target, then calls the same operating solver. Process and cost presets are editable screening assumptions. Foundry money and land outputs carry quality chips; screening values use a tilde instead of fake precision.
 
 ## Running locally
 

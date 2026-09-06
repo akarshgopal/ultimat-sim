@@ -28,6 +28,15 @@
   const SAVES_KEY = 'molecular-foundry.saves.v1';
   const NETWORK_KEY = 'molecular-foundry.network.v1';
   const LEGACY_NETWORK_KEY = 'molecular-foundry.empire.v1';
+  const TAB_KEY = 'molecular-foundry.tab.v1';
+  const FOUNDATION_TABS = ['overview', 'location', 'process', 'economics'];
+  const TAB_IDS = {
+    overview: { tab: 'tabOverview', panel: 'panelOverview' },
+    location: { tab: 'tabLocation', panel: 'panelLocation' },
+    process: { tab: 'tabProcess', panel: 'panelProcess' },
+    economics: { tab: 'tabEconomics', panel: 'panelEconomics' },
+  };
+  let activeTab = 'overview';
   const NODE_WIDTH = 220;
   const COLUMN_GAP = 120;
   let selectedNodeId = null;
@@ -422,6 +431,17 @@
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
   document.getElementById('loadMethaneRecycle').addEventListener('click', loadMethaneRecycle);
   document.getElementById('loadCoastalMethane').addEventListener('click', () => loadCoastalMethane(0));
+  document.getElementById('processDemoMenu')?.addEventListener('click', event => {
+    const demo = event.target.closest?.('[data-demo]')?.dataset.demo;
+    if (demo === 'methane-recycle') loadMethaneRecycle();
+    else if (demo === 'coastal-methane') loadCoastalMethane(0);
+    else if (demo === 'abundance-hub') loadAbundanceHub();
+    else if (demo === 'demo-network') loadDemoNetwork();
+  });
+  for (const name of FOUNDATION_TABS) {
+    document.getElementById(TAB_IDS[name].tab)?.addEventListener('click', () => activateTab(name));
+  }
+  document.getElementById('foundryTabs')?.addEventListener('keydown', handleTabListKeydown);
   document.getElementById('sizeToTarget').addEventListener('click', () => {
     const product = document.getElementById('sizeProduct')?.value || 'CH4';
     const rate = Number(document.getElementById('sizeTargetRate').value);
@@ -1408,8 +1428,84 @@
     renderGraph();
   }
 
+  function tabNameFromButton(button) {
+    if (!button) return '';
+    const controls = button.getAttribute?.('aria-controls') || button['aria-controls'] || '';
+    const fromControls = String(controls).replace(/^panel/i, '').toLowerCase();
+    if (FOUNDATION_TABS.includes(fromControls)) return fromControls;
+    const id = button.id || '';
+    const fromId = String(id).replace(/^tab/i, '').toLowerCase();
+    return FOUNDATION_TABS.includes(fromId) ? fromId : '';
+  }
+
+  function readSavedTab() {
+    if (!storage) return 'overview';
+    try {
+      const value = storage.getItem(TAB_KEY);
+      return FOUNDATION_TABS.includes(value) ? value : 'overview';
+    } catch {
+      return 'overview';
+    }
+  }
+
+  function persistTab(name) {
+    if (!storage) return;
+    try { storage.setItem(TAB_KEY, name); } catch { /* ignore */ }
+  }
+
+  function scheduleMapInvalidate() {
+    if (!siteMap || typeof siteMap.invalidateSize !== 'function') return;
+    const invalidate = () => { try { siteMap.invalidateSize({ animate: false }); } catch { /* ignore */ } };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(invalidate);
+    else invalidate();
+  }
+
+  function activateTab(name) {
+    const next = FOUNDATION_TABS.includes(name) ? name : 'overview';
+    activeTab = next;
+    for (const tab of FOUNDATION_TABS) {
+      const selected = tab === next;
+      const ids = TAB_IDS[tab];
+      const button = document.getElementById(ids.tab);
+      const panel = document.getElementById(ids.panel);
+      if (button) {
+        button.setAttribute('aria-selected', String(selected));
+        button.tabIndex = selected ? 0 : -1;
+        button.classList[selected ? 'add' : 'remove']('is-active');
+      }
+      if (panel) {
+        panel.hidden = !selected;
+        panel.classList[selected ? 'add' : 'remove']('is-active');
+      }
+    }
+    document.body.setAttribute('data-tab', next);
+    persistTab(next);
+    if (next === 'location') scheduleMapInvalidate();
+    if (next === 'process' && graph.nodes.length) {
+      const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
+      schedule(() => { try { fitCanvas(); } catch { /* ignore */ } });
+    }
+    return next;
+  }
+
+  function handleTabListKeydown(event) {
+    const current = tabNameFromButton(event.target.closest?.('[role="tab"]') || event.target);
+    if (!current) return;
+    const index = FOUNDATION_TABS.indexOf(current);
+    let next = current;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = FOUNDATION_TABS[(index + 1) % FOUNDATION_TABS.length];
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = FOUNDATION_TABS[(index - 1 + FOUNDATION_TABS.length) % FOUNDATION_TABS.length];
+    else if (event.key === 'Home') next = FOUNDATION_TABS[0];
+    else if (event.key === 'End') next = FOUNDATION_TABS[FOUNDATION_TABS.length - 1];
+    else return;
+    event.preventDefault?.();
+    activateTab(next);
+    document.getElementById(TAB_IDS[next].tab)?.focus?.();
+  }
+
   function toggleCanvasFocus() {
     canvasFocused = !canvasFocused;
+    if (canvasFocused) activateTab('process');
     document.body.classList[canvasFocused ? 'add' : 'remove']('canvas-focus');
     const button = document.getElementById('focusCanvas');
     button.textContent = canvasFocused ? 'Show panels' : 'Focus canvas';
@@ -1882,15 +1978,92 @@
         || Math.abs(current.lng - coords.longitude) > 0.0005;
       if (moved) siteMap.setView([coords.latitude, coords.longitude], siteMap.getZoom?.() || 10, { animate: false });
       updateSiteMapOverlays();
-      const invalidate = () => { try { siteMap.invalidateSize({ animate: false }); } catch { /* ignore */ } };
-      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(invalidate);
-      else invalidate();
+      if (activeTab === 'location') scheduleMapInvalidate();
     } catch {
       siteMapStatus('Map overlay update failed. Latitude/longitude and Apply location still work.');
     }
   }
 
-  function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); }
+  function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); renderOverview(); }
+
+  function overviewSaleRows() {
+    const sales = (currentEconomics?.sinks || [])
+      .filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0)
+      .sort((left, right) => right.deliveredAmount - left.deliveredAmount)
+      .slice(0, 4)
+      .map(sink => [sink.id, `${formatNumber(sink.deliveredAmount / 1000)} t/year`]);
+    if (sales.length) return sales;
+    const slate = networkResult?.slate;
+    if (!slate) return [];
+    return Object.entries(slate)
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 3)
+      .map(([substance, tonnes]) => [substance, `${formatNumber(tonnes)} t/year`]);
+  }
+
+  function renderOverview() {
+    const siteEl = document.getElementById('overviewSiteName');
+    const honesty = document.getElementById('overviewHonesty');
+    const cash = document.getElementById('overviewCashflow');
+    const slate = document.getElementById('overviewSlate');
+    const land = document.getElementById('overviewLand');
+    const limiting = document.getElementById('overviewLimiting');
+    if (!siteEl || !cash) return;
+
+    siteEl.textContent = site?.name || draftSiteLabel();
+
+    const gate = economicsGateReasons();
+    if (honesty) {
+      if (!graph.nodes.length) honesty.textContent = 'Blank factory — load a demo or add blocks on Process.';
+      else if (gate.length) honesty.textContent = `Screening — not bankable (${gate.join('; ')}).`;
+      else if (currentEconomics) honesty.textContent = 'Screening cashflow for this factory.';
+      else honesty.textContent = 'Graph incomplete — economics unavailable.';
+    }
+
+    if (!currentEconomics) {
+      cash.innerHTML = '<div><dt>Co-product cashflow</dt><dd>Unavailable</dd></div>';
+    } else {
+      const net = currentEconomics.annualNetCash;
+      const netClass = net > 0 ? 'positive' : net < 0 ? 'negative' : '';
+      cash.innerHTML = [
+        ['Annual net cash', formatCashflowMoney(net), netClass],
+        ['Annual revenue', formatCashflowMoney(currentEconomics.annualRevenue), ''],
+        ['Installed CAPEX', formatCashflowMoney(currentEconomics.installedCapex), ''],
+      ].map(([term, value, cls]) => `<div><dt>${term}</dt><dd class="${cls}">${value}</dd></div>`).join('');
+    }
+
+    if (slate) {
+      const rows = overviewSaleRows();
+      slate.innerHTML = rows.length
+        ? rows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join('')
+        : '<div><dt>Products</dt><dd>None yet</dd></div>';
+    }
+
+    if (land) {
+      if (site && typeof FlowsheetFootprint !== 'undefined') {
+        const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
+        land.textContent = footprint.totalAreaM2 > 0
+          ? `${formatHa(footprint.totalHa)} total · solar ${formatHa(footprint.solar.ha)}`
+          : 'No land estimate yet';
+      } else if (networkResult?.landHa) {
+        land.textContent = `${formatHa(networkResult.landHa)} network land`;
+      } else {
+        land.textContent = 'No site land yet';
+      }
+    }
+
+    if (limiting) {
+      const missing = missingConnections();
+      const bottlenecks = graph.nodes.flatMap(current => bottlenecksFor(current.id).map(limit => `${current.label}: ${portName(limit)}`));
+      if (!graph.nodes.length) limiting.textContent = 'Empty factory';
+      else if (solveError) limiting.textContent = solveError;
+      else if (missing.length) limiting.textContent = `Incomplete: ${missing.slice(0, 3).join(' · ')}`;
+      else if (bottlenecks.length) limiting.textContent = `Bottleneck: ${bottlenecks.slice(0, 3).join(' · ')}`;
+      else if (result?.balances && result.balances.maxAbsResidual >= 1e-8) limiting.textContent = 'Check balances';
+      else if (result) limiting.textContent = 'Factory running · balances closed';
+      else limiting.textContent = 'Not solved';
+    }
+  }
 
   function renderGraph() {
     renderCanvasZoom();
@@ -2611,10 +2784,10 @@
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
     completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation,
-    saveNamed, loadNamed, captureBaseline, clearBaseline,
+    saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
     solve: solveAndRender, fitCanvas, get result() { return result; }, get baseline() { return baseline; },
     get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },
-    get sizing() { return lastSizing; },
+    get sizing() { return lastSizing; }, get activeTab() { return activeTab; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
   };
   refreshSaveOptions();
@@ -2631,4 +2804,5 @@
   }
   if (restoreSnapshot(readJson(AUTOSAVE_KEY))) solveAndRender();
   else render();
+  activateTab(readSavedTab());
 })();

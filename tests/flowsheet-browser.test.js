@@ -4,6 +4,19 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
+test('root chrome exposes four tabs and keeps Network copy without Empire', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /role="tablist"/);
+  assert.match(html, />Overview</);
+  assert.match(html, />Location</);
+  assert.match(html, />Process</);
+  assert.match(html, />Economics</);
+  assert.doesNotMatch(html, /empire/i);
+  assert.match(html, /Network/);
+  assert.match(html, /id="networkPanel"/);
+  assert.doesNotMatch(html, /role="tab"[^>]*>\s*Network\s*</i);
+});
+
 test('flowsheet engine runs through browser globals', () => {
   const context = vm.createContext({});
   for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/almeria-seawater.js', 'cases/dac.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js']) {

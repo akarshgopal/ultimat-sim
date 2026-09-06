@@ -396,7 +396,92 @@ test('product chrome uses Network and never Empire', () => {
   assert.doesNotMatch(css, /empire/i);
   assert.doesNotMatch(js, /LEGACY_EMPIRE|\bEmpire\b/);
   assert.match(html, /Network/);
+  assert.match(html, /id="networkPanel"/);
+  assert.match(html, /class="[^"]*network-panel/);
   assert.match(css, /\.network-panel/);
+});
+
+test('four primary tabs land on Overview and fold Network into Economics', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const labels = [...html.matchAll(/role="tab"(?![a-z])[^>]*>([^<]+)/gi)].map(match => match[1].trim());
+  assert.deepEqual(labels, ['Overview', 'Location', 'Process', 'Economics']);
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /id="tabOverview"[^>]*aria-selected="true"/);
+  assert.match(html, /id="panelOverview"/);
+  assert.match(html, /id="panelLocation"[^>]*hidden/);
+  assert.match(html, /id="panelProcess"[^>]*hidden/);
+  assert.match(html, /id="panelEconomics"[^>]*hidden/);
+  assert.match(html, /id="sizeForCashflow"/);
+  assert.match(html, /id="loadDemoNetwork"/);
+  assert.match(html, /id="siteMap"/);
+  assert.match(html, /id="flowsheetCanvas"/);
+  assert.match(html, /id="economicsBanner"/);
+  assert.match(html, /id="economicsAck"/);
+  assert.doesNotMatch(html, /role="tab"[^>]*>\s*Network\s*</i);
+  assert.match(html, /id="networkPanel"/);
+  const economicsChunk = html.slice(html.indexOf('id="panelEconomics"'));
+  assert.match(economicsChunk, /id="networkPanel"/);
+  assert.match(economicsChunk, /id="siteFootprint"/);
+});
+
+test('activateTab switches panels, defaults to Overview, and persists', () => {
+  const values = new Map();
+  const storage = {
+    getItem(key) { return values.get(key) ?? null; },
+    setItem(key, value) { values.set(key, value); },
+  };
+  const context = loadApp(storage);
+  const app = context.__FLOWSHEET_APP__;
+  assert.equal(app.activeTab, 'overview');
+  assert.equal(context.__elements.get('panelOverview').hidden, false);
+  assert.equal(context.__elements.get('panelLocation').hidden, true);
+  assert.equal(context.__elements.get('panelProcess').hidden, true);
+  assert.equal(context.__elements.get('panelEconomics').hidden, true);
+  assert.equal(context.__elements.get('tabOverview')['aria-selected'], 'true');
+
+  app.activateTab('location');
+  assert.equal(app.activeTab, 'location');
+  assert.equal(context.__elements.get('panelLocation').hidden, false);
+  assert.equal(context.__elements.get('panelOverview').hidden, true);
+  assert.equal(values.get('molecular-foundry.tab.v1'), 'location');
+  assert.equal(context.__elements.get('tabLocation')['aria-selected'], 'true');
+  assert.equal(typeof context.__elements.get('applyCoordinates').listeners.click, 'function');
+
+  context.__elements.get('tabProcess').listeners.click();
+  assert.equal(app.activeTab, 'process');
+  assert.equal(context.__elements.get('panelProcess').hidden, false);
+
+  const restored = loadApp({
+    getItem(key) { return key === 'molecular-foundry.tab.v1' ? 'economics' : null; },
+    setItem() {},
+  }).__FLOWSHEET_APP__;
+  assert.equal(restored.activeTab, 'economics');
+});
+
+test('overview dashboard stays calm after loading demos', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  assert.equal(app.activeTab, 'overview');
+  app.loadMethaneRecycle();
+  const cash = context.__elements.get('overviewCashflow').innerHTML;
+  assert.match(cash, /Annual net cash/);
+  assert.match(cash, /Installed CAPEX/);
+  assert.doesNotMatch(cash, /quality-chip/);
+  assert.doesNotMatch(cash, /~/);
+  assert.match(context.__elements.get('overviewLimiting').textContent, /Factory running|balances closed/);
+  assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /flow-edge material recycle/);
+
+  app.loadCoastalMethane(0);
+  assert.match(context.__elements.get('overviewSiteName').textContent, /Almer/);
+  assert.match(context.__elements.get('overviewHonesty').textContent, /not bankable/);
+  assert.doesNotMatch(context.__elements.get('overviewLand').textContent, /1\.6 ha\/MWp/);
+  assert.match(context.__elements.get('siteMapLayers').innerHTML, /OSM/);
+  assert.equal(typeof context.__elements.get('sizeForCashflow').listeners.click, 'function');
+
+  app.loadDemoNetwork();
+  assert.match(context.__elements.get('networkProducts').innerHTML, /CH4/);
+  assert.match(context.__elements.get('overviewSlate').innerHTML, /t\/year/);
+  assert.doesNotMatch(context.__elements.get('overviewSlate').innerHTML, /quality-chip quality-screening/);
 });
 
 test('economics panel does not spam screening chips or tildes', () => {

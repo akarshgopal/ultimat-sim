@@ -713,6 +713,9 @@ button.primary-action:focus-visible {
   gap: 10px 12px;
   align-items: end;
 }
+.site-location-grid .site-preset-label {
+  grid-column: 1 / -1;
+}
 .site-location-grid .primary-action {
   grid-column: 1 / -1;
   justify-self: start;
@@ -725,7 +728,8 @@ button.primary-action:focus-visible {
   display: grid;
   gap: 4px;
 }
-.site-location label input {
+.site-location label input,
+.site-location label select {
   width: 100%;
   margin-top: 0;
   min-height: 36px;

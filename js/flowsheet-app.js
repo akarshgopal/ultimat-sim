@@ -532,6 +532,7 @@
     solveAndRender();
   });
   document.getElementById('applyCoordinates').addEventListener('click', applyCoordinates);
+  document.getElementById('sitePreset')?.addEventListener('change', () => { applySitePreset(); });
   document.getElementById('siteLatitude').addEventListener('input', syncSiteMapFromInputs);
   document.getElementById('siteLongitude').addEventListener('input', syncSiteMapFromInputs);
   document.getElementById('siteMapLayers').addEventListener('change', event => {
@@ -943,7 +944,110 @@
     }
   }
 
-  function bindLocation({ latitude, longitude, solarKWp, batteryKWh = 0, solar, name }) {
+  function sitePresets() {
+    const data = globalThis.SITE_PRESETS;
+    return Array.isArray(data) ? data : [];
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function defaultSiteRights() {
+    return {
+      gridImport: { kind: 'grid', status: 'unverified', authorize: false, note: 'Unverified grid access; zero authorized imports' },
+      freshwater: { kind: 'freshwater', status: 'unverified', authorize: false, note: 'Unverified freshwater access; zero authorized supply' },
+      seawaterIntake: { kind: 'intake', status: 'unverified', authorize: false, note: 'No seawater intake permit verified' },
+      seawaterDischarge: { kind: 'discharge', status: 'unverified', authorize: false, note: 'No seawater discharge permit verified' },
+      brineConcession: { kind: 'concession', status: 'unverified', authorize: false, note: 'No brine or mineral concession verified' },
+      saltPurchase: { kind: 'purchase', status: 'unverified', authorize: false, note: 'No salt purchase agreement verified' },
+    };
+  }
+
+  function rightsFromHints(hints = {}) {
+    const rights = defaultSiteRights();
+    const keys = RIGHT_KEYS || Object.keys(rights);
+    for (const key of keys) {
+      const hint = hints[key];
+      if (!hint) continue;
+      const status = hint.status === 'assumed' ? 'assumed' : 'unverified';
+      rights[key] = {
+        kind: hint.kind || RIGHT_KINDS?.[key] || rights[key].kind,
+        status,
+        authorize: status === 'assumed',
+        note: hint.note || rights[key].note,
+      };
+    }
+    return rights;
+  }
+
+  function populateSitePresets() {
+    const select = document.getElementById('sitePreset');
+    const presets = sitePresets();
+    if (!select || !presets.length) return;
+    const groups = [];
+    const byRegion = new Map();
+    for (const preset of presets) {
+      const region = preset.region || 'Other';
+      if (!byRegion.has(region)) {
+        byRegion.set(region, []);
+        groups.push(region);
+      }
+      byRegion.get(region).push(preset);
+    }
+    const options = ['<option value="">Choose a site…</option>'];
+    for (const region of groups) {
+      const items = byRegion.get(region).map(preset => (
+        `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)}</option>`
+      )).join('');
+      options.push(`<optgroup label="${escapeHtml(region)}">${items}</optgroup>`);
+    }
+    select.innerHTML = options.join('');
+  }
+
+  function matchingPresetId() {
+    if (site?.id && sitePresets().some(preset => preset.id === site.id)) return site.id;
+    const lat = Number(site?.latitude);
+    const lon = Number(site?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return '';
+    const match = sitePresets().find(preset => (
+      Math.abs(preset.latitude - lat) < 0.01 && Math.abs(preset.longitude - lon) < 0.01
+    ));
+    return match?.id || '';
+  }
+
+  function applySitePreset() {
+    const id = document.getElementById('sitePreset')?.value;
+    const preset = sitePresets().find(item => item.id === id);
+    if (!preset) return;
+    const latEl = document.getElementById('siteLatitude');
+    const lonEl = document.getElementById('siteLongitude');
+    if (latEl) latEl.value = preset.latitude;
+    if (lonEl) lonEl.value = preset.longitude;
+    const previous = site || {};
+    site = {
+      id: preset.id,
+      name: preset.name,
+      region: preset.region,
+      kind: preset.kind,
+      latitude: preset.latitude,
+      longitude: preset.longitude,
+      notes: preset.notes,
+      evidence: Array.isArray(preset.evidence) ? preset.evidence.map(item => ({ ...item })) : [],
+      rights: rightsFromHints(preset.rightsHints),
+      solarKWp: previous.solarKWp,
+      storage: previous.storage,
+      month: previous.month || 0,
+    };
+    render();
+    return applyCoordinates();
+  }
+
+  function bindLocation({ latitude, longitude, solarKWp, batteryKWh = 0, solar, name, notes, rights, evidence }) {
     const hours = solar?.typicalMonths?.[1] && (solar.annualTypical || Object.values(solar.typicalMonths)[0]);
     site = {
       ...(site || {}),
@@ -952,7 +1056,9 @@
       latitude, longitude, solarKWp, month: site?.month || 0, solar,
       storage: { batteryKWh, powerKW: batteryKWh, efficiency: 0.9, initialKWh: 0 },
       resources: { ...(site?.resources || {}) },
-      notes: site?.notes || 'PVGIS solar for this point. Rights and other supplies stay separate.',
+      notes: notes || site?.notes || 'PVGIS solar for this point. Rights and other supplies stay separate.',
+      ...(evidence ? { evidence } : {}),
+      ...(rights ? { rights } : {}),
     };
     if (!site.resources.grid) {
       site.resources.grid = { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' };
@@ -980,16 +1086,7 @@
         ? { label: `${solar.database || 'PVGIS'} typical-day solar`, url: solar.url }
         : site.meteo?.cite,
     };
-    if (!site.rights) {
-      site.rights = {
-        gridImport: { kind: 'grid', status: 'unverified', authorize: false, note: 'Unverified grid access; zero authorized imports' },
-        freshwater: { kind: 'freshwater', status: 'unverified', authorize: false, note: 'Unverified freshwater access; zero authorized supply' },
-        seawaterIntake: { kind: 'intake', status: 'unverified', authorize: false, note: 'No seawater intake permit verified' },
-        seawaterDischarge: { kind: 'discharge', status: 'unverified', authorize: false, note: 'No seawater discharge permit verified' },
-        brineConcession: { kind: 'concession', status: 'unverified', authorize: false, note: 'No brine or mineral concession verified' },
-        saltPurchase: { kind: 'purchase', status: 'unverified', authorize: false, note: 'No salt purchase agreement verified' },
-      };
-    }
+    if (!site.rights) site.rights = defaultSiteRights();
     if (site.rights.gridImport?.authorize === false) {
       site.resources.grid.stream = { kind: 'electricity', kWh: 0 };
     }
@@ -1020,16 +1117,20 @@
     status.textContent = 'Fetching PVGIS hourly series…';
     try {
       const solar = await fetchPvgisHourly(latitude, longitude);
-      bindLocation({ latitude, longitude, solarKWp, batteryKWh, solar });
+      bindLocation({ latitude, longitude, solarKWp, batteryKWh, solar, name: site?.name });
       status.textContent = `Typical-day solar from ${solar.database || 'PVGIS'} ${solar.year || ''}`.trim();
     } catch (error) {
       const frozen = globalThis.PvgisAlmeriaHourly;
       if (frozen && Math.abs(latitude - 36.834) < 0.2 && Math.abs(longitude + 2.463) < 0.2) {
-        bindLocation({ latitude: 36.834, longitude: -2.463, solarKWp, batteryKWh, solar: frozen, name: 'Almería coast · Spain' });
+        bindLocation({
+          latitude: 36.834, longitude: -2.463, solarKWp, batteryKWh, solar: frozen,
+          name: site?.name || 'Almería coast · Spain',
+        });
         status.textContent = 'Live PVGIS unavailable; using frozen Almería 2023 typical days.';
         return;
       }
       status.textContent = error.message;
+      render();
     }
   }
 
@@ -2440,6 +2541,11 @@
     panel.hidden = false;
     document.getElementById('siteName').textContent = site?.name || draftSiteLabel();
     document.getElementById('siteNotes').textContent = site?.notes || '';
+    const presetSelect = document.getElementById('sitePreset');
+    if (presetSelect && sitePresets().length) {
+      const match = matchingPresetId();
+      if (presetSelect.value !== match) presetSelect.value = match;
+    }
     document.getElementById('siteLatitude').value = site?.latitude ?? 36.834;
     document.getElementById('siteLongitude').value = site?.longitude ?? -2.463;
     document.getElementById('siteSolarKWp').value = site?.solarKWp ?? 37.5;
@@ -2970,13 +3076,14 @@
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
     completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadDemoNetwork,
-    addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation,
+    addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
     solve: solveAndRender, fitCanvas, get result() { return result; }, get baseline() { return baseline; },
     get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },
     get sizing() { return lastSizing; }, get activeTab() { return activeTab; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
   };
+  populateSitePresets();
   refreshSaveOptions();
   const savedNetwork = readJson(NETWORK_KEY) || readJson(LEGACY_NETWORK_KEY);
   if (savedNetwork?.plants) network = { plants: savedNetwork.plants, corridors: savedNetwork.corridors || [] };

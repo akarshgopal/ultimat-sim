@@ -42,7 +42,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/almeria-seawater.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/almeria-seawater.js', 'data/site-presets.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -196,6 +196,43 @@ test('fuels plus minerals network rolls up two sited plants', () => {
   assert.match(context.__elements.get('networkStatus').textContent, /site footprint/);
   assert.doesNotMatch(context.__elements.get('networkStatus').textContent, /1\.6 ha\/MWp/);
   assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
+});
+
+test('Location presets populate by region and applying Almería sets coords, name, and honest rights', async () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  const picker = context.__elements.get('sitePreset');
+  assert.match(picker.innerHTML, /optgroup label="Gulf"/);
+  assert.match(picker.innerHTML, /uae-taweelah/);
+  assert.match(picker.innerHTML, /texas-corpus-christi/);
+  assert.match(picker.innerHTML, /india-mundra/);
+  assert.match(picker.innerHTML, /au-port-hedland/);
+  assert.match(picker.innerHTML, /optgroup label="North Africa"/);
+  assert.match(picker.innerHTML, /chile-mejillones/);
+  assert.match(picker.innerHTML, /spain-almeria/);
+
+  picker.value = 'spain-almeria';
+  await app.applySitePreset();
+  assert.equal(app.site.id, 'spain-almeria');
+  assert.equal(app.site.latitude, 36.834);
+  assert.equal(app.site.longitude, -2.463);
+  assert.match(app.site.name, /Almer/);
+  assert.equal(app.site.rights.seawaterIntake.status, 'assumed');
+  assert.equal(app.site.rights.gridImport.status, 'unverified');
+  assert.equal(app.site.rights.gridImport.authorize, false);
+  assert.ok(Object.values(app.site.rights).every(right => right.status !== 'authorized'));
+  assert.match(context.__elements.get('overviewSiteName').textContent, /Almer/);
+  assert.equal(Number(context.__elements.get('siteLatitude').value), 36.834);
+  assert.equal(Number(context.__elements.get('siteLongitude').value), -2.463);
+
+  picker.value = 'india-mundra';
+  await app.applySitePreset();
+  assert.equal(app.site.id, 'india-mundra');
+  assert.equal(app.site.latitude, 22.737);
+  assert.match(app.site.name, /Mundra/);
+  assert.match(context.__elements.get('overviewSiteName').textContent, /Mundra/);
+  assert.equal(app.site.rights.seawaterIntake.status, 'assumed');
+  assert.equal(app.site.rights.seawaterDischarge.status, 'unverified');
 });
 
 test('coastal methane sizeToProduct H2 produces electrolyzer activity and never Limited by Nothing at zero', () => {

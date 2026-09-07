@@ -43,7 +43,7 @@ const WATER_BODIES = Object.freeze([
   { id: 'great-lakes', name: 'North American Great Lakes', kind: 'freshwater', latitude: 45.0, longitude: -83.0, radiusKm: 350 },
 ]);
 
-const COLORMAP_LAYER_IDS = Object.freeze(['pvgis', 'water']);
+const COLORMAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
 
 // GSA / Solargis-style ramp for annual GHI (kWh/m²·year). Stops ≈ daily 0–10 × 365.
 const GSA_GHI_RAMP = Object.freeze([
@@ -77,14 +77,23 @@ const GSA_IRRAD = Object.freeze({
   tileUrl: 'https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/GSA_IRRAD/ImageServer/tile/{z}/{y}/{x}?sliceId=2',
 });
 
-// Pale → dark green land-cost index. Not cadastral, not a sale price.
+// Yellow → dark green USD/ha ramp (USDA farmland-map style). Absolute USD/ha stops.
+const LAND_USD_HA_RAMP = Object.freeze([
+  Object.freeze([2000, '#ffffcc']),
+  Object.freeze([5000, '#d9f0a3']),
+  Object.freeze([10000, '#addd8e']),
+  Object.freeze([20000, '#78c679']),
+  Object.freeze([40000, '#31a354']),
+  Object.freeze([80000, '#006837']),
+]);
+// Relative 0–1 alias for legacy screening helpers (maps onto the USD ramp span).
 const LAND_VALUE_RAMP = Object.freeze([
-  Object.freeze([0, '#f7fcf5']),
-  Object.freeze([0.2, '#e5f5e0']),
-  Object.freeze([0.4, '#c7e9c0']),
-  Object.freeze([0.6, '#74c476']),
-  Object.freeze([0.8, '#238b45']),
-  Object.freeze([1, '#00441b']),
+  Object.freeze([0, LAND_USD_HA_RAMP[0][1]]),
+  Object.freeze([0.2, LAND_USD_HA_RAMP[1][1]]),
+  Object.freeze([0.4, LAND_USD_HA_RAMP[2][1]]),
+  Object.freeze([0.6, LAND_USD_HA_RAMP[3][1]]),
+  Object.freeze([0.8, LAND_USD_HA_RAMP[4][1]]),
+  Object.freeze([1, LAND_USD_HA_RAMP[5][1]]),
 ]);
 
 const LAYER_SOURCES = Object.freeze({
@@ -149,15 +158,35 @@ const LAYER_SOURCES = Object.freeze({
     id: 'land',
     label: 'Land value',
     kind: 'overlay',
-    quality: 'unavailable',
-    available: false,
-    render: 'none',
-    note: 'No public key-free cadastral or farmland price raster is wired. The prior landIndexAt heuristic choropleth was removed — it was not a price map.',
-    url: 'https://www.worldbank.org/en/topic/land',
+    quality: 'cited',
+    available: true,
+    render: 'choropleth',
+    units: 'USD/ha',
+    note: 'Official agricultural land values (USDA NASS farm real estate by US state; Eurostat apri_lprc arable land by country). Early siting proxy only — not cadastral, not industrial parcel quotes, not transaction comps. Transparent where unpublished.',
+    data: 'data/land-prices.json',
+    admin: 'data/land-admin.geojson',
     cite: Object.freeze({
-      label: 'Land value overlay unavailable (no key-free public price raster wired)',
-      url: 'https://www.worldbank.org/en/topic/land',
+      label: 'USDA NASS Land Values 2025 + Eurostat apri_lprc (USD/ha)',
+      url: 'https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf',
     }),
+    cites: Object.freeze([
+      Object.freeze({
+        label: 'USDA NASS Land Values 2025 (farm real estate $/acre → USD/ha)',
+        url: 'https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf',
+      }),
+      Object.freeze({
+        label: 'Eurostat apri_lprc agricultural land prices (ARA EUR/ha → USD)',
+        url: 'https://ec.europa.eu/eurostat/databrowser/view/apri_lprc/default/table',
+      }),
+    ]),
+    legend: Object.freeze([
+      Object.freeze({ value: 2000, color: '#ffffcc', label: '$2k/ha' }),
+      Object.freeze({ value: 5000, color: '#d9f0a3', label: '$5k' }),
+      Object.freeze({ value: 10000, color: '#addd8e', label: '$10k' }),
+      Object.freeze({ value: 20000, color: '#78c679', label: '$20k' }),
+      Object.freeze({ value: 40000, color: '#31a354', label: '$40k' }),
+      Object.freeze({ value: 80000, color: '#006837', label: '$80k+' }),
+    ]),
   }),
   footprint: Object.freeze({
     id: 'footprint',
@@ -612,8 +641,71 @@ function sampleGsaDecoded(decoded, z, tileY, tileX, latitude, longitude) {
   return value;
 }
 
-function landColor(relativeIndex) {
-  return colorFromRamp(relativeIndex, LAND_VALUE_RAMP);
+function getLandPricesBundle() {
+  if (globalThis.LAND_PRICES && typeof globalThis.LAND_PRICES === 'object') return globalThis.LAND_PRICES;
+  if (typeof require === 'function') {
+    try { return require('../data/land-prices.js'); } catch { /* optional in browser */ }
+  }
+  return null;
+}
+
+function getLandAdminGeoJSON() {
+  if (globalThis.LAND_ADMIN_GEOJSON && typeof globalThis.LAND_ADMIN_GEOJSON === 'object') {
+    return globalThis.LAND_ADMIN_GEOJSON;
+  }
+  if (typeof require === 'function') {
+    try { return require('../data/land-admin.js'); } catch { /* optional */ }
+  }
+  return null;
+}
+
+function landPriceIndex(bundle = getLandPricesBundle()) {
+  const map = new Map();
+  const records = bundle?.records;
+  if (!Array.isArray(records)) return map;
+  for (const record of records) {
+    if (!record?.id) continue;
+    map.set(record.id, record);
+  }
+  return map;
+}
+
+function landPriceById(id, bundle = getLandPricesBundle()) {
+  if (!id) return null;
+  return landPriceIndex(bundle).get(id) || null;
+}
+
+function landColorUsdPerHa(usdPerHa) {
+  if (!Number.isFinite(usdPerHa) || !(usdPerHa > 0)) return null;
+  return colorFromRamp(usdPerHa, LAND_USD_HA_RAMP);
+}
+
+function landColor(relativeIndexOrUsd) {
+  if (!Number.isFinite(relativeIndexOrUsd)) return null;
+  // Absolute USD/ha values are >> 1; relative screening index stays in [0, 1].
+  if (relativeIndexOrUsd > 1.5) return landColorUsdPerHa(relativeIndexOrUsd);
+  return colorFromRamp(relativeIndexOrUsd, LAND_VALUE_RAMP);
+}
+
+function landChoroplethStyle(feature, bundle = getLandPricesBundle()) {
+  const id = feature?.properties?.id;
+  const record = landPriceById(id, bundle);
+  if (!record || !Number.isFinite(record.usdPerHa) || !(record.usdPerHa > 0)) {
+    return {
+      fillColor: '#000000',
+      fillOpacity: 0,
+      color: '#445566',
+      weight: 0.4,
+      opacity: 0.25,
+    };
+  }
+  return {
+    fillColor: landColorUsdPerHa(record.usdPerHa),
+    fillOpacity: 0.72,
+    color: '#1b4332',
+    weight: 0.6,
+    opacity: 0.55,
+  };
 }
 
 function waterScreeningColor(bandOrScore) {
@@ -699,6 +791,7 @@ return {
   COLORMAP_LAYER_IDS,
   GSA_GHI_RAMP,
   GSA_IRRAD,
+  LAND_USD_HA_RAMP,
   LAND_VALUE_RAMP,
   haToRadiusM,
   circlePolygon,
@@ -717,6 +810,12 @@ return {
   gsaTileBounds,
   gsaCoveringTiles,
   sampleGsaDecoded,
+  getLandPricesBundle,
+  getLandAdminGeoJSON,
+  landPriceIndex,
+  landPriceById,
+  landColorUsdPerHa,
+  landChoroplethStyle,
   landColor,
   landIndexAt,
   waterScreeningColor,

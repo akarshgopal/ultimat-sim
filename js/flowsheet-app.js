@@ -2263,7 +2263,43 @@
     if (siteMapOverlays.water) showSiteMapLayer('water');
   }
 
+  function ensureLandChoropleth() {
+    if (!siteMap || typeof L === 'undefined' || !MapSite) return;
+    if (siteMapOverlays.land) {
+      showSiteMapLayer('land');
+      return;
+    }
+    const geojson = MapSite.getLandAdminGeoJSON?.() || globalThis.LAND_ADMIN_GEOJSON;
+    const prices = MapSite.getLandPricesBundle?.() || globalThis.LAND_PRICES;
+    if (!geojson?.features?.length) {
+      siteMapStatus('Land admin polygons missing; land choropleth unavailable.');
+      return;
+    }
+    const layer = L.geoJSON(geojson, {
+      style(feature) {
+        return MapSite.landChoroplethStyle(feature, prices);
+      },
+      onEachFeature(feature, lyr) {
+        const id = feature?.properties?.id;
+        const record = MapSite.landPriceById?.(id, prices);
+        const name = feature?.properties?.name || id || 'Unknown';
+        if (record) {
+          const usd = Math.round(record.usdPerHa).toLocaleString('en-US');
+          const src = record.source || 'official agricultural land value';
+          lyr.bindPopup(`${name}<br><strong>$${usd}/ha</strong> (${record.year})<br><small>${src}</small>`);
+        } else {
+          lyr.bindPopup(`${name}<br><small>No published agricultural land value in the bundled sources</small>`);
+        }
+      },
+      pane: 'overlayPane',
+      className: 'site-map-land-choropleth',
+    });
+    siteMapOverlays.land = layer;
+    showSiteMapLayer('land');
+  }
+
   function updateSiteMapLegend() {
+
     const el = document.getElementById('siteMapLegend');
     if (!el) return;
     const active = COLORMAP_IDS.find(id => siteMapEnabled[id]);
@@ -2296,6 +2332,25 @@
       }
       if (labels) labels.innerHTML = '';
       if (citeEl) citeEl.innerHTML = layerCiteHtml(source);
+    } else if (active === 'land') {
+      if (title) title.textContent = 'Ag land value USD/ha (official stats)';
+      const stops = MapSite.LAND_USD_HA_RAMP || source?.legend || [];
+      if (ramp) {
+        ramp.className = 'site-map-legend-ramp is-continuous';
+        const colors = Array.isArray(stops[0]) ? stops.map(([, color]) => color) : stops.map(item => item.color);
+        ramp.innerHTML = colors.map(color => `<span style="background:${color}"></span>`).join('');
+      }
+      if (labels) {
+        labels.innerHTML = '<span>$2k</span><span>$10k</span><span>$40k</span><span>$80k+</span>';
+      }
+      if (citeEl) {
+        const cites = source?.cites || [];
+        if (cites.length) {
+          citeEl.innerHTML = cites.map(c => (c.url ? `<a href="${c.url}" target="_blank" rel="noreferrer">${c.label}</a>` : c.label)).join(' · ');
+        } else {
+          citeEl.innerHTML = layerCiteHtml(source);
+        }
+      }
     }
   }
 
@@ -2387,10 +2442,7 @@
       }
       if (siteMapEnabled.pvgis && MapSite) ensureSolarColormap();
       else if (siteMapEnabled.water && MapSite) ensureWaterColormap();
-      if (siteMapEnabled.land) {
-        siteMapEnabled.land = false;
-        hideSiteMapLayer('land');
-      }
+      else if (siteMapEnabled.land && MapSite) ensureLandChoropleth();
       updateSiteMapLegend();
     } catch {
       siteMapStatus('Colormap overlay failed. Coordinates, footprint, and network markers still work.');

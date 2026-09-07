@@ -43,22 +43,39 @@ const WATER_BODIES = Object.freeze([
   { id: 'great-lakes', name: 'North American Great Lakes', kind: 'freshwater', latitude: 45.0, longitude: -83.0, radiusKm: 350 },
 ]);
 
-const COLORMAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
+const COLORMAP_LAYER_IDS = Object.freeze(['pvgis', 'water']);
 
-// GSA / Solargis DNI-style ramp (kWh/m²·day). Used for the screening GHI colormap.
+// GSA / Solargis-style ramp for annual GHI (kWh/m²·year). Stops ≈ daily 0–10 × 365.
 const GSA_GHI_RAMP = Object.freeze([
   Object.freeze([0, '#394b68']),
-  Object.freeze([1, '#2c7bb6']),
-  Object.freeze([2, '#00a6ca']),
-  Object.freeze([3, '#00ccbc']),
-  Object.freeze([4, '#90eb9d']),
-  Object.freeze([5, '#ffff8c']),
-  Object.freeze([6, '#f9d057']),
-  Object.freeze([7, '#f29e2e']),
-  Object.freeze([8, '#e76818']),
-  Object.freeze([9, '#d7191c']),
-  Object.freeze([10, '#c51b7d']),
+  Object.freeze([365, '#2c7bb6']),
+  Object.freeze([730, '#00a6ca']),
+  Object.freeze([1095, '#00ccbc']),
+  Object.freeze([1460, '#90eb9d']),
+  Object.freeze([1825, '#ffff8c']),
+  Object.freeze([2190, '#f9d057']),
+  Object.freeze([2555, '#f29e2e']),
+  Object.freeze([2920, '#e76818']),
+  Object.freeze([3285, '#d7191c']),
+  Object.freeze([3650, '#c51b7d']),
 ]);
+
+// Global Solar Atlas GSA_IRRAD ImageServer (geographic LERC2D cache, not Web Mercator).
+const GSA_IRRAD = Object.freeze({
+  sliceId: 2,
+  variable: 'GHI',
+  units: 'kWh/m²·year',
+  minValue: 112,
+  maxValue: 3013,
+  tileSize: 256,
+  maxZoom: 8,
+  latMin: -60,
+  latMax: 65,
+  originX: -180,
+  originY: 65,
+  resolutions: Object.freeze([0.64, 0.32, 0.16, 0.08, 0.04, 0.02, 0.01, 0.005, 0.0025]),
+  tileUrl: 'https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/GSA_IRRAD/ImageServer/tile/{z}/{y}/{x}?sliceId=2',
+});
 
 // Pale → dark green land-cost index. Not cadastral, not a sale price.
 const LAND_VALUE_RAMP = Object.freeze([
@@ -88,18 +105,22 @@ const LAYER_SOURCES = Object.freeze({
     id: 'pvgis',
     label: 'Solar GHI',
     kind: 'overlay',
-    quality: 'screening',
-    render: 'colormap',
+    quality: 'cited',
+    render: 'lerc-tiles',
     colormap: 'gsa-ghi',
-    data: 'data/ghi-coarse.json',
-    url: 'https://re.jrc.ec.europa.eu/pvg_tools/en/',
+    tileScheme: 'gsa-geographic',
+    sliceId: GSA_IRRAD.sliceId,
+    variable: GSA_IRRAD.variable,
+    units: GSA_IRRAD.units,
+    url: GSA_IRRAD.tileUrl,
+    maxNativeZoom: GSA_IRRAD.maxZoom,
     api: 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat={lat}&lon={lon}&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json',
     cite: Object.freeze({
-      label: 'JRC PVGIS',
+      label: 'JRC PVGIS (hourly site fetch on Apply location)',
       url: 'https://re.jrc.ec.europa.eu/pvg_tools/en/',
     }),
     overlayCite: Object.freeze({
-      label: 'GHI colormap after Global Solar Atlas / Solargis. Screening field, not the GSA raster.',
+      label: 'Annual GHI from Global Solar Atlas (World Bank ESMAP / Solargis) via GSA_IRRAD LERC tiles',
       url: 'https://globalsolaratlas.info/',
     }),
   }),
@@ -128,12 +149,13 @@ const LAYER_SOURCES = Object.freeze({
     id: 'land',
     label: 'Land value',
     kind: 'overlay',
-    quality: 'screening',
-    render: 'choropleth',
-    colormap: 'pale-dark-green',
+    quality: 'unavailable',
+    available: false,
+    render: 'none',
+    note: 'No public key-free cadastral or farmland price raster is wired. The prior landIndexAt heuristic choropleth was removed — it was not a price map.',
     url: 'https://www.worldbank.org/en/topic/land',
     cite: Object.freeze({
-      label: 'Screening land-cost index (not cadastral / not transaction data)',
+      label: 'Land value overlay unavailable (no key-free public price raster wired)',
       url: 'https://www.worldbank.org/en/topic/land',
     }),
   }),
@@ -462,6 +484,7 @@ function rainforestCut(lat, lon) {
 }
 
 function ghiScreeningKWh(latitude, longitude) {
+  // Approximate annual GHI (kWh/m²·year) for offline triage only — not the GSA raster.
   const coords = coordsFrom(latitude, longitude);
   if (!Number.isFinite(coords.latitude) || coords.latitude < -90 || coords.latitude > 90) return null;
   const absLat = Math.abs(coords.latitude);
@@ -476,79 +499,117 @@ function ghiScreeningKWh(latitude, longitude) {
   else cloud = 0.48;
   const lon = Number.isFinite(coords.longitude) ? coords.longitude : 0;
   const regional = 1 + desertBoost(coords.latitude, lon) - rainforestCut(coords.latitude, lon);
-  return clamp(6.6 * (zenith ** 0.85) * cloud * regional, 0.7, 8.4);
-}
-
-let ghiGridCache;
-
-function getGhiGrid() {
-  if (ghiGridCache !== undefined) return ghiGridCache;
-  if (globalThis.GHI_COARSE && Array.isArray(globalThis.GHI_COARSE.values)) {
-    ghiGridCache = globalThis.GHI_COARSE;
-    return ghiGridCache;
-  }
-  if (typeof require === 'function') {
-    try {
-      const loaded = require('../data/ghi-coarse.json');
-      if (loaded && Array.isArray(loaded.values)) {
-        ghiGridCache = loaded;
-        return ghiGridCache;
-      }
-    } catch { /* formula fallback */ }
-  }
-  ghiGridCache = null;
-  return null;
+  const daily = clamp(6.6 * (zenith ** 0.85) * cloud * regional, 0.7, 8.4);
+  return daily * 365;
 }
 
 function ghiAt(latitude, longitude) {
-  const coords = coordsFrom(latitude, longitude);
-  if (!Number.isFinite(coords.latitude) || coords.latitude < -90 || coords.latitude > 90) return null;
-  const grid = getGhiGrid();
-  if (!grid?.values?.length) return ghiScreeningKWh(coords);
-
-  const cellDeg = finiteNumber(grid.cellDeg, 2);
-  const ncols = Math.round(finiteNumber(grid.ncols, 180));
-  const nrows = Math.round(finiteNumber(grid.nrows, 60));
-  const scale = finiteNumber(grid.scale, 10) || 10;
-  const west = finiteNumber(grid.west, -180);
-  const north = finiteNumber(grid.north, 60);
-  const originLon = west + cellDeg / 2;
-  const originLat = north - cellDeg / 2;
-  let lon = coords.longitude;
-  if (!Number.isFinite(lon)) return ghiScreeningKWh(coords);
-  while (lon < -180) lon += 360;
-  while (lon >= 180) lon -= 360;
-
-  const fx = (lon - originLon) / cellDeg;
-  const fy = (originLat - coords.latitude) / cellDeg;
-  const x0 = Math.floor(fx);
-  const y0 = Math.floor(fy);
-  const tx = fx - x0;
-  const ty = fy - y0;
-
-  function sample(ix, iy) {
-    if (iy < 0 || iy >= nrows) return null;
-    const wrapped = ((ix % ncols) + ncols) % ncols;
-    const packed = grid.values[iy * ncols + wrapped];
-    if (!Number.isFinite(packed)) return null;
-    return packed / scale;
-  }
-
-  const v00 = sample(x0, y0);
-  const v10 = sample(x0 + 1, y0);
-  const v01 = sample(x0, y0 + 1);
-  const v11 = sample(x0 + 1, y0 + 1);
-  const present = [v00, v10, v01, v11].filter(value => value != null);
-  if (!present.length) return ghiScreeningKWh(coords);
-  const a = v00 ?? present[0];
-  const b = v10 ?? a;
-  const c = v01 ?? a;
-  const d = v11 ?? b;
-  return (1 - tx) * (1 - ty) * a + tx * (1 - ty) * b + (1 - tx) * ty * c + tx * ty * d;
+  return ghiScreeningKWh(latitude, longitude);
 }
 
-function ghiColor(kwhPerM2Day) {
-  return colorFromRamp(kwhPerM2Day, GSA_GHI_RAMP);
+function ghiColor(annualKwhPerM2) {
+  return colorFromRamp(annualKwhPerM2, GSA_GHI_RAMP);
+}
+
+function ghiColorRgb(annualKwhPerM2) {
+  const color = ghiColor(annualKwhPerM2);
+  if (!color) return null;
+  if (color.startsWith('rgb')) {
+    const parts = color.match(/\d+/g);
+    if (!parts || parts.length < 3) return null;
+    return [Number(parts[0]), Number(parts[1]), Number(parts[2])];
+  }
+  return parseHexColor(color);
+}
+
+function gsaResolution(z) {
+  const zoom = Math.max(0, Math.min(GSA_IRRAD.maxZoom, Math.round(finiteNumber(z, 0))));
+  return GSA_IRRAD.resolutions[zoom];
+}
+
+function gsaZoomForMapZoom(mapZoom, latitude = 0) {
+  const z = Math.max(0, finiteNumber(mapZoom, 0));
+  const latRad = clamp(finiteNumber(latitude, 0), -85, 85) * Math.PI / 180;
+  const metersPerPx = 156543.03392 * Math.cos(latRad) / (2 ** z);
+  const degPerPx = metersPerPx / METERS_PER_DEG_LAT;
+  let bestZ = 0;
+  let bestDiff = Infinity;
+  for (let level = 0; level <= GSA_IRRAD.maxZoom; level += 1) {
+    const diff = Math.abs(Math.log(Math.max(gsaResolution(level), 1e-12) / Math.max(degPerPx, 1e-12)));
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestZ = level;
+    }
+  }
+  return bestZ;
+}
+
+function gsaTileXY(latitude, longitude, z) {
+  const zoom = Math.max(0, Math.min(GSA_IRRAD.maxZoom, Math.round(finiteNumber(z, 0))));
+  const res = gsaResolution(zoom);
+  const tileDeg = GSA_IRRAD.tileSize * res;
+  let lon = finiteNumber(longitude);
+  const lat = finiteNumber(latitude);
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  if (lat < GSA_IRRAD.latMin || lat > GSA_IRRAD.latMax) return null;
+  while (lon < -180) lon += 360;
+  while (lon >= 180) lon -= 360;
+  const x = Math.floor((lon - GSA_IRRAD.originX) / tileDeg);
+  const y = Math.floor((GSA_IRRAD.originY - lat) / tileDeg);
+  if (x < 0 || y < 0) return null;
+  return { z: zoom, x, y, res, tileDeg };
+}
+
+function gsaTileBounds(z, tileY, tileX) {
+  const res = gsaResolution(z);
+  const tileDeg = GSA_IRRAD.tileSize * res;
+  const west = GSA_IRRAD.originX + tileX * tileDeg;
+  const north = GSA_IRRAD.originY - tileY * tileDeg;
+  return {
+    west,
+    east: west + tileDeg,
+    north,
+    south: north - tileDeg,
+    res,
+  };
+}
+
+function gsaCoveringTiles(south, west, north, east, z) {
+  const zoom = Math.max(0, Math.min(GSA_IRRAD.maxZoom, Math.round(finiteNumber(z, 0))));
+  const res = gsaResolution(zoom);
+  const tileDeg = GSA_IRRAD.tileSize * res;
+  const s = Math.max(GSA_IRRAD.latMin, finiteNumber(south));
+  const n = Math.min(GSA_IRRAD.latMax, finiteNumber(north));
+  let w = finiteNumber(west);
+  let e = finiteNumber(east);
+  if (![s, n, w, e].every(Number.isFinite) || !(n > s) || !(e > w)) return [];
+  while (w < -180) { w += 360; e += 360; }
+  while (w >= 180) { w -= 360; e -= 360; }
+  const x0 = Math.max(0, Math.floor((w - GSA_IRRAD.originX) / tileDeg));
+  const x1 = Math.max(0, Math.floor(((Math.min(e, 180) - GSA_IRRAD.originX) / tileDeg)));
+  const y0 = Math.max(0, Math.floor((GSA_IRRAD.originY - n) / tileDeg));
+  const y1 = Math.max(0, Math.floor((GSA_IRRAD.originY - s) / tileDeg));
+  const tiles = [];
+  for (let y = y0; y <= y1; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      tiles.push({ z: zoom, y, x });
+    }
+  }
+  return tiles;
+}
+
+function sampleGsaDecoded(decoded, z, tileY, tileX, latitude, longitude) {
+  if (!decoded?.pixels?.[0]) return null;
+  const bounds = gsaTileBounds(z, tileY, tileX);
+  const res = bounds.res;
+  const px = Math.floor((longitude - bounds.west) / res);
+  const py = Math.floor((bounds.north - latitude) / res);
+  if (px < 0 || py < 0 || px >= GSA_IRRAD.tileSize || py >= GSA_IRRAD.tileSize) return null;
+  const i = py * GSA_IRRAD.tileSize + px;
+  if (decoded.mask && !decoded.mask[i]) return null;
+  const value = decoded.pixels[0][i];
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
 }
 
 function landColor(relativeIndex) {
@@ -637,6 +698,7 @@ return {
   LAYER_SOURCES,
   COLORMAP_LAYER_IDS,
   GSA_GHI_RAMP,
+  GSA_IRRAD,
   LAND_VALUE_RAMP,
   haToRadiusM,
   circlePolygon,
@@ -648,6 +710,13 @@ return {
   ghiScreeningKWh,
   ghiAt,
   ghiColor,
+  ghiColorRgb,
+  gsaResolution,
+  gsaZoomForMapZoom,
+  gsaTileXY,
+  gsaTileBounds,
+  gsaCoveringTiles,
+  sampleGsaDecoded,
   landColor,
   landIndexAt,
   waterScreeningColor,

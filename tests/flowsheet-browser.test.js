@@ -18,7 +18,7 @@ test('root chrome exposes four tabs and keeps Network copy without Empire', () =
   assert.match(html, /id="sitePreset"/);
   assert.match(html, /id="siteMapLegend"/);
   assert.match(html, /data\/site-presets\.js/);
-  assert.match(html, /data\/ghi-coarse\.js/);
+  assert.match(html, /vendor\/LercDecode\.js/);
   assert.ok(html.indexOf('data/site-presets.js') < html.indexOf('js/flowsheet-app.js'));
-  assert.ok(html.indexOf('data/ghi-coarse.js') < html.indexOf('js/flowsheet-app.js'));
+  assert.ok(html.indexOf('vendor/LercDecode.js') < html.indexOf('js/flowsheet-app.js'));
 });

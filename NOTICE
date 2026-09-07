@@ -13,3 +13,8 @@ Copyright (c) 2026 Akarsh Gopal (water-systems loop and ultimat-sim packaging)
 It is not a GitHub fork of that project (this repo was created empty and the
 source was copied locally), and it is not affiliated with Terraform Industries.
 The MIT license and Ben Schrauwen's copyright notice are retained as required.
+
+Third-party notices
+-------------------
+Esri lerc (vendor/LercDecode.js, vendor/lerc-wasm.wasm) is licensed under the Apache License, Version 2.0.
+See https://github.com/Esri/lerc and vendor/README.md.

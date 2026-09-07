@@ -7,6 +7,7 @@ const {
   LAYER_SOURCES,
   COLORMAP_LAYER_IDS,
   GSA_GHI_RAMP,
+  GSA_IRRAD,
   LAND_VALUE_RAMP,
   haToRadiusM,
   circlePolygon,
@@ -16,13 +17,17 @@ const {
   networkPlantMarkers,
   ghiAt,
   ghiColor,
+  ghiColorRgb,
+  gsaZoomForMapZoom,
+  gsaTileXY,
+  gsaCoveringTiles,
+  sampleGsaDecoded,
   landColor,
   landIndexAt,
   waterScreeningColor,
   isDeepOceanScreening,
   webMercatorToLatLng,
 } = require('../engine/map-site');
-const ghiCoarse = require('../data/ghi-coarse.json');
 
 test('waterAvailabilityScreening keeps coastal seawater, Dead Sea brine, and inland arid/fresh bands', () => {
   const almeria = waterAvailabilityScreening(36.834, -2.463);
@@ -67,14 +72,12 @@ test('pvScreeningBand is a latitude screen, not a PVGIS hourly series', () => {
   assert.equal(pvScreeningBand(NaN).band, 'unknown');
 });
 
-test('landValueScreening is a coastal / inland / arid land-cost screen', () => {
+test('landValueScreening remains a helper but land overlay is unavailable', () => {
   const almeria = landValueScreening(36.834, -2.463);
   assert.equal(almeria.quality, 'screening');
   assert.equal(almeria.band, 'coastal-high');
   assert.ok(almeria.relativeIndex > 0.6);
-  assert.match(almeria.cite.label, /not cadastral|not transaction/i);
-  assert.match(almeria.cite.url, /worldbank|fao/i);
-  assert.match(almeria.note, /coastal|not a cadastral/i);
+  assert.match(almeria.cite.label, /not cadastral|not transaction|unavailable/i);
 
   const sahara = landValueScreening(23, 10);
   assert.equal(sahara.band, 'arid-low');
@@ -88,24 +91,27 @@ test('landValueScreening is a coastal / inland / arid land-cost screen', () => {
   const bad = landValueScreening(120, 0);
   assert.equal(bad.band, 'unknown');
   assert.equal(bad.relativeIndex, 0);
+
+  assert.equal(LAYER_SOURCES.land.available, false);
+  assert.equal(LAYER_SOURCES.land.render, 'none');
+  assert.equal(LAYER_SOURCES.land.quality, 'unavailable');
+  assert.match(LAYER_SOURCES.land.note, /removed|unavailable|not a price map/i);
 });
 
-test('LAYER_SOURCES describes solar/water/land map-filling colormaps', () => {
-  assert.deepEqual([...COLORMAP_LAYER_IDS], ['pvgis', 'water', 'land']);
-  assert.equal(LAYER_SOURCES.land.id, 'land');
-  assert.equal(LAYER_SOURCES.land.label, 'Land value');
-  assert.equal(LAYER_SOURCES.land.kind, 'overlay');
-  assert.equal(LAYER_SOURCES.land.quality, 'screening');
-  assert.equal(LAYER_SOURCES.land.render, 'choropleth');
-  assert.match(LAYER_SOURCES.land.colormap, /green/i);
-  assert.match(LAYER_SOURCES.land.cite.label, /not cadastral|not transaction/i);
-  assert.ok(LAYER_SOURCES.land.cite.url === null || /worldbank|fao/i.test(LAYER_SOURCES.land.cite.url));
-
+test('LAYER_SOURCES describes cited GSA LERC solar and Aqueduct water', () => {
+  assert.deepEqual([...COLORMAP_LAYER_IDS], ['pvgis', 'water']);
   assert.equal(LAYER_SOURCES.pvgis.label, 'Solar GHI');
-  assert.equal(LAYER_SOURCES.pvgis.render, 'colormap');
-  assert.equal(LAYER_SOURCES.pvgis.quality, 'screening');
-  assert.match(LAYER_SOURCES.pvgis.data, /ghi-coarse/);
-  assert.match(LAYER_SOURCES.pvgis.overlayCite.label, /Global Solar Atlas|Solargis/i);
+  assert.equal(LAYER_SOURCES.pvgis.render, 'lerc-tiles');
+  assert.equal(LAYER_SOURCES.pvgis.quality, 'cited');
+  assert.equal(LAYER_SOURCES.pvgis.sliceId, 2);
+  assert.equal(LAYER_SOURCES.pvgis.variable, 'GHI');
+  assert.match(LAYER_SOURCES.pvgis.units, /kWh\/m²·year|kWh\/m\u00b2·year/);
+  assert.match(LAYER_SOURCES.pvgis.url, /GSA_IRRAD/);
+  assert.match(LAYER_SOURCES.pvgis.url, /sliceId=2/);
+  assert.match(LAYER_SOURCES.pvgis.url, /\{z\}\/\{y\}\/\{x\}/);
+  assert.doesNotMatch(LAYER_SOURCES.pvgis.url || '', /ghi-coarse/);
+  assert.equal(LAYER_SOURCES.pvgis.data, undefined);
+  assert.match(LAYER_SOURCES.pvgis.overlayCite.label, /Global Solar Atlas|Solargis|ESMAP/i);
   assert.match(LAYER_SOURCES.pvgis.overlayCite.url, /globalsolaratlas/i);
   assert.match(LAYER_SOURCES.pvgis.cite.url, /pvg_tools|jrc\.ec\.europa\.eu/);
 
@@ -127,34 +133,43 @@ test('LAYER_SOURCES describes solar/water/land map-filling colormaps', () => {
   }
 });
 
-test('bundled GHI coarse grid is a screening field with GSA-like regional order', () => {
-  assert.equal(ghiCoarse.quality, 'screening');
-  assert.equal(ghiCoarse.ncols * ghiCoarse.nrows, ghiCoarse.values.length);
-  assert.match(ghiCoarse.note, /not the Global Solar Atlas raster/i);
-  const atacama = ghiAt(-24, -70);
-  const sahara = ghiAt(23, 10);
-  const amazon = ghiAt(3, -60);
-  const oslo = ghiAt(59.9, 10.8);
-  const almeria = ghiAt(36.834, -2.463);
-  assert.ok(atacama > sahara);
-  assert.ok(sahara > amazon);
-  assert.ok(amazon > oslo);
-  assert.ok(almeria > oslo);
-  assert.ok(oslo < 3.2);
-  assert.ok(atacama > 7);
-  assert.equal(ghiAt(NaN), null);
+test('GSA annual ramp and geographic tile helpers', () => {
+  assert.equal(GSA_IRRAD.sliceId, 2);
+  assert.equal(GSA_IRRAD.variable, 'GHI');
   assert.equal(GSA_GHI_RAMP.length, 11);
-  const cool = ghiColor(2);
-  const hot = ghiColor(8);
-  assert.match(cool, /rgb\(/);
-  assert.match(hot, /rgb\(/);
-  const coolParts = cool.match(/\d+/g).map(Number);
-  const hotParts = hot.match(/\d+/g).map(Number);
-  assert.ok(coolParts[2] > coolParts[0], 'low GHI is blue/cyan');
-  assert.ok(hotParts[0] > hotParts[2], 'high GHI is orange/red');
+  assert.equal(GSA_GHI_RAMP[1][0], 365);
+  assert.equal(ghiAt(NaN), null);
+  const cool = ghiColor(700);
+  const hot = ghiColor(2800);
+  assert.match(cool, /rgb\(|#/);
+  assert.match(hot, /rgb\(|#/);
+  const coolRgb = ghiColorRgb(700);
+  const hotRgb = ghiColorRgb(2800);
+  assert.ok(coolRgb[2] > coolRgb[0], 'low annual GHI is blue/cyan');
+  assert.ok(hotRgb[0] > hotRgb[2], 'high annual GHI is orange/red');
+
+  const alm = gsaTileXY(36.834, -2.463, 6);
+  assert.deepEqual({ z: alm.z, y: alm.y, x: alm.x }, { z: 6, y: 11, x: 69 });
+  const covers = gsaCoveringTiles(36, -3, 37, -2, 6);
+  assert.ok(covers.some(t => t.y === 11 && t.x === 69));
+  assert.ok(gsaZoomForMapZoom(10, 36) >= 0);
+  assert.ok(gsaZoomForMapZoom(10, 36) <= 8);
+  assert.ok(ghiAt(23, 10) > ghiAt(59.9, 10.8));
 });
 
-test('land choropleth is pale-to-dark green and skips deep ocean', () => {
+test('vendored Lerc decodes a GSA GHI fixture tile', async () => {
+  const Lerc = require('../vendor/LercDecode.js');
+  await Lerc.load({ locateFile: file => path.join(__dirname, '..', 'vendor', file) });
+  const fixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'gsa-ghi-almeria-z6.lerc'));
+  const decoded = Lerc.decode(fixture);
+  assert.equal(decoded.width, 256);
+  assert.equal(decoded.height, 256);
+  assert.equal(decoded.pixelType, 'U16');
+  const value = sampleGsaDecoded(decoded, 6, 11, 69, 36.834, -2.463);
+  assert.ok(value > 1500 && value < 2300, `Almería annual GHI should be ~1871, got ${value}`);
+});
+
+test('land choropleth helpers remain but deep ocean skip still works', () => {
   const pale = landColor(0.15);
   const dark = landColor(0.9);
   const paleParts = pale.match(/\d+/g).map(Number);
@@ -181,7 +196,7 @@ test('web mercator helper and footprint circle stay available', () => {
   assert.equal(markers.length, 1);
 });
 
-test('site map solar/water/land overlays are colormaps, not L.circle rings', () => {
+test('site map solar overlay uses GSA LERC, not ghi-coarse or land GridLayer', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
@@ -189,13 +204,22 @@ test('site map solar/water/land overlays are colormaps, not L.circle rings', () 
   assert.doesNotMatch(app, /radius:\s*22000/);
   assert.doesNotMatch(app, /radius:\s*30000/);
   assert.match(app, /GridLayer/);
+  assert.match(app, /GSA_IRRAD|gsaTileUrl|paintGsaIrradTile|createGsaIrradLayer/);
+  assert.match(app, /sliceId/);
+  assert.match(app, /Lerc\.(load|decode)/);
   assert.match(app, /gis6\.uspatial\.umn\.edu/);
   assert.match(app, /\{z\}\/\{y\}\/\{x\}/);
   assert.match(app, /COLORMAP_IDS|COLORMAP_LAYER_IDS/);
   assert.match(app, /updateSiteMapLegend/);
+  assert.doesNotMatch(app, /ensureLandColormap/);
+  assert.doesNotMatch(app, /landIndexAt\(lat,\s*lon\)/);
+  assert.doesNotMatch(app, /ghi-coarse/);
   assert.match(html, /id="siteMapLegend"/);
-  assert.match(html, /data\/ghi-coarse\.js/);
-  assert.ok(html.indexOf('data/ghi-coarse.js') < html.indexOf('js/flowsheet-app.js'));
+  assert.match(html, /vendor\/LercDecode\.js/);
+  assert.doesNotMatch(html, /ghi-coarse/);
+  assert.ok(html.indexOf('vendor/LercDecode.js') < html.indexOf('js/flowsheet-app.js'));
   assert.match(css, /\.site-map-legend/);
   assert.match(css, /\.site-map-legend-ramp/);
+  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'data', 'ghi-coarse.json')));
+  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'data', 'ghi-coarse.js')));
 });

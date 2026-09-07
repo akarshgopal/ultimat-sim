@@ -1969,6 +1969,7 @@
     const ids = order.filter(id => sources[id]).concat(Object.keys(sources).filter(id => !order.includes(id)));
     el.innerHTML = ids.map(id => {
       const source = sources[id];
+      if (source.available === false) return '';
       const ui = MAP_LAYER_UI[id] || { label: source.label, tone: id };
       const checked = siteMapEnabled[id] ? ' checked' : '';
       const citeText = source.cite?.label || '';
@@ -2107,14 +2108,140 @@
     });
   }
 
+  let lercLoadPromise = null;
+  const gsaTileCache = new Map();
+
+  function ensureLercLoaded() {
+    if (typeof Lerc === 'undefined' || typeof Lerc.load !== 'function') {
+      return Promise.reject(new Error('Lerc decoder unavailable'));
+    }
+    if (Lerc.isLoaded?.()) return Promise.resolve();
+    if (!lercLoadPromise) {
+      lercLoadPromise = Lerc.load({
+        locateFile(fileName, scriptDir) {
+          if (scriptDir) return `${scriptDir}${fileName}`;
+          return `vendor/${fileName}`;
+        },
+      }).catch(err => {
+        lercLoadPromise = null;
+        throw err;
+      });
+    }
+    return lercLoadPromise;
+  }
+
+  function gsaTileUrl(z, y, x) {
+    const template = MapSite?.LAYER_SOURCES?.pvgis?.url || MapSite?.GSA_IRRAD?.tileUrl
+      || 'https://tiledimageservices.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/GSA_IRRAD/ImageServer/tile/{z}/{y}/{x}?sliceId=2';
+    return template.replace('{z}', z).replace('{y}', y).replace('{x}', x);
+  }
+
+  function fetchGsaLercTile(z, y, x) {
+    const key = `${z}/${y}/${x}`;
+    if (gsaTileCache.has(key)) return gsaTileCache.get(key);
+    const pending = (async () => {
+      try {
+        await ensureLercLoaded();
+        const response = await fetch(gsaTileUrl(z, y, x));
+        if (!response.ok) return null;
+        const buffer = await response.arrayBuffer();
+        if (!buffer || !buffer.byteLength) return null;
+        return Lerc.decode(buffer);
+      } catch {
+        return null;
+      }
+    })();
+    gsaTileCache.set(key, pending);
+    if (gsaTileCache.size > 96) {
+      const first = gsaTileCache.keys().next().value;
+      gsaTileCache.delete(first);
+    }
+    return pending;
+  }
+
+  async function paintGsaIrradTile(canvas, coords) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || !MapSite) return;
+    const width = canvas.width;
+    const height = canvas.height;
+    const nw = latLngForColormapTile(coords, 0, 0, width);
+    const se = latLngForColormapTile(coords, width, height, width);
+    const north = Math.max(nw.latitude, se.latitude);
+    const south = Math.min(nw.latitude, se.latitude);
+    const west = Math.min(nw.longitude, se.longitude);
+    const east = Math.max(nw.longitude, se.longitude);
+    const midLat = (north + south) / 2;
+    if (north < (MapSite.GSA_IRRAD?.latMin ?? -60) || south > (MapSite.GSA_IRRAD?.latMax ?? 65)) return;
+
+    const gsaZ = MapSite.gsaZoomForMapZoom(coords.z, midLat);
+    const covers = MapSite.gsaCoveringTiles(south, west, north, east, gsaZ);
+    if (!covers.length) return;
+
+    const decodedByKey = new Map();
+    await Promise.all(covers.map(async tile => {
+      const decoded = await fetchGsaLercTile(tile.z, tile.y, tile.x);
+      if (decoded) decodedByKey.set(`${tile.z}/${tile.y}/${tile.x}`, { tile, decoded });
+    }));
+    if (!decodedByKey.size) return;
+
+    const image = ctx.createImageData(width, height);
+    const data = image.data;
+    for (let py = 0; py < height; py += 1) {
+      for (let px = 0; px < width; px += 1) {
+        const ll = latLngForColormapTile(coords, px + 0.5, py + 0.5, width);
+        if (ll.latitude < (MapSite.GSA_IRRAD?.latMin ?? -60) || ll.latitude > (MapSite.GSA_IRRAD?.latMax ?? 65)) continue;
+        const idx = MapSite.gsaTileXY(ll.latitude, ll.longitude, gsaZ);
+        if (!idx) continue;
+        const entry = decodedByKey.get(`${idx.z}/${idx.y}/${idx.x}`);
+        if (!entry) continue;
+        const value = MapSite.sampleGsaDecoded(entry.decoded, idx.z, idx.y, idx.x, ll.latitude, ll.longitude);
+        if (value == null) continue;
+        const rgb = MapSite.ghiColorRgb(value);
+        if (!rgb) continue;
+        const o = (py * width + px) * 4;
+        data[o] = rgb[0];
+        data[o + 1] = rgb[1];
+        data[o + 2] = rgb[2];
+        data[o + 3] = 168;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+
+  function createGsaIrradLayer() {
+    if (typeof L === 'undefined' || typeof L.GridLayer !== 'function') return null;
+    const Layer = L.GridLayer.extend({
+      createTile(coords, done) {
+        const size = this.getTileSize();
+        const canvas = L.DomUtil.create('canvas', 'leaflet-tile');
+        canvas.width = size.x;
+        canvas.height = size.y;
+        paintGsaIrradTile(canvas, coords).then(
+          () => done(null, canvas),
+          () => done(null, canvas),
+        );
+        return canvas;
+      },
+    });
+    return new Layer({
+      pane: 'overlayPane',
+      opacity: 0.85,
+      maxZoom: 19,
+      maxNativeZoom: MapSite?.GSA_IRRAD?.maxZoom || 8,
+      className: 'site-map-colormap site-map-colormap--solar',
+      keepBuffer: 1,
+    });
+  }
+
   function ensureSolarColormap() {
     if (!MapSite) return;
     if (!siteMapOverlays.pvgis) {
-      siteMapOverlays.pvgis = createScreeningColormapLayer(
-        (lat, lon) => MapSite.ghiAt(lat, lon),
-        value => MapSite.ghiColor(value),
-        'site-map-colormap site-map-colormap--solar',
-      );
+      try {
+        siteMapOverlays.pvgis = createGsaIrradLayer();
+      } catch {
+        siteMapOverlays.pvgis = null;
+        siteMapStatus('Global Solar Atlas LERC tiles failed to initialize.');
+      }
     }
     if (siteMapOverlays.pvgis) showSiteMapLayer('pvgis');
   }
@@ -2136,18 +2263,6 @@
     if (siteMapOverlays.water) showSiteMapLayer('water');
   }
 
-  function ensureLandColormap() {
-    if (!MapSite) return;
-    if (!siteMapOverlays.land) {
-      siteMapOverlays.land = createScreeningColormapLayer(
-        (lat, lon) => MapSite.landIndexAt(lat, lon),
-        value => MapSite.landColor(value),
-        'site-map-colormap site-map-colormap--land',
-      );
-    }
-    if (siteMapOverlays.land) showSiteMapLayer('land');
-  }
-
   function updateSiteMapLegend() {
     const el = document.getElementById('siteMapLegend');
     if (!el) return;
@@ -2164,13 +2279,13 @@
     const citeEl = document.getElementById('siteMapLegendCite');
     const source = MapSite.LAYER_SOURCES[active];
     if (active === 'pvgis') {
-      if (title) title.textContent = 'GHI kWh/m²·day (screening)';
+      if (title) title.textContent = 'GHI kWh/m²·year (Global Solar Atlas)';
       const stops = MapSite.GSA_GHI_RAMP || [];
       if (ramp) {
         ramp.className = 'site-map-legend-ramp is-continuous';
         ramp.innerHTML = stops.map(([, color]) => `<span style="background:${color}"></span>`).join('');
       }
-      if (labels) labels.innerHTML = '<span>1</span><span>4</span><span>7</span><span>10</span>';
+      if (labels) labels.innerHTML = '<span>700</span><span>1500</span><span>2200</span><span>3000</span>';
       if (citeEl) citeEl.innerHTML = layerCiteHtml(source?.overlayCite ? { cite: source.overlayCite } : source);
     } else if (active === 'water') {
       if (title) title.textContent = 'Baseline water stress';
@@ -2180,15 +2295,6 @@
         ramp.innerHTML = items.map(item => `<span class="site-map-legend-swatch"><i style="background:${item.color}"></i>${item.label}</span>`).join('');
       }
       if (labels) labels.innerHTML = '';
-      if (citeEl) citeEl.innerHTML = layerCiteHtml(source);
-    } else if (active === 'land') {
-      if (title) title.textContent = 'Relative land-cost index (screening)';
-      const stops = MapSite.LAND_VALUE_RAMP || [];
-      if (ramp) {
-        ramp.className = 'site-map-legend-ramp is-continuous';
-        ramp.innerHTML = stops.map(([, color]) => `<span style="background:${color}"></span>`).join('');
-      }
-      if (labels) labels.innerHTML = '<span>low</span><span>high</span>';
       if (citeEl) citeEl.innerHTML = layerCiteHtml(source);
     }
   }
@@ -2281,7 +2387,10 @@
       }
       if (siteMapEnabled.pvgis && MapSite) ensureSolarColormap();
       else if (siteMapEnabled.water && MapSite) ensureWaterColormap();
-      else if (siteMapEnabled.land && MapSite) ensureLandColormap();
+      if (siteMapEnabled.land) {
+        siteMapEnabled.land = false;
+        hideSiteMapLayer('land');
+      }
       updateSiteMapLegend();
     } catch {
       siteMapStatus('Colormap overlay failed. Coordinates, footprint, and network markers still work.');

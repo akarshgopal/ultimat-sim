@@ -185,7 +185,7 @@ test('site panel reports location-aware footprint instead of 1.6 ha/MWp', () => 
   assert.doesNotMatch(horizon, /1\.6 ha\/MWp/);
   assert.match(metrics, /GCR/);
   assert.match(metrics, /Solar land/);
-  assert.match(note, /orders of magnitude|order-of-magnitude screening/);
+  assert.match(note, /cited or screening intensities|orders of magnitude|order-of-magnitude screening|panel area/i);
   assert.equal(context.__elements.get('siteFootprint').hidden, false);
   assert.match(context.__elements.get('siteFootprintPads').innerHTML, /Electrolyzer|DAC|Sabatier|SWRO/i);
 });

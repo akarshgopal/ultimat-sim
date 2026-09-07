@@ -761,6 +761,148 @@ function plantSite(plant) {
   return plant?.definition?.site || plant?.site || {};
 }
 
+
+function offsetLatLng(latitude, longitude, eastM, northM) {
+  const coords = coordsFrom(latitude, longitude);
+  if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) {
+    return { latitude: NaN, longitude: NaN };
+  }
+  const latRad = coords.latitude * Math.PI / 180;
+  const metersPerDegLon = Math.max(METERS_PER_DEG_LAT * Math.cos(latRad), 1e-6);
+  return {
+    latitude: coords.latitude + finiteNumber(northM) / METERS_PER_DEG_LAT,
+    longitude: coords.longitude + finiteNumber(eastM) / metersPerDegLon,
+  };
+}
+
+function rectanglePolygon(latitude, longitude, widthM, heightM, eastM = 0, northM = 0) {
+  const width = Math.max(0, finiteNumber(widthM));
+  const height = Math.max(0, finiteNumber(heightM));
+  if (!(width > 0) || !(height > 0)) return [];
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const corners = [
+    [-halfW, -halfH],
+    [halfW, -halfH],
+    [halfW, halfH],
+    [-halfW, halfH],
+    [-halfW, -halfH],
+  ];
+  return corners.map(([de, dn]) => {
+    const point = offsetLatLng(latitude, longitude, eastM + de, northM + dn);
+    return [point.latitude, point.longitude];
+  });
+}
+
+function padFootprintDimensions(areaM2, aspect = 1.25) {
+  const area = Math.max(0, finiteNumber(areaM2));
+  if (!(area > 0)) return { widthM: 0, heightM: 0 };
+  const ratio = Math.max(0.5, finiteNumber(aspect, 1.25));
+  const heightM = Math.sqrt(area / ratio);
+  const widthM = area / heightM;
+  return { widthM, heightM };
+}
+
+// Deterministic campus: solar rectangle north of pin; process pads in a grid to the south.
+function layoutFootprintCampus({ latitude, longitude, solar, processes = [], totalHa, gapM = 24 } = {}) {
+  const coords = coordsFrom(latitude, longitude);
+  if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) return [];
+  const gap = Math.max(4, finiteNumber(gapM, 24));
+  const blocks = [];
+  const solarArea = Math.max(0, finiteNumber(solar?.landAreaM2 ?? solar?.areaM2));
+  if (solarArea > 0) {
+    const dims = padFootprintDimensions(solarArea, 1.6);
+    const northM = gap + dims.heightM / 2;
+    blocks.push({
+      id: 'solar',
+      label: 'Solar field',
+      unit: 'solar-pv',
+      areaM2: solarArea,
+      quality: solar?.quality || 'cited',
+      evidence: solar?.evidence || [],
+      ring: rectanglePolygon(coords.latitude, coords.longitude, dims.widthM, dims.heightM, 0, northM),
+      kind: 'solar',
+    });
+  }
+
+  const pads = [...(processes || [])]
+    .filter(item => finiteNumber(item?.areaM2) > 0)
+    .map(item => ({ ...item }))
+    .sort((a, b) => b.areaM2 - a.areaM2 || String(a.id).localeCompare(String(b.id)));
+
+  const rowBudget = Math.max(
+    60,
+    solarArea > 0
+      ? Math.sqrt(solarArea) * 0.55
+      : Math.max(60, pads.reduce((sum, item) => sum + Math.sqrt(item.areaM2), 0) * 0.5)
+  );
+
+  let cursorEast = 0;
+  let rowIndex = 0;
+  for (const pad of pads) {
+    const dims = padFootprintDimensions(pad.areaM2, 1.2);
+    if (cursorEast > 0 && cursorEast + dims.widthM > rowBudget) {
+      rowIndex += 1;
+      cursorEast = 0;
+    }
+    pad.__widthM = dims.widthM;
+    pad.__heightM = dims.heightM;
+    pad.__row = rowIndex;
+    pad.__eastStart = cursorEast;
+    cursorEast += dims.widthM + gap;
+  }
+
+  const rowHeights = [];
+  for (const pad of pads) {
+    rowHeights[pad.__row] = Math.max(rowHeights[pad.__row] || 0, pad.__heightM);
+  }
+  const rowSouthEdge = [];
+  let southCursor = gap;
+  for (let r = 0; r < rowHeights.length; r += 1) {
+    rowSouthEdge[r] = southCursor;
+    southCursor += (rowHeights[r] || 0) + gap;
+  }
+
+  for (const pad of pads) {
+    const rowPads = pads.filter(item => item.__row === pad.__row);
+    const rowWidth = rowPads.reduce(
+      (sum, item, index) => sum + item.__widthM + (index < rowPads.length - 1 ? gap : 0),
+      0
+    );
+    const eastM = -rowWidth / 2 + pad.__eastStart + pad.__widthM / 2;
+    const northM = -(rowSouthEdge[pad.__row] + pad.__heightM / 2);
+    blocks.push({
+      id: pad.id,
+      label: pad.label,
+      unit: pad.unit,
+      areaM2: pad.areaM2,
+      quality: pad.quality,
+      evidence: pad.evidence || [],
+      ring: rectanglePolygon(coords.latitude, coords.longitude, pad.__widthM, pad.__heightM, eastM, northM),
+      kind: 'process',
+    });
+  }
+
+  const outlineHa = finiteNumber(totalHa);
+  if (outlineHa > 0) {
+    const radiusM = haToRadiusM(outlineHa);
+    if (radiusM > 0) {
+      blocks.push({
+        id: 'total-outline',
+        label: 'Total footprint outline',
+        unit: 'total',
+        areaM2: outlineHa * SQM_PER_HA,
+        quality: 'screening',
+        evidence: [],
+        ring: circlePolygon(coords.latitude, coords.longitude, radiusM),
+        kind: 'outline',
+      });
+    }
+  }
+
+  return blocks;
+}
+
 function networkPlantMarkers(network = {}) {
   const plants = network.plants || [];
   const markers = [];
@@ -795,6 +937,10 @@ return {
   LAND_VALUE_RAMP,
   haToRadiusM,
   circlePolygon,
+  rectanglePolygon,
+  offsetLatLng,
+  padFootprintDimensions,
+  layoutFootprintCampus,
   waterAvailabilityScreening,
   pvScreeningBand,
   landValueScreening,

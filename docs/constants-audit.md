@@ -17,7 +17,7 @@
 
 - `docs/flowsheet-architecture.md` cites desalination, electrolysis, DAC, PV, battery, and heat sources at the *family* level.
 - Catalog entries often attach the same papers, but **several engine defaults in `units.js` still lack inline citations** (items 1–4, 6–7, 11 now cited; 8–10 labeled cited/screening). Abundance SECs/recoveries often cite only loosely related DOE/USGS pages.
-- **`engine/footprint.js` now estimates site land** from panel area ÷ location-aware GCR plus order-of-magnitude process pads. Coefficients remain screening assumptions (see solar/land).
+- **`engine/footprint.js` estimates site land** from panel area ÷ location-aware GCR plus named process-pad intensities (cited mid-range where available; remaining units screening). Still not surveyed layouts.
 - Electrolyzer SEC defaults are aligned on alkaline **52** kWh/kg H₂ (Buttler 2018); catalog PEM **55** and coastal PEM **55** (DOE) stay as technology-specific overrides.
 
 ---
@@ -49,7 +49,7 @@ These distort “real” material–energy–land–money coupling the most when
 | location | symbol/value | used for | class | proposed source or action |
 | --- | --- | --- | --- | --- |
 | `engine/footprint.js` | panelEfficiency 20%; baseGCR 0.45 (E–W 0.75); lat spacing multiplier | Solar land from panels÷GCR | **assumption** | Location-aware GCR documented in the module assumptions array; cite NREL PV land-use later. |
-| `engine/footprint.js` process pads | e.g. electrolyzer `max(24, kW×0.03)` m²; DAC `max(36, tCO₂/y×0.35)`; SWRO `max(16, m³/d×0.8)` | Process pad area | **assumption** | Keep OOM labels; do not present as surveyed footprints. |
+| `engine/footprint.js` process pads | Named intensities in `PROCESS_INTENSITIES` (e.g. PEM m²/kW, DAC m²/(t·y), SWRO m²/(m³/d)) | Process pad area | **cited** / **screening** | Evidence URLs on each unit; not surveyed footprints. |
 | `js/flowsheet-app.js` UI copy | “order-of-magnitude screening” | Site footprint note | **assumption** | Keep screening wording. |
 | `js/…` `solar-pv` | `capacityFactor: 0.24` | Default PV energy when not sited | **cited** | NREL ATB 2024 utility-scale PV Resource Class 8 mean AC CF 24.5% (GHI bin 4–4.25 kWh/m²/day, ILR=1.34), rounded. Inspector `sourceNote`. CAPEX 1560 unchanged. |
 | `js/…` `solar-pv` | `capexPerKW: 1560`, `fixedOMPerKWYear: 20`, `lifeYears: 30`, `discountRate: 0.07` | LCOE helper / installed economics | **cited** (NREL ATB URL on catalog) | 2024 ATB year pinned in CF `sourceNote`; CAPEX 1560 kept. |

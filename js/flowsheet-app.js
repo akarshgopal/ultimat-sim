@@ -58,7 +58,7 @@
   let siteMap = null;
   let siteMapMarker = null;
   let siteMapOverlays = { osm: null, pvgis: null, water: null, land: null, footprint: null, network: null };
-  let siteMapEnabled = { osm: true, pvgis: true, water: false, land: false, footprint: false, network: false };
+  let siteMapEnabled = { osm: true, pvgis: true, water: false, land: false, footprint: true, network: false };
   let activeDemoId = null;
   let lastCashflowCompare = null;
   let siteMapFailed = false;
@@ -2451,19 +2451,34 @@
     clearSiteMapLayer('footprint');
     if (siteMapEnabled.footprint && MapSite && typeof FlowsheetFootprint !== 'undefined') {
       const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
-      const radiusM = MapSite.haToRadiusM(footprint.totalHa);
-      const ring = MapSite.circlePolygon(coords.latitude, coords.longitude, radiusM);
-      if (ring.length) {
-        const poly = L.polygon(ring, {
-          color: '#7a8fa3',
-          weight: 2,
-          fillColor: '#7a8fa3',
-          fillOpacity: 0.28,
-          interactive: true,
-        });
-        poly.bindPopup(`Site footprint ${formatHa(footprint.totalHa)} · panel area ÷ GCR + pads`);
-        poly.addTo(siteMap);
-        siteMapOverlays.footprint = poly;
+      const campus = typeof MapSite.layoutFootprintCampus === 'function'
+        ? MapSite.layoutFootprintCampus({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          solar: footprint.solar,
+          processes: footprint.processes,
+          totalHa: footprint.totalHa,
+        })
+        : [];
+      if (campus.length) {
+        const group = L.layerGroup();
+        for (const block of campus) {
+          if (!block.ring?.length) continue;
+          const isOutline = block.kind === 'outline';
+          const color = footprintColor(block.unit, { cssVar: false });
+          const poly = L.polygon(block.ring, {
+            color: isOutline ? '#7a8fa3' : color,
+            weight: isOutline ? 1 : 2,
+            dashArray: isOutline ? '4 4' : null,
+            fillColor: color,
+            fillOpacity: isOutline ? 0.04 : block.kind === 'solar' ? 0.22 : 0.45,
+            interactive: true,
+          });
+          poly.bindPopup(footprintPopupHtml(block));
+          poly.addTo(group);
+        }
+        group.addTo(siteMap);
+        siteMapOverlays.footprint = group;
       }
     }
 
@@ -2741,7 +2756,27 @@
     }).join('');
   }
 
-  function footprintColor(unit) {
+  function footprintColor(unit, { cssVar = true } = {}) {
+    const hex = {
+      electrolyzer: '#5b8def',
+      dac: '#6ba177',
+      'dac-solid': '#6ba177',
+      'dac-liquid': '#4f8f6a',
+      'dac-electroswing': '#7bb38a',
+      sabatier: '#c4a35a',
+      methanol: '#b8924a',
+      swro: '#5aa6c7',
+      med: '#4f97b8',
+      msf: '#4588a8',
+      desal: '#5aa6c7',
+      'brine-minerals': '#d4a017',
+      asu: '#7a8fa3',
+      ammonia: '#6b7f9a',
+      battery: '#8a8f98',
+      'solar-pv': '#c9a227',
+      total: '#7a8fa3',
+    };
+    if (!cssVar) return hex[unit] || '#9aa3ad';
     return {
       electrolyzer: 'var(--h2)',
       dac: 'var(--co2)',
@@ -2758,7 +2793,19 @@
       asu: 'var(--h2)',
       ammonia: 'var(--h2)',
       battery: 'var(--text-muted)',
+      'solar-pv': 'var(--warning)',
     }[unit] || 'var(--border-light)';
+  }
+
+  function footprintPopupHtml(block) {
+    const area = Number(block.areaM2) || 0;
+    const areaText = area >= 10000 ? `${(area / 10000).toLocaleString('en-US', { maximumFractionDigits: 2 })} ha` : `${Math.round(area).toLocaleString('en-US')} m²`;
+    const quality = block.quality ? ` · ${block.quality}` : '';
+    const cites = (block.evidence || [])
+      .filter(item => item?.url)
+      .map(item => `<div><a href="${item.url}" target="_blank" rel="noopener noreferrer">${item.label || item.url}</a></div>`)
+      .join('');
+    return `<strong>${block.label || block.id}</strong><br>${areaText}${quality}${cites ? `<div class="map-popup-cites">${cites}</div>` : ''}`;
   }
 
   function formatHa(ha) {
@@ -2817,7 +2864,7 @@
     if (svg) svg.innerHTML = footprintBarSvg(footprint);
     if (metrics) {
       const landQuality = classifyQuality({ kind: 'land' });
-      const padQuality = classifyQuality({ kind: 'intensity', sourceNote: 'order-of-magnitude screening' });
+      const padQuality = classifyQuality({ kind: 'intensity', sourceNote: footprint.processes.some(item => item.quality === 'cited') ? 'cited pad intensities' : 'order-of-magnitude screening' });
       metrics.innerHTML = metricRows([
         ['Solar land', `${formatUncertainHa(footprint.solar.ha)} · ${formatUncertainNumber(footprint.solar.acres, landQuality)} acres`, { quality: landQuality }],
         ['GCR', `${formatUncertainNumber(footprint.solar.gcr * 100, landQuality)}% (base ${formatUncertainNumber(footprint.solar.baseGcr * 100, landQuality)}%)`, { quality: landQuality }],
@@ -2828,11 +2875,14 @@
     }
     if (pads) {
       pads.innerHTML = footprint.processes
-        .map(item => `<li><span class="pad-swatch" style="background:${footprintColor(item.unit)}"></span>${item.label} · ${formatNumber(item.areaM2)} m²</li>`)
+        .map(item => {
+          const quality = item.quality && item.quality !== 'cited' ? ` · ${item.quality}` : '';
+          return `<li><span class="pad-swatch" style="background:${footprintColor(item.unit)}"></span>${item.label} · ${formatNumber(item.areaM2)} m²${quality}</li>`;
+        })
         .join('');
     }
     if (note) {
-      note.textContent = 'Pads are rough orders of magnitude. Solar land uses panel area ÷ GCR.';
+      note.textContent = 'Process pads use cited or screening intensities × activity (not surveyed layouts). Solar = panel area ÷ GCR.';
     }
   }
 

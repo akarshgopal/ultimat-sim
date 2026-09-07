@@ -12,6 +12,8 @@ const {
   LAND_VALUE_RAMP,
   haToRadiusM,
   circlePolygon,
+  layoutFootprintCampus,
+  rectanglePolygon,
   waterAvailabilityScreening,
   pvScreeningBand,
   landValueScreening,
@@ -270,4 +272,39 @@ test('site map solar uses GSA LERC; land uses GeoJSON choropleth, not GridLayer 
   assert.ok(!fs.existsSync(path.join(__dirname, '..', 'data', 'ghi-coarse.js')));
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'data', 'land-prices.json')));
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'data', 'land-admin.geojson')));
+});
+
+
+test('layoutFootprintCampus returns solar + pad rings whose areas sum to inputs', () => {
+  const solar = { landAreaM2: 10000, quality: 'cited', evidence: [{ label: 't', url: 'https://example.com' }] };
+  const processes = [
+    { id: 'a', label: 'A', unit: 'electrolyzer', areaM2: 400, quality: 'cited', evidence: [] },
+    { id: 'b', label: 'B', unit: 'swro', areaM2: 100, quality: 'cited', evidence: [] },
+  ];
+  const blocks = layoutFootprintCampus({
+    latitude: 36.834,
+    longitude: -2.463,
+    solar,
+    processes,
+    totalHa: (10000 + 500) / 10000,
+  });
+  const again = layoutFootprintCampus({
+    latitude: 36.834,
+    longitude: -2.463,
+    solar,
+    processes,
+    totalHa: (10000 + 500) / 10000,
+  });
+  assert.ok(blocks.length >= 3);
+  assert.equal(JSON.stringify(blocks.map(b => b.id)), JSON.stringify(again.map(b => b.id)));
+  const solarBlock = blocks.find(b => b.kind === 'solar');
+  const processBlocks = blocks.filter(b => b.kind === 'process');
+  const outline = blocks.find(b => b.kind === 'outline');
+  assert.ok(solarBlock?.ring?.length >= 4);
+  assert.equal(processBlocks.length, 2);
+  assert.ok(processBlocks.every(b => b.ring.length >= 4));
+  assert.ok(outline?.ring?.length > 8);
+  const laid = solarBlock.areaM2 + processBlocks.reduce((sum, b) => sum + b.areaM2, 0);
+  assert.ok(Math.abs(laid - (10000 + 500)) < 1e-9);
+  assert.ok(rectanglePolygon(36.834, -2.463, 40, 20).length >= 4);
 });

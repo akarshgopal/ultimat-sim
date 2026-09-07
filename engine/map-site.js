@@ -43,6 +43,33 @@ const WATER_BODIES = Object.freeze([
   { id: 'great-lakes', name: 'North American Great Lakes', kind: 'freshwater', latitude: 45.0, longitude: -83.0, radiusKm: 350 },
 ]);
 
+const COLORMAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
+
+// GSA / Solargis DNI-style ramp (kWh/m²·day). Used for the screening GHI colormap.
+const GSA_GHI_RAMP = Object.freeze([
+  Object.freeze([0, '#394b68']),
+  Object.freeze([1, '#2c7bb6']),
+  Object.freeze([2, '#00a6ca']),
+  Object.freeze([3, '#00ccbc']),
+  Object.freeze([4, '#90eb9d']),
+  Object.freeze([5, '#ffff8c']),
+  Object.freeze([6, '#f9d057']),
+  Object.freeze([7, '#f29e2e']),
+  Object.freeze([8, '#e76818']),
+  Object.freeze([9, '#d7191c']),
+  Object.freeze([10, '#c51b7d']),
+]);
+
+// Pale → dark green land-cost index. Not cadastral, not a sale price.
+const LAND_VALUE_RAMP = Object.freeze([
+  Object.freeze([0, '#f7fcf5']),
+  Object.freeze([0.2, '#e5f5e0']),
+  Object.freeze([0.4, '#c7e9c0']),
+  Object.freeze([0.6, '#74c476']),
+  Object.freeze([0.8, '#238b45']),
+  Object.freeze([1, '#00441b']),
+]);
+
 const LAYER_SOURCES = Object.freeze({
   osm: Object.freeze({
     id: 'osm',
@@ -59,35 +86,54 @@ const LAYER_SOURCES = Object.freeze({
   }),
   pvgis: Object.freeze({
     id: 'pvgis',
-    label: 'PVGIS PV',
+    label: 'Solar GHI',
     kind: 'overlay',
     quality: 'screening',
+    render: 'colormap',
+    colormap: 'gsa-ghi',
+    data: 'data/ghi-coarse.json',
     url: 'https://re.jrc.ec.europa.eu/pvg_tools/en/',
     api: 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat={lat}&lon={lon}&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json',
     cite: Object.freeze({
       label: 'JRC PVGIS',
       url: 'https://re.jrc.ec.europa.eu/pvg_tools/en/',
     }),
+    overlayCite: Object.freeze({
+      label: 'GHI colormap after Global Solar Atlas / Solargis. Screening field, not the GSA raster.',
+      url: 'https://globalsolaratlas.info/',
+    }),
   }),
   water: Object.freeze({
     id: 'water',
-    label: 'Water screening',
+    label: 'Aqueduct BWS',
     kind: 'overlay',
-    quality: 'screening',
-    url: 'https://www.wri.org/data/aqueduct-water-risk-atlas',
+    quality: 'cited',
+    render: 'tiles',
+    tileScheme: 'arcgis-zyx',
+    url: 'https://gis6.uspatial.umn.edu/arcgis/rest/services/SCOPE/WRI_Aqueducts_Baseline_water_stress/MapServer/tile/{z}/{y}/{x}',
+    maxNativeZoom: 9,
+    opacity: 0.72,
+    fallback: 'screening-grid',
     cite: Object.freeze({
-      label: 'WRI Aqueduct (screening proxy, not the basin raster)',
+      label: 'WRI Aqueduct Baseline Water Stress via UMN SCOPE MapServer (CC BY 4.0)',
       url: 'https://www.wri.org/data/aqueduct-water-risk-atlas',
     }),
+    legend: Object.freeze([
+      Object.freeze({ label: 'Arid and low water use', color: '#999999' }),
+      Object.freeze({ label: 'High 40–80%', color: '#ff1500' }),
+      Object.freeze({ label: 'Extremely high >80%', color: '#990000' }),
+    ]),
   }),
   land: Object.freeze({
     id: 'land',
     label: 'Land value',
     kind: 'overlay',
     quality: 'screening',
+    render: 'choropleth',
+    colormap: 'pale-dark-green',
     url: 'https://www.worldbank.org/en/topic/land',
     cite: Object.freeze({
-      label: 'Screening land-cost band (not cadastral / not transaction data)',
+      label: 'Screening land-cost index (not cadastral / not transaction data)',
       url: 'https://www.worldbank.org/en/topic/land',
     }),
   }),
@@ -330,19 +376,19 @@ function landValueScreening(latitude, longitude) {
 
   if (water.band === 'seawater' || (Number.isFinite(water.seawaterKm) && water.seawaterKm <= COASTAL_SEAWATER_KM)) {
     band = 'coastal-high';
-    // Ports / coasts usually clear higher — subtropical solar belts a bit more.
-    relativeIndex = absLat < 40 ? 0.85 : 0.72;
-    const km = Number.isFinite(water.seawaterKm) ? Math.round(water.seawaterKm) : null;
-    note = km != null
-      ? `Coastal screening (~${km} km to seawater). Land-cost band tends high near coasts and ports — not a cadastral value or transaction price.`
+    const km = Number.isFinite(water.seawaterKm) ? water.seawaterKm : 40;
+    const proximity = Math.exp(-Math.max(0, km) / 50);
+    relativeIndex = clamp(0.64 + 0.26 * proximity + (absLat < 40 ? 0.04 : 0), 0.64, 0.94);
+    note = Number.isFinite(water.seawaterKm)
+      ? `Coastal screening (~${Math.round(water.seawaterKm)} km to seawater). Land-cost band tends high near coasts and ports — not a cadastral value or transaction price.`
       : 'Coastal screening. Land-cost band tends high near coasts and ports — not a cadastral value or transaction price.';
   } else if (water.band === 'arid' || water.climate === 'subtropical-dry' || water.climate === 'polar') {
     band = 'arid-low';
-    relativeIndex = 0.22;
+    relativeIndex = clamp(0.14 + 0.10 * (1 - absLat / 90), 0.12, 0.28);
     note = 'Arid / sparse-settlement screening from latitude + water-access proxy. Proxy land-cost band tends low inland where water and access are scarce — not a market appraisal.';
   } else {
     band = 'inland-moderate';
-    relativeIndex = water.band === 'brine' ? 0.42 : 0.52;
+    relativeIndex = water.band === 'brine' ? 0.42 : clamp(0.44 + 0.12 * (water.score || 0.5), 0.40, 0.62);
     note = 'Inland moderate screening from coastal distance + latitude. Not cadastral, not transaction data — early siting triage only (World Bank / FAO land-topic proxy).';
   }
 
@@ -355,6 +401,207 @@ function landValueScreening(latitude, longitude) {
     waterBand: water.band,
     seawaterKm: water.seawaterKm ?? null,
   };
+}
+
+function parseHexColor(hex) {
+  const raw = String(hex || '').replace('#', '');
+  if (raw.length !== 6) return [0, 0, 0];
+  return [parseInt(raw.slice(0, 2), 16), parseInt(raw.slice(2, 4), 16), parseInt(raw.slice(4, 6), 16)];
+}
+
+function mixHex(a, b, t) {
+  const pa = parseHexColor(a);
+  const pb = parseHexColor(b);
+  const u = clamp(t, 0, 1);
+  const r = Math.round(pa[0] + (pb[0] - pa[0]) * u);
+  const g = Math.round(pa[1] + (pb[1] - pa[1]) * u);
+  const bl = Math.round(pa[2] + (pb[2] - pa[2]) * u);
+  return `rgb(${r},${g},${bl})`;
+}
+
+function colorFromRamp(value, stops) {
+  if (!Number.isFinite(value) || !stops?.length) return null;
+  if (value <= stops[0][0]) return stops[0][1];
+  const last = stops[stops.length - 1];
+  if (value >= last[0]) return last[1];
+  for (let i = 1; i < stops.length; i += 1) {
+    if (value <= stops[i][0]) {
+      const [v0, c0] = stops[i - 1];
+      const [v1, c1] = stops[i];
+      const span = v1 - v0;
+      return mixHex(c0, c1, span === 0 ? 0 : (value - v0) / span);
+    }
+  }
+  return last[1];
+}
+
+function cosineBump(value, center, halfWidth) {
+  const width = Math.max(halfWidth, 1e-6);
+  const t = Math.abs(value - center) / width;
+  if (t >= 1) return 0;
+  return 0.5 * (1 + Math.cos(Math.PI * t));
+}
+
+function desertBoost(lat, lon) {
+  let boost = 0;
+  boost = Math.max(boost, cosineBump(lat, -23.5, 6) * cosineBump(lon, -69.5, 4) * 0.24);
+  boost = Math.max(boost, cosineBump(lat, 23, 10) * cosineBump(lon, 12, 28) * 0.13);
+  boost = Math.max(boost, cosineBump(lat, 24, 8) * cosineBump(lon, 46, 14) * 0.12);
+  boost = Math.max(boost, cosineBump(lat, -26, 8) * cosineBump(lon, 133, 16) * 0.11);
+  boost = Math.max(boost, cosineBump(lat, 33.5, 6) * cosineBump(lon, -112, 8) * 0.09);
+  boost = Math.max(boost, cosineBump(lat, -24, 7) * cosineBump(lon, 20, 10) * 0.08);
+  return boost;
+}
+
+function rainforestCut(lat, lon) {
+  let cut = 0;
+  cut = Math.max(cut, cosineBump(lat, -2, 9) * cosineBump(lon, -62, 16) * 0.18);
+  cut = Math.max(cut, cosineBump(lat, 1, 7) * cosineBump(lon, 22, 12) * 0.16);
+  cut = Math.max(cut, cosineBump(lat, 2, 8) * cosineBump(lon, 113, 14) * 0.12);
+  return cut;
+}
+
+function ghiScreeningKWh(latitude, longitude) {
+  const coords = coordsFrom(latitude, longitude);
+  if (!Number.isFinite(coords.latitude) || coords.latitude < -90 || coords.latitude > 90) return null;
+  const absLat = Math.abs(coords.latitude);
+  const zenith = Math.max(0.08, Math.cos(absLat * Math.PI / 180));
+  let cloud = 1;
+  if (absLat < 8) cloud = 0.78;
+  else if (absLat < 15) cloud = 0.86;
+  else if (absLat < 32) cloud = 1.08;
+  else if (absLat < 42) cloud = 0.98;
+  else if (absLat < 52) cloud = 0.82;
+  else if (absLat < 62) cloud = 0.66;
+  else cloud = 0.48;
+  const lon = Number.isFinite(coords.longitude) ? coords.longitude : 0;
+  const regional = 1 + desertBoost(coords.latitude, lon) - rainforestCut(coords.latitude, lon);
+  return clamp(6.6 * (zenith ** 0.85) * cloud * regional, 0.7, 8.4);
+}
+
+let ghiGridCache;
+
+function getGhiGrid() {
+  if (ghiGridCache !== undefined) return ghiGridCache;
+  if (globalThis.GHI_COARSE && Array.isArray(globalThis.GHI_COARSE.values)) {
+    ghiGridCache = globalThis.GHI_COARSE;
+    return ghiGridCache;
+  }
+  if (typeof require === 'function') {
+    try {
+      const loaded = require('../data/ghi-coarse.json');
+      if (loaded && Array.isArray(loaded.values)) {
+        ghiGridCache = loaded;
+        return ghiGridCache;
+      }
+    } catch { /* formula fallback */ }
+  }
+  ghiGridCache = null;
+  return null;
+}
+
+function ghiAt(latitude, longitude) {
+  const coords = coordsFrom(latitude, longitude);
+  if (!Number.isFinite(coords.latitude) || coords.latitude < -90 || coords.latitude > 90) return null;
+  const grid = getGhiGrid();
+  if (!grid?.values?.length) return ghiScreeningKWh(coords);
+
+  const cellDeg = finiteNumber(grid.cellDeg, 2);
+  const ncols = Math.round(finiteNumber(grid.ncols, 180));
+  const nrows = Math.round(finiteNumber(grid.nrows, 60));
+  const scale = finiteNumber(grid.scale, 10) || 10;
+  const west = finiteNumber(grid.west, -180);
+  const north = finiteNumber(grid.north, 60);
+  const originLon = west + cellDeg / 2;
+  const originLat = north - cellDeg / 2;
+  let lon = coords.longitude;
+  if (!Number.isFinite(lon)) return ghiScreeningKWh(coords);
+  while (lon < -180) lon += 360;
+  while (lon >= 180) lon -= 360;
+
+  const fx = (lon - originLon) / cellDeg;
+  const fy = (originLat - coords.latitude) / cellDeg;
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const tx = fx - x0;
+  const ty = fy - y0;
+
+  function sample(ix, iy) {
+    if (iy < 0 || iy >= nrows) return null;
+    const wrapped = ((ix % ncols) + ncols) % ncols;
+    const packed = grid.values[iy * ncols + wrapped];
+    if (!Number.isFinite(packed)) return null;
+    return packed / scale;
+  }
+
+  const v00 = sample(x0, y0);
+  const v10 = sample(x0 + 1, y0);
+  const v01 = sample(x0, y0 + 1);
+  const v11 = sample(x0 + 1, y0 + 1);
+  const present = [v00, v10, v01, v11].filter(value => value != null);
+  if (!present.length) return ghiScreeningKWh(coords);
+  const a = v00 ?? present[0];
+  const b = v10 ?? a;
+  const c = v01 ?? a;
+  const d = v11 ?? b;
+  return (1 - tx) * (1 - ty) * a + tx * (1 - ty) * b + (1 - tx) * ty * c + tx * ty * d;
+}
+
+function ghiColor(kwhPerM2Day) {
+  return colorFromRamp(kwhPerM2Day, GSA_GHI_RAMP);
+}
+
+function landColor(relativeIndex) {
+  return colorFromRamp(relativeIndex, LAND_VALUE_RAMP);
+}
+
+function waterScreeningColor(bandOrScore) {
+  if (typeof bandOrScore === 'string') {
+    return {
+      seawater: '#2bb5a0',
+      brine: '#9b8ec4',
+      freshwater: '#7ec8a3',
+      arid: '#999999',
+      unknown: null,
+    }[bandOrScore] || null;
+  }
+  if (!Number.isFinite(bandOrScore)) return null;
+  return colorFromRamp(bandOrScore, [
+    [0, '#999999'],
+    [0.2, '#c4a35a'],
+    [0.5, '#7ec8a3'],
+    [0.85, '#2bb5a0'],
+    [1, '#1a8f90'],
+  ]);
+}
+
+function isDeepOceanScreening(latitude, longitude) {
+  const water = waterAvailabilityScreening(latitude, longitude);
+  const nearest = water.nearestWater;
+  if (!nearest || nearest.kind !== 'seawater') return false;
+  if (!(nearest.accessKm === 0)) return false;
+  // Equivalent-circle basins are not shorelines. Only skip the interior of
+  // very large seas so coastal land near small basins still paints.
+  if (!(nearest.radiusKm >= 400)) return false;
+  return nearest.km < nearest.radiusKm * 0.2;
+}
+
+function landIndexAt(latitude, longitude) {
+  const land = landValueScreening(latitude, longitude);
+  if (land.band === 'unknown' || !Number.isFinite(land.relativeIndex)) return null;
+  if (isDeepOceanScreening(latitude, longitude)) return null;
+  return land.relativeIndex;
+}
+
+function webMercatorToLatLng(z, tileX, tileY, px, py, tileSize = 256) {
+  const zoom = Math.max(0, finiteNumber(z, 0));
+  const n = 2 ** zoom;
+  const size = Math.max(1, finiteNumber(tileSize, 256));
+  const mercX = (finiteNumber(tileX, 0) + finiteNumber(px, 0) / size) / n;
+  const mercY = (finiteNumber(tileY, 0) + finiteNumber(py, 0) / size) / n;
+  const longitude = mercX * 360 - 180;
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * mercY)));
+  return { latitude: latRad * 180 / Math.PI, longitude };
 }
 
 function plantSite(plant) {
@@ -388,6 +635,9 @@ return {
   EARTH_RADIUS_KM,
   WATER_BODIES,
   LAYER_SOURCES,
+  COLORMAP_LAYER_IDS,
+  GSA_GHI_RAMP,
+  LAND_VALUE_RAMP,
   haToRadiusM,
   circlePolygon,
   waterAvailabilityScreening,
@@ -395,5 +645,14 @@ return {
   landValueScreening,
   networkPlantMarkers,
   distanceKm,
+  ghiScreeningKWh,
+  ghiAt,
+  ghiColor,
+  landColor,
+  landIndexAt,
+  waterScreeningColor,
+  colorFromRamp,
+  isDeepOceanScreening,
+  webMercatorToLatLng,
 };
 });

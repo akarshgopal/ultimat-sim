@@ -107,8 +107,14 @@
             <div class="map-layer-bar site-map-layers" id="siteMapLayers" role="group" aria-label="Map layers"></div>
             <div class="site-map" id="siteMap" role="application" aria-label="Site location map"></div>
             <div class="site-map-empty" id="siteMapEmpty" hidden>Map unavailable. Apply latitude and longitude below.</div>
+            <div class="site-map-legend" id="siteMapLegend" hidden>
+              <p class="site-map-legend-title" id="siteMapLegendTitle"></p>
+              <div class="site-map-legend-ramp" id="siteMapLegendRamp" role="img" aria-label="Map colormap"></div>
+              <p class="site-map-legend-labels" id="siteMapLegendLabels"></p>
+              <p class="site-map-legend-cite" id="siteMapLegendCite"></p>
+            </div>
           </div>
-          <p class="status-meta" id="siteMapStatus">Click map to set site · layer chips cite screening sources on hover.</p>
+          <p class="status-meta" id="siteMapStatus">Click map to set site · Solar, water, and land fill the map (one colormap at a time).</p>
         </div>
         <details class="more-section" id="siteLocationDetails" open>
           <summary>Coordinates</summary>
@@ -319,6 +325,7 @@
   <script src="engine/network.js"></script>
   <script src="engine/uncertainty.js"></script>
   <script src="engine/map-site.js"></script>
+  <script src="data/ghi-coarse.js"></script>
   <script src="data/pvgis-almeria-hourly.js"></script>
   <script src="data/dead-sea-brine.js"></script>
   <script src="data/almeria-seawater.js"></script>

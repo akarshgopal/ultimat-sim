@@ -58,7 +58,7 @@
   let siteMap = null;
   let siteMapMarker = null;
   let siteMapOverlays = { osm: null, pvgis: null, water: null, land: null, footprint: null, network: null };
-  let siteMapEnabled = { osm: true, pvgis: true, water: true, land: true, footprint: false, network: false };
+  let siteMapEnabled = { osm: true, pvgis: true, water: false, land: false, footprint: false, network: false };
   let activeDemoId = null;
   let lastCashflowCompare = null;
   let siteMapFailed = false;
@@ -540,6 +540,15 @@
     const id = target?.getAttribute?.('data-layer') || target?.['data-layer'];
     if (!id || !Object.prototype.hasOwnProperty.call(siteMapEnabled, id)) return;
     siteMapEnabled[id] = !!target.checked;
+    if (siteMapEnabled[id] && MapSite?.COLORMAP_LAYER_IDS?.includes(id)) {
+      for (const other of MapSite.COLORMAP_LAYER_IDS) {
+        if (other === id || !siteMapEnabled[other]) continue;
+        siteMapEnabled[other] = false;
+        const root = document.getElementById('siteMapLayers');
+        const input = root?.querySelector?.(`[data-layer="${other}"]`);
+        if (input) input.checked = false;
+      }
+    }
     updateSiteMapOverlays();
   });
   document.getElementById('siteBatteryKWh').addEventListener('change', event => {
@@ -1939,12 +1948,13 @@
 
   const MAP_LAYER_UI = Object.freeze({
     osm: Object.freeze({ label: 'Basemap OSM', tone: 'basemap' }),
-    pvgis: Object.freeze({ label: 'Solar (PV)', tone: 'solar' }),
+    pvgis: Object.freeze({ label: 'Solar (GHI)', tone: 'solar' }),
     water: Object.freeze({ label: 'Water', tone: 'water' }),
     land: Object.freeze({ label: 'Land value', tone: 'land' }),
     footprint: Object.freeze({ label: 'Footprint', tone: 'footprint' }),
     network: Object.freeze({ label: 'Network', tone: 'network' }),
   });
+  const COLORMAP_IDS = MapSite?.COLORMAP_LAYER_IDS || ['pvgis', 'water', 'land'];
 
   function renderSiteMapLayerToggles() {
     const el = document.getElementById('siteMapLayers');
@@ -1968,40 +1978,219 @@
     siteMapLayersReady = true;
   }
 
-  function pvOverlayColor(band) {
-    return {
-      excellent: '#e8a317',
-      good: '#d4a017',
-      moderate: '#c79a48',
-      limited: '#9aa8b8',
-      poor: '#e07070',
-    }[band] || '#e8a317';
-  }
-
-  function waterOverlayColor(band) {
-    return {
-      seawater: '#2bb5a0',
-      brine: '#9b8ec4',
-      freshwater: '#6ba177',
-      arid: '#c79a48',
-      unknown: '#9aa8b8',
-    }[band] || '#2bb5a0';
-  }
-
-  function landOverlayColor(band) {
-    return {
-      'coastal-high': '#c4a35a',
-      'inland-moderate': '#a8894a',
-      'arid-low': '#8b7355',
-      unknown: '#9aa8b8',
-    }[band] || '#c4a35a';
-  }
-
   function clearSiteMapLayer(id) {
     const layer = siteMapOverlays[id];
     if (!layer || !siteMap) return;
     try { siteMap.removeLayer(layer); } catch { /* already removed */ }
     siteMapOverlays[id] = null;
+  }
+
+  function showSiteMapLayer(id) {
+    const layer = siteMapOverlays[id];
+    if (!layer || !siteMap) return;
+    if (!siteMap.hasLayer(layer)) layer.addTo(siteMap);
+  }
+
+  function hideSiteMapLayer(id) {
+    const layer = siteMapOverlays[id];
+    if (!layer || !siteMap) return;
+    if (siteMap.hasLayer(layer)) siteMap.removeLayer(layer);
+  }
+
+  function latLngForColormapTile(coords, px, py, tileSize) {
+    if (MapSite?.webMercatorToLatLng) return MapSite.webMercatorToLatLng(coords.z, coords.x, coords.y, px, py, tileSize);
+    const n = 2 ** coords.z;
+    const mercX = (coords.x + px / tileSize) / n;
+    const mercY = (coords.y + py / tileSize) / n;
+    return {
+      latitude: Math.atan(Math.sinh(Math.PI * (1 - 2 * mercY))) * 180 / Math.PI,
+      longitude: mercX * 360 - 180,
+    };
+  }
+
+  function paintScreeningColormap(canvas, coords, valueAt, colorAt, cells = 32) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const width = canvas.width;
+    const height = canvas.height;
+    const stepX = width / cells;
+    const stepY = height / cells;
+    for (let iy = 0; iy < cells; iy += 1) {
+      for (let ix = 0; ix < cells; ix += 1) {
+        const ll = latLngForColormapTile(coords, (ix + 0.5) * stepX, (iy + 0.5) * stepY, width);
+        const value = valueAt(ll.latitude, ll.longitude);
+        if (value == null || value === false) continue;
+        const color = colorAt(value);
+        if (!color) continue;
+        ctx.fillStyle = color;
+        ctx.fillRect(Math.floor(ix * stepX), Math.floor(iy * stepY), Math.ceil(stepX) + 1, Math.ceil(stepY) + 1);
+      }
+    }
+  }
+
+  function createScreeningColormapLayer(valueAt, colorAt, className) {
+    if (typeof L === 'undefined' || typeof L.GridLayer !== 'function') return null;
+    const Layer = L.GridLayer.extend({
+      createTile(coords) {
+        const size = this.getTileSize();
+        const canvas = L.DomUtil.create('canvas', 'leaflet-tile');
+        canvas.width = size.x;
+        canvas.height = size.y;
+        paintScreeningColormap(canvas, coords, valueAt, colorAt);
+        return canvas;
+      },
+    });
+    return new Layer({
+      pane: 'overlayPane',
+      opacity: 0.62,
+      className: className || 'site-map-colormap',
+      keepBuffer: 1,
+    });
+  }
+
+  function punchNearBlack(canvas) {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    try {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] < 18 && data[i + 1] < 18 && data[i + 2] < 18) data[i + 3] = 0;
+      }
+      ctx.putImageData(imageData, 0, 0);
+    } catch { /* tainted canvas; leave the raw tile */ }
+  }
+
+  function createAqueductBwsLayer() {
+    if (typeof L === 'undefined' || typeof L.GridLayer !== 'function') return null;
+    const src = MapSite?.LAYER_SOURCES?.water;
+    const template = src?.url || 'https://gis6.uspatial.umn.edu/arcgis/rest/services/SCOPE/WRI_Aqueducts_Baseline_water_stress/MapServer/tile/{z}/{y}/{x}';
+    const maxNative = src?.maxNativeZoom || 9;
+    const Layer = L.GridLayer.extend({
+      createTile(coords, done) {
+        const size = this.getTileSize();
+        const canvas = L.DomUtil.create('canvas', 'leaflet-tile');
+        canvas.width = size.x;
+        canvas.height = size.y;
+        const url = template.replace('{z}', coords.z).replace('{y}', coords.y).replace('{x}', coords.x);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, size.x, size.y);
+            punchNearBlack(canvas);
+          }
+          done(null, canvas);
+        };
+        img.onerror = () => {
+          paintScreeningColormap(
+            canvas,
+            coords,
+            (lat, lon) => MapSite.waterAvailabilityScreening(lat, lon).band,
+            band => MapSite.waterScreeningColor(band),
+            24,
+          );
+          done(null, canvas);
+        };
+        img.src = url;
+        return canvas;
+      },
+    });
+    return new Layer({
+      pane: 'overlayPane',
+      opacity: src?.opacity ?? 0.72,
+      maxNativeZoom: maxNative,
+      maxZoom: 19,
+      className: 'site-map-colormap site-map-colormap--water',
+      keepBuffer: 1,
+    });
+  }
+
+  function ensureSolarColormap() {
+    if (!MapSite) return;
+    if (!siteMapOverlays.pvgis) {
+      siteMapOverlays.pvgis = createScreeningColormapLayer(
+        (lat, lon) => MapSite.ghiAt(lat, lon),
+        value => MapSite.ghiColor(value),
+        'site-map-colormap site-map-colormap--solar',
+      );
+    }
+    if (siteMapOverlays.pvgis) showSiteMapLayer('pvgis');
+  }
+
+  function ensureWaterColormap() {
+    if (!MapSite) return;
+    if (!siteMapOverlays.water) {
+      try {
+        siteMapOverlays.water = createAqueductBwsLayer();
+      } catch {
+        siteMapOverlays.water = createScreeningColormapLayer(
+          (lat, lon) => MapSite.waterAvailabilityScreening(lat, lon).band,
+          band => MapSite.waterScreeningColor(band),
+          'site-map-colormap site-map-colormap--water',
+        );
+        siteMapStatus('Aqueduct BWS tiles unavailable; showing water screening colormap.');
+      }
+    }
+    if (siteMapOverlays.water) showSiteMapLayer('water');
+  }
+
+  function ensureLandColormap() {
+    if (!MapSite) return;
+    if (!siteMapOverlays.land) {
+      siteMapOverlays.land = createScreeningColormapLayer(
+        (lat, lon) => MapSite.landIndexAt(lat, lon),
+        value => MapSite.landColor(value),
+        'site-map-colormap site-map-colormap--land',
+      );
+    }
+    if (siteMapOverlays.land) showSiteMapLayer('land');
+  }
+
+  function updateSiteMapLegend() {
+    const el = document.getElementById('siteMapLegend');
+    if (!el) return;
+    const active = COLORMAP_IDS.find(id => siteMapEnabled[id]);
+    if (!active || !MapSite) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.dataset.layer = active;
+    const title = document.getElementById('siteMapLegendTitle');
+    const ramp = document.getElementById('siteMapLegendRamp');
+    const labels = document.getElementById('siteMapLegendLabels');
+    const citeEl = document.getElementById('siteMapLegendCite');
+    const source = MapSite.LAYER_SOURCES[active];
+    if (active === 'pvgis') {
+      if (title) title.textContent = 'GHI kWh/m²·day (screening)';
+      const stops = MapSite.GSA_GHI_RAMP || [];
+      if (ramp) {
+        ramp.className = 'site-map-legend-ramp is-continuous';
+        ramp.innerHTML = stops.map(([, color]) => `<span style="background:${color}"></span>`).join('');
+      }
+      if (labels) labels.innerHTML = '<span>1</span><span>4</span><span>7</span><span>10</span>';
+      if (citeEl) citeEl.innerHTML = layerCiteHtml(source?.overlayCite ? { cite: source.overlayCite } : source);
+    } else if (active === 'water') {
+      if (title) title.textContent = 'Baseline water stress';
+      const items = source?.legend || [];
+      if (ramp) {
+        ramp.className = 'site-map-legend-ramp is-swatches';
+        ramp.innerHTML = items.map(item => `<span class="site-map-legend-swatch"><i style="background:${item.color}"></i>${item.label}</span>`).join('');
+      }
+      if (labels) labels.innerHTML = '';
+      if (citeEl) citeEl.innerHTML = layerCiteHtml(source);
+    } else if (active === 'land') {
+      if (title) title.textContent = 'Relative land-cost index (screening)';
+      const stops = MapSite.LAND_VALUE_RAMP || [];
+      if (ramp) {
+        ramp.className = 'site-map-legend-ramp is-continuous';
+        ramp.innerHTML = stops.map(([, color]) => `<span style="background:${color}"></span>`).join('');
+      }
+      if (labels) labels.innerHTML = '<span>low</span><span>high</span>';
+      if (citeEl) citeEl.innerHTML = layerCiteHtml(source);
+    }
   }
 
   function initSiteMap() {
@@ -2077,7 +2266,6 @@
     if (!siteMap || typeof L === 'undefined') return;
     const coords = readMapCoordinates();
     if (!coords) return;
-    const latlng = [coords.latitude, coords.longitude];
 
     if (siteMapOverlays.osm) {
       if (siteMapEnabled.osm) {
@@ -2087,56 +2275,16 @@
       }
     }
 
-    clearSiteMapLayer('pvgis');
-    if (siteMapEnabled.pvgis && MapSite) {
-      const pv = MapSite.pvScreeningBand(coords);
-      const pvLayer = L.circle(latlng, {
-        radius: 14000,
-        color: pvOverlayColor(pv.band),
-        weight: 1.5,
-        fillColor: pvOverlayColor(pv.band),
-        fillOpacity: 0.18,
-        interactive: true,
-      });
-      pvLayer.bindPopup(`${pv.band} PV screening · ${pv.typicalKWhPerKWpDay != null ? `${pv.typicalKWhPerKWpDay.toFixed(1)} kWh/kWp·day` : 'n/a'}<br><a href="${pv.cite.url}" target="_blank" rel="noreferrer">${pv.cite.label}</a>`);
-      pvLayer.addTo(siteMap);
-      siteMapOverlays.pvgis = pvLayer;
-    }
-
-    clearSiteMapLayer('water');
-    if (siteMapEnabled.water && MapSite) {
-      const water = MapSite.waterAvailabilityScreening(coords);
-      const waterLayer = L.circle(latlng, {
-        radius: 22000,
-        color: waterOverlayColor(water.band),
-        weight: 1.5,
-        fillColor: waterOverlayColor(water.band),
-        fillOpacity: 0.14,
-        interactive: true,
-      });
-      waterLayer.bindPopup(`${water.band} water screening<br>${water.note}<br><a href="${water.cite.url}" target="_blank" rel="noreferrer">${water.cite.label}</a>`);
-      waterLayer.addTo(siteMap);
-      siteMapOverlays.water = waterLayer;
-    }
-
-    clearSiteMapLayer('land');
-    if (siteMapEnabled.land && MapSite) {
-      const land = MapSite.landValueScreening(coords);
-      const landColor = landOverlayColor(land.band);
-      const landLayer = L.circle(latlng, {
-        radius: 30000,
-        color: landColor,
-        weight: 1.5,
-        fillColor: landColor,
-        fillOpacity: 0.12,
-        interactive: true,
-      });
-      const landCite = land.cite?.url
-        ? `<br><a href="${land.cite.url}" target="_blank" rel="noreferrer">${land.cite.label}</a>`
-        : (land.cite?.label ? `<br>${land.cite.label}` : '');
-      landLayer.bindPopup(`${land.band} land-value screening · index ${Number(land.relativeIndex || 0).toFixed(2)}<br>${land.note || ''}${landCite}`);
-      landLayer.addTo(siteMap);
-      siteMapOverlays.land = landLayer;
+    try {
+      for (const id of COLORMAP_IDS) {
+        if (!siteMapEnabled[id]) hideSiteMapLayer(id);
+      }
+      if (siteMapEnabled.pvgis && MapSite) ensureSolarColormap();
+      else if (siteMapEnabled.water && MapSite) ensureWaterColormap();
+      else if (siteMapEnabled.land && MapSite) ensureLandColormap();
+      updateSiteMapLegend();
+    } catch {
+      siteMapStatus('Colormap overlay failed. Coordinates, footprint, and network markers still work.');
     }
 
     clearSiteMapLayer('footprint');

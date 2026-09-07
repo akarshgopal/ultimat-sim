@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Molecular Foundry — ultimat-sim</title>
+  <meta name="description" content="Plan a chemical industry from physics, chemistry, and economics at real locations.">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous">
+  <link rel="stylesheet" href="style.css?v=b38eb1c7bca2">
+  <link rel="stylesheet" href="flowsheet.css?v=b38eb1c7bca2">
+</head>
+<body class="flowsheet-page">
+  <header class="flowsheet-header">
+    <div class="brand">
+      <h1>Molecular Foundry</h1>
+      <p class="status-meta">Chemical industry planner · physics first, then money</p>
+    </div>
+    <div class="flowsheet-status" aria-live="polite">
+      <span class="status-chip idle" id="solveStatus">Empty factory</span>
+      <span class="status-chip idle" id="balanceStatus">Add a block</span>
+    </div>
+  </header>
+
+  <div class="foundry-tabs" id="foundryTabs" role="tablist" aria-label="Foundry views">
+    <button type="button" role="tab" id="tabOverview" aria-controls="panelOverview" aria-selected="true" tabindex="0">Overview</button>
+    <button type="button" role="tab" id="tabLocation" aria-controls="panelLocation" aria-selected="false" tabindex="-1">Location</button>
+    <button type="button" role="tab" id="tabProcess" aria-controls="panelProcess" aria-selected="false" tabindex="-1">Process</button>
+    <button type="button" role="tab" id="tabEconomics" aria-controls="panelEconomics" aria-selected="false" tabindex="-1">Economics</button>
+  </div>
+
+  <div class="foundry-panels">
+        <section class="tab-panel overview-panel is-active" id="panelOverview" role="tabpanel" aria-labelledby="tabOverview">
+      <div class="overview-dashboard">
+        <header class="overview-hero">
+          <div class="overview-hero-copy">
+            <span class="eyebrow" id="overviewDemoChip" hidden></span>
+            <h2 id="overviewSiteName">Choose a site</h2>
+            <p class="overview-honesty" id="overviewHonesty">Load a demo or build on Process.</p>
+          </div>
+          <div class="overview-hero-metrics" id="overviewCashflow" aria-label="Cashflow summary">
+            <div class="hero-metric"><span>Net cash / year</span><strong>—</strong></div>
+            <div class="hero-metric"><span>Revenue / year</span><strong>—</strong></div>
+            <div class="hero-metric"><span>CAPEX</span><strong>—</strong></div>
+          </div>
+        </header>
+
+        <button type="button" class="issue-card" id="overviewLimiting" hidden>Empty factory</button>
+        <div class="cashflow-result" id="cashflowResult" hidden></div>
+
+        <div class="overview-split">
+          <section class="overview-block" aria-labelledby="overviewSlateHeading">
+            <h3 id="overviewSlateHeading">Top materials</h3>
+            <dl class="overview-slate" id="overviewSlate">
+              <div><dt>Products</dt><dd>None yet</dd></div>
+            </dl>
+          </section>
+          <section class="overview-block" aria-labelledby="overviewLandHeading">
+            <h3 id="overviewLandHeading">Land</h3>
+            <p class="overview-oneliner" id="overviewLand">—</p>
+          </section>
+        </div>
+
+        <section class="overview-block overview-actions-block">
+          <div class="overview-actions">
+            <button type="button" class="primary-action" id="sizeForCashflow">Optimize co-product cashflow</button>
+          </div>
+          <details class="more-section" id="sizeToTargetDetails">
+            <summary>Size one product</summary>
+            <div class="overview-actions">
+              <label>Product
+                <select id="sizeProduct" aria-label="Size-to-target product">
+                  <option value="CH4">CH₄</option>
+                  <option value="H2">H₂</option>
+                  <option value="lithium">Lithium</option>
+                  <option value="salt">Salt</option>
+                </select>
+              </label>
+              <label>kg/day <input id="sizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
+              <button type="button" id="sizeToTarget">Size to target</button>
+            </div>
+            <p class="status-meta" id="sizeToTargetStatus">Single-product physics tool.</p>
+          </details>
+          <div class="demo-scenarios" id="overviewDemoMenu" role="group" aria-label="Demo scenarios">
+            <span class="eyebrow">Scenarios</span>
+            <div class="overview-demos">
+              <button type="button" id="loadMethaneRecycle" data-demo-id="methane-recycle">Methane recycle</button>
+              <button type="button" id="loadCoastalMethane" data-demo-id="coastal-methane">Coastal methane</button>
+              <button type="button" id="loadAbundanceHub" data-demo-id="abundance-hub">Brine + ammonia</button>
+              <button type="button" id="loadDemoNetwork" data-demo-id="demo-network">Fuels + minerals</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="tab-panel location-panel" id="panelLocation" role="tabpanel" aria-labelledby="tabLocation" hidden>
+      <section class="tool-panel site-panel" id="sitePanel">
+        <div class="tool-panel-head">
+          <div>
+            <span class="eyebrow">Site</span>
+            <h3 id="siteName">No site selected</h3>
+          </div>
+          <label id="siteMonthLabel" hidden>Typical day <select id="siteMonth"></select></label>
+        </div>
+        <div class="site-map-panel" id="siteMapPanel">
+          <div class="site-map-shell">
+            <div class="map-layer-bar site-map-layers" id="siteMapLayers" role="group" aria-label="Map layers"></div>
+            <div class="site-map" id="siteMap" role="application" aria-label="Site location map"></div>
+            <div class="site-map-empty" id="siteMapEmpty" hidden>Map unavailable. Apply latitude and longitude below.</div>
+            <div class="site-map-legend" id="siteMapLegend" hidden>
+              <p class="site-map-legend-title" id="siteMapLegendTitle"></p>
+              <div class="site-map-legend-ramp" id="siteMapLegendRamp" role="img" aria-label="Map colormap"></div>
+              <p class="site-map-legend-labels" id="siteMapLegendLabels"></p>
+              <p class="site-map-legend-cite" id="siteMapLegendCite"></p>
+            </div>
+          </div>
+          <p class="status-meta" id="siteMapStatus">Click map to set site · Solar, water, and land fill the map (one colormap at a time).</p>
+        </div>
+        <details class="more-section" id="siteLocationDetails" open>
+          <summary>Coordinates</summary>
+          <div class="site-location site-location-grid">
+            <label class="site-preset-label">Location
+              <select id="sitePreset" aria-label="Location site preset">
+                <option value="">Choose a site…</option>
+              </select>
+            </label>
+            <label>Lat <input id="siteLatitude" type="number" step="0.001" value="36.834"></label>
+            <label>Lon <input id="siteLongitude" type="number" step="0.001" value="-2.463"></label>
+            <label>PV kWp <input id="siteSolarKWp" type="number" min="0" step="0.5" value="37.5"></label>
+            <label>Battery kWh <input id="siteBatteryKWh" type="number" min="0" step="1" value="0"></label>
+            <button type="button" class="primary-action" id="applyCoordinates">Apply location</button>
+          </div>
+          <p class="status-meta" id="siteFetchStatus">Applies PVGIS solar for these coordinates.</p>
+        </details>
+        <details class="more-section" id="siteMethodDetails"><summary>Method &amp; sources</summary><p class="status-meta" id="siteNotes"></p><p class="literature-links" id="siteEvidence"></p></details>
+        <details class="more-section" id="siteMeteoDetails">
+          <summary>Meteo</summary>
+          <div id="siteMeteo" class="site-truth"></div>
+        </details>
+        <details class="more-section" id="siteAssayDetails">
+          <summary>Assay</summary>
+          <div id="siteAssay" class="site-truth"></div>
+        </details>
+        <details class="more-section" id="siteRightsDetails">
+          <summary>Rights</summary>
+          <div id="siteRights" class="site-rights"></div>
+        </details>
+        <p class="status-meta" id="siteHorizon"></p>
+        <details class="more-section" id="siteResourcesDetails"><summary>Resource budgets</summary><dl class="strip-metrics" id="siteResources"></dl></details>
+      </section>
+    </section>
+
+    <section class="tab-panel process-panel" id="panelProcess" role="tabpanel" aria-labelledby="tabProcess" hidden>
+      <main class="flowsheet-workspace">
+        <aside class="flowsheet-sidebar controls-sidebar" aria-label="Build menu">
+          <div class="sidebar-heading">
+            <span class="eyebrow">Build</span>
+            <h2>Process blocks</h2>
+          </div>
+          <label class="palette-search"><input id="paletteSearch" type="search" placeholder="Search blocks" aria-label="Search process blocks"></label>
+          <div class="building-palette" id="buildingPalette"></div>
+          <h3 class="palette-heading">Sources and destinations</h3>
+          <div class="building-palette" id="utilityPalette"></div>
+          <button type="button" class="clear-factory" id="clearFactory">Clear canvas</button>
+          <div class="model-note">
+            <span class="eyebrow">Factory rules</span>
+            <p>Click a port, then a compatible port. Wiring does not change setpoints.</p>
+          </div>
+        </aside>
+
+        <section class="flowsheet-stage" aria-labelledby="diagramTitle">
+          <div class="stage-heading">
+            <div>
+              <span class="eyebrow">Factory floor</span>
+              <h2 id="diagramTitle">Blank factory</h2>
+              <p id="flowSummary">0 blocks · 0 connections</p>
+            </div>
+            <div class="stage-actions">
+              <details class="demo-menu" id="processDemoMenu">
+                <summary>Load demo</summary>
+                <div class="demo-menu-actions">
+                  <button type="button" data-demo="methane-recycle">Methane + water recycle</button>
+                  <button type="button" data-demo="coastal-methane">Coastal methane</button>
+                  <button type="button" data-demo="abundance-hub">Ammonia + brine hub</button>
+                  <button type="button" data-demo="demo-network">Fuels + minerals network</button>
+                </div>
+              </details>
+              <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
+              <button type="button" id="autoArrange">Arrange</button>
+              <button type="button" id="focusCanvas" aria-pressed="false">Focus canvas</button>
+              <details class="save-menu" id="baselineMenu">
+                <summary>Baseline</summary>
+                <div class="snapshot-controls">
+                  <button type="button" id="captureBaseline">Capture baseline</button>
+                  <button type="button" id="clearBaseline">Clear baseline</button>
+                </div>
+              </details>
+              <details class="save-menu">
+                <summary>Saved factories</summary>
+                <div class="snapshot-controls">
+                  <select id="factorySaves" aria-label="Saved factories"><option value="">Autosave</option></select>
+                  <button type="button" id="saveFactory">Save as…</button>
+                  <button type="button" id="deleteFactorySave">Delete save</button>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <section class="comparison-panel" id="comparisonPanel" hidden aria-live="polite">
+            <div class="comparison-heading">
+              <div><span class="eyebrow">Decision support</span><h3>Scenario comparison</h3></div>
+              <span class="status-meta" id="comparisonStatus"></span>
+            </div>
+            <dl class="comparison-metrics" id="comparisonMetrics"></dl>
+            <h4>Synergy ledger · current vs baseline</h4>
+            <div class="synergy-ledger" id="synergyLedger"></div>
+          </section>
+
+          <div class="canvas-frame">
+            <div class="canvas-zoom" aria-label="Canvas zoom controls">
+              <button type="button" id="zoomOut" aria-label="Zoom canvas out">−</button>
+              <input id="canvasZoom" type="range" min="25" max="200" step="5" value="100" aria-label="Canvas zoom">
+              <output id="canvasZoomValue" for="canvasZoom">100%</output>
+              <button type="button" id="zoomIn" aria-label="Zoom canvas in">+</button>
+              <button type="button" id="zoomFit" aria-label="Fit graph to canvas">Fit</button>
+              <button type="button" id="zoomReset">Reset</button>
+            </div>
+            <div class="flowsheet-canvas empty" id="flowsheetCanvas">
+              <div class="empty-canvas">
+                <span class="eyebrow">Blank factory</span>
+                <strong>Start here</strong>
+                <p>Load a scenario on Overview, or add blocks here and connect ports. Shift-drag to pan · Fit to frame.</p>
+              </div>
+            </div>
+          </div>
+          <div class="warning-strip" id="warnings" hidden></div>
+          <button type="button" class="exit-focus" id="exitFocus" hidden>Exit focus</button>
+        </section>
+
+        <aside class="flowsheet-sidebar inspector-sidebar" aria-label="Selected node details">
+          <div class="sidebar-heading">
+            <span class="eyebrow">Inspector</span>
+            <h2 id="inspectorTitle">Nothing selected</h2>
+            <p id="inspectorKind">Select a block.</p>
+          </div>
+          <div id="nodeControls"></div>
+          <dl class="inspector-metrics" id="inspectorMetrics"></dl>
+          <section class="inspector-section"><h3>Ports and connections</h3><div id="streamList" class="stream-list"></div></section>
+          <section class="inspector-section"><h3>Current inflow and outflow</h3><div id="recipeList" class="recipe-list"></div></section>
+          <section class="inspector-section"><h3>Circular exchanges</h3><div id="exchangeList" class="recipe-list"></div></section>
+          <section class="inspector-section"><h3>Balance residuals</h3><dl class="balance-list" id="balanceList"></dl></section>
+        </aside>
+      </main>
+    </section>
+
+    <section class="tab-panel economics-tab" id="panelEconomics" role="tabpanel" aria-labelledby="tabEconomics" hidden>
+      <div class="economics-layout">
+        <section class="tool-panel economics-panel" aria-live="polite">
+          <div class="tool-panel-head">
+            <div>
+              <span class="eyebrow">Current plant</span>
+              <h3>This factory</h3>
+            </div>
+            <div class="project-assumptions">
+              <label>Years <input id="projectLifeYears" type="number" min="1" step="1" value="20"></label>
+              <label>Discount <span class="number-with-unit"><input id="discountRate" type="number" min="0" step="0.1" value="8"><span>%</span></span></label>
+            </div>
+          </div>
+          <p class="status-meta" id="economicsStatus">Complete the graph to calculate viability.</p>
+          <p class="economics-banner" id="economicsBanner" hidden></p>
+          <label class="economics-ack" id="economicsAckLabel"><input id="economicsAck" type="checkbox"> I understand these are screening figures, not bankable</label>
+          <dl class="strip-metrics" id="economicsMetrics"></dl>
+        </section>
+
+        <section class="tool-panel network-panel is-empty" id="networkPanel">
+          <div class="tool-panel-head">
+            <div>
+              <span class="eyebrow">Network rollup</span>
+              <h3 id="networkTitle">No plants</h3>
+            </div>
+            <div class="network-actions">
+              <button type="button" id="addPlantToNetwork">Add current plant</button>
+              <button type="button" id="clearNetwork">Clear network</button>
+            </div>
+          </div>
+          <p class="status-meta" id="networkStatus">Separate from the plant above — multi-plant materials, land, freight, cash.</p>
+          <details class="more-section network-detail">
+            <summary>Network detail</summary>
+            <div id="networkBody" class="network-body" hidden>
+              <div class="network-plants-block">
+                <h4>Plants</h4>
+                <div id="networkPlants" class="network-plants"></div>
+              </div>
+              <div class="network-rollup">
+                <h4>Rollup</h4>
+                <dl class="strip-metrics" id="networkMetrics"></dl>
+                <h4>Product slate · t/year</h4>
+                <dl class="product-slate" id="networkProducts"></dl>
+                <div id="networkCorridors" class="network-haul"></div>
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <details class="more-section footprint-details">
+          <summary>Site footprint</summary>
+          <div id="siteFootprint" class="site-footprint tool-panel" hidden>
+            <svg id="siteFootprintSvg" class="footprint-svg" viewBox="0 0 160 12" aria-hidden="true"></svg>
+            <dl class="strip-metrics" id="siteFootprintMetrics"></dl>
+            <ul class="footprint-pads" id="siteFootprintPads"></ul>
+            <p class="status-meta" id="siteFootprintNote"></p>
+          </div>
+        </details>
+      </div>
+    </section>
+  </div>
+
+  <script src="engine/model.js?v=b38eb1c7bca2"></script>
+  <script src="engine/units.js?v=b38eb1c7bca2"></script>
+  <script src="engine/heat.js?v=b38eb1c7bca2"></script>
+  <script src="engine/solve.js?v=b38eb1c7bca2"></script>
+  <script src="engine/economics.js?v=b38eb1c7bca2"></script>
+  <script src="engine/footprint.js?v=b38eb1c7bca2"></script>
+  <script src="engine/size.js?v=b38eb1c7bca2"></script>
+  <script src="engine/network.js?v=b38eb1c7bca2"></script>
+  <script src="engine/uncertainty.js?v=b38eb1c7bca2"></script>
+  <script src="engine/map-site.js?v=b38eb1c7bca2"></script>
+  <script src="data/pvgis-almeria-hourly.js?v=b38eb1c7bca2"></script>
+  <script src="data/dead-sea-brine.js?v=b38eb1c7bca2"></script>
+  <script src="data/almeria-seawater.js?v=b38eb1c7bca2"></script>
+  <script src="data/site-presets.js?v=b38eb1c7bca2"></script>
+  <script src="data/land-prices.js?v=b38eb1c7bca2"></script>
+  <script src="data/land-admin.js?v=b38eb1c7bca2"></script>
+  <script src="cases/sabatier.js?v=b38eb1c7bca2"></script>
+  <script src="cases/coastal.js?v=b38eb1c7bca2"></script>
+  <script src="cases/abundance.js?v=b38eb1c7bca2"></script>
+  <script src="cases/network.js?v=b38eb1c7bca2"></script>
+  <script src="vendor/LercDecode.js?v=b38eb1c7bca2"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
+  <script src="js/flowsheet-app.js?v=b38eb1c7bca2"></script>
+</body>
+</html>

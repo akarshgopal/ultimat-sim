@@ -445,13 +445,21 @@ function reaction(specification) {
       port, stream(input.substance, productMol * input.molPerProductMol, feeds[port].phase),
     ]));
     const limitingValue = Math.min(...Object.values(limits));
+    const wasteHeatKWhPerKg = nonnegative(Number(
+      params.wasteHeatKWhPerKg ?? params.heatKWhPerKg ?? specification.heatKWhPerKg ?? 0
+    ), 'wasteHeatKWhPerKg');
+    const wasteHeatT_C = Number(params.wasteHeatT_C ?? specification.wasteHeatT_C ?? 250);
+    const outlets = Object.fromEntries(Object.entries(specification.outputs).map(([port, output]) => [
+      port, stream(output.substance, productMol * output.molPerProductMol, output.phase),
+    ]));
+    if (wasteHeatKWhPerKg > 0 || specification.heatKWhPerKg != null) {
+      outlets.wasteHeat = { kind: 'heat', kWh: activity * wasteHeatKWhPerKg, T_C: wasteHeatT_C };
+    }
     return {
       activity,
       requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * electricitySEC } },
       consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * electricitySEC } },
-      outlets: Object.fromEntries(Object.entries(specification.outputs).map(([port, output]) => [
-        port, stream(output.substance, productMol * output.molPerProductMol, output.phase),
-      ])),
+      outlets,
       limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
         .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
         .map(([name]) => name),
@@ -538,6 +546,18 @@ const ammonia = reaction({
   product: 'NH3', electricityKWhPerKg: 0.6,
   inputs: { nitrogen: { substance: 'N2', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
   outputs: { ammonia: { substance: 'NH3', molPerProductMol: 1, phase: 'liquid' } },
+});
+// CO2 + 3 H2 → CH3OH + H2O. 0.5 kWh/kg is screening synthesis/compression, not electrolysis.
+// Reject heat 0.43 kWh/kg is gas-phase enthalpy (~49 kJ/mol / 3.6 / 32.04); 250 °C is a screening reject T.
+const methanol = reaction({
+  product: 'CH3OH', electricityKWhPerKg: 0.5,
+  heatKWhPerKg: 0.43,
+  wasteHeatT_C: 250,
+  inputs: { co2: { substance: 'CO2', molPerProductMol: 1 }, hydrogen: { substance: 'H2', molPerProductMol: 3 } },
+  outputs: {
+    methanol: { substance: 'CH3OH', molPerProductMol: 1, phase: 'liquid' },
+    water: { substance: 'H2O', molPerProductMol: 1, phase: 'liquid' },
+  },
 });
 const chlorAlkali = reaction({
   product: 'NaOH', electricityKWhPerKg: 2.5,
@@ -766,6 +786,18 @@ const UNITS = Object.freeze({
       wasteHeat: { direction: 'out', kind: 'heat', required: true },
     },
     evaluate: sabatier,
+  },
+  methanol: {
+    kind: 'converter',
+    ports: {
+      co2: { direction: 'in', kind: 'material', required: true },
+      hydrogen: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      methanol: { direction: 'out', kind: 'material', required: true },
+      water: { direction: 'out', kind: 'material', required: true },
+      wasteHeat: { direction: 'out', kind: 'heat', required: true },
+    },
+    evaluate: methanol,
   },
   asu: {
     kind: 'converter',

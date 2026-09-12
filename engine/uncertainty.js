@@ -45,6 +45,7 @@ const UNIT_INTENSITY_QUALITY = Object.freeze({
   'dac-liquid': 'cited',
   'dac-electroswing': 'cited',
   sabatier: 'screening',
+  methanol: 'screening',
   asu: 'recoverable',
   ammonia: 'recoverable',
   'brine-minerals': 'assumption',

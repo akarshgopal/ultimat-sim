@@ -71,6 +71,8 @@
                 <select id="sizeProduct" aria-label="Size-to-target product">
                   <option value="CH4">CH₄</option>
                   <option value="H2">H₂</option>
+                  <option value="methanol">Methanol</option>
+                  <option value="ammonia">Ammonia</option>
                   <option value="lithium">Lithium</option>
                   <option value="salt">Salt</option>
                 </select>
@@ -186,6 +188,25 @@
                 </div>
               </details>
               <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
+              <details class="save-menu" id="processSizeMenu">
+                <summary>Size</summary>
+                <div class="snapshot-controls">
+                  <button type="button" id="processSizeForCashflow">Co-product cashflow</button>
+                  <label>Product
+                    <select id="processSizeProduct" aria-label="Process size-to-target product">
+                      <option value="CH4">CH₄</option>
+                      <option value="H2">H₂</option>
+                      <option value="methanol">Methanol</option>
+                      <option value="ammonia">Ammonia</option>
+                      <option value="lithium">Lithium</option>
+                      <option value="salt">Salt</option>
+                    </select>
+                  </label>
+                  <label>kg/day <input id="processSizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
+                  <button type="button" id="processSizeToTarget">Size to target</button>
+                </div>
+                <p class="status-meta" id="processSizeStatus">Physics first, then cashflow.</p>
+              </details>
               <button type="button" id="autoArrange">Arrange</button>
               <button type="button" id="focusCanvas" aria-pressed="false">Focus canvas</button>
               <details class="save-menu" id="baselineMenu">

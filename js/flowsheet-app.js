@@ -64,11 +64,13 @@
   let siteMapFailed = false;
   let siteMapTilesFailed = false;
   let siteMapLayersReady = false;
-  const SIZE_PRODUCT_LABELS = { CH4: 'CH₄', H2: 'H₂', lithium: 'lithium', salt: 'salt' };
+  const SIZE_PRODUCT_LABELS = {
+    CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
+  };
   const PALETTE_CATEGORIES = {
     Water: ['swro', 'med', 'msf'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Fuels: ['electrolyzer', 'sabatier', 'asu', 'ammonia'],
+    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia'],
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery', 'aluminium-smelter', 'hydrogen-dri', 'titanium-kroll'],
     Power: ['solar-pv', 'nuclear-electricity', 'battery', 'solar-thermal', 'thermal-storage'],
   };
@@ -205,6 +207,17 @@
       ],
       sourceNote: 'Default 1 kWh/kg CH₄ is a screening ancillary load in a 0.4–1.5 kWh/kg band, not electrolysis. Zapf (via Baier et al. 2018) gives 0.4 kWh/m³ SNG to heat the 1:4 CO₂/H₂ feed to 300 °C (~0.56 kWh/kg at 0.717 kg/m³). Compression and recycle sit above that heat-up; 1 kWh/kg is in-band screening, not a plant quote. Reject heat 2.86 kWh/kg CH₄ is 165 kJ/mol methanation enthalpy (165/3.6/16.04); 250 °C is a screening reject T, not a measured outlet.',
       references: [{ label: 'Baier et al. 2018 (citing Zapf 2017)', url: 'https://doi.org/10.3389/fenrg.2018.00005' }],
+    },
+    methanol: {
+      label: 'Methanol synthesis', capacity: 1000, rate: 100, activityUnit: 'kg CH₃OH/day',
+      palette: { section: 'building', order: 6.5, glyph: 'MeOH', tone: 'methane', description: 'CO₂ + 3 H₂ → methanol' },
+      params: { electricityKWhPerKg: 0.5, wasteHeatKWhPerKg: 0.43, wasteHeatT_C: 250 },
+      controls: [
+        { key: 'electricityKWhPerKg', label: 'Synthesis electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg MeOH' },
+        { key: 'wasteHeatKWhPerKg', label: 'Reject heat', min: 0, max: 3, step: 0.01, unit: 'kWhₜₕ/kg MeOH' },
+        { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 80, max: 400, step: 5, unit: '°C' },
+      ],
+      sourceNote: 'Default 0.5 kWh/kg is screening synthesis/compression, not electrolysis. Reject heat 0.43 kWh/kg is CO₂ + 3 H₂ → CH₃OH + H₂O enthalpy (~49 kJ/mol / 3.6 / 32.04); 250 °C is a screening reject T, not a measured outlet.',
     },
     asu: {
       label: 'Air separation unit', capacity: 1000, rate: 100, activityUnit: 'kg N₂/day',
@@ -368,7 +381,7 @@
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
     capturedCo2: 'Captured CO₂', depletedAir: 'Depleted gas', spentMedia: 'Spent media', feed: 'Feed water', product: 'Fresh water',
     brine: 'Brine', water: 'Water', hydrogen: 'Hydrogen', oxygen: 'Oxygen', waterReject: 'Reject water',
-    co2: 'CO₂', methane: 'Methane', out: 'Output', in: 'Input',
+    co2: 'CO₂', methane: 'Methane', methanol: 'Methanol', out: 'Output', in: 'Input',
     wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'Ammonia', offgas: 'Off-gas',
     lithium: 'Lithium chloride', bromide: 'Sodium bromide', magnesium: 'Magnesium chloride', potash: 'Potash', gypsum: 'Gypsum', salt: 'Salt', raffinate: 'Raffinate',
     caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Aluminium', carbonDioxide: 'Carbon dioxide',
@@ -507,7 +520,23 @@
       /* sizeToProduct writes the status line */
     }
   });
+  document.getElementById('processSizeToTarget')?.addEventListener('click', () => {
+    const product = document.getElementById('processSizeProduct')?.value || 'CH4';
+    const rate = Number(document.getElementById('processSizeTargetRate')?.value);
+    try {
+      sizeToProduct(product, rate);
+    } catch {
+      /* sizeToProduct writes the status line */
+    }
+  });
   document.getElementById('sizeForCashflow')?.addEventListener('click', () => {
+    try {
+      sizeForPositiveCashflow();
+    } catch {
+      /* sizeForPositiveCashflow writes the status line */
+    }
+  });
+  document.getElementById('processSizeForCashflow')?.addEventListener('click', () => {
     try {
       sizeForPositiveCashflow();
     } catch {
@@ -810,13 +839,18 @@
     const nodes = definition?.graph?.nodes || [];
     if (product === 'CH4') return nodes.find(node => node.unit === 'sabatier')?.id;
     if (product === 'H2') return nodes.find(node => node.unit === 'electrolyzer')?.id;
+    if (product === 'methanol') return nodes.find(node => node.unit === 'methanol')?.id;
+    if (product === 'ammonia') return nodes.find(node => node.unit === 'ammonia')?.id;
     if (product === 'lithium' || product === 'salt') return nodes.find(node => node.unit === 'brine-minerals')?.id;
     return nodes[0]?.id;
   }
 
   function writeSizeStatus(error) {
-    const status = document.getElementById('sizeToTargetStatus');
-    if (status && error) status.textContent = error.message || String(error);
+    const text = error?.message || String(error || '');
+    for (const id of ['sizeToTargetStatus', 'processSizeStatus']) {
+      const status = document.getElementById(id);
+      if (status && error) status.textContent = text;
+    }
   }
 
   function sizeToProduct(product, rate, opts = {}) {
@@ -1855,7 +1889,9 @@
       'dac.air': 'air', 'dac-solid.air': 'air', 'dac-liquid.air': 'air', 'dac-electroswing.air': 'air',
       'asu.air': 'air', 'swro.feed': 'seawater', 'med.feed': 'seawater', 'msf.feed': 'seawater', 'brine-minerals.brine': 'brine',
       'electrolyzer.water': 'water', 'chlor-alkali.water': 'water', 'sabatier.co2': 'co2', 'sabatier.hydrogen': 'hydrogen',
-      'ammonia.nitrogen': 'nitrogen', 'ammonia.hydrogen': 'hydrogen', 'chlor-alkali.salt': 'salt',
+      'ammonia.nitrogen': 'nitrogen', 'ammonia.hydrogen': 'hydrogen',
+      'methanol.co2': 'co2', 'methanol.hydrogen': 'hydrogen',
+      'chlor-alkali.salt': 'salt',
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
       'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'titanium-kroll.titaniumTetrachloride': 'titaniumTetrachloride', 'titanium-kroll.magnesium': 'magnesium',
@@ -2934,16 +2970,19 @@
     document.getElementById('siteEvidence').innerHTML = (site?.evidence || []).map(item => (
       item.url ? `<a href="${item.url}" target="_blank" rel="noreferrer">${item.label}</a>` : item.label
     )).join(' · ');
-    const sizeStatus = document.getElementById('sizeToTargetStatus');
-    if (sizeStatus) {
+    const sizeText = (() => {
       if (lastSizing?.mode === 'positive-cashflow') {
         const obj = lastSizing.objective || {};
         const selected = lastSizing.selected || {};
         const slate = selected.slateMode || selected.product || 'slate';
         const scale = selected.scale != null ? ` · scale ${selected.scale}×` : (selected.rate != null ? ` · ${selected.rate} kg/day` : '');
         const metNote = obj.met ? '' : ' · objective not met';
-        sizeStatus.textContent = `${obj.positiveSaleCount || 0} positive-sale products · net cash ${formatCashflowMoney(obj.annualNetCash)} · ${slate}${scale}${metNote}`;
-      } else if (lastSizing) {
+        const heatNote = lastSizing.heatCoveredKWh != null || lastSizing.heatResidualKWh != null
+          ? ` · heat covered ${formatNumber(lastSizing.heatCoveredKWh || 0)} / residual ${formatNumber(lastSizing.heatResidualKWh || 0)} kWh`
+          : '';
+        return `${obj.positiveSaleCount || 0} positive-sale products · net cash ${formatCashflowMoney(obj.annualNetCash)} · ${slate}${scale}${heatNote}${metNote}`;
+      }
+      if (lastSizing) {
         const iters = lastSizing.iterations;
         const capNote = lastSizing.history?.some(step => step.capped) ? ' · cap-limited' : '';
         const convergeNote = lastSizing.converged ? '' : ' · not converged';
@@ -2956,10 +2995,18 @@
         const heatNote = lastSizing.heatCoveredKWh != null || lastSizing.heatResidualKWh != null
           ? ` · heat covered ${formatNumber(lastSizing.heatCoveredKWh || 0)} / residual ${formatNumber(lastSizing.heatResidualKWh || 0)} kWh`
           : '';
-        sizeStatus.textContent = `${product} · ${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${heatNote}${capNote}${convergeNote}${rightsNote}`;
-      } else {
-        sizeStatus.textContent = 'Single-product physics tool.';
+        return `${product} · ${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${heatNote}${capNote}${convergeNote}${rightsNote}`;
       }
+      return null;
+    })();
+    if (sizeText) {
+      for (const id of ['sizeToTargetStatus', 'processSizeStatus']) {
+        const sizeStatus = document.getElementById(id);
+        if (sizeStatus) sizeStatus.textContent = sizeText;
+      }
+    } else {
+      const overview = document.getElementById('sizeToTargetStatus');
+      if (overview) overview.textContent = 'Single-product physics tool.';
     }
   }
 

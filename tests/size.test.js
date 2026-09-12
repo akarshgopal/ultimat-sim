@@ -175,3 +175,120 @@ test('coastal H2 size closes mass balance and horizon produces hydrogen', () => 
     assert.ok(horizon.nodes.electrolyzer.limitedBy.length, 'undersized horizon must name a binding constraint');
   }
 });
+
+function methanolPlant({ rate = 10 } = {}) {
+  const h2Kg = 3 * SUBSTANCES.H2.molarMassG / SUBSTANCES.CH3OH.molarMassG * rate;
+  const co2Kg = SUBSTANCES.CO2.molarMassG / SUBSTANCES.CH3OH.molarMassG * rate;
+  return {
+    graph: {
+      nodes: [
+        { id: 'hydrogen', unit: 'material-source', params: { stream: { kind: 'material', mol: { H2: h2Kg * 1000 / SUBSTANCES.H2.molarMassG }, phase: 'gas', T_C: 25, P_bar: 1 } } },
+        { id: 'co2', unit: 'material-source', params: { stream: { kind: 'material', mol: { CO2: co2Kg * 1000 / SUBSTANCES.CO2.molarMassG }, phase: 'gas', T_C: 25, P_bar: 1 } } },
+        { id: 'electricity', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: 50 } } },
+        { id: 'methanol', unit: 'methanol', capacity: rate, params: { electricityKWhPerKg: 0.5, wasteHeatKWhPerKg: 0.43, wasteHeatT_C: 250 } },
+        { id: 'methanol-product', unit: 'material-sink' },
+        { id: 'process-water', unit: 'material-sink' },
+        { id: 'waste-heat', unit: 'heat-sink' },
+      ],
+      edges: [
+        { from: { node: 'hydrogen', port: 'out' }, to: { node: 'methanol', port: 'hydrogen' } },
+        { from: { node: 'co2', port: 'out' }, to: { node: 'methanol', port: 'co2' } },
+        { from: { node: 'electricity', port: 'out' }, to: { node: 'methanol', port: 'electricity' } },
+        { from: { node: 'methanol', port: 'methanol' }, to: { node: 'methanol-product', port: 'in' } },
+        { from: { node: 'methanol', port: 'water' }, to: { node: 'process-water', port: 'in' } },
+        { from: { node: 'methanol', port: 'wasteHeat' }, to: { node: 'waste-heat', port: 'in' } },
+      ],
+    },
+    operation: { setpoints: { methanol: rate } },
+  };
+}
+
+function h2MedHotPlant() {
+  const seawater = {
+    kind: 'material',
+    mol: { H2O: 8000 },
+    phase: 'liquid',
+    T_C: 25,
+    P_bar: 1,
+  };
+  const h2Mol = 20 * 1000 / SUBSTANCES.H2.molarMassG;
+  const co2Mol = 8 * 1000 / SUBSTANCES.CO2.molarMassG;
+  return {
+    graph: {
+      nodes: [
+        { id: 'seawater', unit: 'material-source', params: { stream: seawater } },
+        { id: 'hot-h2', unit: 'material-source', params: { stream: { kind: 'material', mol: { H2: h2Mol }, phase: 'gas', T_C: 25, P_bar: 1 } } },
+        { id: 'hot-co2', unit: 'material-source', params: { stream: { kind: 'material', mol: { CO2: co2Mol }, phase: 'gas', T_C: 25, P_bar: 1 } } },
+        { id: 'electricity', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: 2000 } } },
+        { id: 'heat', unit: 'heat-source', params: { stream: { kind: 'heat', kWh: 200, T_C: 120 } } },
+        { id: 'power-bus', unit: 'electrical-bus' },
+        { id: 'desal', unit: 'med', capacity: 2, params: { recovery: 0.35, electricityKWhPerM3: 2, heatKWhPerM3: 60, minHeatT_C: 70, wasteHeatT_C: 40, feedDensityKgM3: 1000, productDensityKgM3: 1000, ionRejection: 1 } },
+        { id: 'electrolyzer', unit: 'electrolyzer', capacity: 5, params: { secKWhPerKgH2: 52 } },
+        { id: 'hot', unit: 'methanol', capacity: 8, params: { electricityKWhPerKg: 0, wasteHeatKWhPerKg: 2, wasteHeatT_C: 250 } },
+        { id: 'brine', unit: 'material-sink' },
+        { id: 'hydrogen', unit: 'material-sink' },
+        { id: 'oxygen', unit: 'material-sink' },
+        { id: 'waterReject', unit: 'material-sink' },
+        { id: 'methanol-product', unit: 'material-sink' },
+        { id: 'process-water', unit: 'material-sink' },
+        { id: 'waste-heat', unit: 'heat-sink' },
+        { id: 'desal-waste', unit: 'heat-sink' },
+      ],
+      edges: [
+        { from: { node: 'seawater', port: 'out' }, to: { node: 'desal', port: 'feed' } },
+        { from: { node: 'electricity', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        { from: { node: 'power-bus', port: 'out' }, to: { node: 'desal', port: 'electricity' } },
+        { from: { node: 'power-bus', port: 'out' }, to: { node: 'electrolyzer', port: 'electricity' } },
+        { from: { node: 'power-bus', port: 'out' }, to: { node: 'hot', port: 'electricity' } },
+        { from: { node: 'heat', port: 'out' }, to: { node: 'desal', port: 'heat' } },
+        { from: { node: 'desal', port: 'product' }, to: { node: 'electrolyzer', port: 'water' } },
+        { from: { node: 'desal', port: 'brine' }, to: { node: 'brine', port: 'in' } },
+        { from: { node: 'desal', port: 'wasteHeat' }, to: { node: 'desal-waste', port: 'in' } },
+        { from: { node: 'electrolyzer', port: 'hydrogen' }, to: { node: 'hydrogen', port: 'in' } },
+        { from: { node: 'electrolyzer', port: 'oxygen' }, to: { node: 'oxygen', port: 'in' } },
+        { from: { node: 'electrolyzer', port: 'waterReject' }, to: { node: 'waterReject', port: 'in' } },
+        { from: { node: 'hot-h2', port: 'out' }, to: { node: 'hot', port: 'hydrogen' } },
+        { from: { node: 'hot-co2', port: 'out' }, to: { node: 'hot', port: 'co2' } },
+        { from: { node: 'hot', port: 'methanol' }, to: { node: 'methanol-product', port: 'in' } },
+        { from: { node: 'hot', port: 'water' }, to: { node: 'process-water', port: 'in' } },
+        { from: { node: 'hot', port: 'wasteHeat' }, to: { node: 'waste-heat', port: 'in' } },
+      ],
+    },
+    operation: {
+      setpoints: { desal: 0.2, electrolyzer: 2, hot: 8 },
+      priorities: { 'power-bus': ['desal', 'electrolyzer', 'hot'] },
+    },
+  };
+}
+
+test('sizeToProduct methanol meets a sink target on a minimal graph', () => {
+  const sized = sizeToProduct({ product: 'CH3OH', rate: 12, definition: methanolPlant({ rate: 4 }) });
+  assert.equal(sized.product, 'methanol');
+  assert.ok(Math.abs(sized.achieved - 12) < 1e-6);
+  assert.ok(sized.residual < 1e-6);
+  assert.equal(sized.converged, true);
+  assert.ok(sized.definition.graph.nodes.find(node => node.unit === 'methanol').capacity >= 12 - 1e-9);
+  assertClosed(sized.solved);
+});
+
+test('sizeToProduct ammonia on abundance meets the NH3 sink', () => {
+  const sized = sizeToProduct({ product: 'NH3', rate: 10, caseOrBuilder: createAbundanceCase });
+  assert.equal(sized.product, 'ammonia');
+  assert.ok(Math.abs(sized.achieved - 10) < 1e-4);
+  assert.ok(sized.residual < 1e-6);
+  assert.equal(sized.converged, true);
+  assertClosed(sized.solved);
+});
+
+test('H2 sizing cascades an explicit hot source onto MED heat', () => {
+  const withCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant() });
+  const withoutCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant(), heatCredit: false });
+  const lastWith = withCredit.history.at(-1).duties;
+  const lastWithout = withoutCredit.history.at(-1).duties;
+  assert.ok(lastWithout.heatKWh > lastWith.heatKWh + 1e-9);
+  assert.ok(lastWith.heatCoveredKWh > 0 || withCredit.solved.heatIntegration.coveredKWh > 0);
+  assert.ok(Math.abs(withCredit.achieved - 2) < 1e-6);
+  assert.ok(Math.abs(withoutCredit.achieved - 2) < 1e-6);
+  assertClosed(withCredit.solved);
+  assertClosed(withoutCredit.solved);
+});

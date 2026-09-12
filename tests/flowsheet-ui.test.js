@@ -244,6 +244,26 @@ test('Location presets populate by region and applying Almería sets coords, nam
   assert.equal(app.site.rights.seawaterDischarge.status, 'unverified');
 });
 
+test('size product menus list methanol and ammonia', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /id="sizeProduct"/);
+  assert.match(html, /value="methanol"/);
+  assert.match(html, /value="ammonia"/);
+  assert.match(html, /id="processSizeProduct"/);
+  assert.match(html, /id="processSizeForCashflow"/);
+});
+
+test('positive-cashflow status reports heat covered when present', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadAbundanceHub();
+  const sized = app.sizeForPositiveCashflow({ scales: [1], rates: [0] });
+  assert.equal(sized.mode, 'positive-cashflow');
+  const status = context.__elements.get('sizeToTargetStatus').textContent;
+  assert.match(status, /positive-sale/);
+  assert.match(status, /heat covered/);
+});
+
 test('coastal methane sizeToProduct H2 produces electrolyzer activity and never Limited by Nothing at zero', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;

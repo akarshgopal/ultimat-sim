@@ -9,6 +9,7 @@ const SUBSTANCES = Object.freeze({
   O2: { elements: { O: 2 }, molarMassG: 31.9988, charge: 0 },
   CO2: { elements: { C: 1, O: 2 }, molarMassG: 44.0095, charge: 0 },
   CH4: { elements: { C: 1, H: 4 }, molarMassG: 16.04246, charge: 0 },
+  CH3OH: { elements: { C: 1, H: 4, O: 1 }, molarMassG: 32.04186, charge: 0 },
   N2: { elements: { N: 2 }, molarMassG: 28.0134, charge: 0 },
   'Na+': { elements: { Na: 1 }, molarMassG: 22.989769, charge: 1 },
   'Cl-': { elements: { Cl: 1 }, molarMassG: 35.45, charge: -1 },

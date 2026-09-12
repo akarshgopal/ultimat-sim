@@ -109,6 +109,7 @@ These distort “real” material–energy–land–money coupling the most when
 | --- | --- | --- | --- | --- |
 | Sabatier stoich | CO₂ + 4 H₂ → CH₄ + 2 H₂O | Mass balances | **derived** | Already documented in architecture. |
 | Sabatier | `electricityKWhPerKgCH4: 1` (catalog & cases) | Ancillary power | **screening** | 0.4–1.5 kWh/kg band, not electrolysis. Zapf (via Baier et al. 2018 Frontiers) 0.4 kWh/m³ SNG heat-up ≈ 0.56 kWh/kg. 1 kWh/kg kept as in-band screening. |
+| methanol | `0.5` kWh/kg MeOH; waste `0.43` kWh/kg @ 250 °C; CO₂ + 3 H₂ → CH₃OH + H₂O | Synthesis power + reject heat | **screening** (power, T) / **derived** (stoich, enthalpy) | Power is synthesis/compression, not electrolysis. 0.43 kWh/kg is ~49 kJ/mol / 3.6 / 32.04. |
 | ASU | N₂ recovery 0.98; O₂ 0.95; `0.25` kWh/kg N₂ | Air separation | **recoverable** | Replace vague DOE R&D link with cryogenic ASU SEC literature (~0.2–0.4 kWh/kg N₂). |
 | ammonia | `0.6` kWh/kg NH₃ (+ stoich 0.5 N₂, 1.5 H₂) | Haber–Bosch power beyond H₂ | **recoverable** | Cite IEA/DOE ammonia energy; clarify this excludes electrolysis. |
 | chlor-alkali | `2.5` kWh/kg NaOH; 1:1:0.5:0.5 stoich | Membrane cell screening | **recoverable** | DOE chlor-alkali profile already linked — extract SEC. |
@@ -138,7 +139,7 @@ These distort “real” material–energy–land–money coupling the most when
 | --- | --- | --- | --- | --- |
 | MED/MSF/DAC waste heat T | 40–100 °C defaults | Reject heat grade | **assumption** | Screening reject temperature for cascade eligibility. |
 | Sabatier `heatKWhPerKgCH4` 2.86; `wasteHeatT_C` 250 °C | Recoverable methanation reject | **derived** (enthalpy) / **assumption** (T) | 165 kJ/mol CH₄ / 3.6 / 16.04 ≈ 2.86 kWh/kg. 250 °C is a screening reject T, not a measured outlet. Cascade-eligible vs DAC `minHeatT_C` 80 °C. |
-| `engine/heat.js` cascade | Covered / residual demand / unrecovered waste | **derived** | Post-solve T-feasible greedy match of converter `wasteHeat` onto `consumed.heat`. Not HEN synthesis. Does not change `balances.heatKWh` or remove the external heat-source node. `sizeToProduct` CH4 duty estimate uses the same matcher; purchased heat is residual. |
+| `engine/heat.js` cascade | Covered / residual demand / unrecovered waste | **derived** | Post-solve T-feasible greedy match of converter `wasteHeat` onto `consumed.heat`. Not HEN synthesis. Does not change `balances.heatKWh` or remove the external heat-source node. `sizeToProduct` duty estimates use the same matcher on every product path with heat sinks/sources; purchased heat is residual. Parked converters are not credited. |
 | `engine/size.js` unmet heat | Electric resistance COP=1 | **assumption** / **screening** | After cascade, residual process heat is added to electricity for PV (`solarKWp`). Covered cascade duty is not. Opt out with `heatCredit: false`. Not a heat pump; not a modeled electric heater block. |
 | coastal heat budget | 30 kWh/day @ 100 °C | DAC heat supply | **assumption** | Explicitly noted unverified in site notes. |
 | `solar-thermal` | sunHours 6; T 150 °C; CAPEX 1000 $/kWₜₕ | Process heat source | **assumption** (DOE process-heat page linked) | Map to DOE/NREL CSP or flat-plate cost & yield. |

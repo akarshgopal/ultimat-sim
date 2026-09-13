@@ -4,6 +4,7 @@
 })(globalThis, Object.freeze([
   Object.freeze({
     id: 'uae-taweelah',
+    assayId: 'persian-gulf-seawater',
     name: 'Taweelah, Abu Dhabi, UAE',
     region: 'Gulf',
     latitude: 24.761,
@@ -24,6 +25,7 @@
   }),
   Object.freeze({
     id: 'qatar-ras-laffan',
+    assayId: 'persian-gulf-seawater',
     name: 'Ras Laffan, Qatar',
     region: 'Gulf',
     latitude: 25.888,
@@ -44,6 +46,7 @@
   }),
   Object.freeze({
     id: 'saudi-oxagon',
+    assayId: 'red-sea-seawater',
     name: 'NEOM Oxagon, Red Sea, Saudi Arabia',
     region: 'Red Sea',
     latitude: 28.131,
@@ -64,6 +67,7 @@
   }),
   Object.freeze({
     id: 'egypt-ain-sokhna',
+    assayId: 'red-sea-seawater',
     name: 'Ain Sokhna, Gulf of Suez, Egypt',
     region: 'Red Sea',
     latitude: 29.648,
@@ -104,6 +108,7 @@
   }),
   Object.freeze({
     id: 'au-port-hedland',
+    assayId: 'pilbara-indian-ocean-seawater',
     name: 'Port Hedland, Pilbara, Australia',
     region: 'Australia',
     latitude: -20.310,
@@ -124,6 +129,7 @@
   }),
   Object.freeze({
     id: 'au-kwinana',
+    assayId: 'pilbara-indian-ocean-seawater',
     name: 'Kwinana, Western Australia',
     region: 'Australia',
     latitude: -32.232,
@@ -164,6 +170,7 @@
   }),
   Object.freeze({
     id: 'texas-corpus-christi',
+    assayId: 'texas-gulf-seawater',
     name: 'Corpus Christi, Texas, USA',
     region: 'Texas/US Gulf',
     latitude: 27.813,
@@ -184,6 +191,7 @@
   }),
   Object.freeze({
     id: 'morocco-agadir',
+    assayId: 'morocco-atlantic-seawater',
     name: 'Agadir, Morocco',
     region: 'North Africa',
     latitude: 30.427,
@@ -204,6 +212,7 @@
   }),
   Object.freeze({
     id: 'morocco-dakhla',
+    assayId: 'morocco-atlantic-seawater',
     name: 'Dakhla, Atlantic Sahara',
     region: 'North Africa',
     latitude: 23.714,
@@ -224,6 +233,7 @@
   }),
   Object.freeze({
     id: 'chile-mejillones',
+    assayId: 'atacama-pacific-seawater',
     name: 'Mejillones, Antofagasta, Chile',
     region: 'Atacama/Chile',
     latitude: -23.100,
@@ -264,6 +274,7 @@
   }),
   Object.freeze({
     id: 'spain-almeria',
+    assayId: 'almeria-seawater',
     name: 'Almería coast · Spain',
     region: 'Europe',
     latitude: 36.834,

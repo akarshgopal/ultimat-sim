@@ -19,10 +19,12 @@ const ALBORAN_URL = 'https://en.wikipedia.org/wiki/Alboran_Sea';
 const EVIDENCE = [
   { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; 2023 hourly typical day for dispatch', url: PVGIS_URL },
   { label: 'PEM: DOE 2022 system status, 55 kWh/kg H₂; not a future target', url: 'https://www.energy.gov/cmei/fuels/technical-targets-proton-exchange-membrane-electrolysis' },
+  { label: 'SWRO plant SEC band: Elimelech & Phillip 2011; Voutchkov 2018 RO-train 2.5–2.8 kWh/m³', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
   { label: 'Seawater: Millero/Pilson S=35 majors scaled 36.5/35 for Alboran MAW near Almería; not a NaCl proxy', url: MILLERO_URL },
   { label: 'Alboran Sea Modified Atlantic Water salinity context (~36.5 g/kg)', url: ALBORAN_URL },
   { label: 'Air: 422.45 ppm, 2024 global estimate; dry O₂/N₂ balance is simplified', url: 'https://essd.copernicus.org/articles/17/965/2025/' },
-  { label: 'DAC: solid-sorbent route; heat, capture and makeup rates are screening assumptions', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
+  { label: 'DAC: solid-sorbent route; heat, capture and makeup rates are screening assumptions (IEA 2022)', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
+  { label: 'NASEM 2019 Negative Emissions Technologies — DAC heat-dominated (DOI)', url: 'https://doi.org/10.17226/25259' },
 ];
 
 function seawaterFromAssay(almeriaAssay, massKg) {

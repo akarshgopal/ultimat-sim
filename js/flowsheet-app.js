@@ -90,7 +90,7 @@
         { key: 'secKWhPerM3', label: 'Electricity', min: 2, max: 8, step: 0.1, unit: 'kWh/m³' },
         { key: 'ionRejection', label: 'Ion rejection', min: 0.95, max: 1, step: 0.001 },
       ],
-      sourceNote: 'Default 3.5 kWh/m³ is a plant-level SEC in the Elimelech & Phillip 2011 3–4 kWh/m³ band (RO stage plus intake, pretreatment, posttreatment, and brine discharge). Recovery 0.45 is the low end of the 45–55% range in which most SWRO plants operate. Ghaffour et al. 2013 reports the same 3–4 kWh/m³ SWRO plant band with energy recovery.',
+      sourceNote: 'Default 3.5 kWh/m³ is a plant-level SEC in the Elimelech & Phillip 2011 3–4 kWh/m³ band (RO stage plus intake, pretreatment, posttreatment, and brine discharge). Recovery 0.45 is the low end of the 45–55% range in which most SWRO plants operate. Ghaffour et al. 2013 reports the same 3–4 kWh/m³ SWRO plant band with energy recovery. Voutchkov 2018 reports best-in-class medium/large SWRO membrane systems at 2.5–2.8 kWh/m³ (RO train); 3.5 keeps the broader plant-level band rather than RO-only best-in-class.',
       references: [
         { label: 'Elimelech & Phillip 2011', url: 'https://doi.org/10.1126/science.1200488' },
         { label: 'Ghaffour et al. 2013', url: 'https://doi.org/10.1016/j.apenergy.2012.12.073' },
@@ -146,10 +146,11 @@
         { key: 'consumablesPerKgCO2', label: 'Consumables', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
       ],
-      sourceNote: 'Screening assumption in the IEA DAC 2022 solid-sorbent family, not a plant quote. Electricity 0.5 kWh/kg CO₂ = 1.8 GJ/t; heat 1.5 kWh/kg CO₂ = 5.4 GJ/t (×3.6 MJ/kWh). Combined 7.2 GJ/t sits at the low end of IEA S-DAC 7.2–9.5 GJ/t with a 25/75 electricity/heat split. Capture fraction 0.9 and amine makeup 0.02 kg/kg CO₂ are screening, not IEA table values.',
+      sourceNote: 'Screening assumption in the IEA DAC 2022 solid-sorbent family, not a plant quote. Electricity 0.5 kWh/kg CO₂ = 1.8 GJ/t; heat 1.5 kWh/kg CO₂ = 5.4 GJ/t (×3.6 MJ/kWh). Combined 7.2 GJ/t sits at the low end of IEA S-DAC 7.2–9.5 GJ/t with a 25/75 electricity/heat split. NASEM 2019 (DOI 10.17226/25259) likewise notes thermal regeneration dominates solid-sorbent DAC energy. Capture fraction 0.9 and amine makeup 0.02 kg/kg CO₂ are screening, not IEA/NASEM table values. minHeatT_C 80 °C is a low-grade solid-sorbent screening floor.',
       references: [
         { label: 'Keith et al. 2018', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
         { label: 'IEA DAC 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
+        { label: 'NASEM 2019 Negative Emissions Technologies (DAC chapter)', url: 'https://doi.org/10.17226/25259' },
       ],
     },
     'dac-solid': {
@@ -164,9 +165,10 @@
         { key: 'consumablesPerKgCO2', label: 'Amine makeup', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
       ],
-      sourceNote: 'Screening assumption in the IEA DAC 2022 solid-sorbent family, not a plant quote. Electricity 0.5 kWh/kg CO₂ = 1.8 GJ/t; heat 1.5 kWh/kg CO₂ = 5.4 GJ/t (×3.6 MJ/kWh). Combined 7.2 GJ/t sits at the low end of IEA S-DAC 7.2–9.5 GJ/t with a 25/75 electricity/heat split. Capture fraction 0.9 and amine makeup 0.02 kg/kg CO₂ are screening, not IEA table values.',
+      sourceNote: 'Screening assumption in the IEA DAC 2022 solid-sorbent family, not a plant quote. Electricity 0.5 kWh/kg CO₂ = 1.8 GJ/t; heat 1.5 kWh/kg CO₂ = 5.4 GJ/t (×3.6 MJ/kWh). Combined 7.2 GJ/t sits at the low end of IEA S-DAC 7.2–9.5 GJ/t with a 25/75 electricity/heat split. NASEM 2019 (DOI 10.17226/25259) likewise notes thermal regeneration dominates solid-sorbent DAC energy. Capture fraction 0.9 and amine makeup 0.02 kg/kg CO₂ are screening, not IEA/NASEM table values. minHeatT_C 80 °C is a low-grade solid-sorbent screening floor.',
       references: [
         { label: 'IEA DAC 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
+        { label: 'NASEM 2019 Negative Emissions Technologies (DAC chapter)', url: 'https://doi.org/10.17226/25259' },
         { label: 'Keith et al. 2018', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
       ],
     },
@@ -182,7 +184,7 @@
         { key: 'consumablesPerKgCO2', label: 'KOH makeup', min: 0, max: 0.1, step: 0.001, unit: 'kg/kg CO₂' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 20, max: 300, step: 5, unit: '°C' },
       ],
-      sourceNote: 'Keith et al. 2018 Carbon Engineering process. Heat 2.45 kWh/kg CO₂ = 8.82 GJ/t from Scenario A (8.81 GJ/t NG; 8.81/3.6 = 2.447 kWh/kg). Electricity 0.366 kWh/kg CO₂ = 366 kWh/t = 1.32 GJ/t from Scenario C purchased power. Mixed-scenario vectors, not one Keith plant configuration. Capture fraction 0.75 is Keith et al. 2018 Table 1 74.5% rounded. KOH makeup 0.01 kg/kg CO₂ is screening, not a Keith table value.',
+      sourceNote: 'Keith et al. 2018 Carbon Engineering process. Heat 2.45 kWh/kg CO₂ = 8.82 GJ/t from Scenario A (8.81 GJ/t NG; 8.81/3.6 = 2.447 kWh/kg). Electricity 0.366 kWh/kg CO₂ = 366 kWh/t = 1.32 GJ/t from Scenario C purchased power. Mixed-scenario vectors, not one Keith plant configuration. Capture fraction 0.75 is Keith et al. 2018 Table 1 74.5% rounded. minHeatT_C 900 °C matches calciner-grade liquid solvent. KOH makeup 0.01 kg/kg CO₂ is screening, not a Keith table value. NASEM 2019 frames liquid-solvent DAC as heat-dominated high-temperature regeneration.',
       references: [{ label: 'Keith et al. 2018 Carbon Engineering process', url: 'https://doi.org/10.1016/j.joule.2018.05.006' }],
     },
     'dac-electroswing': {
@@ -205,7 +207,7 @@
         { key: 'heatKWhPerKgCH4', label: 'Reject heat', min: 0, max: 5, step: 0.01, unit: 'kWhₜₕ/kg CH₄' },
         { key: 'wasteHeatT_C', label: 'Reject heat temperature', min: 80, max: 400, step: 5, unit: '°C' },
       ],
-      sourceNote: 'Default 1 kWh/kg CH₄ is a screening ancillary load in a 0.4–1.5 kWh/kg band, not electrolysis. Zapf (via Baier et al. 2018) gives 0.4 kWh/m³ SNG to heat the 1:4 CO₂/H₂ feed to 300 °C (~0.56 kWh/kg at 0.717 kg/m³). Compression and recycle sit above that heat-up; 1 kWh/kg is in-band screening, not a plant quote. Reject heat 2.86 kWh/kg CH₄ is 165 kJ/mol methanation enthalpy (165/3.6/16.04); 250 °C is a screening reject T, not a measured outlet.',
+      sourceNote: 'Default 1 kWh/kg CH₄ is a screening ancillary/compression/heat-up load in a 0.4–1.5 kWh/kg band, not electrolysis. Zapf (via Baier et al. 2018 Frontiers DOI 10.3389/fenrg.2018.00005) gives 0.4 kWh/m³ SNG to heat the 1:4 CO₂/H₂ feed to 300 °C (~0.56 kWh/kg at 0.717 kg/m³). Compression and recycle sit above that heat-up; 1 kWh/kg is in-band screening, not a plant quote. Reject heat 2.86 kWh/kg CH₄ is 165 kJ/mol methanation enthalpy (165/3.6/16.04); wasteHeatT_C 250 °C is a screening reject T for cascade eligibility, not a measured outlet.',
       references: [{ label: 'Baier et al. 2018 (citing Zapf 2017)', url: 'https://doi.org/10.3389/fenrg.2018.00005' }],
     },
     methanol: {
@@ -1082,10 +1084,29 @@
       notes: preset.notes,
       evidence: Array.isArray(preset.evidence) ? preset.evidence.map(item => ({ ...item })) : [],
       rights: rightsFromHints(preset.rightsHints),
+      resources: {},
       solarKWp: previous.solarKWp,
       storage: previous.storage,
       month: previous.month || 0,
     };
+    if (globalThis.SiteAssays?.bindPresetAssay) {
+      globalThis.SiteAssays.bindPresetAssay(site, preset.id);
+    } else if (preset.assayId) {
+      site.assay = {
+        kind: 'seawater',
+        assayId: preset.assayId,
+        quality: 'cited',
+        summary: `Frozen assay ${preset.assayId} (bind when SiteAssays is loaded)`,
+        evidence: [],
+      };
+    } else {
+      site.assay = {
+        kind: 'seawater',
+        quality: 'screening',
+        summary: 'No frozen multi-ion assay for this preset — composition not bound.',
+        evidence: [],
+      };
+    }
     render();
     return applyCoordinates();
   }

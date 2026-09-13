@@ -21,9 +21,35 @@
         "id": "eurostat-apri_lprc",
         "label": "Eurostat apri_lprc agricultural land prices (EUR/ha, ARA preferred)",
         "url": "https://ec.europa.eu/eurostat/databrowser/view/apri_lprc/default/table"
+      },
+      {
+        "id": "statcan-32100047",
+        "label": "Statistics Canada 32-10-0047-01 farm land and buildings $/acre (CAD→USD)",
+        "url": "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210004701"
+      },
+      {
+        "id": "abares-farmland-2023",
+        "label": "ABARES/DAFF Farmland Price Indicator national broadacre AUD/ha (2023)",
+        "url": "https://www.agriculture.gov.au/about/news/broadacre-farmland-prices-strong-growth"
       }
     ],
-    "generatedAt": "2026-09-07T11:45:55.571Z"
+    "fxExtra": {
+      "AUDUSD": {
+        "pair": "AUDUSD",
+        "rate": 0.71728,
+        "date": "2026-09-11",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      },
+      "CADUSD": {
+        "pair": "CADUSD",
+        "rate": 0.72161,
+        "date": "2026-09-11",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      }
+    },
+    "generatedAt": "2026-09-13T19:13:13.512Z"
   },
   "records": [
     {
@@ -42,6 +68,24 @@
         "pair": "EURUSD",
         "rate": 1.1622,
         "date": "2026-09-04",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      }
+    },
+    {
+      "id": "AU",
+      "name": "Australia",
+      "usdPerHa": 6763,
+      "audPerHa": 9429,
+      "year": 2023,
+      "source": "ABARES Farmland Price Indicator via DAFF — national broadacre AUD/ha → USD",
+      "citeUrl": "https://www.agriculture.gov.au/about/news/broadacre-farmland-prices-strong-growth",
+      "unit": "USD/ha",
+      "kind": "country",
+      "fx": {
+        "pair": "AUDUSD",
+        "rate": 0.71728,
+        "date": "2026-09-11",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
       }
@@ -82,6 +126,25 @@
         "pair": "EURUSD",
         "rate": 1.1622,
         "date": "2026-09-04",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      }
+    },
+    {
+      "id": "CA",
+      "name": "Canada",
+      "usdPerHa": 10062,
+      "cadPerAcre": 5643,
+      "usdPerAcre": 4072,
+      "year": 2025,
+      "source": "Statistics Canada Table 32-10-0047-01 — farm land and buildings value per acre (CAD) → USD",
+      "citeUrl": "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210004701",
+      "unit": "USD/ha",
+      "kind": "country",
+      "fx": {
+        "pair": "CADUSD",
+        "rate": 0.72161,
+        "date": "2026-09-11",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
       }

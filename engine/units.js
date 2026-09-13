@@ -22,6 +22,7 @@ function swro({ inlets, requestedActivity, capacity, params = {} }) {
   const requested = nonnegative(requestedActivity, 'requestedActivity');
   const installed = nonnegative(capacity, 'capacity');
   // Plant SEC 3.5 kWh/m³ and recovery 0.45 sit in Elimelech & Phillip 2011 (plant ~3–4 kWh/m³; most SWRO at 45–55%).
+  // Voutchkov 2018 best-in-class RO-train 2.5–2.8 kWh/m³; 3.5 keeps plant-level band (DOI 10.1016/j.desal.2017.10.033).
   const recovery = Number(params.recovery ?? 0.45);
   const sec = nonnegative(Number(params.secKWhPerM3 ?? 3.5), 'secKWhPerM3');
   const density = nonnegative(Number(params.feedDensityKgM3 ?? 1025), 'feedDensityKgM3');
@@ -218,7 +219,7 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
     'electricityKWhPerKgCO2'
   );
   const heatKWhPerKgCO2 = nonnegative(
-    Number(params.heatKWhPerKgCO2 ?? 1.5),
+    Number(params.heatKWhPerKgCO2 ?? 1.5), // solid default; IEA S-DAC family / NASEM 2019 heat-dominated
     'heatKWhPerKgCO2'
   );
   const minHeatT_C = Number(params.minHeatT_C ?? 80);

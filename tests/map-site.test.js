@@ -200,11 +200,11 @@ test('land USD/ha ramp is yellow→dark green; deep ocean skip still works', () 
   assert.equal(empty.fillOpacity, 0);
 });
 
-test('bundled land-prices data is finite, unique, and covers US+EU', () => {
+test('bundled land-prices data is finite, unique, and covers US+EU+CA+AU', () => {
   const bundle = getLandPricesBundle();
   assert.equal(bundle, landPrices);
   assert.ok(Array.isArray(bundle.records));
-  assert.ok(bundle.records.length >= 70);
+  assert.ok(bundle.records.length >= 76);
   const ids = new Set();
   let us = 0;
   let eu = 0;
@@ -221,6 +221,17 @@ test('bundled land-prices data is finite, unique, and covers US+EU', () => {
   }
   assert.equal(us, 48);
   assert.ok(eu >= 20, `expected ≥20 EU countries, got ${eu}`);
+  const byId = Object.fromEntries(bundle.records.map((r) => [r.id, r]));
+  assert.ok(byId.CA, 'Canada national record');
+  assert.ok(byId.AU, 'Australia national record');
+  assert.equal(byId.CA.kind, 'country');
+  assert.equal(byId.AU.kind, 'country');
+  assert.ok(byId.CA.citeUrl.includes('statcan'));
+  assert.ok(byId.AU.citeUrl.includes('agriculture.gov.au') || byId.AU.source.includes('ABARES'));
+  assert.ok(Number.isFinite(byId.CA.usdPerHa) && byId.CA.usdPerHa > 0);
+  assert.ok(Number.isFinite(byId.AU.usdPerHa) && byId.AU.usdPerHa > 0);
+  assert.ok(byId.CA.fx?.pair === 'CADUSD');
+  assert.ok(byId.AU.fx?.pair === 'AUDUSD');
   assert.ok(landPriceById('US-IA', bundle).usdPerHa > 10000);
   assert.ok(landPriceById('ES', bundle).usdPerHa > 5000);
   assert.equal(landPriceById('US-AK', bundle), null);

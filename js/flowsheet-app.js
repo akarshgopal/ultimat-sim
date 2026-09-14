@@ -498,10 +498,12 @@
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
   document.getElementById('loadMethaneRecycle').addEventListener('click', () => { setActiveDemo('methane-recycle', 'Methane recycle'); loadMethaneRecycle(); });
   document.getElementById('loadCoastalMethane').addEventListener('click', () => { setActiveDemo('coastal-methane', 'Coastal methane'); loadCoastalMethane(0); });
+  document.getElementById('loadMethanolPlant')?.addEventListener('click', () => { setActiveDemo('coastal-methanol', 'Coastal methanol'); loadMethanolPlant(0); });
   document.getElementById('processDemoMenu')?.addEventListener('click', event => {
     const demo = event.target.closest?.('[data-demo]')?.dataset.demo;
     if (demo === 'methane-recycle') { setActiveDemo(demo, 'Methane recycle'); loadMethaneRecycle(); }
     else if (demo === 'coastal-methane') { setActiveDemo(demo, 'Coastal methane'); loadCoastalMethane(0); }
+    else if (demo === 'coastal-methanol') { setActiveDemo(demo, 'Coastal methanol'); loadMethanolPlant(0); }
     else if (demo === 'abundance-hub') { setActiveDemo(demo, 'Brine + ammonia'); loadAbundanceHub(); }
     else if (demo === 'demo-network') { setActiveDemo(demo, 'Fuels + minerals'); loadDemoNetwork(); }
   });
@@ -800,6 +802,18 @@
     }
   }
 
+  function loadMethanolPlant(month = 0) {
+    lastSizing = null;
+    if (typeof MethanolCase === 'undefined' || !MethanolCase.createMethanolCase) {
+      throw new Error('Methanol case is not loaded');
+    }
+    loadCase(MethanolCase.createMethanolCase(month), 'methanol');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'Coastal methanol loaded. Size-to-target methanol sizes DAC, SWRO, electrolyzer, and PV; cashflow stays screening.';
+    }
+  }
+
   function formatSizingResidual(value) {
     const residual = Number(value);
     if (!Number.isFinite(residual)) return '—';
@@ -974,13 +988,15 @@
   function refreshSiteElectricity() {
     if (!site?.resources?.electricity) return;
     const hours = FlowsheetSolver.hourlyProfile?.(site);
-    const daily = hours ? hours.reduce((sum, value) => sum + value, 0) : Number(site.dailyPVKWhPerKWp) || 0;
+    const monthly = site.meteo?.monthlyPVKWhPerKWp;
+    const fromMonth = Array.isArray(monthly) ? monthly[site.month || 0] : null;
+    const daily = hours
+      ? hours.reduce((sum, value) => sum + value, 0)
+      : Number(fromMonth || site.dailyPVKWhPerKWp) || 0;
     const kWh = daily * Number(site.solarKWp || 0);
     site.resources.electricity.stream = { kind: 'electricity', kWh };
     site.dailyPVKWhPerKWp = daily;
     if (site.meteo) {
-      const monthly = site.meteo.monthlyPVKWhPerKWp;
-      const fromMonth = Array.isArray(monthly) ? monthly[site.month || 0] : null;
       site.meteo.dailyPVKWhPerKWp = hours ? daily : (fromMonth || daily);
     }
     for (const current of graph.nodes.filter(item => item.siteResource === 'electricity')) {
@@ -2602,18 +2618,45 @@
   function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); renderOverview(); }
 
   function overviewSaleRows() {
+    const productQuality = classifyQuality({ kind: 'product-cost' });
     const sales = (currentEconomics?.sinks || [])
       .filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0)
       .sort((left, right) => right.deliveredAmount - left.deliveredAmount)
       .slice(0, 4)
-      .map(sink => [sink.id, `${formatNumber(sink.deliveredAmount / 1000)} t/year`]);
+      .map(sink => [
+        sink.id,
+        `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`,
+        { quality: productQuality },
+      ]);
     if (sales.length) return sales;
     const slate = networkResult?.slate;
     if (!slate) return [];
     return Object.entries(slate)
       .sort((left, right) => right[1] - left[1])
       .slice(0, 3)
-      .map(([substance, tonnes]) => [substance, `${formatNumber(tonnes)} t/year`]);
+      .map(([substance, tonnes]) => [
+        substance,
+        `${formatUncertainNumber(tonnes, productQuality)} t/year`,
+        { quality: productQuality },
+      ]);
+  }
+
+  function overviewYieldMeta() {
+    const meteo = site?.meteo;
+    if (!meteo && !Number.isFinite(Number(site?.dailyPVKWhPerKWp))) return null;
+    const quality = classifyQuality({
+      kind: 'meteo',
+      quality: meteo?.quality,
+      sourceNote: meteo?.cite?.label || meteo?.source || meteo?.notes,
+    });
+    const monthly = Array.isArray(meteo?.monthlyPVKWhPerKWp) ? meteo.monthlyPVKWhPerKWp : [];
+    const monthVals = monthly.slice(1).map(Number).filter(Number.isFinite);
+    const band = monthVals.length >= 2
+      ? { low: Math.min(...monthVals), high: Math.max(...monthVals), unit: 'kWh/kWp·day' }
+      : null;
+    const daily = Number(meteo?.dailyPVKWhPerKWp ?? site.dailyPVKWhPerKWp);
+    const references = quality === 'cited' ? citeFrom(meteo?.cite) : [];
+    return { daily, quality, band, references };
   }
 
   function renderOverview() {
@@ -2622,16 +2665,21 @@
     const cash = document.getElementById('overviewCashflow');
     const slate = document.getElementById('overviewSlate');
     const land = document.getElementById('overviewLand');
+    const yieldEl = document.getElementById('overviewYield');
     const limiting = document.getElementById('overviewLimiting');
     if (!siteEl || !cash) return;
 
     siteEl.textContent = site?.name || draftSiteLabel();
 
     const gate = economicsGateReasons();
+    const moneyQuality = classifyQuality({ kind: 'money' });
+    const landQuality = classifyQuality({ kind: 'land' });
     if (honesty) {
       if (!graph.nodes.length) honesty.textContent = 'Load a scenario or build on Process.';
-      else if (gate.length) honesty.textContent = `Not bankable yet — ${gate.join('; ')}.`;
-      else if (currentEconomics) honesty.textContent = 'Plant cashflow for the loaded graph.';
+      else if (gate.length) honesty.textContent = `Not bankable — screening. ${gate.join('; ')}.`;
+      else if (currentEconomics && (moneyQuality === 'screening' || moneyQuality === 'assumption')) {
+        honesty.textContent = 'Screening — not bankable. Assumptions dominate cashflow and land.';
+      } else if (currentEconomics) honesty.textContent = 'Plant cashflow for the loaded graph.';
       else honesty.textContent = 'Graph incomplete.';
     }
 
@@ -2641,29 +2689,43 @@
       const net = currentEconomics.annualNetCash;
       const netClass = net > 0 ? 'positive' : net < 0 ? 'negative' : '';
       cash.innerHTML = [
-        ['Net cash / year', formatCashflowMoney(net), netClass],
-        ['Revenue / year', formatCashflowMoney(currentEconomics.annualRevenue), ''],
-        ['CAPEX', formatCashflowMoney(currentEconomics.installedCapex), ''],
-      ].map(([term, value, cls]) => `<div class="hero-metric"><span>${term}</span><strong class="${cls}">${value}</strong></div>`).join('');
+        ['Net cash / year', formatUncertainMoney(net, moneyQuality), netClass, { quality: moneyQuality }],
+        ['Revenue / year', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), '', { quality: moneyQuality }],
+        ['CAPEX', formatUncertainMoney(currentEconomics.installedCapex, moneyQuality), '', { quality: moneyQuality }],
+      ].map(([term, value, cls, meta]) => (
+        `<div class="hero-metric"><span>${term}</span><strong class="${cls}">${value}</strong>${metricMetaMarkup(meta)}</div>`
+      )).join('');
     }
 
     if (slate) {
       const rows = overviewSaleRows();
       slate.innerHTML = rows.length
-        ? rows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join('')
+        ? rows.map(([term, value, meta]) => `<div><dt>${term}</dt><dd>${value}${metricMetaMarkup(meta)}</dd></div>`).join('')
         : '<div><dt>Products</dt><dd>None yet</dd></div>';
     }
 
     if (land) {
       if (site && typeof FlowsheetFootprint !== 'undefined') {
         const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
-        land.textContent = footprint.totalAreaM2 > 0
-          ? `${formatHa(footprint.totalHa)} · solar ${formatHa(footprint.solar.ha)}`
+        land.innerHTML = footprint.totalAreaM2 > 0
+          ? `${formatUncertainHa(footprint.totalHa, landQuality)} · solar ${formatUncertainHa(footprint.solar.ha, landQuality)}${metricMetaMarkup({ quality: landQuality })}`
           : '—';
       } else if (networkResult?.landHa) {
-        land.textContent = `${formatHa(networkResult.landHa)} network`;
+        land.innerHTML = `${formatUncertainHa(networkResult.landHa, landQuality)} network${metricMetaMarkup({ quality: landQuality })}`;
       } else {
         land.textContent = '—';
+      }
+    }
+
+    if (yieldEl) {
+      const yieldMeta = overviewYieldMeta();
+      if (!yieldMeta || !Number.isFinite(yieldMeta.daily)) yieldEl.textContent = '—';
+      else {
+        yieldEl.innerHTML = `${formatUncertainNumber(yieldMeta.daily, yieldMeta.quality, { unit: 'kWh/kWp·day' })}${metricMetaMarkup({
+          quality: yieldMeta.quality,
+          band: yieldMeta.band,
+          references: yieldMeta.references,
+        })}`;
       }
     }
 
@@ -2968,7 +3030,7 @@
     document.getElementById('siteBatteryKWh').value = site?.storage?.batteryKWh ?? 0;
     const monthLabel = document.getElementById('siteMonthLabel');
     const monthSelect = document.getElementById('siteMonth');
-    if (site?.solar?.typicalMonths || site?.id === 'almeria-pvgis-2026-09-05') {
+    if (site?.solar?.typicalMonths || Array.isArray(site?.meteo?.monthlyPVKWhPerKWp)) {
       monthLabel.hidden = false;
       monthSelect.innerHTML = SITE_MONTHS.map((label, index) => `<option value="${index}"${index === (site.month || 0) ? ' selected' : ''}>${label}</option>`).join('');
     } else {
@@ -3502,7 +3564,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
     solve: solveAndRender, fitCanvas, get result() { return result; }, get baseline() { return baseline; },

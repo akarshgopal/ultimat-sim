@@ -42,7 +42,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/almeria-seawater.js', 'data/site-presets.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/almeria-seawater.js', 'data/atacama-pacific-seawater.js', 'data/site-presets.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -242,6 +242,41 @@ test('Location presets populate by region and applying Almería sets coords, nam
   assert.match(context.__elements.get('overviewSiteName').textContent, /Mundra/);
   assert.equal(app.site.rights.seawaterIntake.status, 'assumed');
   assert.equal(app.site.rights.seawaterDischarge.status, 'unverified');
+});
+
+test('Overview hero shows screening notice and cited solar yield without screening-chip spam', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(0);
+  const honesty = context.__elements.get('overviewHonesty').textContent;
+  const cash = context.__elements.get('overviewCashflow').innerHTML;
+  const yieldHtml = context.__elements.get('overviewYield').innerHTML;
+  const land = context.__elements.get('overviewLand').innerHTML;
+  assert.match(honesty, /not bankable/i);
+  assert.match(honesty, /screening/i);
+  assert.doesNotMatch(cash, /quality-chip quality-screening/);
+  assert.doesNotMatch(cash, /~|±|\+\/-/);
+  assert.match(cash, /\$/);
+  assert.match(yieldHtml, /quality-chip quality-cited/);
+  assert.match(yieldHtml, /PVGIS|re\.jrc/);
+  assert.match(yieldHtml, /kWh\/kWp/);
+  assert.match(land, /ha|m²/);
+});
+
+test('coastal methanol demo loads Mejillones plant and sizes methanol', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadMethanolPlant(0);
+  assert.equal(app.site.id, 'mejillones-pvgis-2026-09-14');
+  assert.equal(app.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
+  assert.ok(app.graph.nodes.some(node => node.unit === 'methanol'));
+  assert.ok(app.result.nodes.methanol.activity > 0);
+  assert.match(context.__elements.get('overviewSiteName').textContent, /Mejillones/);
+  assert.match(context.__elements.get('overviewHonesty').textContent, /not bankable/i);
+  assert.match(context.__elements.get('overviewYield').innerHTML, /quality-chip quality-cited/);
+  const sized = app.sizeToProduct('methanol', 8);
+  assert.equal(sized.product, 'methanol');
+  assert.ok(Math.abs(sized.achieved - 8) < 1e-4);
 });
 
 test('size product menus list methanol and ammonia', () => {

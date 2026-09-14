@@ -329,7 +329,7 @@ button.primary-action:focus-visible {
 
 .overview-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.9fr);
   gap: 20px;
 }
 
@@ -1645,6 +1645,16 @@ label output + .quality-chip {
 .hero-metric strong { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
 .hero-metric strong.positive { color: var(--success); }
 .hero-metric strong.negative { color: var(--danger); }
+.hero-metric .quality-chip { margin-left: 0; margin-top: 6px; }
+.hero-metric .quality-band,
+.hero-metric .number-cite,
+.overview-oneliner .quality-band,
+.overview-oneliner .number-cite,
+.overview-slate .quality-band,
+.overview-slate .number-cite {
+  display: block;
+  margin-top: 4px;
+}
 .issue-card {
   display: block;
   width: 100%;

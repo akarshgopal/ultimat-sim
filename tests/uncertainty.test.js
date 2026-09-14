@@ -28,6 +28,17 @@ test('LCOE is cited for NREL ATB solar PV and assumption otherwise', () => {
   assert.equal(classifyQuality({ kind: 'lcoh', unit: 'solar-thermal' }), 'assumption');
 });
 
+test('quality chips omit screening noise and cite markup keeps links', () => {
+  assert.equal(qualityChip('screening', { omitNoisy: true }), '');
+  assert.equal(qualityChip('assumption', { omitNoisy: true }), '');
+  assert.match(qualityChip('cited', { omitNoisy: true }), /quality-cited/);
+  assert.match(citeMarkup([{ label: 'PVGIS', url: 'https://re.jrc.ec.europa.eu/' }]), /href="https:\/\/re\.jrc/);
+  const band = parseBand('2.5–2.8 kWh/m³');
+  assert.equal(band.low, 2.5);
+  assert.equal(band.high, 2.8);
+  assert.match(formatUncertainNumber(5.27, 'cited', { unit: 'kWh/kWp·day', band: { low: 4.38, high: 5.8, unit: 'kWh/kWp·day' } }), /4\.38/);
+});
+
 test('screening money uses fewer significant figures without a tilde', () => {
   assert.equal(formatUncertainMoney(52425, 'screening'), '$52,000');
   assert.equal(formatUncertainMoney(-12345, 'assumption'), '-$12,000');

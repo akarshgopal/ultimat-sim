@@ -58,6 +58,10 @@
             <h3 id="overviewLandHeading">Land</h3>
             <p class="overview-oneliner" id="overviewLand">—</p>
           </section>
+          <section class="overview-block" aria-labelledby="overviewYieldHeading">
+            <h3 id="overviewYieldHeading">Solar yield</h3>
+            <p class="overview-oneliner" id="overviewYield">—</p>
+          </section>
         </div>
 
         <section class="overview-block overview-actions-block">
@@ -87,6 +91,7 @@
             <div class="overview-demos">
               <button type="button" id="loadMethaneRecycle" data-demo-id="methane-recycle">Methane recycle</button>
               <button type="button" id="loadCoastalMethane" data-demo-id="coastal-methane">Coastal methane</button>
+              <button type="button" id="loadMethanolPlant" data-demo-id="coastal-methanol">Coastal methanol</button>
               <button type="button" id="loadAbundanceHub" data-demo-id="abundance-hub">Brine + ammonia</button>
               <button type="button" id="loadDemoNetwork" data-demo-id="demo-network">Fuels + minerals</button>
             </div>
@@ -183,6 +188,7 @@
                 <div class="demo-menu-actions">
                   <button type="button" data-demo="methane-recycle">Methane + water recycle</button>
                   <button type="button" data-demo="coastal-methane">Coastal methane</button>
+                  <button type="button" data-demo="coastal-methanol">Coastal methanol</button>
                   <button type="button" data-demo="abundance-hub">Ammonia + brine hub</button>
                   <button type="button" data-demo="demo-network">Fuels + minerals network</button>
                 </div>
@@ -361,6 +367,7 @@
   <script src="data/land-admin.js"></script>
   <script src="cases/sabatier.js"></script>
   <script src="cases/coastal.js"></script>
+  <script src="cases/methanol.js"></script>
   <script src="cases/abundance.js"></script>
   <script src="cases/network.js"></script>
   <script src="vendor/LercDecode.js"></script>

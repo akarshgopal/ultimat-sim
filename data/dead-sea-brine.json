@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "retrieved": "2026-09-06",
+    "site": {
+      "latitude": 31.16,
+      "longitude": 35.43,
+      "context": "Dead Sea industrial shore; open-water ion assay, not a concession sample"
+    },
+    "quality": "Majors cited from Wikipedia Dead Sea chemistry (early-1980s surface). Li+ cited as 18 mg/L open-water (Alsabbagh et al. 2021); end-brine 30–40 mg/L is not used.",
+    "notes": "Ion mass concentrations are g/kg brine as published. Li+ is 0.018 g/L converted with density 1.24 kg/L → 0.018/1.24 ≈ 0.0145 g/kg. mol_per_kg = g_per_kg / molarMassG from engine/model SUBSTANCES. Literature numbers are preferred over forcing charge balance. Headline salinity 276 g/kg is cited context; water mass uses the summed ion masses, not that headline."
+  },
+  "density_kg_per_L": 1.24,
+  "salinity_g_per_kg": 276,
+  "ions_g_per_kg": {
+    "Cl-": 181.4,
+    "Br-": 4.2,
+    "SO4-2": 0.4,
+    "Ca+2": 14.1,
+    "Na+": 32.5,
+    "K+": 6.2,
+    "Mg+2": 35.2,
+    "Li+": 0.014516129032258063
+  },
+  "lithium": {
+    "g_per_L": 0.018,
+    "mg_per_L": 18,
+    "g_per_kg": 0.014516129032258063,
+    "note": "Open-water Dead Sea 18 mg/L (Alsabbagh et al. Minerals Engineering 2021). End-brine 30–40 mg/L is not used. Converted with density 1.24 kg/L."
+  },
+  "mol_per_kg": {
+    "Cl-": 5.117066290550071,
+    "Br-": 0.052563075690829,
+    "SO4-2": 0.00416406412658755,
+    "Ca+2": 0.3518139627725934,
+    "Na+": 1.4136723165856953,
+    "K+": 0.15857466948690863,
+    "Mg+2": 1.4482616745525614,
+    "Li+": 0.0020916612438412192
+  },
+  "evidence": [
+    {
+      "label": "Wikipedia: Dead Sea chemical composition (early-1980s surface, g/kg)",
+      "url": "https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition"
+    },
+    {
+      "label": "Alsabbagh et al. 2021, Minerals Engineering: Li+ 18 mg/L Dead Sea water (DOI)",
+      "url": "https://doi.org/10.1016/j.mineng.2021.107038"
+    }
+  ]
+}

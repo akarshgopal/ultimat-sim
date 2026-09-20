@@ -13,6 +13,7 @@ const {
   PLANT_TEMPLATES,
   DEAD_SEA_SITE_ID,
   SCREENING_NOTE,
+  LAYER_SOFT_NOTE,
   RIGHTS_SCREENING,
   RIGHTS_NONE,
   FAST_SCALES,
@@ -99,6 +100,7 @@ test('when Dead Sea abundance is in the search set, returns a scored candidate u
   assert.equal(winner.assayId, 'dead-sea-brine');
   assert.equal(winner.rightsScenario, RIGHTS_SCREENING);
   assert.ok(winner.notes.some(note => /screening assumes intake\/concession/i.test(note)));
+  assert.ok(result.notes.includes(LAYER_SOFT_NOTE));
   assert.match(SCREENING_NOTE, /not a bankable permit/i);
 });
 
@@ -340,6 +342,60 @@ test('ranking prefers higher tonnes among feasible, then sale count, then cash, 
     ['a-site:abundance', 'a-site:methanol', 'b-site:abundance', 'c-site:coastal', 'miss:methanol'],
   );
   assert.ok(ranked[0].tonnes > ranked[2].tonnes);
+});
+
+test('soft rank breaks equal-primary ties; missing layers do not exclude', () => {
+  const base = {
+    template: 'abundance',
+    tonnes: 10,
+    positiveSaleCount: 2,
+    annualNetCash: 50,
+    feasible: true,
+    met: true,
+  };
+  const ranked = rankCandidates([
+    { ...base, siteId: 'z-low', layerScore: 0.2, softRank: 0.2 },
+    { ...base, siteId: 'a-high', layerScore: 0.9, softRank: 0.9 },
+    { ...base, siteId: 'm-missing', layerScore: null, softRank: null },
+  ]);
+  assert.equal(ranked[0].siteId, 'a-high');
+  assert.equal(ranked.length, 3);
+  assert.ok(ranked.some(row => row.siteId === 'm-missing'));
+  assert.deepEqual(ranked.map(row => row.siteId), ['a-high', 'm-missing', 'z-low']);
+
+  const cashWins = rankCandidates([
+    { ...base, siteId: 'high-soft', annualNetCash: 10, layerScore: 0.99, softRank: 0.99 },
+    { ...base, siteId: 'high-cash', annualNetCash: 50, layerScore: 0.01, softRank: 0.01 },
+  ]);
+  assert.equal(cashWins[0].siteId, 'high-cash');
+
+  const near = [
+    { ...base, siteId: 'z-low', feasible: false, met: false, annualNetCash: -20, layerScore: 0.2, softRank: 0.2 },
+    { ...base, siteId: 'a-high', feasible: false, met: false, annualNetCash: -20, layerScore: 0.9, softRank: 0.9 },
+    { ...base, siteId: 'm-missing', feasible: false, met: false, annualNetCash: -20, layerScore: null, softRank: null },
+  ].sort(compareNearMisses);
+  assert.deepEqual(near.map(row => row.siteId), ['a-high', 'm-missing', 'z-low']);
+
+  const almeria = searchSite('spain-almeria');
+  const scored = evaluateCandidate(almeria, 'coastal', FAST);
+  assert.equal(typeof scored.layerScore, 'number');
+  assert.equal(scored.softRank, scored.layerScore);
+  assert.ok(scored.notes.includes(LAYER_SOFT_NOTE));
+  assert.match(LAYER_SOFT_NOTE, /not optimizer objectives/i);
+
+  const noLayers = evaluateCandidate({
+    id: 'nowhere',
+    name: 'No coordinates',
+    latitude: NaN,
+    longitude: NaN,
+    hasBrineAssay: true,
+    brineAssayId: 'dead-sea-brine',
+    assayId: 'dead-sea-brine',
+    assayKind: 'brine',
+  }, 'abundance', FAST);
+  assert.equal(noLayers.status, 'ok');
+  assert.equal(noLayers.layerScore, null);
+  assert.equal(noLayers.softRank, null);
 });
 
 test('near-miss ranking prefers operating cash- slates over idle cash≈0', () => {

@@ -746,6 +746,96 @@ function landIndexAt(latitude, longitude) {
   return land.relativeIndex;
 }
 
+function pointInRing(lon, lat, ring) {
+  if (!Array.isArray(ring) || ring.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const xi = finiteNumber(ring[i]?.[0]);
+    const yi = finiteNumber(ring[i]?.[1]);
+    const xj = finiteNumber(ring[j]?.[0]);
+    const yj = finiteNumber(ring[j]?.[1]);
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+    const intersect = ((yi > lat) !== (yj > lat))
+      && (lon < (xj - xi) * (lat - yi) / ((yj - yi) || 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInPolygon(lon, lat, geometry) {
+  if (!geometry) return false;
+  if (geometry.type === 'Polygon') {
+    const rings = geometry.coordinates;
+    if (!Array.isArray(rings) || !rings.length) return false;
+    if (!pointInRing(lon, lat, rings[0])) return false;
+    for (let i = 1; i < rings.length; i += 1) {
+      if (pointInRing(lon, lat, rings[i])) return false;
+    }
+    return true;
+  }
+  if (geometry.type === 'MultiPolygon') {
+    const polys = geometry.coordinates;
+    if (!Array.isArray(polys)) return false;
+    return polys.some(rings => pointInPolygon(lon, lat, { type: 'Polygon', coordinates: rings }));
+  }
+  return false;
+}
+
+function landPriceAt(latitude, longitude, bundle = getLandPricesBundle(), admin = getLandAdminGeoJSON()) {
+  const coords = coordsFrom(latitude, longitude);
+  if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude) || coords.latitude < -90 || coords.latitude > 90) {
+    return null;
+  }
+  const features = admin?.features;
+  if (!Array.isArray(features) || !features.length) return null;
+  for (const feature of features) {
+    if (!pointInPolygon(coords.longitude, coords.latitude, feature?.geometry)) continue;
+    const record = landPriceById(feature.properties?.id, bundle);
+    if (record && Number.isFinite(record.usdPerHa) && record.usdPerHa > 0) return record;
+    return null;
+  }
+  return null;
+}
+
+function landCostScore(usdPerHa) {
+  if (!Number.isFinite(usdPerHa) || !(usdPerHa > 0)) return null;
+  const lo = LAND_USD_HA_RAMP[0][0];
+  const hi = LAND_USD_HA_RAMP[LAND_USD_HA_RAMP.length - 1][0];
+  const span = Math.log(hi) - Math.log(lo);
+  if (!(span > 0)) return null;
+  return clamp(1 - (Math.log(usdPerHa) - Math.log(lo)) / span, 0, 1);
+}
+
+// Secondary siting score from sun/water/land helpers. Null when layers are missing — not a gate.
+function layerScoreAt(latitude, longitude) {
+  const coords = coordsFrom(latitude, longitude);
+  if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude) || coords.latitude < -90 || coords.latitude > 90) {
+    return null;
+  }
+
+  const parts = [];
+  const pv = pvScreeningBand(coords);
+  if (pv.band !== 'unknown' && Number.isFinite(pv.typicalKWhPerKWpDay)) {
+    parts.push(clamp(pv.typicalKWhPerKWpDay / 6.8, 0, 1));
+  }
+  const water = waterAvailabilityScreening(coords);
+  if (water.band !== 'unknown' && Number.isFinite(water.score)) {
+    parts.push(clamp(water.score, 0, 1));
+  }
+  const priced = landPriceAt(coords);
+  if (priced) {
+    const land = landCostScore(priced.usdPerHa);
+    if (land != null) parts.push(land);
+  } else {
+    const landIndex = landIndexAt(coords);
+    if (Number.isFinite(landIndex)) parts.push(clamp(1 - landIndex, 0, 1));
+  }
+
+  if (!parts.length) return null;
+  const score = parts.reduce((sum, value) => sum + value, 0) / parts.length;
+  return Math.round(score * 1e4) / 1e4;
+}
+
 function webMercatorToLatLng(z, tileX, tileY, px, py, tileSize = 256) {
   const zoom = Math.max(0, finiteNumber(z, 0));
   const n = 2 ** zoom;
@@ -960,10 +1050,12 @@ return {
   getLandAdminGeoJSON,
   landPriceIndex,
   landPriceById,
+  landPriceAt,
   landColorUsdPerHa,
   landChoroplethStyle,
   landColor,
   landIndexAt,
+  layerScoreAt,
   waterScreeningColor,
   colorFromRamp,
   isDeepOceanScreening,

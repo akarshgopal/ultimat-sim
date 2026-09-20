@@ -9,6 +9,9 @@
       'pilbara-indian-ocean-seawater': require('./pilbara-indian-ocean-seawater.js'),
       'atacama-pacific-seawater': require('./atacama-pacific-seawater.js'),
       'morocco-atlantic-seawater': require('./morocco-atlantic-seawater.js'),
+      'arabian-sea-seawater': require('./arabian-sea-seawater.js'),
+      'gulf-of-kutch-seawater': require('./gulf-of-kutch-seawater.js'),
+      'benguela-atlantic-seawater': require('./benguela-atlantic-seawater.js'),
       'persian-gulf-sabkha-brine': require('./persian-gulf-sabkha-brine.js'),
       'atacama-lithium-brine': require('./atacama-lithium-brine.js'),
       'lake-mackay-wa-brine': require('./lake-mackay-wa-brine.js'),
@@ -21,6 +24,9 @@
       'pilbara-indian-ocean-seawater': root.PilbaraIndianOceanSeawater,
       'atacama-pacific-seawater': root.AtacamaPacificSeawater,
       'morocco-atlantic-seawater': root.MoroccoAtlanticSeawater,
+      'arabian-sea-seawater': root.ArabianSeaSeawater,
+      'gulf-of-kutch-seawater': root.GulfOfKutchSeawater,
+      'benguela-atlantic-seawater': root.BenguelaAtlanticSeawater,
       'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
       'atacama-lithium-brine': root.AtacamaLithiumBrine,
       'lake-mackay-wa-brine': root.LakeMackayWaBrine,
@@ -45,6 +51,9 @@
     'chile-mejillones': 'atacama-pacific-seawater',
     'morocco-agadir': 'morocco-atlantic-seawater',
     'morocco-dakhla': 'morocco-atlantic-seawater',
+    'oman-duqm': 'arabian-sea-seawater',
+    'india-mundra': 'gulf-of-kutch-seawater',
+    'namibia-walvis-bay': 'benguela-atlantic-seawater',
   });
 
   /** Preset id → process-brine assay file id. Literature brine is not a mineral concession. */

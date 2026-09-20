@@ -147,14 +147,21 @@ function templateEligible(site, template) {
     };
   }
   if (template === 'coastal' || template === 'methanol') {
-    if (site?.hasSeawaterAssay && site.assayKind === 'seawater') {
-      return { ok: true };
+    if (!(site?.hasSeawaterAssay && site.assayKind === 'seawater')) {
+      return {
+        ok: false,
+        reason: 'no-seawater-assay',
+        notes: 'Coastal/methanol templates need a cited seawater assay; not applied to brine hubs or screening coasts without composition.',
+      };
     }
-    return {
-      ok: false,
-      reason: 'no-seawater-assay',
-      notes: 'Coastal/methanol templates need a cited seawater assay; not applied to brine hubs or screening coasts without composition.',
-    };
+    if (!frozenSolarFor(site, template)) {
+      return {
+        ok: false,
+        reason: 'no-frozen-pvgis',
+        notes: 'Coastal/methanol templates need a frozen per-site PVGIS series; not applied with another site\'s kWh/kWp.',
+      };
+    }
+    return { ok: true };
   }
   return { ok: false, reason: 'unknown-template', notes: `Unknown plant template ${template}` };
 }
@@ -430,6 +437,12 @@ function errorRow(site, template, error, notes = []) {
 function evaluateCandidate(site, template, sizeOpts = {}) {
   const notes = [SCREENING_NOTE];
   const solar = frozenSolarFor(site, template);
+  if (!solar && (template === 'coastal' || template === 'methanol')) {
+    return skippedRow(site, template, {
+      reason: 'no-frozen-pvgis',
+      notes: 'Coastal/methanol templates need a frozen per-site PVGIS series; not applied with another site\'s kWh/kWp.',
+    });
+  }
   if (!solar) notes.push('No frozen PVGIS series for this site; screening uses the plant-template solar, not a local yield.');
   let definition;
   try {
@@ -547,5 +560,6 @@ return {
   defaultSearchSites,
   templateEligible,
   evaluateCandidate,
+  frozenSolarFor,
 };
 });

@@ -36,7 +36,7 @@ function densityAt(salinity) {
   return Math.round((1.026 + 0.00075 * (salinity - 36.5)) * 1000) / 1000;
 }
 
-function buildAssay({ id, site, salinity, quality, notes, evidence }) {
+function buildAssay({ id, site, salinity, quality, notes, evidence, retrieved = RETRIEVED }) {
   const scale = salinity / 35;
   const ions_g_per_kg = {};
   const mol_per_kg = {};
@@ -48,7 +48,7 @@ function buildAssay({ id, site, salinity, quality, notes, evidence }) {
   const density_kg_per_L = densityAt(salinity);
   return {
     meta: {
-      retrieved: RETRIEVED,
+      retrieved,
       id,
       site,
       quality,
@@ -189,6 +189,72 @@ const ASSAYS = [
       },
     ],
   }),
+  buildAssay({
+    id: 'arabian-sea-seawater',
+    retrieved: '2026-09-21',
+    site: {
+      context: 'Arabian Sea / NW Indian Ocean surface salinity ~36.3 g/kg (ASHSW 36–36.5 band); Millero S=35 majors scaled 36.3/35. Basin typical, not an intake/discharge permit sample.',
+      latitude: 19.7,
+      longitude: 57.7,
+    },
+    salinity: 36.3,
+    quality: 'Majors cited from Millero/Pilson S=35 scaled 36.3/35 for Arabian Sea / NW Indian Ocean surface salinity (Kumar & Prasad 1999 ASHSW 36.7–35.3 psu, 36.5 core contour; 36.3 mid-band of the 36–36.5 surface literature). Basin typical, not a Duqm intake/discharge permit.',
+    notes: 'Ion mass concentrations are g/kg seawater. Base S=35 g/kg Millero majors scaled by 36.3/35. HCO3 omitted. Density screening only. Not a NaCl proxy. Not a Port of Duqm / SEZAD intake sample.',
+    evidence: [
+      {
+        label: 'Kumar & Prasad 1999 JGR Oceans: Arabian Sea High-Salinity Water 36.7–35.3 psu; 36.5 core contour (DOI)',
+        url: 'https://doi.org/10.1029/1998JC900022',
+      },
+      {
+        label: 'Rao & Sivakumar 2003 JGR Oceans: Arabian Sea SSS in excess of 35‰ year-round; 36‰ contour (DOI)',
+        url: 'https://doi.org/10.1029/2001JC000907',
+      },
+    ],
+  }),
+  buildAssay({
+    id: 'gulf-of-kutch-seawater',
+    retrieved: '2026-09-21',
+    site: {
+      context: 'Gulf of Kutch inverse-estuary mouth/open-gulf salinity ~37.2 g/kg; Millero S=35 majors scaled 37.2/35. Inner gulf is saltier. Not an intake/discharge permit sample.',
+      latitude: 22.7,
+      longitude: 69.7,
+    },
+    salinity: 37.2,
+    quality: 'Majors cited from Millero/Pilson S=35 scaled 37.2/35 for Gulf of Kutch mouth/open-gulf salinity (Vethamony et al. 2007 37.20 psu near the mouth; inner gulf >40 psu). Inverse-estuary screening, not a Mundra Port intake/discharge permit.',
+    notes: 'Ion mass concentrations are g/kg seawater. Base S=35 g/kg Millero majors scaled by 37.2/35. HCO3 omitted. Density screening only. Not a NaCl proxy. Inner-gulf and saltpan creeks are saltier than this mouth/open-gulf value.',
+    evidence: [
+      {
+        label: 'Vethamony et al. 2007 Mar. Pollut. Bull.: Gulf of Kachchh inverse estuary 37.20 psu near mouth, >40 psu at head (DOI)',
+        url: 'https://doi.org/10.1016/j.marpolbul.2007.01.022',
+      },
+      {
+        label: 'Kumar & Prasad 1999 JGR Oceans: Arabian Sea high-salinity surface context for the gulf mouth (DOI)',
+        url: 'https://doi.org/10.1029/1998JC900022',
+      },
+    ],
+  }),
+  buildAssay({
+    id: 'benguela-atlantic-seawater',
+    retrieved: '2026-09-21',
+    site: {
+      context: 'Northern Benguela / SE Atlantic surface salinity ~35.2 g/kg; Millero S=35 majors scaled 35.2/35. Basin typical, not an intake/discharge permit sample.',
+      latitude: -23.0,
+      longitude: 14.5,
+    },
+    salinity: 35.2,
+    quality: 'Majors cited from Millero/Pilson S=35 scaled 35.2/35 for northern Benguela / SE Atlantic surface salinity (WOA climatology family ~35.0–35.5; Mohrholz et al. 2008 Walvis 23°S hydrography). Basin typical, not a Walvis Bay intake/discharge permit.',
+    notes: 'Ion mass concentrations are g/kg seawater. Base S=35 g/kg Millero majors scaled by 35.2/35. HCO3 omitted. Density screening only. Not a NaCl proxy. Not a Namport intake sample.',
+    evidence: [
+      {
+        label: 'Mohrholz et al. 2008 Cont. Shelf Res.: northern Benguela / Walvis Bay 23°S water-mass hydrography (DOI)',
+        url: 'https://doi.org/10.1016/j.csr.2007.10.001',
+      },
+      {
+        label: 'NOAA NCEI World Ocean Atlas 2023 Volume 2: Salinity (DOI)',
+        url: 'https://doi.org/10.25923/70qt-9574',
+      },
+    ],
+  }),
 ];
 
 function toUmd(globalName, json) {
@@ -203,6 +269,9 @@ const GLOBALS = {
   'pilbara-indian-ocean-seawater': 'PilbaraIndianOceanSeawater',
   'atacama-pacific-seawater': 'AtacamaPacificSeawater',
   'morocco-atlantic-seawater': 'MoroccoAtlanticSeawater',
+  'arabian-sea-seawater': 'ArabianSeaSeawater',
+  'gulf-of-kutch-seawater': 'GulfOfKutchSeawater',
+  'benguela-atlantic-seawater': 'BenguelaAtlanticSeawater',
 };
 
 for (const assay of ASSAYS) {

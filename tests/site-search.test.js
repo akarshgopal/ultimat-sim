@@ -14,6 +14,8 @@ const {
   FAST_SCALES,
   FAST_RATES,
   templateEligible,
+  frozenSolarFor,
+  evaluateCandidate,
 } = require('../engine/site-search');
 
 const FAST = { scales: FAST_SCALES.slice(), rates: FAST_RATES.slice() };
@@ -98,7 +100,9 @@ test('presets without brine assay do not get an invented feasible abundance plan
   const noAssay = defaultSearchSites().find(site => site.id === 'oman-duqm');
   assert.equal(seawater.hasSeawaterAssay, true);
   assert.equal(seawater.hasBrineAssay, false);
-  assert.equal(noAssay.hasSeawaterAssay, false);
+  assert.equal(noAssay.hasSeawaterAssay, true);
+  assert.equal(noAssay.hasBrineAssay, false);
+  assert.equal(noAssay.assayId, 'arabian-sea-seawater');
 
   const skipped = searchAbundanceSites({
     sites: [seawater, noAssay],
@@ -123,6 +127,52 @@ test('presets without brine assay do not get an invented feasible abundance plan
   assert.ok(mixed.skipped.some(row => row.siteId === 'uae-taweelah' && row.reason === 'no-brine-assay'));
   assert.equal(templateEligible(seawater, 'abundance').ok, false);
   assert.equal(templateEligible(brineSite(), 'coastal').ok, false);
+});
+
+test('coastal/methanol skip coasts without frozen PVGIS rather than inventing kWh/kWp', () => {
+  const duqm = defaultSearchSites().find(site => site.id === 'oman-duqm');
+  const mundra = defaultSearchSites().find(site => site.id === 'india-mundra');
+  const walvis = defaultSearchSites().find(site => site.id === 'namibia-walvis-bay');
+  const taweelah = defaultSearchSites().find(site => site.id === 'uae-taweelah');
+  const almeria = defaultSearchSites().find(site => site.id === 'spain-almeria');
+  const mejillones = defaultSearchSites().find(site => site.id === 'chile-mejillones');
+
+  for (const site of [duqm, mundra, walvis, taweelah]) {
+    assert.equal(site.hasSeawaterAssay, true, site.id);
+    assert.equal(frozenSolarFor(site, 'coastal'), null, site.id);
+    assert.equal(frozenSolarFor(site, 'methanol'), null, site.id);
+    const coastal = templateEligible(site, 'coastal');
+    assert.equal(coastal.ok, false);
+    assert.equal(coastal.reason, 'no-frozen-pvgis');
+    const methanol = templateEligible(site, 'methanol');
+    assert.equal(methanol.ok, false);
+    assert.equal(methanol.reason, 'no-frozen-pvgis');
+    assert.equal(templateEligible(site, 'abundance').reason, 'no-brine-assay');
+    const evaluated = evaluateCandidate(site, 'coastal', FAST);
+    assert.equal(evaluated.status, 'skipped');
+    assert.equal(evaluated.reason, 'no-frozen-pvgis');
+  }
+
+  assert.equal(duqm.assayId, 'arabian-sea-seawater');
+  assert.equal(mundra.assayId, 'gulf-of-kutch-seawater');
+  assert.equal(walvis.assayId, 'benguela-atlantic-seawater');
+  assert.ok(frozenSolarFor(almeria, 'coastal'));
+  assert.ok(frozenSolarFor(mejillones, 'methanol'));
+  assert.equal(templateEligible(almeria, 'coastal').ok, true);
+  assert.equal(templateEligible(mejillones, 'methanol').ok, true);
+  assert.equal(templateEligible(almeria, 'abundance').ok, false);
+  assert.ok(frozenSolarFor(brineSite(), 'abundance'));
+  assert.equal(templateEligible(brineSite(), 'abundance').ok, true);
+
+  const skipped = searchAbundanceSites({
+    sites: [duqm, mundra, walvis, taweelah],
+    templates: ['coastal', 'methanol'],
+    sizeOpts: FAST,
+  });
+  assert.equal(skipped.tried, 0);
+  assert.equal(skipped.feasibleCount, 0);
+  assert.equal(skipped.skippedCount, 8);
+  assert.ok(skipped.skipped.every(row => row.reason === 'no-frozen-pvgis'));
 });
 
 test('a cheap test-fixture plant can still be cash-positive so ranking logic stays testable', () => {

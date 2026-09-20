@@ -36,10 +36,27 @@ test('brine train conserves ions while exposing lithium, bromide, potash, magnes
 });
 
 test('abundance hub couples brine bromide to chlor-alkali chlorine and its hydrogen to ammonia', () => {
-  const solved = solveOperation(createAbundanceCase());
+  const definition = createAbundanceCase();
+  assert.equal(definition.meta.assayId, 'dead-sea-brine');
+  const solved = solveOperation(definition);
   assert.equal(solved.convergence.converged, true);
   assert.ok(solved.nodes['bromine-recovery'].activity > 0);
   assert.ok(solved.nodes.ammonia.activity > 0);
   assert.ok(solved.nodes.minerals.outlets.lithium.mol.LiCl > 0);
+  assert.ok(solved.balances.maxAbsResidual < 1e-8);
+});
+
+test('createAbundanceCase({ assayId }) runs Atacama lithium brine without invented bromide', () => {
+  const definition = createAbundanceCase({ assayId: 'atacama-lithium-brine' });
+  assert.equal(definition.meta.assayId, 'atacama-lithium-brine');
+  assert.equal(createAbundanceCase('atacama-lithium-brine').meta.assayId, 'atacama-lithium-brine');
+  const brine = definition.graph.nodes.find(node => node.id === 'brine').params.stream;
+  assert.ok(brine.mol['Li+'] > 0);
+  assert.equal(brine.mol['Br-'], undefined);
+  const solved = solveOperation(definition);
+  assert.equal(solved.convergence.converged, true);
+  assert.ok(solved.nodes.minerals.outlets.lithium.mol.LiCl > 0);
+  assert.equal(solved.nodes['bromine-recovery'].activity, 0);
+  assert.ok(Number.isFinite(solved.nodes.ammonia.activity));
   assert.ok(solved.balances.maxAbsResidual < 1e-8);
 });

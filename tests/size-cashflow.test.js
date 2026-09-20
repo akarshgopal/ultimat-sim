@@ -152,6 +152,15 @@ test('sizeForPositiveCashflow on abundance also searches the ammonia fuel family
   assert.equal(sized.heatCoveredKWh != null || sized.heatResidualKWh != null, true);
 });
 
+test('sizeToProduct runs on Atacama lithium brine abundance case', () => {
+  const definition = createAbundanceCase({ assayId: 'atacama-lithium-brine' });
+  const sized = sizeToProduct({ product: 'LiCl', rate: 20, definition });
+  assert.equal(sized.product, 'lithium');
+  assert.equal(sized.converged, true);
+  assert.ok(Math.abs(sized.achieved - 20) < 1e-4);
+  assertClosed(sized.solved);
+});
+
 test('sizeForPositiveCashflow on minerals plus hydrogen searches joint candidates', () => {
   const sized = sizeForPositiveCashflow({
     definition: mineralsAndHydrogenPlant(),

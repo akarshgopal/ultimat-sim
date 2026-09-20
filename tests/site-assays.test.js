@@ -55,13 +55,100 @@ test('bindPresetAssay attaches cited seawater resource for Gulf / screening note
   const gulf = { resources: {} };
   SiteAssays.bindPresetAssay(gulf, 'uae-taweelah');
   assert.equal(gulf.assay.quality, 'cited');
+  assert.equal(gulf.assay.kind, 'seawater');
   assert.equal(gulf.assay.salinity_g_per_kg, 40.5);
   assert.ok(gulf.resources.seawater.stream.mol['Na+'] > 0);
   assert.ok(gulf.resources.seawater.stream.mol.H2O > 0);
   assert.match(gulf.resources.seawater.evidence, /not an intake/i);
+  assert.equal(gulf.brineAssay.kind, 'brine');
+  assert.equal(gulf.brineAssay.quality, 'cited');
+  assert.equal(gulf.brineAssay.assayId, 'persian-gulf-sabkha-brine');
+  assert.doesNotMatch(gulf.brineAssay.summary, /Millero|Pilson/);
+  assert.ok(gulf.resources.brine.stream.mol['Na+'] > 0);
+  assert.ok(gulf.resources.brine.stream.mol.H2O > 0);
+  assert.equal(gulf.resources.brine.stream.mol['Li+'], undefined);
+  assert.equal(gulf.resources.brine.stream.mol['Br-'], undefined);
+  assert.match(gulf.resources.brine.evidence, /not a mineral concession/i);
 
   const bare = { resources: {} };
   SiteAssays.bindPresetAssay(bare, 'oman-duqm');
   assert.equal(bare.assay.quality, 'screening');
   assert.equal(bare.resources.seawater, undefined);
+  assert.equal(bare.resources.brine, undefined);
+});
+
+const BRINE_ASSAY_FILES = [
+  'persian-gulf-sabkha-brine',
+  'atacama-lithium-brine',
+  'lake-mackay-wa-brine',
+  'great-salt-lake-brine',
+];
+
+for (const id of BRINE_ASSAY_FILES) {
+  test(`process brine ${id} parses with cited ions only`, () => {
+    const json = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', `${id}.json`), 'utf8'));
+    const js = require(`../data/${id}.js`);
+    assert.equal(js.salinity_g_per_kg, json.salinity_g_per_kg);
+    assert.equal(js.meta.id, id);
+    assert.equal(js.meta.retrieved, '2026-09-20');
+    assert.ok(Number.isFinite(js.density_kg_per_L) && js.density_kg_per_L > 1.05 && js.density_kg_per_L < 1.4);
+    assert.ok(Number.isFinite(js.salinity_g_per_kg) && js.salinity_g_per_kg > 50 && js.salinity_g_per_kg < 400);
+    const ionSum = Object.values(js.ions_g_per_kg).reduce((sum, grams) => sum + grams, 0);
+    assert.ok(Math.abs(js.salinity_g_per_kg - ionSum) < 1e-9);
+    for (const [ion, grams] of Object.entries(js.ions_g_per_kg)) {
+      assert.ok(Number.isFinite(grams) && grams > 0, ion);
+      assert.ok(SUBSTANCES[ion], `unexpected ion ${ion}`);
+      const expectedMol = grams / SUBSTANCES[ion].molarMassG;
+      assert.ok(Math.abs(js.mol_per_kg[ion] - expectedMol) < 1e-9, `${ion} mol`);
+    }
+    assert.equal(Object.keys(js.mol_per_kg).sort().join(), Object.keys(js.ions_g_per_kg).sort().join());
+    assert.equal(js.ions_g_per_kg.HCO3, undefined);
+    assert.equal(js.ions_g_per_kg['HCO3-'], undefined);
+    if (id === 'persian-gulf-sabkha-brine' || id === 'lake-mackay-wa-brine') {
+      assert.equal(js.ions_g_per_kg['Li+'], undefined);
+      assert.equal(js.ions_g_per_kg['Br-'], undefined);
+    }
+    if (id === 'atacama-lithium-brine' || id === 'lake-mackay-wa-brine' || id === 'great-salt-lake-brine') {
+      assert.equal(js.ions_g_per_kg['Ca+2'], undefined);
+      assert.equal(js.ions_g_per_kg['Br-'], undefined);
+    }
+    assert.ok(js.evidence.length > 0);
+    assert.ok(js.evidence.every((item) => /^https:\/\//.test(item.url)));
+    assert.ok(!js.evidence.some((item) => /doi\.org\/10\.1016\/j\.dsr\.2007\.10\.001/.test(item.url)));
+    assert.equal(SiteAssays.getAssay(id), js);
+    assert.ok(SiteAssays.assayIds.includes(id));
+    assert.ok(SiteAssays.brineAssayIds.includes(id));
+  });
+}
+
+test('brineAssayId on presets resolves via PRESET_BRINE_ASSAY_IDS / getAssay', () => {
+  const claimed = presets.filter((p) => p.brineAssayId);
+  assert.ok(claimed.length >= 4, `expected ≥4 brine-assay presets, got ${claimed.length}`);
+  for (const preset of claimed) {
+    assert.equal(SiteAssays.brineAssayIdForPreset(preset.id), preset.brineAssayId);
+    const assay = SiteAssays.getAssay(preset.brineAssayId);
+    assert.ok(assay, preset.brineAssayId);
+    assert.equal(assay.meta.id, preset.brineAssayId);
+    assert.equal(assay.meta.kind, 'brine');
+  }
+  for (const [presetId, assayId] of Object.entries(SiteAssays.PRESET_BRINE_ASSAY_IDS)) {
+    const preset = presets.find((p) => p.id === presetId);
+    assert.ok(preset, presetId);
+    assert.equal(preset.brineAssayId, assayId);
+  }
+  assert.equal(SiteAssays.brineAssayIdForPreset('spain-almeria'), null);
+  assert.ok(SiteAssays.getAssay('great-salt-lake-brine'));
+  assert.ok(!Object.values(SiteAssays.PRESET_BRINE_ASSAY_IDS).includes('great-salt-lake-brine'));
+});
+
+test('inland Lake Mackay preset binds only process brine', () => {
+  const inland = { resources: {} };
+  SiteAssays.bindPresetAssay(inland, 'au-lake-mackay');
+  assert.equal(inland.assay.kind, 'brine');
+  assert.equal(inland.assay.quality, 'cited');
+  assert.equal(inland.assay.assayId, 'lake-mackay-wa-brine');
+  assert.doesNotMatch(inland.assay.summary, /Millero|Pilson/);
+  assert.equal(inland.resources.seawater, undefined);
+  assert.ok(inland.resources.brine.stream.mol['Na+'] > 0);
+  assert.equal(inland.resources.brine.stream.mol['Li+'], undefined);
 });

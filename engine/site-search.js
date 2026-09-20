@@ -7,11 +7,12 @@
     typeof require === 'function' ? require('../cases/abundance') : root.AbundanceCase,
     typeof require === 'function' ? require('../cases/network') : root.NetworkCase,
     typeof require === 'function' ? require('../data/site-presets.js') : root.SITE_PRESETS,
-    typeof require === 'function' ? require('../data/site-assays') : root.SiteAssays
+    typeof require === 'function' ? require('../data/site-assays') : root.SiteAssays,
+    typeof require === 'function' ? require('../data/pvgis-sites.js') : root.PvgisSites
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FlowsheetSiteSearch = api;
-})(globalThis, (sizeApi, networkApi, coastal, methanol, abundance, networkCase, sitePresets, siteAssays) => {
+})(globalThis, (sizeApi, networkApi, coastal, methanol, abundance, networkCase, sitePresets, siteAssays, pvgisSites) => {
 const PLANT_TEMPLATES = Object.freeze(['abundance', 'coastal', 'methanol']);
 const DEAD_SEA_SITE_ID = 'dead-sea-pvgis-2026-09-06';
 const SCREENING_NOTE = 'Screening assumes intake/concession for evaluation only; not a bankable permit.';
@@ -255,7 +256,8 @@ function frozenSolarFor(site, template) {
       nativeTemplate: 'abundance',
     } : null;
   }
-  return null;
+  const extra = pvgisSites?.frozenSolarFor?.(site, template);
+  return extra || null;
 }
 
 function assumeScreeningBrine(definition) {

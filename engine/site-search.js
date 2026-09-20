@@ -296,9 +296,11 @@ function buildAbundancePlant(site) {
   if (!networkCase?.siteDeadSeaAbundance && !abundance?.createAbundanceCase) {
     throw new Error('Abundance case is not loaded');
   }
+  // Regional offtake: createAbundanceCase({ region }) maps site.region via TeaScreening.
+  // NetworkCase.siteDeadSeaAbundance stays the Dead Sea / me-levant path (core wires other brines).
   const definition = networkCase?.siteDeadSeaAbundance
     ? networkCase.siteDeadSeaAbundance()
-    : abundance.createAbundanceCase();
+    : abundance.createAbundanceCase({ region: site.region });
   overlaySiteIdentity(definition, site, [SCREENING_NOTE]);
   assumeScreeningBrine(definition);
   applyFrozenSolar(definition, frozenSolarFor(site, 'abundance'), 'abundance');

@@ -42,6 +42,8 @@ function resolveAssayId(options) {
 
 function createAbundanceCase(options = {}) {
   const assayId = resolveAssayId(options);
+  const region = options && typeof options === 'object' ? options.region : undefined;
+  const demandRegionId = tea.resolveDemandRegion(region);
   const assay = assays[assayId];
   if (!assay) throw new Error(`Unknown abundance assay ${assayId}`);
   const brine = brineFromAssay(assay, MASS_KG_PER_DAY);
@@ -61,18 +63,18 @@ function createAbundanceCase(options = {}) {
 
   const sale = id => (id === 'raffinate'
     ? { disposition: 'reinjection' }
-    : tea.bindSale(id));
+    : tea.bindSale(id, { region }));
   return {
-    meta: { assayId, tea: tea.abundanceEvidence() },
-    teaEvidence: tea.abundanceEvidence(),
+    meta: { assayId, demandRegionId, tea: tea.abundanceEvidence(region) },
+    teaEvidence: tea.abundanceEvidence(region),
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'brine', unit: 'material-source', sourcePreset: 'brine', params: { stream: brine }, economics: tea.bindCost('brine') },
-        { id: 'salt-feed', unit: 'material-source', sourcePreset: 'salt', params: { stream: material('NaCl', causticMol) }, economics: tea.bindCost('salt-feed') },
-        { id: 'water', unit: 'material-source', sourcePreset: 'water', params: { stream: material('H2O', causticMol, 'liquid') }, economics: tea.bindCost('water') },
+        { id: 'brine', unit: 'material-source', sourcePreset: 'brine', params: { stream: brine }, economics: tea.bindCost('brine', { region }) },
+        { id: 'salt-feed', unit: 'material-source', sourcePreset: 'salt', params: { stream: material('NaCl', causticMol) }, economics: tea.bindCost('salt-feed', { region }) },
+        { id: 'water', unit: 'material-source', sourcePreset: 'water', params: { stream: material('H2O', causticMol, 'liquid') }, economics: tea.bindCost('water', { region }) },
         { id: 'air', unit: 'material-source', sourcePreset: 'air', params: { stream: air }, economics: { unitCost: 0 } },
-        { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: powerKWh } }, economics: tea.bindCost('power') },
+        { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: powerKWh } }, economics: tea.bindCost('power', { region }) },
         { id: 'power-bus', unit: 'electrical-bus' },
         { id: 'minerals', unit: 'brine-minerals', capacity: streamMassKg(brine), params: { electricityKWhPerKgBrine: 0.05, lithiumRecovery: 0.9, bromideRecovery, magnesiumRecovery: 0.5, potashRecovery: 0.7, gypsumRecovery: 0.7, saltRecovery: 0.5 }, economics: tea.bindCapex('minerals', { variableOM: 0.01 }) },
         { id: 'chlor-alkali', unit: 'chlor-alkali', capacity: causticKg, params: { electricityKWhPerKg: 2.5 }, economics: tea.bindCapex('chlor-alkali', { variableOM: 0.05 }) },
@@ -80,11 +82,11 @@ function createAbundanceCase(options = {}) {
         { id: 'asu', unit: 'asu', capacity: nitrogenKg, params: { nitrogenRecovery: 0.98, oxygenRecovery: 0.95, electricityKWhPerKgN2: 0.25 }, economics: tea.bindCapex('asu', { variableOM: 0.02 }) },
         { id: 'ammonia', unit: 'ammonia', capacity: ammoniaKg, params: { electricityKWhPerKg: 0.6 }, economics: tea.bindCapex('ammonia', { variableOM: 0.05 }) },
         ...outputs.map(id => ({ id, unit: 'material-sink', economics: sale(id) })),
-        { id: 'caustic', unit: 'material-sink', economics: tea.bindSale('caustic') },
-        { id: 'bromine', unit: 'material-sink', economics: tea.bindSale('bromine') },
-        { id: 'recovered-salt', unit: 'material-sink', economics: tea.bindSale('salt') },
-        { id: 'ammonia-product', unit: 'material-sink', economics: tea.bindSale('ammonia') },
-        { id: 'oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen') },
+        { id: 'caustic', unit: 'material-sink', economics: tea.bindSale('caustic', { region }) },
+        { id: 'bromine', unit: 'material-sink', economics: tea.bindSale('bromine', { region }) },
+        { id: 'recovered-salt', unit: 'material-sink', economics: tea.bindSale('salt', { region }) },
+        { id: 'ammonia-product', unit: 'material-sink', economics: tea.bindSale('ammonia', { region }) },
+        { id: 'oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen', { region }) },
         { id: 'offgas', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [

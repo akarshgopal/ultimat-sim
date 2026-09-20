@@ -5,6 +5,7 @@
   Object.freeze({
     id: 'uae-taweelah',
     assayId: 'persian-gulf-seawater',
+    brineAssayId: 'persian-gulf-sabkha-brine',
     name: 'Taweelah, Abu Dhabi, UAE',
     region: 'Gulf',
     latitude: 24.761,
@@ -20,12 +21,13 @@
       freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'Desalination capacity on this coast is not a freshwater right for this plant' }),
       seawaterIntake: Object.freeze({ kind: 'intake', status: 'assumed', authorize: true, note: 'Assumed Gulf seawater access for screening; no Taweelah intake permit on file' }),
       seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'No Gulf outfall permit verified' }),
-      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'No brine or mineral concession verified' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Abu Dhabi sabkha process-brine assay is not a mineral concession' }),
     }),
   }),
   Object.freeze({
     id: 'qatar-ras-laffan',
     assayId: 'persian-gulf-seawater',
+    brineAssayId: 'persian-gulf-sabkha-brine',
     name: 'Ras Laffan, Qatar',
     region: 'Gulf',
     latitude: 25.888,
@@ -41,7 +43,7 @@
       freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'No freshwater allocation verified' }),
       seawaterIntake: Object.freeze({ kind: 'intake', status: 'assumed', authorize: true, note: 'Assumed Gulf seawater access for screening; no Ras Laffan intake permit on file' }),
       seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'No Gulf outfall permit verified' }),
-      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'No brine or mineral concession verified' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Gulf sabkha process-brine assay (Abu Dhabi coastal aquifer means) is not a mineral concession' }),
     }),
   }),
   Object.freeze({
@@ -109,6 +111,7 @@
   Object.freeze({
     id: 'au-port-hedland',
     assayId: 'pilbara-indian-ocean-seawater',
+    brineAssayId: 'lake-mackay-wa-brine',
     name: 'Port Hedland, Pilbara, Australia',
     region: 'Australia',
     latitude: -20.310,
@@ -124,7 +127,7 @@
       freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'No Pilbara water licence verified' }),
       seawaterIntake: Object.freeze({ kind: 'intake', status: 'assumed', authorize: true, note: 'Assumed Indian Ocean seawater access for screening; no Hedland intake permit on file' }),
       seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'No ocean outfall permit verified' }),
-      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'No brine or mineral concession verified' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Lake Mackay WA playa process-brine assay is not a mineral concession; not Port Hedland seawater' }),
     }),
   }),
   Object.freeze({
@@ -146,6 +149,27 @@
       seawaterIntake: Object.freeze({ kind: 'intake', status: 'assumed', authorize: true, note: 'Assumed Cockburn Sound seawater access for screening; no Kwinana intake permit on file' }),
       seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'No Cockburn Sound outfall permit verified' }),
       brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'No brine or mineral concession verified' }),
+    }),
+  }),
+  Object.freeze({
+    id: 'au-lake-mackay',
+    brineAssayId: 'lake-mackay-wa-brine',
+    name: 'Lake Mackay, Western Australia',
+    region: 'Australia',
+    latitude: -22.5,
+    longitude: 128.5,
+    kind: 'brine-hub',
+    notes: 'Lake Mackay playa (East Pilbara–adjacent / Gibson Desert). Location preset only — literature process-brine assay is not a mineral concession or mining lease. Live PVGIS on select.',
+    evidence: Object.freeze([
+      Object.freeze({ label: 'Agrimin Mackay Potash Project EPA water-chemistry memo (median lake groundwater majors)', url: 'https://www.epa.wa.gov.au/sites/default/files/PER_documentation2/Appendix%20I.20%20AMN_Water_Chemistry_Summary_Memo_210819.pdf' }),
+      Object.freeze({ label: 'OpenStreetMap: Lake Mackay', url: 'https://www.openstreetmap.org/#map=8/-22.5/128.5' }),
+    ]),
+    rightsHints: Object.freeze({
+      gridImport: Object.freeze({ kind: 'grid', status: 'unverified', authorize: false, note: 'No grid interconnection verified at this inland playa' }),
+      freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'No freshwater right verified' }),
+      seawaterIntake: Object.freeze({ kind: 'intake', status: 'unverified', authorize: false, note: 'Inland brine hub; no seawater intake' }),
+      seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'Inland brine hub; no seawater outfall' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Lake Mackay process-brine assay is not a mineral concession' }),
     }),
   }),
   Object.freeze({
@@ -234,6 +258,7 @@
   Object.freeze({
     id: 'chile-mejillones',
     assayId: 'atacama-pacific-seawater',
+    brineAssayId: 'atacama-lithium-brine',
     name: 'Mejillones, Antofagasta, Chile',
     region: 'Atacama/Chile',
     latitude: -23.100,
@@ -249,7 +274,7 @@
       freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'No freshwater right verified in this arid basin' }),
       seawaterIntake: Object.freeze({ kind: 'intake', status: 'assumed', authorize: true, note: 'Assumed Pacific seawater access for screening; no Mejillones intake permit on file' }),
       seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'No Pacific outfall permit verified' }),
-      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Atacama minerals nearby are not a brine concession for this plant' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Salar de Atacama process-brine assay is not a mineral concession; Atacama minerals nearby are not a concession for this plant' }),
     }),
   }),
   Object.freeze({

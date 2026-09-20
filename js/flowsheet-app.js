@@ -1115,6 +1115,14 @@
         summary: `Frozen assay ${preset.assayId} (bind when SiteAssays is loaded)`,
         evidence: [],
       };
+    } else if (preset.brineAssayId) {
+      site.assay = {
+        kind: 'brine',
+        assayId: preset.brineAssayId,
+        quality: 'cited',
+        summary: `Frozen process-brine assay ${preset.brineAssayId} (bind when SiteAssays is loaded)`,
+        evidence: [],
+      };
     } else {
       site.assay = {
         kind: 'seawater',

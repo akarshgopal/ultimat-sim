@@ -1,17 +1,30 @@
 (function exposeAbundanceCase(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/dead-sea-brine.js') : root.DeadSeaBrine
+    typeof require === 'function' ? {
+      'dead-sea-brine': require('../data/dead-sea-brine.js'),
+      'persian-gulf-sabkha-brine': require('../data/persian-gulf-sabkha-brine.js'),
+      'atacama-lithium-brine': require('../data/atacama-lithium-brine.js'),
+      'lake-mackay-wa-brine': require('../data/lake-mackay-wa-brine.js'),
+      'great-salt-lake-brine': require('../data/great-salt-lake-brine.js'),
+    } : {
+      'dead-sea-brine': root.DeadSeaBrine,
+      'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
+      'atacama-lithium-brine': root.AtacamaLithiumBrine,
+      'lake-mackay-wa-brine': root.LakeMackayWaBrine,
+      'great-salt-lake-brine': root.GreatSaltLakeBrine,
+    }
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.AbundanceCase = api;
-})(globalThis, (model, assay) => {
+})(globalThis, (model, assays) => {
 const { SUBSTANCES, streamMassKg } = model;
 const MASS_KG_PER_DAY = 100000;
+const DEFAULT_ASSAY_ID = 'dead-sea-brine';
 
-function brineFromAssay(deadSeaAssay, massKg) {
-  const gPerKg = deadSeaAssay.ions_g_per_kg;
-  const molPerKg = deadSeaAssay.mol_per_kg;
+function brineFromAssay(assayData, massKg) {
+  const gPerKg = assayData.ions_g_per_kg;
+  const molPerKg = assayData.mol_per_kg;
   const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
   const mol = {
     H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
@@ -20,10 +33,19 @@ function brineFromAssay(deadSeaAssay, massKg) {
   return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
 }
 
-function createAbundanceCase() {
+function resolveAssayId(options) {
+  if (typeof options === 'string') return options;
+  if (options && typeof options === 'object' && options.assayId) return options.assayId;
+  return DEFAULT_ASSAY_ID;
+}
+
+function createAbundanceCase(options = {}) {
+  const assayId = resolveAssayId(options);
+  const assay = assays[assayId];
+  if (!assay) throw new Error(`Unknown abundance assay ${assayId}`);
   const brine = brineFromAssay(assay, MASS_KG_PER_DAY);
   const bromideRecovery = 0.9;
-  const bromineMol = brine.mol['Br-'] * bromideRecovery / 2;
+  const bromineMol = (brine.mol['Br-'] || 0) * bromideRecovery / 2;
   const bromineKg = bromineMol * SUBSTANCES.Br2.molarMassG / 1000;
   const causticMol = bromineMol * 2;
   const causticKg = causticMol * SUBSTANCES.NaOH.molarMassG / 1000;
@@ -37,6 +59,7 @@ function createAbundanceCase() {
   const outputs = ['lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'raffinate'];
 
   return {
+    meta: { assayId },
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [

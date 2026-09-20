@@ -271,6 +271,53 @@ function assumeScreeningBrine(definition) {
   definition.site.notes = definition.site.notes ? `${definition.site.notes} ${extra}` : extra;
 }
 
+function saleKeyForNode(node) {
+  const id = String(node?.id || '');
+  const aliases = {
+    lithium: 'lithium',
+    magnesium: 'magnesium',
+    potash: 'potash',
+    gypsum: 'gypsum',
+    salt: 'salt',
+    'recovered-salt': 'salt',
+    caustic: 'caustic',
+    bromine: 'bromine',
+    bromide: 'bromine',
+    ammonia: 'ammonia',
+    'ammonia-product': 'ammonia',
+    oxygen: 'oxygen',
+    methane: 'methane',
+    methanol: 'methanol',
+    'methanol-product': 'methanol',
+    water: 'water',
+    'process-water': 'water',
+    'sabatier-water': 'water',
+  };
+  return aliases[id] || null;
+}
+
+function applyRegionalTea(definition, region) {
+  const tea = abundance?.TEA;
+  if (!definition?.graph?.nodes || !region || !tea?.bindSale) return;
+  for (const node of definition.graph.nodes) {
+    const econ = node.economics;
+    if (!econ) continue;
+    if (econ.disposition === 'sale') {
+      const key = saleKeyForNode(node);
+      if (key && tea.prices?.[key]) {
+        node.economics = { ...econ, ...tea.bindSale(key, { region }) };
+      }
+    }
+    const powerPurchase = (node.unit === 'electricity-source' || node.id === 'power' || node.id === 'electricity')
+      && econ.unitCost != null
+      && econ.installedCapex == null
+      && econ.capexRate == null;
+    if (powerPurchase && tea.bindCost) {
+      node.economics = { ...econ, ...tea.bindCost('power', { region }) };
+    }
+  }
+}
+
 function overlaySiteIdentity(definition, site, extraNotes = []) {
   definition.site = definition.site || {};
   definition.site.id = site.id;
@@ -455,6 +502,7 @@ function buildAbundancePlant(site) {
   overlaySiteIdentity(definition, site, [SCREENING_NOTE]);
   assumeScreeningBrine(definition);
   applyFrozenSolar(definition, solar, 'abundance');
+  applyRegionalTea(definition, site.region);
   return definition;
 }
 
@@ -468,6 +516,7 @@ function buildFuelPlant(site, template) {
   const solarNote = applyFrozenSolar(definition, frozenSolarFor(site, template), template);
   overlaySiteIdentity(definition, site, [SCREENING_NOTE, solarNote].filter(Boolean));
   bindSeawaterAssay(definition, site, intake);
+  applyRegionalTea(definition, site.region);
   return definition;
 }
 
@@ -687,7 +736,7 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
   const { tonnes, products } = saleProducts(objective, economics);
   const slate = slateFromNetwork(sized.definition, site);
   if (!met) {
-    notes.push('No cash-positive slate under the searched discrete grid; not an invented fuel winner.');
+    notes.push('No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.');
   }
   if (Array.isArray(sized.warnings)) {
     for (const warning of sized.warnings) {
@@ -724,7 +773,10 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
 function resolveSizeOpts(sizeOpts = {}) {
   const scales = sizeOpts.scales && sizeOpts.scales.length ? sizeOpts.scales : SEARCH_SCALES.slice();
   const rates = sizeOpts.rates && sizeOpts.rates.length ? sizeOpts.rates : SEARCH_RATES.slice();
-  return { ...sizeOpts, scales, rates };
+  const refine = sizeOpts.refine != null
+    ? Boolean(sizeOpts.refine)
+    : (sizeOpts.fast !== true && (scales.length >= 2 || rates.length >= 2));
+  return { ...sizeOpts, scales, rates, refine };
 }
 
 function searchAbundanceSites(opts = {}) {
@@ -792,7 +844,9 @@ return {
   templateEligible,
   evaluateCandidate,
   buildAbundancePlant,
+  buildFuelPlant,
   resolveAbundanceAssayId,
   frozenSolarFor,
+  applyRegionalTea,
 };
 });

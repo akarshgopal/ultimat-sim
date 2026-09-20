@@ -42,28 +42,35 @@ const VOUTCHKOV_2018 = 'https://doi.org/10.1016/j.desal.2017.10.033';
 const THEMA_2019 = 'https://doi.org/10.1016/j.rser.2019.06.030';
 const IRENA_MEOH = 'https://www.irena.org/publications/2021/Jan/Innovation-Outlook-Renewable-Methanol';
 const IEA_ELEC = 'https://www.iea.org/reports/electricity-2024';
+const IEA_ELEC_2026 = 'https://www.iea.org/reports/electricity-2026';
+const EIA_EPA = 'https://www.eia.gov/electricity/annual/';
 const DEFAULT_DEMAND_REGION_ID = 'me-levant';
 const DEMAND_REGION_LABELS = {
-  'me-levant': 'Dead Sea / Middle East default (Levant, Gulf, Red Sea, Arabian Sea). Not a plant offtake contract.',
+  'me-levant': 'Dead Sea / Levant screening offtake (Red Sea and Arabian Sea inherit). Not a plant offtake contract.',
+  gulf: 'Gulf screening offtake. Minerals inherit me-levant tables; not a DEWA/EWEC/KAHRAMAA contract.',
   'chile-atacama': 'Atacama / Chile screening offtake. Lithium ceiling reflects USGS Chile mine-production order (supply-side, not a contract). Other minerals inherit me-levant. Not a plant offtake contract.',
-  'australia': 'Australia screening offtake. Minerals inherit me-levant; USGS Australia lithium is hard-rock spodumene, not a brine offtake contract.',
-  'default': 'Default screening offtake (inherits Dead Sea / Middle East tables) for unmapped site.region. Not a plant offtake contract.',
+  australia: 'Australia screening offtake. Minerals inherit me-levant; USGS Australia lithium is hard-rock spodumene, not a brine offtake contract.',
+  europe: 'Europe screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
+  india: 'India screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
+  texas: 'Texas / US Gulf screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
+  'southern-africa': 'Southern Africa screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
+  default: 'Default screening offtake (inherits Dead Sea / Middle East tables) for unmapped site.region. Not a plant offtake contract.',
 };
 const DEMAND_REGION = DEMAND_REGION_LABELS[DEFAULT_DEMAND_REGION_ID];
 const EDITOR_DEMAND_DEFAULT = 1e6; // kg/y screening editor seed; not unlimited offtake
 // SITE_PRESETS.region / site-search Dead Sea 'Levant' → demandByRegion id. Unknown → default.
 const REGION_STRING_TO_ID = {
   Levant: 'me-levant',
-  Gulf: 'me-levant',
+  Gulf: 'gulf',
   'Red Sea': 'me-levant',
   'Arabian Sea': 'me-levant',
   'Atacama/Chile': 'chile-atacama',
   Australia: 'australia',
-  India: 'default',
-  'Texas/US Gulf': 'default',
+  India: 'india',
+  'Texas/US Gulf': 'texas',
   'North Africa': 'default',
-  'Southern Africa': 'default',
-  Europe: 'default',
+  'Southern Africa': 'southern-africa',
+  Europe: 'europe',
 };
 
 const prices = {
@@ -377,6 +384,11 @@ function inheritDemand(base, inheritNote, overrides = {}) {
 const CHILE_INHERIT_NOTE = 'Inherited me-levant screening offtake; Chile table only regionalizes lithium. Not a plant contract.';
 const AUSTRALIA_INHERIT_NOTE = 'Inherited me-levant screening offtake. USGS MCS 2025 Australia lithium mine production 2024e ~88,000 t Li content is hard-rock spodumene, not a Lake Mackay brine offtake. Not a plant contract.';
 const DEFAULT_INHERIT_NOTE = 'Inherited me-levant screening offtake (unmapped site.region). Not a plant contract.';
+const GULF_INHERIT_NOTE = 'Inherited me-levant screening offtake for Gulf geography. Not a plant contract.';
+const EUROPE_INHERIT_NOTE = 'Inherited me-levant screening offtake for Europe geography. Not a plant contract.';
+const INDIA_INHERIT_NOTE = 'Inherited me-levant screening offtake for India geography. Not a plant contract.';
+const TEXAS_INHERIT_NOTE = 'Inherited me-levant screening offtake for Texas / US Gulf geography. Not a plant contract.';
+const SOUTHERN_AFRICA_INHERIT_NOTE = 'Inherited me-levant screening offtake for Southern Africa geography. Not a plant contract.';
 
 const demandChile = inheritDemand(demand, CHILE_INHERIT_NOTE, {
   lithium: row(
@@ -388,28 +400,82 @@ const demandChile = inheritDemand(demand, CHILE_INHERIT_NOTE, {
 
 const demandAustralia = inheritDemand(demand, AUSTRALIA_INHERIT_NOTE);
 const demandDefault = inheritDemand(demand, DEFAULT_INHERIT_NOTE);
+const demandGulf = inheritDemand(demand, GULF_INHERIT_NOTE);
+const demandEurope = inheritDemand(demand, EUROPE_INHERIT_NOTE);
+const demandIndia = inheritDemand(demand, INDIA_INHERIT_NOTE);
+const demandTexas = inheritDemand(demand, TEXAS_INHERIT_NOTE);
+const demandSouthernAfrica = inheritDemand(demand, SOUTHERN_AFRICA_INHERIT_NOTE);
 
 const demandByRegion = {
   'me-levant': demand,
+  gulf: demandGulf,
   'chile-atacama': demandChile,
   australia: demandAustralia,
+  europe: demandEurope,
+  india: demandIndia,
+  texas: demandTexas,
+  'southern-africa': demandSouthernAfrica,
   default: demandDefault,
 };
 const DEMAND_REGIONS = demandByRegion;
 
-// Screening industrial-power overlays (not a PPA). me-levant / default keep costs.power ($0.04/kWh).
+const IEA_ELEC_EVIDENCE = [
+  { label: 'IEA Electricity 2024 (family; screening industrial tariff overlay, not a PPA)', url: IEA_ELEC },
+  { label: 'IEA Electricity 2026 (family; energy-intensive industrial price gaps, not a PPA)', url: IEA_ELEC_2026 },
+];
+
+// Screening industrial-power overlays (not a PPA). Default / unmapped keep costs.power ($0.04/kWh).
 const powerByRegion = {
+  'me-levant': row(
+    0.04, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Levant industrial power screening overlay ~$40/MWh (global $30–50/MWh mid). IEA Electricity family order — not an IEC/NEPCO tariff or plant PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+  gulf: row(
+    0.04, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Gulf industrial power screening overlay ~$40/MWh (gas-linked industrial order at the global $30–50/MWh mid). IEA Electricity family order — not a DEWA/EWEC/KAHRAMAA PPA or plant tariff.',
+    IEA_ELEC_EVIDENCE
+  ),
   'chile-atacama': row(
     0.07, '$/kWh', 'screening', 'IEA industrial electricity family',
     'Chile industrial power screening overlay ~$70/MWh (above the global $30–50/MWh mid). IEA Electricity 2024 family order — not a SEN/SING PPA or plant tariff.',
-    [{ label: 'IEA Electricity 2024 (family; screening industrial tariff overlay, not a PPA)', url: IEA_ELEC }]
+    IEA_ELEC_EVIDENCE
   ),
   australia: row(
     0.08, '$/kWh', 'screening', 'IEA industrial electricity family',
     'Australia industrial power screening overlay ~$80/MWh (above the global $30–50/MWh mid). IEA Electricity 2024 family order — not an NWIS/SWIS PPA or plant tariff.',
-    [{ label: 'IEA Electricity 2024 (family; screening industrial tariff overlay, not a PPA)', url: IEA_ELEC }]
+    IEA_ELEC_EVIDENCE
+  ),
+  europe: row(
+    0.10, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Europe industrial power screening overlay ~$100/MWh. IEA Electricity 2026: EU energy-intensive industrial prices remain ~2× US and ~50% above India/China; EU wholesale ~USD 95/MWh (2025). Not a Eurostat contract or plant PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+  india: row(
+    0.07, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'India industrial power screening overlay ~$70/MWh (below EU; IEA energy-intensive series uses Andhra Pradesh as the India marker). IEA Electricity family / CEA order — not a DISCOM tariff or plant PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+  texas: row(
+    0.06, '$/kWh', 'screening', 'IEA / EIA industrial electricity family',
+    'Texas industrial power screening overlay ~$60/MWh. IEA US energy-intensive series is Texas-based; EIA Electric Power Annual 2024 Texas industrial average ~6.12 ¢/kWh. Not an ERCOT PPA or retail contract.',
+    [
+      ...IEA_ELEC_EVIDENCE,
+      { label: 'EIA Electric Power Annual (Texas industrial average revenue per kWh; not a PPA)', url: EIA_EPA },
+    ]
+  ),
+  'southern-africa': row(
+    0.09, '$/kWh', 'screening', 'IEA Electricity family + Eskom/NERSA order',
+    'Southern Africa industrial power screening overlay ~$90/MWh (above the global $30–50/MWh mid). IEA Electricity family does not publish a South Africa energy-intensive point on the EU/US/India chart; Eskom/NERSA standard-tariff order sits above that mid (not Megaflex or an NPA quote). Not a plant PPA.',
+    IEA_ELEC_EVIDENCE
   ),
 };
+
+// Product $/kg stays the global screening band unless a regional series is cited.
+// Lithium is the USGS LCE proxy in every region (Chile is supply-side, not a LiCl contract).
+// Regional CAPEX intensity multipliers are omitted (factor 1). NREL ATB location
+// adjustment is US-only; IEA electrolyzer $/kW is technology-family, not geography.
+const capexMultiplierByRegion = {};
 
 function resolveDemandRegion(region) {
   if (region == null || region === '') return DEFAULT_DEMAND_REGION_ID;
@@ -442,7 +508,19 @@ function getPriceForRegion(key, region) {
       note: `${item.note} Chile is supply-side (USGS MCS Chile mine-production order); this USGS LCE proxy is not a Chilean offtake contract.`,
     };
   }
+  if (key === 'lithium' && id && id !== 'me-levant' && id !== 'default') {
+    return {
+      ...item,
+      note: `${item.note} Regional table ${id}: lithium unit price stays the USGS LCE proxy — not a local LiCl contract.`,
+    };
+  }
   return item;
+}
+
+function getCapexMultiplierForRegion(region) {
+  const id = resolveDemandRegion(region);
+  const item = capexMultiplierByRegion[id];
+  return item && Number.isFinite(Number(item.value)) ? Number(item.value) : 1;
 }
 
 const fuelsCapexNote = row(
@@ -475,11 +553,12 @@ function installedCapexFromPack(pack, capacity) {
 function bindCapexPack(processKey, extra = {}) {
   const item = must(packs, processKey, 'pack');
   const capacity = extra.capacity;
+  const regionMul = extra.region != null ? getCapexMultiplierForRegion(extra.region) : 1;
   const merged = {
     ...item,
     scaleExponent: extra.scaleExponent ?? item.scaleExponent,
     refCapacity: extra.refCapacity ?? item.refCapacity,
-    capexIntensity: extra.capexIntensity ?? item.capexIntensity,
+    capexIntensity: extra.capexIntensity ?? item.capexIntensity * regionMul,
   };
   const scaled = merged.scaleExponent != null && merged.refCapacity != null && Number.isFinite(capacity);
   const precompute = extra.precompute != null ? extra.precompute : (item.precompute || scaled);
@@ -626,6 +705,8 @@ return {
   demand,
   demandByRegion,
   DEMAND_REGIONS,
+  powerByRegion,
+  capexMultiplierByRegion,
   REGION_STRING_TO_ID,
   DEFAULT_DEMAND_REGION_ID,
   DEMAND_REGION_LABELS,
@@ -637,6 +718,7 @@ return {
   getDemandForRegion,
   getCostForRegion,
   getPriceForRegion,
+  getCapexMultiplierForRegion,
   bindSale,
   bindSaleForRegion,
   bindCost,

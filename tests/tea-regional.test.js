@@ -10,11 +10,14 @@ test('demandByRegion maps preset.region strings and chile lithium ceiling ≠ me
   assert.equal(tea.resolveDemandRegion(), 'me-levant');
   assert.equal(tea.resolveDemandRegion(undefined), 'me-levant');
   assert.equal(tea.resolveDemandRegion('Levant'), 'me-levant');
-  assert.equal(tea.resolveDemandRegion('Gulf'), 'me-levant');
+  assert.equal(tea.resolveDemandRegion('Gulf'), 'gulf');
   assert.equal(tea.resolveDemandRegion('Atacama/Chile'), 'chile-atacama');
   assert.equal(tea.resolveDemandRegion('chile-atacama'), 'chile-atacama');
   assert.equal(tea.resolveDemandRegion('Australia'), 'australia');
-  assert.equal(tea.resolveDemandRegion('Europe'), 'default');
+  assert.equal(tea.resolveDemandRegion('Europe'), 'europe');
+  assert.equal(tea.resolveDemandRegion('India'), 'india');
+  assert.equal(tea.resolveDemandRegion('Texas/US Gulf'), 'texas');
+  assert.equal(tea.resolveDemandRegion('Southern Africa'), 'southern-africa');
   assert.equal(tea.resolveDemandRegion('unknown-basin'), 'default');
 
   for (const preset of SITE_PRESETS) {
@@ -58,14 +61,34 @@ test('bindSale / bindCost regional overlays: chile offtake and power ≠ me-leva
   const mePower = tea.bindCost('power');
   const chilePower = tea.bindCost('power', { region: 'chile-atacama' });
   const auPower = tea.bindCost('power', { region: 'Australia' });
+  const europePower = tea.bindCost('power', { region: 'Europe' });
+  const indiaPower = tea.bindCost('power', { region: 'India' });
+  const texasPower = tea.bindCost('power', { region: 'Texas/US Gulf' });
+  const gulfPower = tea.bindCost('power', { region: 'Gulf' });
+  const saPower = tea.bindCost('power', { region: 'Southern Africa' });
   assert.equal(mePower.unitCost, 0.04);
   assert.equal(chilePower.unitCost, 0.07);
   assert.equal(auPower.unitCost, 0.08);
+  assert.equal(europePower.unitCost, 0.10);
+  assert.equal(indiaPower.unitCost, 0.07);
+  assert.equal(texasPower.unitCost, 0.06);
+  assert.equal(gulfPower.unitCost, 0.04);
+  assert.equal(saPower.unitCost, 0.09);
   assert.notEqual(chilePower.unitCost, mePower.unitCost);
+  assert.notEqual(europePower.unitCost, mePower.unitCost);
+  assert.notEqual(texasPower.unitCost, mePower.unitCost);
   assert.equal(chilePower.quality, 'screening');
+  assert.equal(europePower.quality, 'screening');
+  assert.equal(texasPower.quality, 'screening');
   assert.match(chilePower.note, /not a SEN\/SING PPA/i);
+  assert.match(europePower.note, /not a Eurostat contract/i);
+  assert.match(texasPower.note, /not an ERCOT PPA/i);
   assert.ok(chilePower.evidence.some(item => /iea\.org.*electricity/i.test(item.url || '')));
+  assert.ok(texasPower.evidence.some(item => /eia\.gov\/electricity/i.test(item.url || '')));
   assert.equal(tea.bindCost('brine', { region: 'chile-atacama' }).unitCost, tea.costs.brine.value);
+  assert.equal(tea.getCapexMultiplierForRegion('Europe'), 1);
+  assert.equal(tea.getCapexMultiplierForRegion('chile-atacama'), 1);
+  assert.equal(chileSale.unitPrice, tea.prices.lithium.value);
 });
 
 test('createAbundanceCase({ region }) is backward compatible and binds chile Li cap', () => {
@@ -87,4 +110,9 @@ test('createAbundanceCase({ region }) is backward compatible and binds chile Li 
   assert.equal(defChile.teaEvidence.demandRegionId, 'chile-atacama');
   const chileDemand = defChile.teaEvidence.demand.find(row => row.key === 'lithium');
   assert.equal(chileDemand.value, 2e7);
+
+  const defEurope = createAbundanceCase({ region: 'Europe' });
+  assert.equal(defEurope.meta.demandRegionId, 'europe');
+  assert.equal(power(defEurope).economics.unitCost, 0.10);
+  assert.equal(lithium(defEurope).economics.unitPrice, tea.prices.lithium.value);
 });

@@ -19,6 +19,7 @@ const {
   FAST_RATES,
   templateEligible,
   buildAbundancePlant,
+  buildFuelPlant,
   frozenSolarFor,
   evaluateCandidate,
 } = require('../engine/site-search');
@@ -100,6 +101,27 @@ test('when Dead Sea abundance is in the search set, returns a scored candidate u
   assert.equal(winner.rightsScenario, RIGHTS_SCREENING);
   assert.ok(winner.notes.some(note => /screening assumes intake\/concession/i.test(note)));
   assert.match(SCREENING_NOTE, /not a bankable permit/i);
+});
+
+test('site-search plants bind regional TEA when site.region is set', () => {
+  const mejillones = searchSite('chile-mejillones');
+  const abundance = buildAbundancePlant(mejillones);
+  const lithium = abundance.graph.nodes.find(node => node.id === 'lithium');
+  assert.equal(abundance.meta.demandRegionId, 'chile-atacama');
+  assert.equal(lithium.economics.annualDemandLimit, 2e7);
+  assert.equal(lithium.economics.unitPrice, 14);
+
+  const methanol = buildFuelPlant(mejillones, 'methanol');
+  const sale = methanol.graph.nodes.find(node => node.id === 'methanol-product');
+  assert.equal(methanol.site.region, 'Atacama/Chile');
+  assert.equal(sale.economics.demandRegionId, 'chile-atacama');
+  assert.equal(sale.economics.unitPrice, 0.4);
+
+  const almeria = searchSite('spain-almeria');
+  const coastal = buildFuelPlant(almeria, 'coastal');
+  const methane = coastal.graph.nodes.find(node => node.id === 'methane');
+  assert.equal(coastal.site.region, 'Europe');
+  assert.equal(methane.economics.demandRegionId, 'europe');
 });
 
 test('buildAbundancePlant uses the site brine assay, not a Dead Sea clone, for Mejillones/Atacama', () => {

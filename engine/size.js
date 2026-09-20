@@ -1599,6 +1599,9 @@ function sizeCoastalToMethane(target, month = 0, opts = {}) {
 const { evaluateEconomics, scorePositiveCashflow } = economics || {};
 const ABUNDANCE_SCALES = [0.25, 0.5, 1, 1.5, 2];
 const FUEL_RATES = [0, 2, 5, 10, 15, 20];
+const FAST_SCALES = [1];
+const FAST_RATES = [0];
+const REFINE_MAX_EXTRA = 6;
 const ABUNDANCE_DOWNSTREAM = Object.freeze(['chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']);
 
 function operatingRevenue(candidate) {
@@ -1629,6 +1632,140 @@ function betterCashflowCandidate(left, right) {
     return left.objective.positiveSaleCount > right.objective.positiveSaleCount ? left : right;
   }
   return left.objective.annualNetCash >= right.objective.annualNetCash ? left : right;
+}
+
+function gridKey(value) {
+  return Math.round(Number(value) * 1e6) / 1e6;
+}
+
+function cashOf(candidate) {
+  const cash = Number(candidate?.objective?.annualNetCash);
+  return Number.isFinite(cash) ? cash : -Infinity;
+}
+
+function midValue(left, right) {
+  const lo = Math.min(left, right);
+  const hi = Math.max(left, right);
+  if (!(hi > lo) || hi - lo < 1e-9) return null;
+  if (lo > 0) {
+    const geo = Math.sqrt(lo * hi);
+    if (Math.abs(geo - lo) < 1e-6 || Math.abs(geo - hi) < 1e-6) return (lo + hi) / 2;
+    return geo;
+  }
+  return (lo + hi) / 2;
+}
+
+function listedGrid(opts, key, fallback) {
+  const listed = opts && opts[key];
+  return listed && listed.length ? listed.slice() : fallback.slice();
+}
+
+function shouldRefine(opts, grid) {
+  if (opts && (opts.refine === false || opts.fast === true)) return false;
+  if (opts && opts.refine === true) return true;
+  return Array.isArray(grid) && grid.length >= 2;
+}
+
+function axisValueOf(candidate) {
+  const selected = candidate && candidate.selected;
+  if (!selected) return null;
+  if (Number.isFinite(Number(selected.rate)) && selected.family !== 'abundance') return Number(selected.rate);
+  if (Number.isFinite(Number(selected.scale))) return Number(selected.scale);
+  return null;
+}
+
+function nextRefineValue(sortedValues, resultAt, seen, best) {
+  const bestVal = axisValueOf(best);
+  const intervals = [];
+  for (let i = 0; i < sortedValues.length - 1; i += 1) {
+    const a = sortedValues[i];
+    const b = sortedValues[i + 1];
+    const mid = midValue(a, b);
+    if (mid == null || seen.has(gridKey(mid))) continue;
+    const ca = cashOf(resultAt.get(a));
+    const cb = cashOf(resultAt.get(b));
+    const signChange = (ca > 0) !== (cb > 0);
+    const touchesBest = bestVal != null && (Math.abs(a - bestVal) < 1e-9 || Math.abs(b - bestVal) < 1e-9);
+    intervals.push({ mid, signChange, touchesBest, a, b });
+  }
+  const crossing = intervals.find(item => item.signChange);
+  if (crossing) return crossing.mid;
+  const nearBest = intervals.filter(item => item.touchesBest);
+  if (nearBest.length) {
+    nearBest.sort((left, right) => (right.b - right.a) - (left.b - left.a));
+    return nearBest[0].mid;
+  }
+  return intervals.length ? intervals[0].mid : null;
+}
+
+function neighborMids(grid, center) {
+  const sorted = [...new Set((grid || []).map(gridKey).filter(value => Number.isFinite(value) && value >= 0))].sort((a, b) => a - b);
+  if (!sorted.length || !Number.isFinite(center)) return [];
+  const key = gridKey(center);
+  let index = sorted.findIndex(value => Math.abs(value - key) < 1e-9);
+  if (index < 0) {
+    index = sorted.reduce((best, value, i) => (
+      Math.abs(value - key) < Math.abs(sorted[best] - key) ? i : best
+    ), 0);
+  }
+  const extras = [];
+  if (index > 0) {
+    const mid = midValue(sorted[index - 1], sorted[index]);
+    if (mid != null) extras.push(gridKey(mid));
+  }
+  if (index < sorted.length - 1) {
+    const mid = midValue(sorted[index], sorted[index + 1]);
+    if (mid != null) extras.push(gridKey(mid));
+  }
+  return extras.filter(value => Math.abs(value - key) > 1e-9);
+}
+
+function refineAxis({ coarse, evaluate, enabled, maxExtra = REFINE_MAX_EXTRA }) {
+  const seen = new Set();
+  const resultAt = new Map();
+  let best = null;
+  let tried = 0;
+
+  const consider = (value) => {
+    const key = gridKey(value);
+    if (!Number.isFinite(key) || key < 0 || seen.has(key)) return;
+    seen.add(key);
+    tried += 1;
+    try {
+      const candidate = evaluate(value);
+      if (candidate) {
+        resultAt.set(key, candidate);
+        best = betterCashflowCandidate(best, candidate);
+      } else {
+        resultAt.set(key, null);
+      }
+    } catch (error) {
+      resultAt.set(key, {
+        mode: 'positive-cashflow',
+        error: error.message,
+        objective: {
+          met: false,
+          positiveSaleCount: 0,
+          annualNetCash: -Infinity,
+          formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).',
+        },
+        warnings: [error.message],
+      });
+      if (!best) best = resultAt.get(key);
+    }
+  };
+
+  for (const value of coarse || []) consider(value);
+  if (enabled) {
+    const extraCap = Number.isFinite(Number(maxExtra)) ? Math.max(0, Math.floor(Number(maxExtra))) : REFINE_MAX_EXTRA;
+    for (let step = 0; step < extraCap; step += 1) {
+      const sorted = [...seen].sort((a, b) => a - b);
+      const next = nextRefineValue(sorted, resultAt, seen, best);
+      if (next == null) break;
+      consider(next);
+    }
+  }
+  return { best, tried };
 }
 
 function scaleMaterialStream(stream, ratio) {
@@ -1768,6 +1905,17 @@ function jointFuelProducts(definition) {
   });
 }
 
+function evaluateAbundanceAt(seed, baseline, slateMode, scale) {
+  const definition = resolveDefinition(seed);
+  if (definition.site?.rights?.brineConcession && !rightIsAuthorized(definition.site.rights.brineConcession)) {
+    assertSizeMayAssume(definition, ['brine']);
+  }
+  applyAbundanceScale(definition, baseline, scale, slateMode);
+  withholdUnauthorizedSupply(definition);
+  const solved = solveOperation(definition);
+  return scoreSizedCandidate(definition, solved, { family: 'abundance', slateMode, scale }, []);
+}
+
 function searchAbundanceCashflow(seed, opts) {
   const baselineDef = resolveDefinition(seed);
   const baseline = baselineAbundanceDuties(baselineDef);
@@ -1777,35 +1925,19 @@ function searchAbundanceCashflow(seed, opts) {
     modes.push('minerals+halogens');
   }
   modes.push('full');
-  const scales = (opts.scales && opts.scales.length) ? opts.scales : ABUNDANCE_SCALES;
+  const scales = listedGrid(opts, 'scales', ABUNDANCE_SCALES);
+  const refine = shouldRefine(opts, scales);
   let best = null;
   let tried = 0;
   for (const slateMode of modes) {
-    for (const scale of scales) {
-      const definition = resolveDefinition(seed);
-      try {
-        if (definition.site?.rights?.brineConcession && !rightIsAuthorized(definition.site.rights.brineConcession)) {
-          assertSizeMayAssume(definition, ['brine']);
-        }
-        applyAbundanceScale(definition, baseline, scale, slateMode);
-        withholdUnauthorizedSupply(definition);
-        const solved = solveOperation(definition);
-        const candidate = scoreSizedCandidate(definition, solved, { family: 'abundance', slateMode, scale }, []);
-        tried += 1;
-        best = betterCashflowCandidate(best, candidate);
-      } catch (error) {
-        tried += 1;
-        if (!best) {
-          best = {
-            mode: 'positive-cashflow',
-            error: error.message,
-            objective: { met: false, positiveSaleCount: 0, annualNetCash: -Infinity, formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).' },
-            selected: { family: 'abundance', slateMode, scale },
-            warnings: [error.message],
-          };
-        }
-      }
-    }
+    const found = refineAxis({
+      coarse: scales,
+      enabled: refine,
+      maxExtra: opts.maxRefine,
+      evaluate: scale => evaluateAbundanceAt(seed, baseline, slateMode, scale),
+    });
+    tried += found.tried;
+    best = betterCashflowCandidate(best, found.best);
   }
   if (!best || !best.definition) throw new Error(best?.error || 'sizeForPositiveCashflow found no feasible abundance slate');
   best.candidatesTried = tried;
@@ -1815,43 +1947,48 @@ function searchAbundanceCashflow(seed, opts) {
   return best;
 }
 
+function evaluateFuelAt(seed, product, rate, opts) {
+  const sized = sizeToProduct({
+    product,
+    rate,
+    caseOrBuilder: seed,
+    caps: opts.caps,
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    heatCredit: opts.heatCredit,
+  });
+  const candidate = scoreSizedCandidate(
+    sized.definition,
+    sized.solved,
+    { family: 'fuel', product, rate },
+    sized.warnings || []
+  );
+  candidate.iterations = sized.iterations;
+  candidate.history = sized.history;
+  candidate.residual = sized.residual;
+  candidate.converged = sized.converged;
+  candidate.heatCoveredKWh = sized.heatCoveredKWh;
+  candidate.heatResidualKWh = sized.heatResidualKWh;
+  return candidate;
+}
+
 function searchFuelCashflow(seed, opts) {
-  const rates = (opts.rates && opts.rates.length) ? opts.rates : FUEL_RATES;
+  const rates = listedGrid(opts, 'rates', FUEL_RATES);
   const probe = resolveDefinition(seed);
   const products = fuelProductsOn(probe);
   if (!products.length) throw new Error('sizeForPositiveCashflow needs Sabatier/CH4, electrolyzer/H2, methanol, or ammonia sale paths');
+  const refine = shouldRefine(opts, rates);
   let best = null;
   let tried = 0;
   for (const product of products) {
-    for (const rate of rates) {
-      try {
-        const sized = sizeToProduct({
-          product,
-          rate,
-          caseOrBuilder: seed,
-          caps: opts.caps,
-          maxIterations: opts.maxIterations,
-          tolerance: opts.tolerance,
-          heatCredit: opts.heatCredit,
-        });
-        const candidate = scoreSizedCandidate(
-          sized.definition,
-          sized.solved,
-          { family: 'fuel', product, rate },
-          sized.warnings || []
-        );
-        candidate.iterations = sized.iterations;
-        candidate.history = sized.history;
-        candidate.residual = sized.residual;
-        candidate.converged = sized.converged;
-        candidate.heatCoveredKWh = sized.heatCoveredKWh;
-        candidate.heatResidualKWh = sized.heatResidualKWh;
-        tried += 1;
-        best = betterCashflowCandidate(best, candidate);
-      } catch (error) {
-        tried += 1;
-      }
-    }
+    const found = refineAxis({
+      coarse: rates,
+      enabled: refine,
+      maxExtra: opts.maxRefine,
+      evaluate: rate => evaluateFuelAt(seed, product, rate, opts),
+    });
+    tried += found.tried;
+    if (found.best && found.best.definition) best = betterCashflowCandidate(best, found.best);
   }
   if (!best) throw new Error('sizeForPositiveCashflow found no feasible fuel sizing candidate');
   best.candidatesTried = tried;
@@ -1861,49 +1998,84 @@ function searchFuelCashflow(seed, opts) {
   return best;
 }
 
+function evaluateJointAt(seed, baseline, scale, product, rate, opts) {
+  const scaled = resolveDefinition(seed);
+  applyAbundanceScale(scaled, baseline, scale, 'full');
+  const sized = sizeToProduct({
+    product,
+    rate,
+    definition: scaled,
+    caps: opts.caps,
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    heatCredit: opts.heatCredit,
+  });
+  const candidate = scoreSizedCandidate(
+    sized.definition,
+    sized.solved,
+    { family: 'joint', slateMode: 'full', scale, product, rate },
+    sized.warnings || []
+  );
+  candidate.iterations = sized.iterations;
+  candidate.history = sized.history;
+  candidate.residual = sized.residual;
+  candidate.converged = sized.converged;
+  candidate.heatCoveredKWh = sized.heatCoveredKWh;
+  candidate.heatResidualKWh = sized.heatResidualKWh;
+  return candidate;
+}
+
 function searchJointCashflow(seed, opts) {
   const products = jointFuelProducts(resolveDefinition(seed));
   if (!products.length) return null;
   const baselineDef = resolveDefinition(seed);
   if (!converter(baselineDef, 'brine-minerals')) return null;
   const baseline = baselineAbundanceDuties(baselineDef);
-  const scales = (opts.scales && opts.scales.length) ? opts.scales : ABUNDANCE_SCALES;
-  const rates = (opts.rates && opts.rates.length) ? opts.rates : FUEL_RATES;
+  const scales = listedGrid(opts, 'scales', ABUNDANCE_SCALES);
+  const rates = listedGrid(opts, 'rates', FUEL_RATES);
   let best = null;
   let tried = 0;
+  const seen = new Set();
+  const consider = (scale, product, rate) => {
+    const key = `${gridKey(scale)}|${product}|${gridKey(rate)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    tried += 1;
+    try {
+      const candidate = evaluateJointAt(seed, baseline, scale, product, rate, opts);
+      best = betterCashflowCandidate(best, candidate);
+    } catch {
+      /* skip infeasible joint point */
+    }
+  };
   for (const scale of scales) {
     for (const product of products) {
-      for (const rate of rates) {
-        try {
-          const scaled = resolveDefinition(seed);
-          applyAbundanceScale(scaled, baseline, scale, 'full');
-          const sized = sizeToProduct({
-            product,
-            rate,
-            definition: scaled,
-            caps: opts.caps,
-            maxIterations: opts.maxIterations,
-            tolerance: opts.tolerance,
-            heatCredit: opts.heatCredit,
-          });
-          const candidate = scoreSizedCandidate(
-            sized.definition,
-            sized.solved,
-            { family: 'joint', slateMode: 'full', scale, product, rate },
-            sized.warnings || []
-          );
-          candidate.iterations = sized.iterations;
-          candidate.history = sized.history;
-          candidate.residual = sized.residual;
-          candidate.converged = sized.converged;
-          candidate.heatCoveredKWh = sized.heatCoveredKWh;
-          candidate.heatResidualKWh = sized.heatResidualKWh;
-          tried += 1;
-          best = betterCashflowCandidate(best, candidate);
-        } catch (error) {
-          tried += 1;
-        }
+      for (const rate of rates) consider(scale, product, rate);
+    }
+  }
+  if (shouldRefine(opts, scales) && shouldRefine(opts, rates) && best?.selected) {
+    const product = best.selected.product;
+    const scale0 = Number(best.selected.scale);
+    const rate0 = Number(best.selected.rate);
+    const extraScales = neighborMids(scales, scale0);
+    const extraRates = neighborMids(rates, rate0);
+    for (const rate of extraRates) consider(scale0, product, rate);
+    for (const scale of extraScales) consider(scale, product, rate0);
+    for (let step = 0; step < Math.min(Number(opts.maxRefine) || REFINE_MAX_EXTRA, 4); step += 1) {
+      const moreRates = neighborMids([...rates, ...extraRates, rate0], best.selected.rate);
+      const moreScales = neighborMids([...scales, ...extraScales, scale0], best.selected.scale);
+      let added = false;
+      for (const rate of moreRates) {
+        const before = tried;
+        consider(best.selected.scale, product, rate);
+        if (tried > before) added = true;
       }
+      for (const scale of moreScales) {
+        const before = tried;
+        consider(scale, product, best.selected.rate);
+        if (tried > before) added = true;
+      }
+      if (!added) break;
     }
   }
   if (!best) {
@@ -1967,5 +2139,14 @@ function sizeForPositiveCashflow(opts = {}) {
   return best;
 }
 
-return { sizeToTarget, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow };
+return {
+  sizeToTarget,
+  sizeCoastalToMethane,
+  sizeToProduct,
+  sizeForPositiveCashflow,
+  ABUNDANCE_SCALES,
+  FUEL_RATES,
+  FAST_SCALES,
+  FAST_RATES,
+};
 });

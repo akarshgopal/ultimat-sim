@@ -172,6 +172,87 @@ test('sizeToProduct runs on Atacama lithium brine abundance case', () => {
   assertClosed(sized.solved);
 });
 
+function windowedCashMineralsPlant() {
+  const brine = {
+    kind: 'material',
+    mol: { H2O: 50, 'Li+': 0.5, 'Cl-': 0.5 },
+    phase: 'liquid',
+    T_C: 25,
+    P_bar: 1,
+  };
+  return {
+    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    graph: {
+      nodes: [
+        { id: 'brine', unit: 'material-source', params: { stream: brine }, economics: { unitCost: 2 } },
+        { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: 1 } }, economics: { unitCost: 0.01 } },
+        {
+          id: 'minerals',
+          unit: 'brine-minerals',
+          capacity: 1,
+          params: {
+            electricityKWhPerKgBrine: 0.05,
+            lithiumRecovery: 1,
+            bromideRecovery: 0,
+            magnesiumRecovery: 0,
+            potashRecovery: 0,
+            gypsumRecovery: 0,
+            saltRecovery: 0,
+          },
+          economics: { installedCapex: 8000, fixedOMPercent: 4, variableOM: 0, assetLifeYears: 20 },
+        },
+        { id: 'lithium', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 400, annualDemandLimit: 8 } },
+        { id: 'bromide', unit: 'material-sink', economics: { disposition: 'vent' } },
+        { id: 'magnesium', unit: 'material-sink', economics: { disposition: 'vent' } },
+        { id: 'potash', unit: 'material-sink', economics: { disposition: 'vent' } },
+        { id: 'gypsum', unit: 'material-sink', economics: { disposition: 'vent' } },
+        { id: 'salt', unit: 'material-sink', economics: { disposition: 'vent' } },
+        { id: 'raffinate', unit: 'material-sink', economics: { disposition: 'reinjection' } },
+      ],
+      edges: [
+        { from: { node: 'brine', port: 'out' }, to: { node: 'minerals', port: 'brine' } },
+        { from: { node: 'power', port: 'out' }, to: { node: 'minerals', port: 'electricity' } },
+        { from: { node: 'minerals', port: 'lithium' }, to: { node: 'lithium', port: 'in' } },
+        { from: { node: 'minerals', port: 'bromide' }, to: { node: 'bromide', port: 'in' } },
+        { from: { node: 'minerals', port: 'magnesium' }, to: { node: 'magnesium', port: 'in' } },
+        { from: { node: 'minerals', port: 'potash' }, to: { node: 'potash', port: 'in' } },
+        { from: { node: 'minerals', port: 'gypsum' }, to: { node: 'gypsum', port: 'in' } },
+        { from: { node: 'minerals', port: 'salt' }, to: { node: 'salt', port: 'in' } },
+        { from: { node: 'minerals', port: 'raffinate' }, to: { node: 'raffinate', port: 'in' } },
+      ],
+    },
+    operation: { setpoints: { minerals: 1 } },
+  };
+}
+
+test('sizeForPositiveCashflow refines a coarse scale grid that can miss cash+', () => {
+  const coarse = [0.25, 4];
+  const missed = sizeForPositiveCashflow({
+    definition: windowedCashMineralsPlant(),
+    scales: coarse,
+    rates: [0],
+    refine: false,
+  });
+  assert.equal(missed.objective.met, false);
+  assert.ok(missed.objective.annualNetCash <= 0);
+  assert.ok(coarse.includes(missed.selected.scale));
+
+  const refined = sizeForPositiveCashflow({
+    definition: windowedCashMineralsPlant(),
+    scales: coarse,
+    rates: [0],
+    refine: true,
+  });
+  assert.equal(refined.objective.met, true);
+  assert.ok(refined.objective.annualNetCash > 0);
+  assert.ok(refined.selected.scale > 0.25);
+  assert.ok(refined.selected.scale < 4);
+  assert.ok(refined.candidatesTried > missed.candidatesTried);
+  assert.ok(Math.abs(refined.economics.annualNetCash - (
+    refined.economics.annualRevenue - refined.economics.annualOperatingCost - refined.economics.annualizedCapex
+  )) < 1e-6);
+});
+
 test('sizeForPositiveCashflow on minerals plus hydrogen searches joint candidates', () => {
   const sized = sizeForPositiveCashflow({
     definition: mineralsAndHydrogenPlant(),

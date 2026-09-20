@@ -9,7 +9,8 @@
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { findFuelBreakEven } = require('../engine/sensitivity.js');
+const { findFuelBreakEven, probeFuelCash } = require('../engine/sensitivity.js');
+const { sizeForPositiveCashflow } = require('../engine/size.js');
 const { createCoastalCase } = require('../cases/coastal.js');
 const { createMethanolCase } = require('../cases/methanol.js');
 const SITE_PRESETS = require('../data/site-presets.js');
@@ -94,6 +95,37 @@ function summarize(result, extra) {
   };
 }
 
+function sizedProbe(builder, product, extra) {
+  const sized = sizeForPositiveCashflow({
+    caseOrBuilder: () => clone(typeof builder === 'function' ? builder() : builder),
+    rates: [2, 5],
+  });
+  const probe = probeFuelCash({
+    definition: sized.definition,
+    solved: sized.solved,
+    product,
+    selected: sized.selected,
+  });
+  return {
+    ...extra,
+    product: probe.product,
+    met: probe.met,
+    bestCash: probe.bestCash,
+    breakEvenPrice: probe.breakEvenPrice,
+    breakEvenPriceInBand: probe.breakEvenPriceInBand,
+    best: probe.best,
+    bounds: probe.bounds,
+    label: probe.label || SCREENING,
+    note: probe.note,
+    warnings: probe.warnings,
+    sized: {
+      met: Boolean(sized.objective?.met),
+      annualNetCash: sized.objective?.annualNetCash ?? null,
+      selected: sized.selected,
+    },
+  };
+}
+
 const coastalAlmeria = createCoastalCase(0);
 const methanolMejillones = createMethanolCase(0);
 const coastalGulf = applyLocationPreset(createCoastalCase(0), 'uae-taweelah');
@@ -149,6 +181,35 @@ const runs = [
   ),
 ];
 
+const probes = [
+  sizedProbe(
+    () => coastalAlmeria,
+    'CH4',
+    {
+      case: 'coastal',
+      site: {
+        id: coastalAlmeria.site.id,
+        name: coastalAlmeria.site.name,
+        preset: 'spain-almeria / native coastal',
+        solar: 'frozen PVGIS-SARAH3/ERA5 Almería typical-day',
+      },
+    }
+  ),
+  sizedProbe(
+    () => methanolMejillones,
+    'methanol',
+    {
+      case: 'methanol',
+      site: {
+        id: methanolMejillones.site.id,
+        name: methanolMejillones.site.name,
+        preset: 'chile-mejillones / native methanol',
+        solar: 'frozen PVGIS-ERA5 Mejillones monthly',
+      },
+    }
+  ),
+];
+
 const report = {
   label: SCREENING,
   sizing: 'baseline-once',
@@ -156,15 +217,18 @@ const report = {
     'coastal CH4 @ Almería (native frozen PVGIS) — vary price and CAPEX factor',
     'methanol @ Mejillones (native chile-mejillones frozen PVGIS-ERA5) — vary price',
     'coastal CH4 @ uae-taweelah location/assay/rights overlay; solar remains Almería frozen series',
+    'post-size probeFuelCash at 2 and 5 kg/day: CH4 green-premium × CAPEX 0.05–2; MeOH commodity band × CAPEX 0.05–2',
   ],
   notRun: [
     'au-port-hedland and saudi-oxagon: no frozen typical-day PVGIS in-repo; applying them would invent yield. Not run.',
   ],
   notes: [
     'Break-even is annualNetCash crossing 0 with positiveSaleCount ≥ 1 on the plant sized once at case capacities (no re-size per trial).',
+    'Post-size probes sweep tea-screening CH4 green-premium / MeOH $0.25–0.50/kg and CAPEX factor 0.05–2 on the cashflow-sized plant (economics only). Screening, not quotes.',
     'Prices and CAPEX are screening, not offtake quotes, vendor CAPEX, or permits.',
   ],
   runs,
+  probes,
 };
 
 console.log(JSON.stringify(report, null, 2));

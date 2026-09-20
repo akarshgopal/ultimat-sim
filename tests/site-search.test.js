@@ -627,6 +627,71 @@ test('no-rights makes screening-cash+ Mejillones abundance infeasible/skipped; o
   assert.equal(payload.cli.rightsScenario, RIGHTS_NO_RIGHTS);
 });
 
+test('coastal/methanol get a screening price×CAPEX probe: cash+ inside bands or documented near-miss', () => {
+  const almeria = searchSite('spain-almeria');
+  const mejillones = searchSite('chile-mejillones');
+  const fuelOpts = { scales: [1], rates: [5] };
+
+  const coastal = evaluateCandidate(almeria, 'coastal', fuelOpts);
+  assert.equal(coastal.status, 'ok');
+  assert.equal(coastal.template, 'coastal');
+  assert.equal(coastal.idle, false);
+  assert.ok('breakEvenPrice' in coastal);
+  assert.ok(Number.isFinite(coastal.bestCash));
+  assert.ok(coastal.fuelProbe);
+  assert.equal(coastal.fuelProbe.bounds.priceMid, 1);
+  assert.equal(coastal.fuelProbe.bounds.capexMin, 0.05);
+  assert.ok(coastal.notes.some(note => /screening/i.test(note)));
+  if (coastal.feasible) {
+    assert.ok(coastal.annualNetCash > 0);
+    assert.ok(coastal.notes.some(note => /cash-positive under screening/i.test(note)));
+  } else {
+    assert.ok(coastal.annualNetCash <= 0);
+    assert.ok(coastal.bestCash <= 0);
+    assert.ok(coastal.breakEvenPrice === null || Number.isFinite(coastal.breakEvenPrice));
+    assert.ok(coastal.notes.some(note => /green-premium|not an invented fuel winner/i.test(note)));
+  }
+
+  const methanol = evaluateCandidate(mejillones, 'methanol', fuelOpts);
+  assert.equal(methanol.status, 'ok');
+  assert.equal(methanol.template, 'methanol');
+  assert.equal(methanol.idle, false);
+  assert.ok('breakEvenPrice' in methanol);
+  assert.ok(Number.isFinite(methanol.bestCash));
+  assert.ok(methanol.fuelProbe);
+  assert.equal(methanol.fuelProbe.bounds.priceMin, 0.25);
+  assert.equal(methanol.fuelProbe.bounds.priceMax, 0.5);
+  assert.ok(methanol.notes.some(note => /screening|commodity/i.test(note)));
+  if (methanol.feasible) {
+    assert.ok(methanol.annualNetCash > 0);
+    assert.ok(methanol.notes.some(note => /cash-positive under screening/i.test(note)));
+    assert.equal(methanol.selected.label, 'screening');
+    assert.ok(methanol.selected.capexFactor >= 0.05 && methanol.selected.capexFactor <= 2);
+    assert.ok(methanol.selected.screeningPrice >= 0.25 && methanol.selected.screeningPrice <= 0.5);
+  } else {
+    assert.ok(methanol.annualNetCash <= 0);
+    assert.ok(methanol.bestCash <= 0);
+    assert.ok(methanol.breakEvenPrice === null || Number.isFinite(methanol.breakEvenPrice));
+    assert.ok(methanol.notes.some(note => /not an invented fuel winner/i.test(note)));
+  }
+
+  const ranked = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['methanol'],
+    sizeOpts: fuelOpts,
+  });
+  if (methanol.feasible) {
+    assert.ok(ranked.ranking.some(row => row.template === 'methanol' && row.siteId === 'chile-mejillones'));
+    assert.ok(ranked.feasibleCount >= 1);
+  } else {
+    assert.equal(ranked.feasibleCount, 0);
+    assert.ok(ranked.nearMisses.some(row => (
+      row.template === 'methanol'
+      && row.siteId === 'chile-mejillones'
+      && Number.isFinite(row.bestCash)
+    )));
+  }
+});
 test('CLI prints JSON and exits 0 with Dead Sea in the default set', () => {
   const script = path.join(__dirname, '..', 'scripts', 'abundance-site-search.mjs');
   const ran = spawnSync(process.execPath, [

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { findFuelBreakEven } = require('../engine/sensitivity');
+const { findFuelBreakEven, probeFuelCash, fuelScreeningBounds } = require('../engine/sensitivity');
 const { sizeForPositiveCashflow } = require('../engine/size');
 
 function waterStream(kg = 20) {
@@ -134,6 +134,44 @@ test("alias product 'methane' normalizes to CH4", () => {
   assert.ok(Number.isFinite(result.breakEven));
   assert.ok(Math.abs(result.breakEven - 4) < 0.05);
   assert.equal(result.label, 'screening');
+});
+
+test('fuelScreeningBounds uses tea-screening CH4 green-premium and MeOH commodity band', () => {
+  const ch4 = fuelScreeningBounds('CH4');
+  const meoh = fuelScreeningBounds('methanol');
+  assert.equal(ch4.label, 'screening');
+  assert.equal(ch4.priceMid, 1);
+  assert.equal(ch4.priceMin, 1);
+  assert.equal(ch4.priceMax, 1);
+  assert.equal(ch4.capexMin, 0.05);
+  assert.equal(ch4.capexMax, 2);
+  assert.match(ch4.note, /green-premium/i);
+  assert.equal(meoh.priceMid, 0.4);
+  assert.equal(meoh.priceMin, 0.25);
+  assert.equal(meoh.priceMax, 0.5);
+  assert.equal(meoh.capexMin, 0.05);
+  assert.equal(meoh.capexMax, 2);
+  assert.match(meoh.note, /commodity/i);
+});
+
+test('probeFuelCash documents a CH4 near-miss inside the green-premium × CAPEX band', () => {
+  const definition = tinyMethanePlant({ unitPrice: 1, unitCost: 4 });
+  const snapshot = JSON.stringify(definition);
+  const probe = probeFuelCash({ definition, product: 'CH4' });
+  assert.equal(JSON.stringify(definition), snapshot);
+  assert.equal(probe.label, 'screening');
+  assert.equal(probe.product, 'CH4');
+  assert.equal(typeof probe.met, 'boolean');
+  assert.ok(Number.isFinite(probe.bestCash));
+  assert.ok(probe.note);
+  assert.match(probe.note, /screening/i);
+  if (probe.met) {
+    assert.ok(probe.bestCash > 0);
+  } else {
+    assert.ok(probe.bestCash <= 0);
+    assert.ok(probe.breakEvenPrice === null || Number.isFinite(probe.breakEvenPrice));
+    assert.match(probe.note, /not an invented fuel winner/i);
+  }
 });
 
 test('sizeForPositiveCashflow still scores the tiny H2 plant without sensitivity side effects', () => {

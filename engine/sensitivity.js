@@ -9,7 +9,7 @@
 })(globalThis, (solver, economics, size) => {
 const { solveOperation } = solver || {};
 const { evaluateEconomics, scorePositiveCashflow } = economics || {};
-const { sizeForPositiveCashflow } = size || {};
+const { sizeForPositiveCashflow, sizeToProduct } = size || {};
 
 // Screening fuel price / CAPEX break-even. Default path sizes the plant once
 // at baseline capacities (`sizing: 'baseline-once'`), then re-evaluates
@@ -379,5 +379,255 @@ function findFuelBreakEven(opts = {}) {
   };
 }
 
-return { findFuelBreakEven };
+function teaPrices() {
+  if (typeof require === 'function') {
+    try {
+      return require('../data/tea-screening.js').prices;
+    } catch {
+      return null;
+    }
+  }
+  return globalThis.TeaScreening?.prices || null;
+}
+
+// Cited/screening fuel bands for the cash+ probe. CH4 is the tea-screening
+// green-premium point ($1/kg), not Henry Hub. MeOH is the $250–500/t commodity
+// band (mid $0.40/kg). CAPEX factor 0.05–2 is a screening multiplier, not a
+// vendor quote. Do not treat these as bankable offtake or EPC numbers.
+function fuelScreeningBounds(product) {
+  const normalized = normalizeProduct(product);
+  const prices = teaPrices();
+  if (normalized === 'CH4') {
+    const mid = finiteNumber(prices?.methane?.value, 1);
+    return {
+      product: 'CH4',
+      priceMin: mid,
+      priceMax: mid,
+      priceMid: mid,
+      capexMin: DEFAULT_CAPEX_MIN,
+      capexMax: DEFAULT_CAPEX_MAX,
+      label: SCREENING_LABEL,
+      source: 'tea-screening methane green-premium',
+      note: `CH4 $${mid}/kg screening green-premium (tea-screening); not Henry Hub and not a quoted gas contract. CAPEX factor ${DEFAULT_CAPEX_MIN}–${DEFAULT_CAPEX_MAX} is screening, not a vendor quote.`,
+    };
+  }
+  if (normalized === 'methanol') {
+    const mid = finiteNumber(prices?.methanol?.value, 0.4);
+    const priceMin = 0.25;
+    const priceMax = 0.5;
+    return {
+      product: 'methanol',
+      priceMin,
+      priceMax,
+      priceMid: mid,
+      capexMin: DEFAULT_CAPEX_MIN,
+      capexMax: DEFAULT_CAPEX_MAX,
+      label: SCREENING_LABEL,
+      source: 'tea-screening methanol commodity band',
+      note: `MeOH $${priceMin}–$${priceMax}/kg commodity band (mid $${mid}/kg, tea-screening); not a plant quote. CAPEX factor ${DEFAULT_CAPEX_MIN}–${DEFAULT_CAPEX_MAX} is screening, not a vendor quote.`,
+    };
+  }
+  return {
+    product: normalized,
+    priceMin: DEFAULT_PRICE_MIN,
+    priceMax: DEFAULT_PRICE_MAX,
+    priceMid: null,
+    capexMin: DEFAULT_CAPEX_MIN,
+    capexMax: DEFAULT_CAPEX_MAX,
+    label: SCREENING_LABEL,
+    source: 'sensitivity defaults',
+    note: `${normalized} screening price $${DEFAULT_PRICE_MIN}–$${DEFAULT_PRICE_MAX}/kg and CAPEX factor ${DEFAULT_CAPEX_MIN}–${DEFAULT_CAPEX_MAX}; not a quoted contract.`,
+  };
+}
+
+function uniqueSorted(values) {
+  return [...new Set(values.filter(value => Number.isFinite(value)))].sort((left, right) => left - right);
+}
+
+function scorePriceCapex({ definition, solved, sink, price, capexFactor }) {
+  if (!evaluateEconomics || !scorePositiveCashflow) {
+    throw new Error('probeFuelCash needs FlowsheetEconomics');
+  }
+  const trial = cloneDefinition(definition);
+  applyPrice(trial, sink, price);
+  applyCapexFactor(trial, capexFactor);
+  const economicsResult = evaluateEconomics(trial, solved);
+  const objective = scorePositiveCashflow(economicsResult);
+  return {
+    price,
+    capexFactor,
+    annualNetCash: objective.annualNetCash,
+    positiveSaleCount: objective.positiveSaleCount,
+    met: Boolean(objective.met),
+    objective,
+    economics: economicsResult,
+  };
+}
+
+function formatMoney(value) {
+  if (!Number.isFinite(value)) return 'n/a';
+  const abs = Math.abs(value);
+  const digits = abs >= 100 ? 0 : (abs >= 10 ? 1 : 2);
+  return value.toFixed(digits);
+}
+
+// Post-size (or already-solved) price × CAPEX-factor grid inside tea-screening
+// bands. Economics only — dollars never re-enter the physics solver. Optional
+// `rates` re-sizes each rate with sizeToProduct before the grid (true size ×
+// price × CAPEX; slower). Default is the given sized plant.
+function probeFuelCash(opts = {}) {
+  const product = normalizeProduct(opts.product);
+  const bounds = fuelScreeningBounds(product);
+  const caseOrBuilder = opts.definition ?? opts.caseOrBuilder;
+  if (!caseOrBuilder) throw new Error('probeFuelCash needs a case definition or builder');
+  const seedSnapshot = typeof caseOrBuilder === 'function' ? null : JSON.stringify(caseOrBuilder);
+  const prices = uniqueSorted([bounds.priceMin, bounds.priceMid, bounds.priceMax]);
+  const capexFactors = uniqueSorted(
+    opts.capexFactors && opts.capexFactors.length
+      ? opts.capexFactors
+      : [bounds.capexMin, 1, bounds.capexMax]
+  );
+  const rates = (opts.rates || []).map(Number).filter(rate => rate > 0);
+  const seeds = [];
+  if (rates.length) {
+    if (!sizeToProduct) throw new Error('probeFuelCash rates need sizeToProduct');
+    for (const rate of rates) {
+      try {
+        const sized = sizeToProduct({
+          product,
+          rate,
+          caseOrBuilder,
+          caps: opts.caps,
+          maxIterations: opts.maxIterations,
+          tolerance: opts.tolerance,
+          heatCredit: opts.heatCredit,
+        });
+        seeds.push({
+          definition: sized.definition,
+          solved: sized.solved,
+          rate,
+          selected: { family: 'fuel', product, rate },
+        });
+      } catch {
+        // Rate may be infeasible; skip.
+      }
+    }
+  } else {
+    const definition = resolveDefinition(caseOrBuilder);
+    let solved = opts.solved;
+    if (!solved) {
+      if (!solveOperation) throw new Error('probeFuelCash needs FlowsheetSolver');
+      solved = solveOperation(definition);
+    }
+    seeds.push({
+      definition,
+      solved,
+      rate: opts.selected?.rate ?? null,
+      selected: opts.selected || null,
+    });
+  }
+  if (!seeds.length) {
+    throw new Error('probeFuelCash found no sized fuel plant to probe');
+  }
+
+  let best = null;
+  const curve = [];
+  for (const seed of seeds) {
+    const sink = findProductSink(seed.definition, product);
+    if (!sink) throw new Error(`probeFuelCash needs a ${product} sale sink`);
+    for (const price of prices) {
+      for (const capexFactor of capexFactors) {
+        const scored = scorePriceCapex({
+          definition: seed.definition,
+          solved: seed.solved,
+          sink,
+          price,
+          capexFactor,
+        });
+        const trial = {
+          ...scored,
+          rate: seed.rate,
+          selected: seed.selected,
+        };
+        curve.push({
+          rate: seed.rate,
+          price,
+          capexFactor,
+          annualNetCash: trial.annualNetCash,
+          positiveSaleCount: trial.positiveSaleCount,
+          met: trial.met,
+        });
+        if (!best) best = trial;
+        else if (trial.met !== best.met) best = trial.met ? trial : best;
+        else if (trial.annualNetCash > best.annualNetCash) best = trial;
+      }
+    }
+  }
+
+  const diagnosticSeed = (best && seeds.find(seed => seed.rate === best.rate)) || seeds[0];
+  const priceSweep = findFuelBreakEven({
+    definition: diagnosticSeed.definition,
+    product,
+    vary: 'price',
+    priceMin: DEFAULT_PRICE_MIN,
+    priceMax: DEFAULT_PRICE_MAX,
+    samples: opts.samples,
+    tolerance: opts.tolerance,
+  });
+  const breakEvenPrice = priceSweep.met ? priceSweep.breakEven : null;
+  const inBand = Number.isFinite(breakEvenPrice)
+    && breakEvenPrice >= bounds.priceMin - 1e-9
+    && breakEvenPrice <= bounds.priceMax + 1e-9;
+
+  const warnings = [
+    'Prices and CAPEX are screening assumptions, not quotes or permits.',
+    bounds.note,
+  ];
+  let note;
+  if (best?.met) {
+    note = `Cash-positive under screening ${product} $${best.price}/kg × CAPEX factor ${best.capexFactor}`
+      + (best.rate != null ? ` at ${best.rate} kg/day` : '')
+      + ` (bestCash ${formatMoney(best.annualNetCash)}/y). ${bounds.note}`;
+  } else {
+    const beText = Number.isFinite(breakEvenPrice)
+      ? `diagnostic breakEvenPrice $${formatMoney(breakEvenPrice)}/kg at sized plant / CAPEX factor 1`
+        + (inBand ? ' (inside screening band)' : ' (outside screening band)')
+      : `no price break-even inside $${DEFAULT_PRICE_MIN}–$${DEFAULT_PRICE_MAX}/kg at CAPEX factor 1`;
+    note = `No cash-positive fuel slate inside screening ${product} $${bounds.priceMin}`
+      + (bounds.priceMax !== bounds.priceMin ? `–$${bounds.priceMax}` : '')
+      + `/kg × CAPEX factor ${bounds.capexMin}–${bounds.capexMax}`
+      + ` (bestCash ${formatMoney(best?.annualNetCash)}/y; ${beText}). Not an invented fuel winner. ${bounds.note}`;
+    warnings.push(`No cash-positive price×CAPEX trial inside screening bounds for ${product}.`);
+  }
+
+  if (seedSnapshot && JSON.stringify(caseOrBuilder) !== seedSnapshot) {
+    throw new Error('probeFuelCash mutated the input definition');
+  }
+
+  return {
+    product,
+    met: Boolean(best?.met),
+    bestCash: best?.annualNetCash ?? null,
+    breakEvenPrice,
+    breakEvenPriceInBand: Boolean(inBand),
+    best: best ? {
+      price: best.price,
+      capexFactor: best.capexFactor,
+      rate: best.rate,
+      annualNetCash: best.annualNetCash,
+      positiveSaleCount: best.positiveSaleCount,
+      met: best.met,
+    } : null,
+    bounds,
+    curve,
+    objective: best?.objective || null,
+    economics: best?.economics || null,
+    selected: best?.selected || null,
+    label: SCREENING_LABEL,
+    note,
+    warnings,
+  };
+}
+
+return { findFuelBreakEven, probeFuelCash, fuelScreeningBounds };
 });

@@ -62,7 +62,10 @@ test('abundance TEA registry exposes cited prices and screening CAPEX intensitie
   assert.equal(tea.capex.minerals.value, 80);
   assert.equal(tea.capex.minerals.quality, 'screening');
   assert.ok(tea.capex.minerals.evidence.some(item => /10\.2172\/1782801/.test(item.doi || item.url || '')));
-  assert.match(tea.demand.unlimited.note, /not a sales forecast/i);
+  assert.equal(tea.packs.minerals.capexIntensity, 80);
+  assert.equal(tea.demand.lithium.value, 1e6);
+  assert.match(tea.demand.lithium.note, /not a plant offtake/i);
+  assert.equal(tea.demand.unlimited, undefined);
 });
 
 test('abundance case binds TEA prices, capexRate, and evidence onto nodes', () => {
@@ -86,6 +89,8 @@ test('abundance case binds TEA prices, capexRate, and evidence onto nodes', () =
   assert.equal(lithiumSink.quality, 'cited');
   assert.ok(lithiumSink.evidence.some(item => /usgs/i.test(item.url || item.label || '')));
   assert.ok(economics.annualizedCapex > 0);
+  assert.equal(node('lithium').economics.annualDemandLimit, tea.demand.lithium.value);
+  assert.notEqual(node('lithium').economics.annualDemandLimit, 1e12);
 });
 
 test('createAbundanceCase({ assayId }) runs Atacama lithium brine without invented bromide', () => {
@@ -102,3 +107,54 @@ test('createAbundanceCase({ assayId }) runs Atacama lithium brine without invent
   assert.ok(Number.isFinite(solved.nodes.ammonia.activity));
   assert.ok(solved.balances.maxAbsResidual < 1e-8);
 });
+
+function packCapex(key, capacity) {
+  const bound = tea.bindCapexPack(key, { capacity });
+  if (bound.installedCapex != null) return bound.installedCapex;
+  return bound.capexRate * capacity;
+}
+
+test('TEA pack CAPEX scales with capacity and is not the old fuel-path toy lump', () => {
+  const mineralsLarge = packCapex('minerals', 100000);
+  const mineralsSmall = packCapex('minerals', 1000);
+  assert.equal(mineralsLarge, 80 * 100000);
+  assert.equal(mineralsSmall, 80 * 1000);
+  assert.equal(mineralsLarge / mineralsSmall, 100);
+
+  const electrolyzer = packCapex('electrolyzer', 100);
+  assert.equal(electrolyzer, tea.packs.electrolyzer.capexIntensity * 100);
+  assert.notEqual(electrolyzer, 21000);
+  assert.ok(electrolyzer > 21000);
+
+  const swro = packCapex('swro', 10);
+  assert.equal(swro, 1500 * 10);
+  assert.notEqual(swro, 1000);
+
+  const scaled = tea.bindCapexPack('swro', { capacity: 100, scaleExponent: 0.6, refCapacity: 10, precompute: true });
+  assert.ok(Math.abs(scaled.installedCapex - 1500 * 100 * (100 / 10) ** (0.6 - 1)) < 1e-6);
+});
+
+test('abundance sale products do not ship annualDemandLimit 1e12', () => {
+  const definition = createAbundanceCase();
+  const productKey = {
+    lithium: 'lithium',
+    magnesium: 'magnesium',
+    potash: 'potash',
+    gypsum: 'gypsum',
+    salt: 'salt',
+    caustic: 'caustic',
+    bromine: 'bromine',
+    'recovered-salt': 'salt',
+    'ammonia-product': 'ammonia',
+    oxygen: 'oxygen',
+  };
+  const sales = definition.graph.nodes.filter(node => node.economics?.disposition === 'sale');
+  assert.ok(sales.length >= 8);
+  for (const node of sales) {
+    assert.notEqual(node.economics.annualDemandLimit, 1e12, node.id);
+    assert.ok(node.economics.annualDemandLimit < 1e12, node.id);
+    assert.ok(node.economics.annualDemandLimit > 0, node.id);
+    assert.equal(node.economics.annualDemandLimit, tea.demand[productKey[node.id]].value, node.id);
+  }
+});
+

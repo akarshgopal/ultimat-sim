@@ -8,6 +8,7 @@
   else root.CoastalCase = api;
 })(globalThis, (sabatier, model, assay) => {
 const { SUBSTANCES } = model;
+const tea = typeof require === 'function' ? require('../data/tea-screening.js') : globalThis.TeaScreening;
 const HOURLY = typeof require === 'function' ? require('../data/pvgis-almeria-hourly.js') : globalThis.PvgisAlmeriaHourly;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=36.834&lon=-2.463&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
 // Frozen PVGIS response: data/pvgis-almeria.json, retrieved 2026-09-05.
@@ -68,13 +69,7 @@ function createCoastalCase(month = 0) {
   node('dac').unit = 'dac-solid';
   node('dac').params.consumablesPerKgCO2 = 0.02;
   node('consumables').params.stream = { kind: 'consumable', amount: 1, unit: 'kg/day', label: 'Amine sorbent makeup', chemicalId: 'amine-sorbent' };
-  node('electricity').economics = {
-    installedCapex: solarKWp * 1000,
-    fixedOM: solarKWp * 20,
-    assetLifeYears: 25,
-    quality: 'screening',
-    note: 'Round $1000/kWp screening PV CAPEX, not NREL ATB or a vendor quote.',
-  };
+  node('electricity').economics = tea.bindCapexPack('solar-pv', { capacity: solarKWp });
   definition.graph.nodes.push({ id: 'spent-media', unit: 'consumable-sink', economics: { disposition: 'disposal', disposalCost: 1 } });
   definition.graph.edges.push({ from: { node: 'dac', port: 'spentMedia' }, to: { node: 'spent-media', port: 'in' } });
   const assumed = 'Assumed accessible quantity; no local supply agreement verified';

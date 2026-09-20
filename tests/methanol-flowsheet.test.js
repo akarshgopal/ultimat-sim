@@ -19,6 +19,13 @@ test('methanol plant uses solid-sorbent DAC, cited Mejillones site, and closes b
   const definition = createMethanolCase();
   const solved = solveOperation(definition);
 
+  const sales = definition.graph.nodes.filter(node => node.economics?.disposition === 'sale');
+  for (const node of sales) {
+    assert.notEqual(node.economics.annualDemandLimit, 1e12, node.id);
+    assert.ok(node.economics.annualDemandLimit < 1e12, node.id);
+  }
+  assert.equal(definition.graph.nodes.find(node => node.id === 'electrolyzer').economics.capexRate, 3250);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'electricity').economics.installedCapex, 20 * 1000);
   assert.equal(definition.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
   assert.equal(definition.graph.nodes.find(node => node.id === 'methanol').unit, 'methanol');
   assert.equal(definition.graph.nodes.find(node => node.id === 'swro').unit, 'swro');

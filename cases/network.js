@@ -8,6 +8,7 @@
   else root.NetworkCase = api;
 })(globalThis, (coastal, abundance, model) => {
 const { streamMassKg } = model;
+const tea = abundance.TEA;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.43&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
 // Frozen PVGIS response: data/pvgis-dead-sea.json, retrieved 2026-09-06.
 const DAILY_PV = [1674.85 / 365, 3.68, 4.05, 4.56, 4.9, 4.94, 5.05, 5.06, 5.13, 5.13, 4.63, 4.14, 3.77];
@@ -34,13 +35,7 @@ function siteDeadSeaAbundance() {
   node('salt-feed').siteResource = 'salt';
   node('water').siteResource = 'freshwater';
   node('air').siteResource = 'air';
-  node('power').economics = {
-    installedCapex: solarKWp * 1000,
-    fixedOM: solarKWp * 20,
-    assetLifeYears: 25,
-    quality: 'screening',
-    note: 'Round $1000/kWp screening PV CAPEX, not NREL ATB or a vendor quote.',
-  };
+  node('power').economics = tea.bindCapexPack('solar-pv', { capacity: solarKWp });
   definition.site = {
     id: 'dead-sea-pvgis-2026-09-06',
     name: 'Dead Sea industrial shore',

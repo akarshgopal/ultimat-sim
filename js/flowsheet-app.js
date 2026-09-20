@@ -3363,7 +3363,7 @@
       variableOM: 0,
       assetLifeYears: 20,
     };
-    if (kind === 'sink') return { disposition: 'vent', unitPrice: 0, disposalCost: 0, annualDemandLimit: 1e12 };
+    if (kind === 'sink') return { disposition: 'vent', unitPrice: 0, disposalCost: 0, annualDemandLimit: (globalThis.TeaScreening && globalThis.TeaScreening.EDITOR_DEMAND_DEFAULT) || 1e6 };
     return {};
   }
 

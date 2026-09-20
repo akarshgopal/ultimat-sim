@@ -68,6 +68,31 @@ Requires Node.js 18 or newer; no external runtime packages are needed.
 
 The live site is https://akarshgopal.github.io/ultimat-sim/ — pushes to main rebuild via GitHub Pages.
 
+
+## Site-hunt limitation list (14 points)
+
+Status of the old abundance / multi-site search limitation list. Screening TEA only — not bankable permits or offtake contracts.
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Expand preset catalog (cited brine/coastal presets; not open-world GIS) | **done** — Great Salt Lake + additional desal/DLE coasts on `SITE_PRESETS`; search-eligible |
+| 2 | Assay-aware abundance wiring | **done** (prior) |
+| 3 | Dual-assay coasts (seawater + process brine) | **done** (prior) |
+| 4 | Process-brine eligibility pins | **done** (prior) |
+| 5 | Rights scenarios that bite | **done** — `screening-assumes-intake-concession` (default), `no-rights` (skip/infeasible), `offtake-limited` (demand haircut); CLI `--rights-scenario` |
+| 6 | Regional demand / offtake tables | **done** (prior) |
+| 7 | Denser / continuous-ish resize in cashflow search | **done** — coarse grid then bounded refine; fast path for tests |
+| 8 | Non-idle near-misses | **done** (prior) |
+| 9 | Freeze more PVGIS (Duqm, Mundra, Walvis Bay, …) | **done** — per-site PVGIS-ERA5 frozen series; no Almería reuse |
+| 10 | Millero seawater assays | **done** (prior) |
+| 11 | Map-layer soft rank (secondary) | **done** — `layerScore`/`softRank` tie-break only; skip if layers missing |
+| 12 | Process-brine catalog coverage | **done** (prior) |
+| 13 | Regional TEA overlays (power $/kWh, prices, optional CAPEX) | **done** — regional power overlays + demand regions; CAPEX multipliers omitted (factor 1, screening-labeled) |
+| 14 | Fuel cash+ path | **done / partial** — `probeFuelCash` price×CAPEX within tea-screening bands; Mejillones methanol can rank cash+; Almería CH₄ may remain near-miss with bestCash/breakEvenPrice |
+
+Leftover gaps: open-world GIS crawler intentionally out of scope; CAPEX intensity multipliers by region still factor 1; live PVGIS for non-frozen coasts still skipped for fuel templates; no pretended permits.
+
+
 ## License
 
 MIT. See `LICENSE` and `NOTICE`.

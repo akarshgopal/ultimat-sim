@@ -8,14 +8,17 @@
     typeof require === 'function' ? require('../cases/network') : root.NetworkCase,
     typeof require === 'function' ? require('../data/site-presets.js') : root.SITE_PRESETS,
     typeof require === 'function' ? require('../data/site-assays') : root.SiteAssays,
-    typeof require === 'function' ? require('../data/pvgis-sites.js') : root.PvgisSites
+    typeof require === 'function' ? require('../data/pvgis-sites.js') : root.PvgisSites,
+    typeof require === 'function' ? require('./map-site') : root.FlowsheetMapSite
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FlowsheetSiteSearch = api;
-})(globalThis, (sizeApi, networkApi, coastal, methanol, abundance, networkCase, sitePresets, siteAssays, pvgisSites) => {
+})(globalThis, (sizeApi, networkApi, coastal, methanol, abundance, networkCase, sitePresets, siteAssays, pvgisSites, mapSite) => {
+
 const PLANT_TEMPLATES = Object.freeze(['abundance', 'coastal', 'methanol']);
 const DEAD_SEA_SITE_ID = 'dead-sea-pvgis-2026-09-06';
 const SCREENING_NOTE = 'Screening assumes intake/concession for evaluation only; not a bankable permit.';
+const LAYER_SOFT_NOTE = 'Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives.';
 const RIGHTS_SCREENING = 'screening-assumes-intake-concession';
 const RIGHTS_NO_RIGHTS = 'no-rights';
 const RIGHTS_OFFTAKE = 'offtake-limited';
@@ -648,6 +651,40 @@ function slateFromNetwork(definition, site) {
   }
 }
 
+function layerScoreForSite(site) {
+  if (typeof mapSite?.layerScoreAt !== 'function') return null;
+  const score = mapSite.layerScoreAt(site?.latitude, site?.longitude);
+  return Number.isFinite(score) ? score : null;
+}
+
+function withLayerScore(row, site) {
+  const score = layerScoreForSite(site);
+  row.layerScore = score;
+  row.softRank = score;
+  return row;
+}
+
+function compareIds(left, right) {
+  const site = String(left?.siteId || '').localeCompare(String(right?.siteId || ''), 'en');
+  if (site) return site;
+  return String(left?.template || '').localeCompare(String(right?.template || ''), 'en');
+}
+
+function layerScoreValue(row) {
+  const raw = row?.layerScore ?? row?.softRank;
+  if (raw == null) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function compareLayerScore(left, right) {
+  const scoreLeft = layerScoreValue(left);
+  const scoreRight = layerScoreValue(right);
+  if (scoreLeft == null || scoreRight == null) return 0;
+  if (scoreLeft !== scoreRight) return scoreRight - scoreLeft;
+  return 0;
+}
+
 function compareCandidates(left, right) {
   const feasLeft = left?.feasible || left?.met ? 1 : 0;
   const feasRight = right?.feasible || right?.met ? 1 : 0;
@@ -661,9 +698,9 @@ function compareCandidates(left, right) {
   const cashLeft = finiteNumber(left?.annualNetCash, 0);
   const cashRight = finiteNumber(right?.annualNetCash, 0);
   if (cashLeft !== cashRight) return cashRight - cashLeft;
-  const site = String(left?.siteId || '').localeCompare(String(right?.siteId || ''), 'en');
-  if (site) return site;
-  return String(left?.template || '').localeCompare(String(right?.template || ''), 'en');
+  const soft = compareLayerScore(left, right);
+  if (soft) return soft;
+  return compareIds(left, right);
 }
 
 function rankCandidates(candidates = []) {
@@ -705,9 +742,9 @@ function compareNearMisses(left, right) {
   const cashLeft = finiteNumber(left?.annualNetCash, 0);
   const cashRight = finiteNumber(right?.annualNetCash, 0);
   if (cashLeft !== cashRight) return cashRight - cashLeft;
-  const site = String(left?.siteId || '').localeCompare(String(right?.siteId || ''), 'en');
-  if (site) return site;
-  return String(left?.template || '').localeCompare(String(right?.template || ''), 'en');
+  const soft = compareLayerScore(left, right);
+  if (soft) return soft;
+  return compareIds(left, right);
 }
 
 function rankNearMisses(candidates = []) {
@@ -726,7 +763,8 @@ function assayIdForRow(site, template) {
 
 function skippedRow(site, template, eligibility, rightsScenario) {
   const scenario = normalizeRightsScenario(rightsScenario);
-  return {
+  return withLayerScore({
+
     siteId: site.id,
     siteName: site.name,
     template,
@@ -744,13 +782,14 @@ function skippedRow(site, template, eligibility, rightsScenario) {
     reason: eligibility.reason,
     rightsScenario: rightsScenarioFor(template, scenario),
     notes: [eligibility.notes, scenarioNote(scenario)].filter(Boolean),
-  };
+  }, site);
+
 }
 
 function errorRow(site, template, error, notes = [], rightsScenario) {
   const scenario = normalizeRightsScenario(rightsScenario);
   const message = error?.message || String(error);
-  return {
+  return withLayerScore({
     siteId: site.id,
     siteName: site.name,
     template,
@@ -768,7 +807,8 @@ function errorRow(site, template, error, notes = [], rightsScenario) {
     reason: message,
     rightsScenario: rightsScenarioFor(template, scenario),
     notes: [...notes, message, scenarioNote(scenario)],
-  };
+  }, site);
+
 }
 
 function evaluateCandidate(site, template, sizeOpts = {}) {
@@ -829,7 +869,7 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       if (warning && !notes.includes(warning)) notes.push(warning);
     }
   }
-  const row = {
+  const row = withLayerScore({
     siteId: site.id,
     siteName: site.name,
     template,
@@ -848,7 +888,8 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
     selected: sized.selected || null,
     rightsScenario: rightsScenarioFor(template, rightsScenario),
     notes,
-  };
+  }, site);
+  if (!notes.includes(LAYER_SOFT_NOTE)) notes.push(LAYER_SOFT_NOTE);
   row.idle = isIdleCandidate(row);
   if (row.idle) {
     notes.push('Idle (selected rate 0 / no positive sale tonnes and cash≈0); not a near-miss operating slate.');
@@ -908,7 +949,8 @@ function searchAbundanceSites(opts = {}) {
     sitesTried: sites.length,
     templates,
     rightsScenario,
-    notes: [scenarioNote(rightsScenario)],
+    notes: [scenarioNote(rightsScenario), LAYER_SOFT_NOTE],
+
   };
 }
 
@@ -916,6 +958,7 @@ return {
   PLANT_TEMPLATES,
   DEAD_SEA_SITE_ID,
   SCREENING_NOTE,
+  LAYER_SOFT_NOTE,
   RIGHTS_SCREENING,
   RIGHTS_NO_RIGHTS,
   RIGHTS_OFFTAKE,

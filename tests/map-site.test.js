@@ -27,6 +27,8 @@ const {
   sampleGsaDecoded,
   getLandPricesBundle,
   landPriceById,
+  landPriceAt,
+  layerScoreAt,
   landColorUsdPerHa,
   landChoroplethStyle,
   landColor,
@@ -235,6 +237,16 @@ test('bundled land-prices data is finite, unique, and covers US+EU+CA+AU', () =>
   assert.ok(landPriceById('US-IA', bundle).usdPerHa > 10000);
   assert.ok(landPriceById('ES', bundle).usdPerHa > 5000);
   assert.equal(landPriceById('US-AK', bundle), null);
+  assert.equal(landPriceAt(36.834, -2.463)?.id, 'ES');
+  assert.equal(landPriceAt(27.8, -97.4)?.id, 'US-TX');
+  assert.equal(landPriceAt(31.16, 35.43), null);
+  assert.equal(layerScoreAt(NaN, NaN), null);
+  assert.equal(layerScoreAt(120, 0), null);
+  const almeriaScore = layerScoreAt(36.834, -2.463);
+  const osloScore = layerScoreAt(59.9, 10.8);
+  assert.ok(Number.isFinite(almeriaScore));
+  assert.ok(Number.isFinite(osloScore));
+  assert.ok(almeriaScore > osloScore);
   assert.ok(landAdmin.features.length > 50);
   const priced = landAdmin.features.filter(f => f.properties.hasPrice);
   assert.ok(priced.length >= 60);

@@ -582,9 +582,9 @@ function buildAbundancePlant(site, rightsScenario) {
   const solar = frozenSolarFor(site, 'abundance');
   attachAbundanceSite(definition, site, solar);
   overlaySiteIdentity(definition, site, [scenarioNote(scenario)]);
-  applyRightsScenario(definition, 'abundance', scenario);
   applyFrozenSolar(definition, solar, 'abundance');
   applyRegionalTea(definition, site.region);
+  applyRightsScenario(definition, 'abundance', scenario);
   return definition;
 }
 

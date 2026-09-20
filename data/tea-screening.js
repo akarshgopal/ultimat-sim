@@ -11,7 +11,9 @@
 //   otherwise installedCapex = capexIntensity × capacity (exponent omitted).
 // Binders expose that as capexRate (= intensity) so evaluateEconomics uses rate × node.capacity,
 // except solar-pv which precomputes installedCapex because kWp is not electricity-source capacity.
-// Demand caps are regional offtake ceilings (Dead Sea / Middle East default), not plant contracts.
+// Demand caps are regional offtake ceilings keyed by demandByRegion (me-levant default),
+// not plant contracts. bindSale(key, { region }) / getDemandForRegion(region) map
+// SITE_PRESETS.region strings onto those tables. Screening, not bankable quotes.
 
 function row(value, unit, quality, source, note, evidence) {
   return { value, unit, quality, source, note, evidence };
@@ -39,8 +41,30 @@ const GHAFFOUR_2013 = 'https://doi.org/10.1016/j.desal.2013.08.011';
 const VOUTCHKOV_2018 = 'https://doi.org/10.1016/j.desal.2017.10.033';
 const THEMA_2019 = 'https://doi.org/10.1016/j.rser.2019.06.030';
 const IRENA_MEOH = 'https://www.irena.org/publications/2021/Jan/Innovation-Outlook-Renewable-Methanol';
-const DEMAND_REGION = 'Dead Sea / Middle East default. Other sites should eventually regionalize. Not a plant offtake contract.';
+const IEA_ELEC = 'https://www.iea.org/reports/electricity-2024';
+const DEFAULT_DEMAND_REGION_ID = 'me-levant';
+const DEMAND_REGION_LABELS = {
+  'me-levant': 'Dead Sea / Middle East default (Levant, Gulf, Red Sea, Arabian Sea). Not a plant offtake contract.',
+  'chile-atacama': 'Atacama / Chile screening offtake. Lithium ceiling reflects USGS Chile mine-production order (supply-side, not a contract). Other minerals inherit me-levant. Not a plant offtake contract.',
+  'australia': 'Australia screening offtake. Minerals inherit me-levant; USGS Australia lithium is hard-rock spodumene, not a brine offtake contract.',
+  'default': 'Default screening offtake (inherits Dead Sea / Middle East tables) for unmapped site.region. Not a plant offtake contract.',
+};
+const DEMAND_REGION = DEMAND_REGION_LABELS[DEFAULT_DEMAND_REGION_ID];
 const EDITOR_DEMAND_DEFAULT = 1e6; // kg/y screening editor seed; not unlimited offtake
+// SITE_PRESETS.region / site-search Dead Sea 'Levant' → demandByRegion id. Unknown → default.
+const REGION_STRING_TO_ID = {
+  Levant: 'me-levant',
+  Gulf: 'me-levant',
+  'Red Sea': 'me-levant',
+  'Arabian Sea': 'me-levant',
+  'Atacama/Chile': 'chile-atacama',
+  Australia: 'australia',
+  India: 'default',
+  'Texas/US Gulf': 'default',
+  'North Africa': 'default',
+  'Southern Africa': 'default',
+  Europe: 'default',
+};
 
 const prices = {
   lithium: row(
@@ -331,6 +355,96 @@ const demand = {
   ),
 };
 
+function cloneDemandRow(item, extraNote) {
+  return {
+    value: item.value,
+    unit: item.unit,
+    quality: item.quality,
+    source: item.source,
+    note: extraNote ? `${item.note} ${extraNote}` : item.note,
+    evidence: item.evidence,
+  };
+}
+
+function inheritDemand(base, inheritNote, overrides = {}) {
+  const out = {};
+  for (const [key, item] of Object.entries(base)) {
+    out[key] = overrides[key] || cloneDemandRow(item, inheritNote);
+  }
+  return out;
+}
+
+const CHILE_INHERIT_NOTE = 'Inherited me-levant screening offtake; Chile table only regionalizes lithium. Not a plant contract.';
+const AUSTRALIA_INHERIT_NOTE = 'Inherited me-levant screening offtake. USGS MCS 2025 Australia lithium mine production 2024e ~88,000 t Li content is hard-rock spodumene, not a Lake Mackay brine offtake. Not a plant contract.';
+const DEFAULT_INHERIT_NOTE = 'Inherited me-levant screening offtake (unmapped site.region). Not a plant contract.';
+
+const demandChile = inheritDemand(demand, CHILE_INHERIT_NOTE, {
+  lithium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS Chile Li production order',
+    'Conservative 20,000 t/y LCE-proxy ceiling, below USGS MCS 2025 Chile mine production 2024e ~49,000 t lithium content (major producer; world 2024e ~240,000 t). Chile is supply-side — this is not an offtake contract and not a LiCl quote.',
+    [{ label: 'USGS MCS 2025 lithium — Chile mine production 2024e ~49,000 t Li content (world 2024e ~240,000 t); not an offtake contract', url: USGS_LI }]
+  ),
+});
+
+const demandAustralia = inheritDemand(demand, AUSTRALIA_INHERIT_NOTE);
+const demandDefault = inheritDemand(demand, DEFAULT_INHERIT_NOTE);
+
+const demandByRegion = {
+  'me-levant': demand,
+  'chile-atacama': demandChile,
+  australia: demandAustralia,
+  default: demandDefault,
+};
+const DEMAND_REGIONS = demandByRegion;
+
+// Screening industrial-power overlays (not a PPA). me-levant / default keep costs.power ($0.04/kWh).
+const powerByRegion = {
+  'chile-atacama': row(
+    0.07, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Chile industrial power screening overlay ~$70/MWh (above the global $30–50/MWh mid). IEA Electricity 2024 family order — not a SEN/SING PPA or plant tariff.',
+    [{ label: 'IEA Electricity 2024 (family; screening industrial tariff overlay, not a PPA)', url: IEA_ELEC }]
+  ),
+  australia: row(
+    0.08, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Australia industrial power screening overlay ~$80/MWh (above the global $30–50/MWh mid). IEA Electricity 2024 family order — not an NWIS/SWIS PPA or plant tariff.',
+    [{ label: 'IEA Electricity 2024 (family; screening industrial tariff overlay, not a PPA)', url: IEA_ELEC }]
+  ),
+};
+
+function resolveDemandRegion(region) {
+  if (region == null || region === '') return DEFAULT_DEMAND_REGION_ID;
+  const raw = String(region).trim();
+  if (demandByRegion[raw]) return raw;
+  if (REGION_STRING_TO_ID[raw]) return REGION_STRING_TO_ID[raw];
+  const lower = raw.toLowerCase();
+  for (const [label, id] of Object.entries(REGION_STRING_TO_ID)) {
+    if (label.toLowerCase() === lower) return id;
+  }
+  return 'default';
+}
+
+function getDemandForRegion(region) {
+  return demandByRegion[resolveDemandRegion(region)];
+}
+
+function getCostForRegion(key, region) {
+  const id = resolveDemandRegion(region);
+  if (key === 'power' && powerByRegion[id]) return powerByRegion[id];
+  return must(costs, key, 'cost');
+}
+
+function getPriceForRegion(key, region) {
+  const item = must(prices, key, 'price');
+  const id = resolveDemandRegion(region);
+  if (key === 'lithium' && id === 'chile-atacama') {
+    return {
+      ...item,
+      note: `${item.note} Chile is supply-side (USGS MCS Chile mine-production order); this USGS LCE proxy is not a Chilean offtake contract.`,
+    };
+  }
+  return item;
+}
+
 const fuelsCapexNote = row(
   null, null, 'screening', 'NREL ATB / DOE H2 family',
   'Fuel-path converter CAPEX uses process packs (electrolyzer, DAC, SWRO, Sabatier, methanol) with literature intensities, not demo lumps. Family: NREL ATB / DOE hydrogen electrolysis / IEA DAC.',
@@ -399,9 +513,10 @@ function bindCapexPack(processKey, extra = {}) {
   return fields;
 }
 
-function bindSale(key) {
-  const item = must(prices, key, 'price');
-  const cap = must(demand, key, 'demand');
+function bindSale(key, extra = {}) {
+  const region = extra && extra.region;
+  const item = getPriceForRegion(key, region);
+  const cap = must(getDemandForRegion(region), key, 'demand');
   return {
     disposition: 'sale',
     unitPrice: item.value,
@@ -410,11 +525,16 @@ function bindSale(key) {
     source: item.source,
     note: `${item.note} Offtake cap ${cap.value} ${cap.unit}: ${cap.note}`,
     evidence: item.evidence,
+    demandRegionId: resolveDemandRegion(region),
   };
 }
 
-function bindCost(key) {
-  const item = must(costs, key, 'cost');
+function bindSaleForRegion(region) {
+  return key => bindSale(key, { region });
+}
+
+function bindCost(key, extra = {}) {
+  const item = getCostForRegion(key, extra && extra.region);
   return {
     unitCost: item.value,
     quality: item.quality,
@@ -473,14 +593,28 @@ function snapshotPacks(keys) {
   });
 }
 
-function abundanceEvidence() {
+function abundanceEvidence(region) {
+  const regionId = resolveDemandRegion(region);
+  const demandMap = getDemandForRegion(regionId);
   return {
     prices: snapshot(prices, ['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium', 'caustic', 'ammonia', 'oxygen']),
-    costs: snapshot(costs, ['power', 'brine', 'water', 'salt-feed']),
+    costs: ['power', 'brine', 'water', 'salt-feed'].map(key => {
+      const item = getCostForRegion(key, regionId);
+      return {
+        key,
+        value: item.value,
+        unit: item.unit,
+        quality: item.quality,
+        source: item.source,
+        note: item.note,
+        evidence: item.evidence,
+      };
+    }),
     capex: snapshot(capex, ['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']),
     packs: snapshotPacks(['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']),
-    demand: snapshot(demand, ['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium', 'caustic', 'ammonia', 'oxygen']),
-    demandRegion: DEMAND_REGION,
+    demand: snapshot(demandMap, ['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium', 'caustic', 'ammonia', 'oxygen']),
+    demandRegion: DEMAND_REGION_LABELS[regionId],
+    demandRegionId: regionId,
   };
 }
 
@@ -490,11 +624,21 @@ return {
   capex,
   packs,
   demand,
+  demandByRegion,
+  DEMAND_REGIONS,
+  REGION_STRING_TO_ID,
+  DEFAULT_DEMAND_REGION_ID,
+  DEMAND_REGION_LABELS,
   fuelsCapexNote,
   EDITOR_DEMAND_DEFAULT,
   DEMAND_REGION,
   installedCapexFromPack,
+  resolveDemandRegion,
+  getDemandForRegion,
+  getCostForRegion,
+  getPriceForRegion,
   bindSale,
+  bindSaleForRegion,
   bindCost,
   bindCapex,
   bindCapexPack,

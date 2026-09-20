@@ -441,7 +441,8 @@ function buildAbundancePlant(site) {
     throw new Error('Abundance case is not loaded');
   }
   const assayId = resolveAbundanceAssayId(site);
-  const definition = abundance.createAbundanceCase({ assayId });
+  // Regional offtake: createAbundanceCase({ region }) maps site.region via TeaScreening.
+  const definition = abundance.createAbundanceCase({ assayId, region: site.region });
   const solar = frozenSolarFor(site, 'abundance');
   attachAbundanceSite(definition, site, solar);
   overlaySiteIdentity(definition, site, [SCREENING_NOTE]);

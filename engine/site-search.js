@@ -7,11 +7,12 @@
     typeof require === 'function' ? require('../cases/abundance') : root.AbundanceCase,
     typeof require === 'function' ? require('../cases/network') : root.NetworkCase,
     typeof require === 'function' ? require('../data/site-presets.js') : root.SITE_PRESETS,
-    typeof require === 'function' ? require('../data/site-assays') : root.SiteAssays
+    typeof require === 'function' ? require('../data/site-assays') : root.SiteAssays,
+    typeof require === 'function' ? require('./sensitivity') : root.FlowsheetSensitivity
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FlowsheetSiteSearch = api;
-})(globalThis, (sizeApi, networkApi, coastal, methanol, abundance, networkCase, sitePresets, siteAssays) => {
+})(globalThis, (sizeApi, networkApi, coastal, methanol, abundance, networkCase, sitePresets, siteAssays, sensitivityApi) => {
 const PLANT_TEMPLATES = Object.freeze(['abundance', 'coastal', 'methanol']);
 const DEAD_SEA_SITE_ID = 'dead-sea-pvgis-2026-09-06';
 const SCREENING_NOTE = 'Screening assumes intake/concession for evaluation only; not a bankable permit.';
@@ -597,6 +598,12 @@ function rightsScenarioFor(site, template, { evaluated = false } = {}) {
   return RIGHTS_NONE;
 }
 
+function fuelProductForTemplate(template) {
+  if (template === 'coastal') return 'CH4';
+  if (template === 'methanol') return 'methanol';
+  return null;
+}
+
 function assayIdForRow(site, template) {
   if (template === 'abundance') return resolveAbundanceAssayId(site);
   return site.seawaterAssayId || (site.assayKind === 'seawater' ? site.assayId : null);
@@ -682,12 +689,17 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
   }
   const objective = sized.objective || {};
   const economics = sized.economics || {};
-  const annualNetCash = jsonNumber(objective.annualNetCash ?? economics.annualNetCash);
-  const met = Boolean(objective.met) && annualNetCash != null && annualNetCash > 0;
-  const { tonnes, products } = saleProducts(objective, economics);
+  let annualNetCash = jsonNumber(objective.annualNetCash ?? economics.annualNetCash);
+  let met = Boolean(objective.met) && annualNetCash != null && annualNetCash > 0;
+  let { tonnes, products } = saleProducts(objective, economics);
+  let positiveSaleCount = finiteNumber(objective.positiveSaleCount, met ? products.length : 0);
+  let selected = sized.selected || null;
   const slate = slateFromNetwork(sized.definition, site);
+  const fuelProduct = fuelProductForTemplate(template);
   if (!met) {
-    notes.push('No cash-positive slate under the searched discrete grid; not an invented fuel winner.');
+    notes.push(fuelProduct
+      ? 'No cash-positive fuel slate under searched rates at TEA screening prices; not an invented fuel winner.'
+      : 'No cash-positive slate under the searched discrete grid; not an invented fuel winner.');
   }
   if (Array.isArray(sized.warnings)) {
     for (const warning of sized.warnings) {
@@ -705,18 +717,67 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
     annualNetCash,
     tonnes,
     totalPositiveSaleTonnes: tonnes,
-    positiveSaleCount: finiteNumber(objective.positiveSaleCount, met ? products.length : 0),
+    positiveSaleCount,
     products,
     met,
     feasible: met,
     status: 'ok',
-    selected: sized.selected || null,
+    selected,
     rightsScenario: rightsScenarioFor(site, template, { evaluated: true }),
     notes,
   };
   row.idle = isIdleCandidate(row);
   if (row.idle) {
     notes.push('Idle (selected rate 0 / no positive sale tonnes and cash≈0); not a near-miss operating slate.');
+  }
+  const probeFn = sensitivityApi?.probeFuelCash;
+  if (!met && !row.idle && fuelProduct && sizeOpts.fuelProbe !== false && typeof probeFn === 'function') {
+    const probe = probeFn({
+      definition: sized.definition,
+      solved: sized.solved,
+      product: fuelProduct,
+      selected,
+    });
+    row.breakEvenPrice = probe.breakEvenPrice;
+    row.bestCash = probe.bestCash;
+    row.fuelProbe = {
+      met: probe.met,
+      best: probe.best,
+      bounds: probe.bounds,
+      label: probe.label,
+      breakEvenPriceInBand: probe.breakEvenPriceInBand,
+    };
+    if (probe.note && !notes.includes(probe.note)) notes.push(probe.note);
+    row.notes = notes.filter(note => (
+      note !== 'No cash-positive fuel slate under searched rates at TEA screening prices; not an invented fuel winner.'
+    ));
+    if (probe.met) {
+      const probed = saleProducts(probe.objective, probe.economics);
+      met = true;
+      annualNetCash = jsonNumber(probe.bestCash);
+      tonnes = probed.tonnes;
+      products = probed.products;
+      positiveSaleCount = finiteNumber(probe.objective?.positiveSaleCount, probed.products.length);
+      selected = {
+        ...(selected || {}),
+        screeningPrice: probe.best?.price,
+        capexFactor: probe.best?.capexFactor,
+        label: 'screening',
+      };
+      row.met = true;
+      row.feasible = true;
+      row.idle = false;
+      row.annualNetCash = annualNetCash;
+      row.tonnes = tonnes;
+      row.totalPositiveSaleTonnes = tonnes;
+      row.products = products;
+      row.positiveSaleCount = positiveSaleCount;
+      row.selected = selected;
+      row.notes = notes.filter(note => !/no cash-positive/i.test(note));
+      if (probe.note && !row.notes.includes(probe.note)) row.notes.push(probe.note);
+    } else if (Number.isFinite(probe.bestCash)) {
+      row.annualNetCash = probe.bestCash;
+    }
   }
   return row;
 }

@@ -14,6 +14,8 @@ const {
   DEAD_SEA_SITE_ID,
   SCREENING_NOTE,
   RIGHTS_SCREENING,
+  RIGHTS_NO_RIGHTS,
+  RIGHTS_OFFTAKE,
   RIGHTS_NONE,
   FAST_SCALES,
   FAST_RATES,
@@ -402,6 +404,76 @@ test('near-miss ranking prefers operating cash- slates over idle cash≈0', () =
   if (search.nearMisses.length) {
     assert.ok(search.nearMisses[0].tonnes > 0 || Object.keys(search.nearMisses[0].slate || {}).length > 0 || search.nearMisses[0].annualNetCash < 0);
   }
+});
+
+test('no-rights makes screening-cash+ Mejillones abundance infeasible/skipped; offtake changes cash', () => {
+  const mejillones = searchSite('chile-mejillones');
+  const screening = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['abundance'],
+    sizeOpts: FAST,
+  });
+  const winner = screening.ranking[0];
+  assert.ok(winner, 'Mejillones abundance should be cash+ under screening');
+  assert.equal(screening.rightsScenario, RIGHTS_SCREENING);
+  assert.equal(winner.rightsScenario, RIGHTS_SCREENING);
+  assert.equal(winner.feasible, true);
+  assert.equal(winner.met, true);
+  assert.ok(winner.annualNetCash > 0);
+
+  const none = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['abundance'],
+    rightsScenario: 'no-rights',
+    sizeOpts: FAST,
+  });
+  assert.equal(none.rightsScenario, RIGHTS_NO_RIGHTS);
+  assert.equal(none.feasibleCount, 0);
+  assert.equal(none.ranking.length, 0);
+  const skipped = none.skipped.find(row => row.siteId === 'chile-mejillones' && row.template === 'abundance');
+  const miss = none.nearMisses.find(row => row.siteId === 'chile-mejillones' && row.template === 'abundance');
+  const hit = skipped || miss;
+  assert.ok(hit, 'no-rights should skip or return a non-cash+ row');
+  assert.equal(hit.feasible, false);
+  assert.equal(hit.met, false);
+  assert.equal(hit.rightsScenario, RIGHTS_NO_RIGHTS);
+  if (skipped) {
+    assert.equal(skipped.reason, 'no-rights');
+    assert.equal(skipped.status, 'skipped');
+  } else {
+    assert.ok(!(hit.annualNetCash > 0));
+  }
+  const plant = buildAbundancePlant(mejillones, RIGHTS_NO_RIGHTS);
+  assert.equal(plant.site.rights.brineConcession.authorize, false);
+  assert.equal(plant.site.rights.brineConcession.status, 'unverified');
+
+  const offtake = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['abundance'],
+    rightsScenario: 'offtake-limited',
+    sizeOpts: FAST,
+  });
+  assert.equal(offtake.rightsScenario, RIGHTS_OFFTAKE);
+  const offtakeHit = offtake.ranking[0] || offtake.nearMisses[0];
+  assert.ok(offtakeHit);
+  assert.equal(offtakeHit.rightsScenario, RIGHTS_OFFTAKE);
+  assert.ok(Number.isFinite(offtakeHit.annualNetCash));
+  assert.notEqual(offtakeHit.annualNetCash, winner.annualNetCash);
+  assert.ok(offtakeHit.annualNetCash < winner.annualNetCash);
+
+  const script = path.join(__dirname, '..', 'scripts/abundance-site-search.mjs');
+  const ran = spawnSync(process.execPath, [
+    script,
+    '--fast',
+    '--templates', 'abundance',
+    '--sites', 'chile-mejillones',
+    '--rights-scenario', 'no-rights',
+  ], { encoding: 'utf8', timeout: 60000 });
+  assert.equal(ran.status, 0, ran.stderr || ran.stdout);
+  const payload = JSON.parse(ran.stdout);
+  assert.equal(payload.rightsScenario, RIGHTS_NO_RIGHTS);
+  assert.equal(payload.feasibleCount, 0);
+  assert.equal(payload.cli.rightsScenario, RIGHTS_NO_RIGHTS);
 });
 
 test('CLI prints JSON and exits 0 with Dead Sea in the default set', () => {

@@ -14,6 +14,7 @@ const {
   SEARCH_SCALES,
   SEARCH_RATES,
   PLANT_TEMPLATES,
+  RIGHTS_SCENARIOS,
 } = require('../engine/site-search.js');
 
 function parseList(value) {
@@ -30,6 +31,7 @@ function parseArgs(argv) {
     siteIds: undefined,
     fast: false,
     nearMisses: true,
+    rightsScenario: undefined,
   };
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -41,6 +43,8 @@ function parseArgs(argv) {
     else if (arg.startsWith('--templates=')) opts.templates = parseList(arg.slice('--templates='.length));
     else if (arg === '--sites') opts.siteIds = parseList(next());
     else if (arg.startsWith('--sites=')) opts.siteIds = parseList(arg.slice('--sites='.length));
+    else if (arg === '--rights-scenario') opts.rightsScenario = next();
+    else if (arg.startsWith('--rights-scenario=')) opts.rightsScenario = arg.slice('--rights-scenario='.length);
     else if (arg === '--no-near-misses') opts.nearMisses = false;
     else if (arg === '--help' || arg === '-h') opts.help = true;
     else {
@@ -59,6 +63,7 @@ function usage() {
   --sites id,id           subset of default search sites (Dead Sea + SITE_PRESETS)
   --fast                  tiny scales/rates for CI
   --no-near-misses        omit cash<=0 rows
+  --rights-scenario s     ${RIGHTS_SCENARIOS.join(' | ')} (default screening-assumes-intake-concession)
 `;
 }
 
@@ -79,6 +84,7 @@ const result = searchAbundanceSites({
   templates: args.templates,
   topN: Number.isFinite(args.topN) && args.topN > 0 ? args.topN : 10,
   nearMisses: args.nearMisses,
+  rightsScenario: args.rightsScenario,
   sizeOpts: args.fast
     ? { scales: FAST_SCALES.slice(), rates: FAST_RATES.slice() }
     : { scales: SEARCH_SCALES.slice(), rates: SEARCH_RATES.slice() },
@@ -89,6 +95,7 @@ result.cli = {
   topN: Number.isFinite(args.topN) ? args.topN : 10,
   templates: args.templates || PLANT_TEMPLATES.slice(),
   sites: sites.map(site => site.id),
+  rightsScenario: result.rightsScenario,
 };
 
 console.log(JSON.stringify(result, null, 2));

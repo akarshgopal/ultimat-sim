@@ -15,6 +15,9 @@ const ASSAY_FILES = [
   'pilbara-indian-ocean-seawater',
   'atacama-pacific-seawater',
   'morocco-atlantic-seawater',
+  'arabian-sea-seawater',
+  'gulf-of-kutch-seawater',
+  'benguela-atlantic-seawater',
 ];
 
 for (const id of ASSAY_FILES) {
@@ -35,9 +38,28 @@ for (const id of ASSAY_FILES) {
   });
 }
 
+test('Duqm Mundra Walvis assays are cited basin typicals, not intake permits', () => {
+  const cases = [
+    ['arabian-sea-seawater', 36.3, /10\.1029\/1998JC900022/],
+    ['gulf-of-kutch-seawater', 37.2, /10\.1016\/j\.marpolbul\.2007\.01\.022/],
+    ['benguela-atlantic-seawater', 35.2, /10\.1016\/j\.csr\.2007\.10\.001/],
+  ];
+  for (const [id, salinity, cite] of cases) {
+    const assay = SiteAssays.getAssay(id);
+    assert.ok(assay, id);
+    assert.equal(assay.salinity_g_per_kg, salinity);
+    assert.equal(assay.meta.retrieved, '2026-09-21');
+    assert.ok(assay.evidence.some((item) => cite.test(item.url)), id);
+    assert.match(assay.meta.quality, /not a .*intake/i);
+  }
+  assert.equal(SiteAssays.assayIdForPreset('oman-duqm'), 'arabian-sea-seawater');
+  assert.equal(SiteAssays.assayIdForPreset('india-mundra'), 'gulf-of-kutch-seawater');
+  assert.equal(SiteAssays.assayIdForPreset('namibia-walvis-bay'), 'benguela-atlantic-seawater');
+});
+
 test('presets that claim an assay resolve via registry', () => {
   const claimed = presets.filter((p) => p.assayId);
-  assert.ok(claimed.length >= 10, `expected ≥10 assay presets, got ${claimed.length}`);
+  assert.ok(claimed.length >= 13, `expected ≥13 assay presets, got ${claimed.length}`);
   for (const preset of claimed) {
     assert.equal(SiteAssays.assayIdForPreset(preset.id), preset.assayId);
     const assay = SiteAssays.getAssay(preset.assayId);
@@ -70,8 +92,31 @@ test('bindPresetAssay attaches cited seawater resource for Gulf / screening note
   assert.equal(gulf.resources.brine.stream.mol['Br-'], undefined);
   assert.match(gulf.resources.brine.evidence, /not a mineral concession/i);
 
+  const duqm = { resources: {} };
+  SiteAssays.bindPresetAssay(duqm, 'oman-duqm');
+  assert.equal(duqm.assay.quality, 'cited');
+  assert.equal(duqm.assay.kind, 'seawater');
+  assert.equal(duqm.assay.assayId, 'arabian-sea-seawater');
+  assert.equal(duqm.assay.salinity_g_per_kg, 36.3);
+  assert.ok(duqm.resources.seawater.stream.mol['Na+'] > 0);
+  assert.match(duqm.resources.seawater.evidence, /not an intake/i);
+  assert.equal(duqm.resources.brine, undefined);
+
+  const mundra = { resources: {} };
+  SiteAssays.bindPresetAssay(mundra, 'india-mundra');
+  assert.equal(mundra.assay.quality, 'cited');
+  assert.equal(mundra.assay.assayId, 'gulf-of-kutch-seawater');
+  assert.equal(mundra.assay.salinity_g_per_kg, 37.2);
+  assert.match(mundra.assay.summary, /37\.2/);
+
+  const walvis = { resources: {} };
+  SiteAssays.bindPresetAssay(walvis, 'namibia-walvis-bay');
+  assert.equal(walvis.assay.assayId, 'benguela-atlantic-seawater');
+  assert.equal(walvis.assay.salinity_g_per_kg, 35.2);
+  assert.equal(walvis.assay.quality, 'cited');
+
   const bare = { resources: {} };
-  SiteAssays.bindPresetAssay(bare, 'oman-duqm');
+  SiteAssays.bindPresetAssay(bare, 'not-a-preset');
   assert.equal(bare.assay.quality, 'screening');
   assert.equal(bare.resources.seawater, undefined);
   assert.equal(bare.resources.brine, undefined);

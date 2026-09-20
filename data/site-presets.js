@@ -90,6 +90,7 @@
   }),
   Object.freeze({
     id: 'oman-duqm',
+    assayId: 'arabian-sea-seawater',
     name: 'Duqm, Oman',
     region: 'Arabian Sea',
     latitude: 19.650,
@@ -174,6 +175,7 @@
   }),
   Object.freeze({
     id: 'india-mundra',
+    assayId: 'gulf-of-kutch-seawater',
     name: 'Mundra, Gujarat, India',
     region: 'India',
     latitude: 22.737,
@@ -279,6 +281,7 @@
   }),
   Object.freeze({
     id: 'namibia-walvis-bay',
+    assayId: 'benguela-atlantic-seawater',
     name: 'Walvis Bay, Namibia',
     region: 'Southern Africa',
     latitude: -22.957,

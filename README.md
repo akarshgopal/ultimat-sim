@@ -39,10 +39,11 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 - `engine/footprint.js`: post-solve solar land (efficiency × location-aware GCR) and cited/screening process-pad intensities with evidence links.
 - `engine/map-site.js`: map-picker geometry, footprint campus layout, layer cites, and colormap helpers (GSA annual GHI ramp + geographic LERC tile math, Aqueduct BWS tile template). Not a permit, assay, cadastral layer, or surveyed layout. Solar overlay decodes Esri LERC via `vendor/LercDecode.js`.
 - `engine/size.js`: outer product sizing loop (`sizeToProduct`) plus co-product cashflow search (`sizeForPositiveCashflow`). CH₄, H₂, methanol, ammonia, lithium, or salt demand sizes water, converters, brine, power, and `solarKWp`; `solveOperation` stays physics-only. Duty estimates cascade T-feasible waste heat onto process sinks before residual heat is purchased. `sizeToTarget` is the CH₄ wrapper.
+- `engine/sensitivity.js`: screening fuel price/CAPEX break-even (`findFuelBreakEven`). Default path sizes the plant once at case capacities, then sweeps primary-product `unitPrice` ($/kg) or a CAPEX factor and re-scores `annualNetCash` / `scorePositiveCashflow` (no re-size). Prices and CAPEX are screening, not quotes. `node scripts/fuel-breakeven.mjs` prints JSON for coastal CH₄ and Mejillones methanol.
 - `engine/uncertainty.js`: quality tags (`cited` / `recoverable` / `assumption` / `derived` / `screening`) and screening-precision formatters. No fake error bars.
 - `cases/`: runnable reference plants (`coastal.js`, `methanol.js`, `abundance.js`, `sabatier.js`, `network.js`).
 - `tests/*flowsheet*.test.js`: engine, economics, and browser-global/UI regression checks. `tests/map-site.test.js` covers the map-picker geometry and layer cites.
-- `scripts/`: local server, static build, GitHub Pages deploy.
+- `scripts/`: local server, static build, GitHub Pages deploy. `scripts/fuel-breakeven.mjs` prints screening CH₄/methanol price and CAPEX-factor break-even JSON.
 
 The root page loads only the Foundry engine, cases, and UI scripts. `style.css` retains base styles used by Foundry. `flowsheet.html` redirects old links to the root page. The archived TEA page, JavaScript, and tests have been removed; their committed history remains in Git.
 

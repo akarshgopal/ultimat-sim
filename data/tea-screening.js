@@ -61,6 +61,7 @@ const REGION_STRING_TO_ID = {
   Australia: 'australia',
   India: 'default',
   'Texas/US Gulf': 'default',
+  'US West / Utah': 'default',
   'North Africa': 'default',
   'Southern Africa': 'default',
   Europe: 'default',

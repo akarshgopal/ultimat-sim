@@ -72,6 +72,51 @@ test('default search sites union Dead Sea hub with SITE_PRESETS and do not inven
   assert.deepEqual(PLANT_TEMPLATES, ['abundance', 'coastal', 'methanol']);
 });
 
+test('new catalog presets are searchable: brine hubs abundance-eligible, desal coasts seawater-eligible', () => {
+  const gsl = searchSite('us-great-salt-lake');
+  assert.ok(gsl, 'us-great-salt-lake');
+  assert.equal(gsl.hasBrineAssay, true);
+  assert.equal(gsl.hasSeawaterAssay, false);
+  assert.equal(gsl.assayKind, 'brine');
+  assert.equal(gsl.assayId, 'great-salt-lake-brine');
+  assert.equal(gsl.brineAssayId, 'great-salt-lake-brine');
+  assert.equal(gsl.kind, 'brine-hub');
+  assert.equal(gsl.region, 'US West / Utah');
+  assert.equal(templateEligible(gsl, 'abundance').ok, true);
+  assert.equal(templateEligible(gsl, 'coastal').ok, false);
+  assert.equal(templateEligible(gsl, 'coastal').reason, 'no-seawater-assay');
+
+  const salar = searchSite('chile-salar-de-atacama');
+  assert.ok(salar, 'chile-salar-de-atacama');
+  assert.equal(salar.hasBrineAssay, true);
+  assert.equal(salar.hasSeawaterAssay, false);
+  assert.equal(salar.assayId, 'atacama-lithium-brine');
+  assert.equal(salar.kind, 'brine-hub');
+  assert.equal(templateEligible(salar, 'abundance').ok, true);
+  assert.equal(templateEligible(salar, 'coastal').reason, 'no-seawater-assay');
+  assert.notEqual(salar.id, 'chile-mejillones');
+
+  const ras = searchSite('saudi-ras-al-khair');
+  assert.ok(ras, 'saudi-ras-al-khair');
+  assert.equal(ras.hasSeawaterAssay, true);
+  assert.equal(ras.hasBrineAssay, false);
+  assert.equal(ras.seawaterAssayId, 'persian-gulf-seawater');
+  assert.equal(ras.assayKind, 'seawater');
+  assert.equal(templateEligible(ras, 'abundance').ok, false);
+  assert.equal(templateEligible(ras, 'abundance').reason, 'no-brine-assay');
+  assert.equal(templateEligible(ras, 'coastal').reason, 'no-frozen-pvgis');
+  assert.equal(ras.rightsHints.seawaterIntake.status, 'assumed');
+
+  const yanbu = searchSite('saudi-yanbu');
+  assert.ok(yanbu, 'saudi-yanbu');
+  assert.equal(yanbu.hasSeawaterAssay, true);
+  assert.equal(yanbu.hasBrineAssay, false);
+  assert.equal(yanbu.seawaterAssayId, 'red-sea-seawater');
+  assert.equal(templateEligible(yanbu, 'abundance').reason, 'no-brine-assay');
+  assert.equal(templateEligible(yanbu, 'coastal').reason, 'no-frozen-pvgis');
+  assert.equal(yanbu.rightsHints.seawaterIntake.status, 'assumed');
+});
+
 test('when Dead Sea abundance is in the search set, returns a scored candidate under the capital-inclusive gate', () => {
   const result = searchAbundanceSites({
     sites: [brineSite()],

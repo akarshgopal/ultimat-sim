@@ -43,8 +43,10 @@
     'spain-almeria': 'almeria-seawater',
     'uae-taweelah': 'persian-gulf-seawater',
     'qatar-ras-laffan': 'persian-gulf-seawater',
+    'saudi-ras-al-khair': 'persian-gulf-seawater',
     'saudi-oxagon': 'red-sea-seawater',
     'egypt-ain-sokhna': 'red-sea-seawater',
+    'saudi-yanbu': 'red-sea-seawater',
     'texas-corpus-christi': 'texas-gulf-seawater',
     'au-port-hedland': 'pilbara-indian-ocean-seawater',
     'au-kwinana': 'pilbara-indian-ocean-seawater',
@@ -61,8 +63,10 @@
     'uae-taweelah': 'persian-gulf-sabkha-brine',
     'qatar-ras-laffan': 'persian-gulf-sabkha-brine',
     'chile-mejillones': 'atacama-lithium-brine',
+    'chile-salar-de-atacama': 'atacama-lithium-brine',
     'au-port-hedland': 'lake-mackay-wa-brine',
     'au-lake-mackay': 'lake-mackay-wa-brine',
+    'us-great-salt-lake': 'great-salt-lake-brine',
   });
 
   const BRINE_ASSAY_IDS = Object.freeze([

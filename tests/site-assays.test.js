@@ -59,7 +59,7 @@ test('Duqm Mundra Walvis assays are cited basin typicals, not intake permits', (
 
 test('presets that claim an assay resolve via registry', () => {
   const claimed = presets.filter((p) => p.assayId);
-  assert.ok(claimed.length >= 13, `expected ≥13 assay presets, got ${claimed.length}`);
+  assert.ok(claimed.length >= 15, `expected ≥15 assay presets, got ${claimed.length}`);
   for (const preset of claimed) {
     assert.equal(SiteAssays.assayIdForPreset(preset.id), preset.assayId);
     const assay = SiteAssays.getAssay(preset.assayId);
@@ -168,7 +168,7 @@ for (const id of BRINE_ASSAY_FILES) {
 
 test('brineAssayId on presets resolves via PRESET_BRINE_ASSAY_IDS / getAssay', () => {
   const claimed = presets.filter((p) => p.brineAssayId);
-  assert.ok(claimed.length >= 4, `expected ≥4 brine-assay presets, got ${claimed.length}`);
+  assert.ok(claimed.length >= 6, `expected ≥6 brine-assay presets, got ${claimed.length}`);
   for (const preset of claimed) {
     assert.equal(SiteAssays.brineAssayIdForPreset(preset.id), preset.brineAssayId);
     const assay = SiteAssays.getAssay(preset.brineAssayId);
@@ -182,8 +182,11 @@ test('brineAssayId on presets resolves via PRESET_BRINE_ASSAY_IDS / getAssay', (
     assert.equal(preset.brineAssayId, assayId);
   }
   assert.equal(SiteAssays.brineAssayIdForPreset('spain-almeria'), null);
+  assert.equal(SiteAssays.brineAssayIdForPreset('us-great-salt-lake'), 'great-salt-lake-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('chile-salar-de-atacama'), 'atacama-lithium-brine');
+  assert.equal(SiteAssays.assayIdForPreset('saudi-ras-al-khair'), 'persian-gulf-seawater');
+  assert.equal(SiteAssays.assayIdForPreset('saudi-yanbu'), 'red-sea-seawater');
   assert.ok(SiteAssays.getAssay('great-salt-lake-brine'));
-  assert.ok(!Object.values(SiteAssays.PRESET_BRINE_ASSAY_IDS).includes('great-salt-lake-brine'));
 });
 
 test('inland Lake Mackay preset binds only process brine', () => {
@@ -196,4 +199,26 @@ test('inland Lake Mackay preset binds only process brine', () => {
   assert.equal(inland.resources.seawater, undefined);
   assert.ok(inland.resources.brine.stream.mol['Na+'] > 0);
   assert.equal(inland.resources.brine.stream.mol['Li+'], undefined);
+});
+
+test('inland Great Salt Lake and Salar de Atacama presets bind only cited process brine', () => {
+  const gsl = { resources: {} };
+  SiteAssays.bindPresetAssay(gsl, 'us-great-salt-lake');
+  assert.equal(gsl.assay.kind, 'brine');
+  assert.equal(gsl.assay.quality, 'cited');
+  assert.equal(gsl.assay.assayId, 'great-salt-lake-brine');
+  assert.equal(gsl.brineAssay.assayId, 'great-salt-lake-brine');
+  assert.doesNotMatch(gsl.assay.summary, /Millero|Pilson/);
+  assert.equal(gsl.resources.seawater, undefined);
+  assert.ok(gsl.resources.brine.stream.mol['Na+'] > 0);
+  assert.ok(gsl.resources.brine.stream.mol['Li+'] > 0);
+  assert.match(gsl.resources.brine.evidence, /not a mineral concession/i);
+
+  const salar = { resources: {} };
+  SiteAssays.bindPresetAssay(salar, 'chile-salar-de-atacama');
+  assert.equal(salar.assay.kind, 'brine');
+  assert.equal(salar.assay.assayId, 'atacama-lithium-brine');
+  assert.equal(salar.resources.seawater, undefined);
+  assert.ok(salar.resources.brine.stream.mol['Li+'] > gsl.resources.brine.stream.mol['Li+'] * 10);
+  assert.match(salar.resources.brine.evidence, /not a mineral concession/i);
 });

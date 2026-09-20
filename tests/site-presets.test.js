@@ -8,11 +8,15 @@ const KINDS = new Set(['coastal-solar', 'brine-hub', 'desert-solar', 'industrial
 const REQUIRED_IDS = [
   'uae-taweelah',
   'saudi-oxagon',
+  'saudi-ras-al-khair',
+  'saudi-yanbu',
   'au-port-hedland',
   'india-mundra',
   'texas-corpus-christi',
+  'us-great-salt-lake',
   'egypt-ain-sokhna',
   'chile-mejillones',
+  'chile-salar-de-atacama',
   'namibia-walvis-bay',
   'oman-duqm',
   'spain-almeria',
@@ -56,6 +60,14 @@ test('SITE_PRESETS export unique ids and finite lat/lon on globalThis and module
     }
     assert.equal(typeof site.notes, 'string');
     assert.ok(site.rightsHints && typeof site.rightsHints === 'object');
+    if (site.kind === 'brine-hub') {
+      assert.equal(site.rightsHints.seawaterIntake.status, 'unverified', `${site.id} inland intake`);
+      assert.equal(site.rightsHints.brineConcession.status, 'unverified', `${site.id} concession`);
+      assert.match(site.rightsHints.brineConcession.note, /not a mineral concession/i);
+    } else {
+      assert.equal(site.rightsHints.seawaterIntake.status, 'assumed', `${site.id} coastal intake`);
+      assert.equal(site.rightsHints.seawaterIntake.authorize, true);
+    }
     for (const [key, hint] of Object.entries(site.rightsHints)) {
       assert.ok(RIGHT_KEYS.includes(key), `${site.id} unknown right ${key}`);
       assert.equal(hint.kind, RIGHT_KINDS[key]);
@@ -67,4 +79,44 @@ test('SITE_PRESETS export unique ids and finite lat/lon on globalThis and module
       assert.ok(hint.note.length > 0);
     }
   }
+});
+
+test('catalog expansion wires GSL inland, Atacama salar screening, and Gulf/Red Sea desal coasts', () => {
+  const byId = new Map(SITE_PRESETS.map(site => [site.id, site]));
+
+  const gsl = byId.get('us-great-salt-lake');
+  assert.equal(gsl.kind, 'brine-hub');
+  assert.equal(gsl.region, 'US West / Utah');
+  assert.equal(gsl.latitude, 41.15);
+  assert.equal(gsl.longitude, -112.55);
+  assert.equal(gsl.brineAssayId, 'great-salt-lake-brine');
+  assert.equal(gsl.assayId, undefined);
+  assert.ok(gsl.evidence.some(item => /doi\.org\/10\.3389\/fceng\.2022\.1008680/.test(item.url)));
+  assert.ok(gsl.evidence.some(item => /usgs\.gov/.test(item.url)));
+  assert.match(gsl.notes, /not a mineral concession/i);
+
+  const salar = byId.get('chile-salar-de-atacama');
+  assert.equal(salar.kind, 'brine-hub');
+  assert.equal(salar.region, 'Atacama/Chile');
+  assert.equal(salar.latitude, -23.5);
+  assert.equal(salar.longitude, -68.25);
+  assert.equal(salar.brineAssayId, 'atacama-lithium-brine');
+  assert.equal(salar.assayId, undefined);
+  assert.match(salar.notes, /not an SQM or Albemarle concession/i);
+  assert.match(salar.notes, /Not Mejillones seawater/i);
+
+  const ras = byId.get('saudi-ras-al-khair');
+  assert.equal(ras.kind, 'industrial-coast');
+  assert.equal(ras.region, 'Gulf');
+  assert.equal(ras.assayId, 'persian-gulf-seawater');
+  assert.equal(ras.brineAssayId, undefined);
+  assert.equal(ras.rightsHints.seawaterIntake.status, 'assumed');
+  assert.match(ras.notes, /not a Ras Al-Khair reject sample/i);
+
+  const yanbu = byId.get('saudi-yanbu');
+  assert.equal(yanbu.kind, 'industrial-coast');
+  assert.equal(yanbu.region, 'Red Sea');
+  assert.equal(yanbu.assayId, 'red-sea-seawater');
+  assert.equal(yanbu.brineAssayId, undefined);
+  assert.equal(yanbu.rightsHints.seawaterIntake.status, 'assumed');
 });

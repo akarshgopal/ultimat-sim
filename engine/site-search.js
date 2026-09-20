@@ -17,7 +17,14 @@ const PLANT_TEMPLATES = Object.freeze(['abundance', 'coastal', 'methanol']);
 const DEAD_SEA_SITE_ID = 'dead-sea-pvgis-2026-09-06';
 const SCREENING_NOTE = 'Screening assumes intake/concession for evaluation only; not a bankable permit.';
 const RIGHTS_SCREENING = 'screening-assumes-intake-concession';
+const RIGHTS_NO_RIGHTS = 'no-rights';
+const RIGHTS_OFFTAKE = 'offtake-limited';
 const RIGHTS_NONE = 'no-rights-modeled';
+const RIGHTS_SCENARIOS = Object.freeze([RIGHTS_SCREENING, RIGHTS_NO_RIGHTS, RIGHTS_OFFTAKE]);
+// 0.1× Chile Li still exceeds catalog plant scale; 0.01× binds so offtake actually changes cash.
+const OFFTAKE_DEMAND_FACTOR = 0.01;
+const NO_RIGHTS_NOTE = 'No-rights scenario: intake/concession are not assumed. A literature assay is not a mineral concession; not a bankable permit.';
+const OFFTAKE_NOTE = `Offtake-limited scenario: regional demand caps scaled by ${OFFTAKE_DEMAND_FACTOR} for screening; not a plant offtake contract. ${SCREENING_NOTE}`;
 const MAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
 const SEARCH_SCALES = Object.freeze([0.25, 0.5, 1, 2, 4]);
 const SEARCH_RATES = Object.freeze([0, 2, 5]);
@@ -38,6 +45,29 @@ function jsonNumber(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
+}
+
+function normalizeRightsScenario(value) {
+  if (value == null || value === '') return RIGHTS_SCREENING;
+  const raw = String(value).trim().toLowerCase();
+  if (raw === RIGHTS_SCREENING || raw === 'screening' || raw === 'screening-assumes') {
+    return RIGHTS_SCREENING;
+  }
+  if (raw === RIGHTS_NO_RIGHTS || raw === 'none') return RIGHTS_NO_RIGHTS;
+  if (raw === RIGHTS_OFFTAKE || raw === 'ofstake-limited' || raw === 'offtake') {
+    return RIGHTS_OFFTAKE;
+  }
+  throw new Error(`Unknown rightsScenario ${value}`);
+}
+
+function scenarioNote(scenario) {
+  if (scenario === RIGHTS_NO_RIGHTS) return NO_RIGHTS_NOTE;
+  if (scenario === RIGHTS_OFFTAKE) return OFFTAKE_NOTE;
+  return SCREENING_NOTE;
+}
+
+function templateNeedsIntakeOrConcession(template) {
+  return template === 'abundance' || template === 'coastal' || template === 'methanol';
 }
 
 function presetList() {
@@ -182,7 +212,7 @@ function isMapLayerTemplate(template) {
   return MAP_LAYER_IDS.includes(template);
 }
 
-function templateEligible(site, template) {
+function templateEligible(site, template, rightsScenario) {
   if (isMapLayerTemplate(template)) {
     return {
       ok: false,
@@ -191,16 +221,14 @@ function templateEligible(site, template) {
     };
   }
   if (template === 'abundance') {
-    if (site?.hasBrineAssay) {
-      return { ok: true };
+    if (!site?.hasBrineAssay) {
+      return {
+        ok: false,
+        reason: 'no-brine-assay',
+        notes: 'Seawater Millero assays are not brine assays; abundance template skipped.',
+      };
     }
-    return {
-      ok: false,
-      reason: 'no-brine-assay',
-      notes: 'Seawater Millero assays are not brine assays; abundance template skipped.',
-    };
-  }
-  if (template === 'coastal' || template === 'methanol') {
+  } else if (template === 'coastal' || template === 'methanol') {
     if (!site?.hasSeawaterAssay) {
       return {
         ok: false,
@@ -215,9 +243,18 @@ function templateEligible(site, template) {
         notes: 'Coastal/methanol templates need a frozen per-site PVGIS series; not applied with another site\'s kWh/kWp.',
       };
     }
-    return { ok: true };
+  } else {
+    return { ok: false, reason: 'unknown-template', notes: `Unknown plant template ${template}` };
   }
-  return { ok: false, reason: 'unknown-template', notes: `Unknown plant template ${template}` };
+  const scenario = normalizeRightsScenario(rightsScenario);
+  if (scenario === RIGHTS_NO_RIGHTS && templateNeedsIntakeOrConcession(template)) {
+    return {
+      ok: false,
+      reason: 'no-rights',
+      notes: 'Intake/concession would be required and are not assumed in the no-rights scenario.',
+    };
+  }
+  return { ok: true };
 }
 
 function frozenSolarFor(site, template) {
@@ -319,6 +356,44 @@ function applyRegionalTea(definition, region) {
     }
   }
 }
+
+function revokeAssumedIntakeAndConcession(definition) {
+  definition.site = definition.site || {};
+  definition.site.rights = definition.site.rights || {};
+  for (const key of ['seawaterIntake', 'brineConcession']) {
+    const prev = definition.site.rights[key] && typeof definition.site.rights[key] === 'object'
+      ? definition.site.rights[key]
+      : {};
+    definition.site.rights[key] = {
+      kind: prev.kind || (key === 'brineConcession' ? 'concession' : 'intake'),
+      status: 'unverified',
+      authorize: false,
+      note: prev.note
+        ? `${prev.note} No-rights scenario does not assume this right.`
+        : 'No-rights scenario: intake/concession not assumed; not a permit.',
+    };
+  }
+}
+
+function applyOfftakeDemandHaircut(definition, factor = OFFTAKE_DEMAND_FACTOR) {
+  const nodes = definition?.graph?.nodes || [];
+  for (const node of nodes) {
+    const economics = node?.economics;
+    if (!economics || economics.disposition !== 'sale') continue;
+    const cap = Number(economics.annualDemandLimit);
+    if (Number.isFinite(cap)) economics.annualDemandLimit = cap * factor;
+  }
+}
+
+function applyRightsScenario(definition, template, scenario) {
+  if (scenario === RIGHTS_NO_RIGHTS) {
+    revokeAssumedIntakeAndConcession(definition);
+    return;
+  }
+  if (template === 'abundance') assumeScreeningBrine(definition);
+  if (scenario === RIGHTS_OFFTAKE) applyOfftakeDemandHaircut(definition);
+}
+
 
 function overlaySiteIdentity(definition, site, extraNotes = []) {
   definition.site = definition.site || {};
@@ -492,23 +567,25 @@ function attachAbundanceSite(definition, site, solar) {
   }
 }
 
-function buildAbundancePlant(site) {
+function buildAbundancePlant(site, rightsScenario) {
   if (typeof abundance?.createAbundanceCase !== 'function') {
     throw new Error('Abundance case is not loaded');
   }
+  const scenario = normalizeRightsScenario(rightsScenario);
   const assayId = resolveAbundanceAssayId(site);
   // Regional offtake: createAbundanceCase({ region }) maps site.region via TeaScreening.
   const definition = abundance.createAbundanceCase({ assayId, region: site.region });
   const solar = frozenSolarFor(site, 'abundance');
   attachAbundanceSite(definition, site, solar);
-  overlaySiteIdentity(definition, site, [SCREENING_NOTE]);
-  assumeScreeningBrine(definition);
+  overlaySiteIdentity(definition, site, [scenarioNote(scenario)]);
+  applyRightsScenario(definition, 'abundance', scenario);
   applyFrozenSolar(definition, solar, 'abundance');
   applyRegionalTea(definition, site.region);
   return definition;
 }
 
-function buildFuelPlant(site, template) {
+function buildFuelPlant(site, template, rightsScenario) {
+  const scenario = normalizeRightsScenario(rightsScenario);
   const builder = template === 'methanol' ? methanol?.createMethanolCase : coastal?.createCoastalCase;
   if (typeof builder !== 'function') throw new Error(`${template} case is not loaded`);
   const definition = builder(0);
@@ -516,15 +593,16 @@ function buildFuelPlant(site, template) {
     (template === 'methanol' ? methanol?.INTAKE_M3_PER_DAY : coastal?.INTAKE_M3_PER_DAY) || 0.1
   );
   const solarNote = applyFrozenSolar(definition, frozenSolarFor(site, template), template);
-  overlaySiteIdentity(definition, site, [SCREENING_NOTE, solarNote].filter(Boolean));
+  overlaySiteIdentity(definition, site, [scenarioNote(scenario), solarNote].filter(Boolean));
   bindSeawaterAssay(definition, site, intake);
   applyRegionalTea(definition, site.region);
+  applyRightsScenario(definition, template, scenario);
   return definition;
 }
 
-function buildPlant(site, template) {
-  if (template === 'abundance') return buildAbundancePlant(site);
-  if (template === 'coastal' || template === 'methanol') return buildFuelPlant(site, template);
+function buildPlant(site, template, rightsScenario) {
+  if (template === 'abundance') return buildAbundancePlant(site, rightsScenario);
+  if (template === 'coastal' || template === 'methanol') return buildFuelPlant(site, template, rightsScenario);
   throw new Error(`Unknown plant template ${template}`);
 }
 
@@ -636,16 +714,9 @@ function rankNearMisses(candidates = []) {
   return candidates.slice().sort(compareNearMisses);
 }
 
-function rightsScenarioFor(site, template, { evaluated = false } = {}) {
+function rightsScenarioFor(template, searchScenario) {
   if (isMapLayerTemplate(template)) return RIGHTS_NONE;
-  if (evaluated && template === 'abundance') return RIGHTS_SCREENING;
-  const hints = site?.rightsHints || {};
-  const intakeOrConcession = hints.seawaterIntake || hints.brineConcession;
-  if (intakeOrConcession && (intakeOrConcession.status === 'assumed' || intakeOrConcession.authorize === true)) {
-    return RIGHTS_SCREENING;
-  }
-  if (evaluated && (template === 'coastal' || template === 'methanol')) return RIGHTS_SCREENING;
-  return RIGHTS_NONE;
+  return normalizeRightsScenario(searchScenario);
 }
 
 function assayIdForRow(site, template) {
@@ -653,7 +724,8 @@ function assayIdForRow(site, template) {
   return site.seawaterAssayId || (site.assayKind === 'seawater' ? site.assayId : null);
 }
 
-function skippedRow(site, template, eligibility) {
+function skippedRow(site, template, eligibility, rightsScenario) {
+  const scenario = normalizeRightsScenario(rightsScenario);
   return {
     siteId: site.id,
     siteName: site.name,
@@ -670,12 +742,13 @@ function skippedRow(site, template, eligibility) {
     idle: false,
     status: 'skipped',
     reason: eligibility.reason,
-    rightsScenario: rightsScenarioFor(site, template, { evaluated: false }),
-    notes: [eligibility.notes, SCREENING_NOTE].filter(Boolean),
+    rightsScenario: rightsScenarioFor(template, scenario),
+    notes: [eligibility.notes, scenarioNote(scenario)].filter(Boolean),
   };
 }
 
-function errorRow(site, template, error, notes = []) {
+function errorRow(site, template, error, notes = [], rightsScenario) {
+  const scenario = normalizeRightsScenario(rightsScenario);
   const message = error?.message || String(error);
   return {
     siteId: site.id,
@@ -693,29 +766,34 @@ function errorRow(site, template, error, notes = []) {
     idle: false,
     status: 'error',
     reason: message,
-    rightsScenario: rightsScenarioFor(site, template, { evaluated: false }),
-    notes: [...notes, message, SCREENING_NOTE],
+    rightsScenario: rightsScenarioFor(template, scenario),
+    notes: [...notes, message, scenarioNote(scenario)],
   };
 }
 
 function evaluateCandidate(site, template, sizeOpts = {}) {
-  const notes = [SCREENING_NOTE];
+  const rightsScenario = normalizeRightsScenario(sizeOpts.rightsScenario);
+  const notes = [scenarioNote(rightsScenario)];
+  const eligibility = templateEligible(site, template, rightsScenario);
+  if (!eligibility.ok) {
+    return skippedRow(site, template, eligibility, rightsScenario);
+  }
   const solar = frozenSolarFor(site, template);
   if (!solar && (template === 'coastal' || template === 'methanol')) {
     return skippedRow(site, template, {
       reason: 'no-frozen-pvgis',
       notes: 'Coastal/methanol templates need a frozen per-site PVGIS series; not applied with another site\'s kWh/kWp.',
-    });
+    }, rightsScenario);
   }
   if (!solar) notes.push('No frozen PVGIS series for this site; screening uses the plant-template solar, not a local yield.');
   let definition;
   try {
-    definition = buildPlant(site, template);
+    definition = buildPlant(site, template, rightsScenario);
   } catch (error) {
-    return errorRow(site, template, error, notes);
+    return errorRow(site, template, error, notes, rightsScenario);
   }
   if (!sizeApi?.sizeForPositiveCashflow) {
-    return errorRow(site, template, new Error('sizeForPositiveCashflow is not loaded'), notes);
+    return errorRow(site, template, new Error('sizeForPositiveCashflow is not loaded'), notes, rightsScenario);
   }
   let sized;
   try {
@@ -729,7 +807,13 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       caps: sizeOpts.caps,
     });
   } catch (error) {
-    return errorRow(site, template, error, notes);
+    if (rightsScenario === RIGHTS_NO_RIGHTS && /cannot assume|no feasible/i.test(error.message || '')) {
+      return skippedRow(site, template, {
+        reason: 'no-rights',
+        notes: 'Size/solve cannot grow unauthorized intake or brine concession.',
+      }, rightsScenario);
+    }
+    return errorRow(site, template, error, notes, rightsScenario);
   }
   const objective = sized.objective || {};
   const economics = sized.economics || {};
@@ -762,7 +846,7 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
     feasible: met,
     status: 'ok',
     selected: sized.selected || null,
-    rightsScenario: rightsScenarioFor(site, template, { evaluated: true }),
+    rightsScenario: rightsScenarioFor(template, rightsScenario),
     notes,
   };
   row.idle = isIdleCandidate(row);
@@ -788,16 +872,17 @@ function searchAbundanceSites(opts = {}) {
     .filter(Boolean);
   const templates = normalizeTemplates(opts.templates);
   const topN = Number.isFinite(Number(opts.topN)) && Number(opts.topN) > 0 ? Math.floor(Number(opts.topN)) : 10;
-  const sizeOpts = resolveSizeOpts(opts.sizeOpts || {});
+  const rightsScenario = normalizeRightsScenario(opts.rightsScenario);
+  const sizeOpts = resolveSizeOpts({ ...(opts.sizeOpts || {}), rightsScenario });
   const includeNearMisses = opts.nearMisses !== false;
 
   const skipped = [];
   const evaluated = [];
   for (const site of sites) {
     for (const template of templates) {
-      const eligibility = templateEligible(site, template);
+      const eligibility = templateEligible(site, template, rightsScenario);
       if (!eligibility.ok) {
-        skipped.push(skippedRow(site, template, eligibility));
+        skipped.push(skippedRow(site, template, eligibility, rightsScenario));
         continue;
       }
       evaluated.push(evaluateCandidate(site, template, sizeOpts));
@@ -822,7 +907,8 @@ function searchAbundanceSites(opts = {}) {
     skippedCount: skipped.length,
     sitesTried: sites.length,
     templates,
-    notes: [SCREENING_NOTE],
+    rightsScenario,
+    notes: [scenarioNote(rightsScenario)],
   };
 }
 
@@ -831,7 +917,11 @@ return {
   DEAD_SEA_SITE_ID,
   SCREENING_NOTE,
   RIGHTS_SCREENING,
+  RIGHTS_NO_RIGHTS,
+  RIGHTS_OFFTAKE,
   RIGHTS_NONE,
+  RIGHTS_SCENARIOS,
+  OFFTAKE_DEMAND_FACTOR,
   MAP_LAYER_IDS,
   SEARCH_SCALES,
   SEARCH_RATES,
@@ -850,5 +940,6 @@ return {
   resolveAbundanceAssayId,
   frozenSolarFor,
   applyRegionalTea,
+  normalizeRightsScenario,
 };
 });

@@ -15,10 +15,14 @@
 const PLANT_TEMPLATES = Object.freeze(['abundance', 'coastal', 'methanol']);
 const DEAD_SEA_SITE_ID = 'dead-sea-pvgis-2026-09-06';
 const SCREENING_NOTE = 'Screening assumes intake/concession for evaluation only; not a bankable permit.';
-const SEARCH_SCALES = Object.freeze([0.5, 1, 2]);
-const SEARCH_RATES = Object.freeze([0, 5]);
+const RIGHTS_SCREENING = 'screening-assumes-intake-concession';
+const RIGHTS_NONE = 'no-rights-modeled';
+const MAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
+const SEARCH_SCALES = Object.freeze([0.25, 0.5, 1, 2, 4]);
+const SEARCH_RATES = Object.freeze([0, 2, 5]);
 const FAST_SCALES = Object.freeze([1]);
 const FAST_RATES = Object.freeze([0]);
+const IDLE_CASH_EPS = 1e-6;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -51,6 +55,8 @@ function deadSeaSearchSite() {
     kind: 'brine-hub',
     assayKind: 'brine',
     assayId: 'dead-sea-brine',
+    brineAssayId: 'dead-sea-brine',
+    seawaterAssayId: null,
     hasBrineAssay: true,
     hasSeawaterAssay: false,
     rightsHints: site.rights ? clone(site.rights) : null,
@@ -60,15 +66,40 @@ function deadSeaSearchSite() {
   };
 }
 
-function hasCitedSeawaterAssay(preset) {
-  const assayId = preset?.assayId || siteAssays?.assayIdForPreset?.(preset?.id);
-  if (!assayId) return { assayId: null, assay: null };
-  const assay = siteAssays?.getAssay?.(assayId) || null;
-  return { assayId, assay };
+function isBrineAssayId(assayId) {
+  if (!assayId) return false;
+  if (/brine/i.test(String(assayId))) return true;
+  const assay = siteAssays?.getAssay?.(assayId);
+  return assay?.meta?.kind === 'brine';
+}
+
+function citedSeawaterAssayId(preset) {
+  if (!preset) return null;
+  if (preset.seawaterAssayId) return preset.seawaterAssayId;
+  const mapped = siteAssays?.assayIdForPreset?.(preset.id);
+  if (mapped) return mapped;
+  if (preset.assayId && !isBrineAssayId(preset.assayId) && preset.assayKind !== 'brine') {
+    return preset.assayId;
+  }
+  return null;
+}
+
+function citedBrineAssayId(preset) {
+  if (!preset) return null;
+  if (preset.brineAssayId) return preset.brineAssayId;
+  const mapped = siteAssays?.brineAssayIdForPreset?.(preset.id);
+  if (mapped) return mapped;
+  if (preset.assayId && (isBrineAssayId(preset.assayId) || preset.assayKind === 'brine')) {
+    return preset.assayId;
+  }
+  return null;
 }
 
 function presetSearchSite(preset) {
-  const { assayId, assay } = hasCitedSeawaterAssay(preset);
+  const seawaterAssayId = citedSeawaterAssayId(preset);
+  const brineAssayId = citedBrineAssayId(preset);
+  const seawater = seawaterAssayId ? siteAssays?.getAssay?.(seawaterAssayId) || true : null;
+  const brine = brineAssayId ? siteAssays?.getAssay?.(brineAssayId) || true : null;
   return {
     id: preset.id,
     name: preset.name,
@@ -76,10 +107,12 @@ function presetSearchSite(preset) {
     latitude: finiteNumber(preset.latitude),
     longitude: finiteNumber(preset.longitude),
     kind: preset.kind || 'industrial-coast',
-    assayKind: assay ? 'seawater' : null,
-    assayId: assay ? assayId : null,
-    hasBrineAssay: false,
-    hasSeawaterAssay: Boolean(assay),
+    assayKind: brine ? 'brine' : (seawater ? 'seawater' : null),
+    assayId: brine ? brineAssayId : (seawater ? seawaterAssayId : null),
+    brineAssayId: brine ? brineAssayId : null,
+    seawaterAssayId: seawater ? seawaterAssayId : null,
+    hasBrineAssay: Boolean(brine),
+    hasSeawaterAssay: Boolean(seawater),
     rightsHints: preset.rightsHints ? clone(preset.rightsHints) : null,
     evidence: Array.isArray(preset.evidence) ? clone(preset.evidence) : [],
     notes: preset.notes || '',
@@ -91,26 +124,30 @@ function defaultSearchSites() {
   return [deadSeaSearchSite(), ...presetList().map(presetSearchSite)];
 }
 
-function isBrineSite(site) {
-  if (!site) return false;
-  if (site.hasBrineAssay === true || site.assayKind === 'brine') return true;
-  return site.id === DEAD_SEA_SITE_ID || site.source === 'NetworkCase.siteDeadSeaAbundance';
+function isDeadSeaHub(site) {
+  return site?.id === DEAD_SEA_SITE_ID || site?.source === 'NetworkCase.siteDeadSeaAbundance';
+}
+
+function pickCoord(value, fallback) {
+  return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
 function normalizeSite(site) {
   if (!site || typeof site !== 'object' || !site.id) return null;
-  if (isBrineSite(site)) {
+  if (isDeadSeaHub(site)) {
     const dead = deadSeaSearchSite();
     return {
       ...dead,
-      id: site.id || dead.id,
       name: site.name || dead.name,
-      latitude: Number.isFinite(Number(site.latitude)) ? Number(site.latitude) : dead.latitude,
-      longitude: Number.isFinite(Number(site.longitude)) ? Number(site.longitude) : dead.longitude,
+      latitude: pickCoord(site.latitude, dead.latitude),
+      longitude: pickCoord(site.longitude, dead.longitude),
       region: site.region || dead.region,
       notes: site.notes || dead.notes,
+      assayId: site.assayId || dead.assayId,
+      brineAssayId: site.brineAssayId || dead.assayId,
+      seawaterAssayId: site.seawaterAssayId || null,
       hasBrineAssay: true,
-      hasSeawaterAssay: false,
+      hasSeawaterAssay: site.hasSeawaterAssay === true,
       assayKind: 'brine',
     };
   }
@@ -119,9 +156,14 @@ function normalizeSite(site) {
   return {
     ...row,
     name: site.name || row.name,
-    latitude: Number.isFinite(Number(site.latitude)) ? Number(site.latitude) : row.latitude,
-    longitude: Number.isFinite(Number(site.longitude)) ? Number(site.longitude) : row.longitude,
-    hasBrineAssay: false,
+    latitude: pickCoord(site.latitude, row.latitude),
+    longitude: pickCoord(site.longitude, row.longitude),
+    hasBrineAssay: site.hasBrineAssay != null ? Boolean(site.hasBrineAssay) : row.hasBrineAssay,
+    hasSeawaterAssay: site.hasSeawaterAssay != null ? Boolean(site.hasSeawaterAssay) : row.hasSeawaterAssay,
+    assayId: site.assayId || row.assayId,
+    brineAssayId: site.brineAssayId || row.brineAssayId,
+    seawaterAssayId: site.seawaterAssayId || row.seawaterAssayId,
+    assayKind: site.assayKind || row.assayKind,
   };
 }
 
@@ -132,12 +174,23 @@ function normalizeTemplates(templates) {
       .map(item => String(item || '').trim())
       .filter(Boolean);
   const known = new Set(PLANT_TEMPLATES);
-  return requested.filter(id => known.has(id));
+  return requested.filter(id => known.has(id) || isMapLayerTemplate(id));
+}
+
+function isMapLayerTemplate(template) {
+  return MAP_LAYER_IDS.includes(template);
 }
 
 function templateEligible(site, template) {
+  if (isMapLayerTemplate(template)) {
+    return {
+      ok: false,
+      reason: 'map-layer-not-objective',
+      notes: 'Map layers are screening overlays, not plant templates or optimizer objectives.',
+    };
+  }
   if (template === 'abundance') {
-    if (site?.hasBrineAssay && site.assayKind === 'brine') {
+    if (site?.hasBrineAssay) {
       return { ok: true };
     }
     return {
@@ -147,7 +200,7 @@ function templateEligible(site, template) {
     };
   }
   if (template === 'coastal' || template === 'methanol') {
-    if (site?.hasSeawaterAssay && site.assayKind === 'seawater') {
+    if (site?.hasSeawaterAssay) {
       return { ok: true };
     }
     return {
@@ -183,7 +236,7 @@ function frozenSolarFor(site, template) {
       nativeTemplate: 'methanol',
     } : null;
   }
-  if (isBrineSite(site)) {
+  if (isDeadSeaHub(site)) {
     const monthly = networkCase?.DAILY_PV?.slice?.() || null;
     const daily = networkCase?.DEAD_SEA_PV;
     return daily > 0 ? {
@@ -276,7 +329,9 @@ function applyFrozenSolar(definition, solar, template) {
 }
 
 function bindSeawaterAssay(definition, site, intakeM3PerDay) {
-  const assay = siteAssays?.getAssay?.(site.assayId);
+  const assayId = site.seawaterAssayId
+    || (site.assayKind === 'seawater' || !site.hasBrineAssay ? site.assayId : null);
+  const assay = siteAssays?.getAssay?.(assayId);
   if (!assay) return;
   const massKg = intakeM3PerDay * assay.density_kg_per_L * 1000;
   const stream = siteAssays.seawaterFromAssay(assay, massKg);
@@ -292,16 +347,106 @@ function bindSeawaterAssay(definition, site, intakeM3PerDay) {
   }
 }
 
+function resolveAbundanceAssayId(site) {
+  if (!site) return 'dead-sea-brine';
+  if (site.assayKind === 'brine' && site.assayId) return site.assayId;
+  if (site.brineAssayId) return site.brineAssayId;
+  const mapped = siteAssays?.brineAssayIdForPreset?.(site.id);
+  if (mapped) return mapped;
+  if (isDeadSeaHub(site)) return 'dead-sea-brine';
+  if (site.hasBrineAssay && site.assayId && isBrineAssayId(site.assayId)) return site.assayId;
+  return 'dead-sea-brine';
+}
+
+function nodeById(definition, id) {
+  return (definition.graph?.nodes || []).find(item => item.id === id);
+}
+
+function attachAbundanceSite(definition, site, solar) {
+  const tea = abundance?.TEA;
+  const powerNode = nodeById(definition, 'power');
+  const brineNode = nodeById(definition, 'brine');
+  const powerKWh = Number(powerNode?.params?.stream?.kWh) || 0;
+  const dailyPV = Number(solar?.dailyPVKWhPerKWp) || Number(networkCase?.DEAD_SEA_PV) || 0;
+  const solarKWp = dailyPV > 0 ? powerKWh / dailyPV : 0;
+  if (powerNode) {
+    powerNode.siteResource = 'electricity';
+    if (tea?.bindCapexPack) {
+      powerNode.economics = tea.bindCapexPack('solar-pv', { capacity: solarKWp });
+    }
+  }
+  if (brineNode) brineNode.siteResource = 'brine';
+  const saltNode = nodeById(definition, 'salt-feed');
+  if (saltNode) saltNode.siteResource = 'salt';
+  const waterNode = nodeById(definition, 'water');
+  if (waterNode) waterNode.siteResource = 'freshwater';
+  const airNode = nodeById(definition, 'air');
+  if (airNode) airNode.siteResource = 'air';
+
+  const assayId = definition.meta?.assayId || resolveAbundanceAssayId(site);
+  const assay = siteAssays?.getAssay?.(assayId);
+  definition.site = definition.site || {};
+  definition.site.solarKWp = solarKWp;
+  definition.site.dailyPVKWhPerKWp = dailyPV;
+  definition.site.resources = {
+    electricity: powerNode?.params?.stream ? {
+      stream: clone(powerNode.params.stream),
+      quality: solar ? 'cited' : 'literature-estimate',
+      evidence: solar
+        ? `Frozen ${solar.source} × array sized to the hub load`
+        : 'Screening PV yield × array sized to the hub load; not a local PVGIS series',
+    } : undefined,
+    brine: brineNode?.params?.stream ? {
+      stream: clone(brineNode.params.stream),
+      quality: 'cited',
+      evidence: `Frozen process-brine assay ${assayId || ''}; daily mass from createAbundanceCase. Literature assay is not a mineral concession.`,
+    } : undefined,
+    salt: saltNode?.params?.stream ? {
+      stream: clone(saltNode.params.stream),
+      quality: 'user-assumption',
+      evidence: 'Purchased salt makeup assumed available; not a local quote',
+    } : undefined,
+    freshwater: waterNode?.params?.stream ? {
+      stream: clone(waterNode.params.stream),
+      quality: 'user-assumption',
+      evidence: 'Process water is assumed, not a local freshwater right',
+    } : undefined,
+    air: airNode?.params?.stream ? {
+      stream: clone(airNode.params.stream),
+      quality: 'literature-estimate',
+      evidence: 'Ambient air intake; no quality permit modeled',
+    } : undefined,
+    grid: {
+      stream: { kind: 'electricity', kWh: 0 },
+      quality: 'unverified',
+      evidence: 'Unverified grid access; zero authorized imports',
+    },
+  };
+  if (assay) {
+    definition.site.assay = {
+      kind: 'brine',
+      assayId: assay.meta?.id || assayId,
+      summary: assay.meta?.notes || assay.meta?.quality || `Frozen process-brine assay ${assayId}`,
+      quality: 'cited',
+      salinity_g_per_kg: assay.salinity_g_per_kg,
+      density_kg_per_L: assay.density_kg_per_L,
+      evidence: Array.isArray(assay.evidence) ? clone(assay.evidence) : [],
+    };
+    definition.site.brineAssay = definition.site.assay;
+  }
+}
+
 function buildAbundancePlant(site) {
-  if (!networkCase?.siteDeadSeaAbundance && !abundance?.createAbundanceCase) {
+  if (typeof abundance?.createAbundanceCase !== 'function') {
     throw new Error('Abundance case is not loaded');
   }
-  const definition = networkCase?.siteDeadSeaAbundance
-    ? networkCase.siteDeadSeaAbundance()
-    : abundance.createAbundanceCase();
+  const assayId = resolveAbundanceAssayId(site);
+  const definition = abundance.createAbundanceCase({ assayId });
+  const solar = frozenSolarFor(site, 'abundance');
+  attachAbundanceSite(definition, site, solar);
   overlaySiteIdentity(definition, site, [SCREENING_NOTE]);
   assumeScreeningBrine(definition);
-  applyFrozenSolar(definition, frozenSolarFor(site, 'abundance'), 'abundance');
+  applyFrozenSolar(definition, solar, 'abundance');
   return definition;
 }
 
@@ -388,11 +533,73 @@ function rankCandidates(candidates = []) {
   return candidates.slice().sort(compareCandidates);
 }
 
+function hasOperatingSlate(row) {
+  const tonnes = finiteNumber(row?.tonnes ?? row?.totalPositiveSaleTonnes, 0);
+  if (tonnes > 0) return true;
+  if (finiteNumber(row?.positiveSaleCount, 0) > 0) return true;
+  if (Array.isArray(row?.products) && row.products.some(product => finiteNumber(product.tonnesPerYear, 0) > 0)) {
+    return true;
+  }
+  if (row?.slate && Object.values(row.slate).some(tonnes => Number(tonnes) > 0)) return true;
+  return false;
+}
+
+function selectedRatePositive(row) {
+  return finiteNumber(row?.selected?.rate, 0) > 0;
+}
+
+function isIdleCandidate(row) {
+  if (hasOperatingSlate(row) || selectedRatePositive(row)) return false;
+  const cash = jsonNumber(row?.annualNetCash);
+  if (cash != null && cash < -IDLE_CASH_EPS) return false;
+  return true;
+}
+
+function compareNearMisses(left, right) {
+  const idleLeft = isIdleCandidate(left) ? 1 : 0;
+  const idleRight = isIdleCandidate(right) ? 1 : 0;
+  if (idleLeft !== idleRight) return idleLeft - idleRight;
+  const tonnesLeft = finiteNumber(left?.tonnes ?? left?.totalPositiveSaleTonnes, 0);
+  const tonnesRight = finiteNumber(right?.tonnes ?? right?.totalPositiveSaleTonnes, 0);
+  if (tonnesLeft !== tonnesRight) return tonnesRight - tonnesLeft;
+  const countLeft = finiteNumber(left?.positiveSaleCount, 0);
+  const countRight = finiteNumber(right?.positiveSaleCount, 0);
+  if (countLeft !== countRight) return countRight - countLeft;
+  const cashLeft = finiteNumber(left?.annualNetCash, 0);
+  const cashRight = finiteNumber(right?.annualNetCash, 0);
+  if (cashLeft !== cashRight) return cashRight - cashLeft;
+  const site = String(left?.siteId || '').localeCompare(String(right?.siteId || ''), 'en');
+  if (site) return site;
+  return String(left?.template || '').localeCompare(String(right?.template || ''), 'en');
+}
+
+function rankNearMisses(candidates = []) {
+  return candidates.slice().sort(compareNearMisses);
+}
+
+function rightsScenarioFor(site, template, { evaluated = false } = {}) {
+  if (isMapLayerTemplate(template)) return RIGHTS_NONE;
+  if (evaluated && template === 'abundance') return RIGHTS_SCREENING;
+  const hints = site?.rightsHints || {};
+  const intakeOrConcession = hints.seawaterIntake || hints.brineConcession;
+  if (intakeOrConcession && (intakeOrConcession.status === 'assumed' || intakeOrConcession.authorize === true)) {
+    return RIGHTS_SCREENING;
+  }
+  if (evaluated && (template === 'coastal' || template === 'methanol')) return RIGHTS_SCREENING;
+  return RIGHTS_NONE;
+}
+
+function assayIdForRow(site, template) {
+  if (template === 'abundance') return resolveAbundanceAssayId(site);
+  return site.seawaterAssayId || (site.assayKind === 'seawater' ? site.assayId : null);
+}
+
 function skippedRow(site, template, eligibility) {
   return {
     siteId: site.id,
     siteName: site.name,
     template,
+    assayId: assayIdForRow(site, template),
     slate: {},
     annualNetCash: null,
     tonnes: 0,
@@ -401,8 +608,10 @@ function skippedRow(site, template, eligibility) {
     products: [],
     met: false,
     feasible: false,
+    idle: false,
     status: 'skipped',
     reason: eligibility.reason,
+    rightsScenario: rightsScenarioFor(site, template, { evaluated: false }),
     notes: [eligibility.notes, SCREENING_NOTE].filter(Boolean),
   };
 }
@@ -413,6 +622,7 @@ function errorRow(site, template, error, notes = []) {
     siteId: site.id,
     siteName: site.name,
     template,
+    assayId: assayIdForRow(site, template),
     slate: {},
     annualNetCash: null,
     tonnes: 0,
@@ -421,8 +631,10 @@ function errorRow(site, template, error, notes = []) {
     products: [],
     met: false,
     feasible: false,
+    idle: false,
     status: 'error',
     reason: message,
+    rightsScenario: rightsScenarioFor(site, template, { evaluated: false }),
     notes: [...notes, message, SCREENING_NOTE],
   };
 }
@@ -468,10 +680,13 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       if (warning && !notes.includes(warning)) notes.push(warning);
     }
   }
-  return {
+  const row = {
     siteId: site.id,
     siteName: site.name,
     template,
+    assayId: template === 'abundance'
+      ? (definition.meta?.assayId || resolveAbundanceAssayId(site))
+      : (site.seawaterAssayId || site.assayId),
     slate,
     annualNetCash,
     tonnes,
@@ -482,8 +697,14 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
     feasible: met,
     status: 'ok',
     selected: sized.selected || null,
+    rightsScenario: rightsScenarioFor(site, template, { evaluated: true }),
     notes,
   };
+  row.idle = isIdleCandidate(row);
+  if (row.idle) {
+    notes.push('Idle (selected rate 0 / no positive sale tonnes and cash≈0); not a near-miss operating slate.');
+  }
+  return row;
 }
 
 function resolveSizeOpts(sizeOpts = {}) {
@@ -517,8 +738,11 @@ function searchAbundanceSites(opts = {}) {
 
   const feasible = evaluated.filter(row => row.feasible);
   const ranking = rankCandidates(feasible).slice(0, topN);
+  const nearMissPool = evaluated.filter(row => (
+    row.status === 'ok' && !row.feasible && !row.idle
+  ));
   const nearMisses = includeNearMisses
-    ? rankCandidates(evaluated.filter(row => row.status === 'ok' && !row.feasible)).slice(0, topN)
+    ? rankNearMisses(nearMissPool).slice(0, topN)
     : [];
 
   return {
@@ -538,14 +762,22 @@ return {
   PLANT_TEMPLATES,
   DEAD_SEA_SITE_ID,
   SCREENING_NOTE,
+  RIGHTS_SCREENING,
+  RIGHTS_NONE,
+  MAP_LAYER_IDS,
   SEARCH_SCALES,
   SEARCH_RATES,
   FAST_SCALES,
   FAST_RATES,
   searchAbundanceSites,
   rankCandidates,
+  compareNearMisses,
+  rankNearMisses,
+  isIdleCandidate,
   defaultSearchSites,
   templateEligible,
   evaluateCandidate,
+  buildAbundancePlant,
+  resolveAbundanceAssayId,
 };
 });

@@ -7,19 +7,28 @@ const SITE_PRESETS = require('../data/site-presets.js');
 const {
   searchAbundanceSites,
   rankCandidates,
+  compareNearMisses,
+  isIdleCandidate,
   defaultSearchSites,
   PLANT_TEMPLATES,
   DEAD_SEA_SITE_ID,
   SCREENING_NOTE,
+  RIGHTS_SCREENING,
+  RIGHTS_NONE,
   FAST_SCALES,
   FAST_RATES,
   templateEligible,
+  buildAbundancePlant,
 } = require('../engine/site-search');
 
 const FAST = { scales: FAST_SCALES.slice(), rates: FAST_RATES.slice() };
 
 function brineSite() {
   return defaultSearchSites().find(site => site.id === DEAD_SEA_SITE_ID);
+}
+
+function searchSite(id) {
+  return defaultSearchSites().find(site => site.id === id);
 }
 
 test('default search sites union Dead Sea hub with SITE_PRESETS and do not invent a Dead Sea preset row', () => {
@@ -29,19 +38,35 @@ test('default search sites union Dead Sea hub with SITE_PRESETS and do not inven
   assert.equal(ids[0], DEAD_SEA_SITE_ID);
   assert.ok(sites[0].hasBrineAssay);
   assert.equal(sites[0].assayKind, 'brine');
+  assert.equal(sites[0].assayId, 'dead-sea-brine');
   assert.equal(sites[0].source, 'NetworkCase.siteDeadSeaAbundance');
   assert.ok(!SITE_PRESETS.some(preset => preset.id === DEAD_SEA_SITE_ID));
   for (const preset of SITE_PRESETS) {
     const row = sites.find(site => site.id === preset.id);
     assert.ok(row, preset.id);
-    assert.equal(row.hasBrineAssay, false);
-    if (preset.assayId) {
-      assert.equal(row.hasSeawaterAssay, true);
-      assert.equal(row.assayKind, 'seawater');
+    if (preset.brineAssayId) {
+      assert.equal(row.hasBrineAssay, true, preset.id);
+      assert.equal(row.assayKind, 'brine');
+      assert.equal(row.assayId, preset.brineAssayId);
+      assert.equal(row.brineAssayId, preset.brineAssayId);
     } else {
-      assert.equal(row.hasSeawaterAssay, false);
+      assert.equal(row.hasBrineAssay, false, preset.id);
+    }
+    if (preset.assayId) {
+      assert.equal(row.hasSeawaterAssay, true, preset.id);
+      assert.equal(row.seawaterAssayId, preset.assayId);
+      if (!preset.brineAssayId) assert.equal(row.assayKind, 'seawater');
+    } else {
+      assert.equal(row.hasSeawaterAssay, false, preset.id);
     }
   }
+  const mejillones = searchSite('chile-mejillones');
+  assert.equal(mejillones.hasBrineAssay, true);
+  assert.equal(mejillones.hasSeawaterAssay, true);
+  assert.equal(mejillones.assayId, 'atacama-lithium-brine');
+  assert.equal(mejillones.seawaterAssayId, 'atacama-pacific-seawater');
+  assert.equal(templateEligible(mejillones, 'abundance').ok, true);
+  assert.equal(templateEligible(mejillones, 'coastal').ok, true);
   assert.deepEqual(PLANT_TEMPLATES, ['abundance', 'coastal', 'methanol']);
 });
 
@@ -69,8 +94,37 @@ test('when Dead Sea abundance is in the search set, returns a scored candidate u
   }
   assert.ok(winner.tonnes >= 0);
   assert.ok(Array.isArray(winner.products));
+  assert.equal(winner.assayId, 'dead-sea-brine');
+  assert.equal(winner.rightsScenario, RIGHTS_SCREENING);
   assert.ok(winner.notes.some(note => /screening assumes intake\/concession/i.test(note)));
   assert.match(SCREENING_NOTE, /not a bankable permit/i);
+});
+
+test('buildAbundancePlant uses the site brine assay, not a Dead Sea clone, for Mejillones/Atacama', () => {
+  const mejillones = searchSite('chile-mejillones');
+  const plant = buildAbundancePlant(mejillones);
+  assert.equal(plant.meta.assayId, 'atacama-lithium-brine');
+  assert.notEqual(plant.meta.assayId, 'dead-sea-brine');
+  assert.equal(plant.site.id, 'chile-mejillones');
+  const brine = plant.graph.nodes.find(node => node.id === 'brine');
+  assert.ok(brine?.params?.stream?.mol['Li+'] > 0);
+  const deadPlant = buildAbundancePlant(brineSite());
+  assert.equal(deadPlant.meta.assayId, 'dead-sea-brine');
+  const deadLi = deadPlant.graph.nodes.find(node => node.id === 'brine').params.stream.mol['Li+'];
+  assert.ok(brine.params.stream.mol['Li+'] > deadLi * 10);
+  assert.equal(deadPlant.graph.nodes.find(node => node.id === 'brine').params.stream.mol['Br-'] > 0, true);
+  assert.equal(brine.params.stream.mol['Br-'] || 0, 0);
+  const normalized = searchAbundanceSites({
+    sites: [{ id: 'chile-mejillones', name: 'Mejillones overlay' }],
+    templates: ['abundance'],
+    sizeOpts: FAST,
+  });
+  assert.equal(normalized.tried, 1);
+  const hit = normalized.ranking.concat(normalized.nearMisses);
+  assert.equal(hit.length, 1);
+  assert.equal(hit[0].siteId, 'chile-mejillones');
+  assert.equal(hit[0].assayId, 'atacama-lithium-brine');
+  assert.equal(hit[0].rightsScenario, RIGHTS_SCREENING);
 });
 
 test('ranking is stable: same input yields the same top siteId+template order', () => {
@@ -94,10 +148,14 @@ test('ranking is stable: same input yields the same top siteId+template order', 
 });
 
 test('presets without brine assay do not get an invented feasible abundance plant', () => {
-  const seawater = defaultSearchSites().find(site => site.id === 'uae-taweelah');
-  const noAssay = defaultSearchSites().find(site => site.id === 'oman-duqm');
+  const seawater = searchSite('spain-almeria');
+  const gulf = searchSite('uae-taweelah');
+  const noAssay = searchSite('oman-duqm');
   assert.equal(seawater.hasSeawaterAssay, true);
   assert.equal(seawater.hasBrineAssay, false);
+  assert.equal(gulf.hasSeawaterAssay, true);
+  assert.equal(gulf.hasBrineAssay, true);
+  assert.equal(gulf.assayId, 'persian-gulf-sabkha-brine');
   assert.equal(noAssay.hasSeawaterAssay, false);
 
   const skipped = searchAbundanceSites({
@@ -110,6 +168,7 @@ test('presets without brine assay do not get an invented feasible abundance plan
   assert.equal(skipped.skippedCount, 2);
   assert.ok(skipped.skipped.every(row => row.template === 'abundance' && row.status === 'skipped'));
   assert.ok(skipped.skipped.every(row => row.reason === 'no-brine-assay'));
+  assert.ok(skipped.skipped.every(row => row.rightsScenario === RIGHTS_SCREENING || row.rightsScenario === RIGHTS_NONE));
   assert.equal(skipped.ranking.length, 0);
 
   const mixed = searchAbundanceSites({
@@ -120,9 +179,20 @@ test('presets without brine assay do not get an invented feasible abundance plan
   const mixedHit = mixed.ranking.concat(mixed.nearMisses);
   assert.ok(mixedHit.some(row => row.siteId === DEAD_SEA_SITE_ID && row.template === 'abundance'));
   assert.ok(mixedHit.every(row => row.siteId === DEAD_SEA_SITE_ID && row.template === 'abundance'));
-  assert.ok(mixed.skipped.some(row => row.siteId === 'uae-taweelah' && row.reason === 'no-brine-assay'));
+  assert.ok(mixed.skipped.some(row => row.siteId === 'spain-almeria' && row.reason === 'no-brine-assay'));
   assert.equal(templateEligible(seawater, 'abundance').ok, false);
+  assert.equal(templateEligible(gulf, 'abundance').ok, true);
   assert.equal(templateEligible(brineSite(), 'coastal').ok, false);
+
+  const layers = searchAbundanceSites({
+    sites: [brineSite()],
+    templates: ['pvgis', 'water', 'land'],
+    sizeOpts: FAST,
+  });
+  assert.equal(layers.tried, 0);
+  assert.ok(layers.skipped.length >= 1);
+  assert.ok(layers.skipped.every(row => row.reason === 'map-layer-not-objective'));
+  assert.ok(layers.skipped.every(row => row.rightsScenario === RIGHTS_NONE));
 });
 
 test('a cheap test-fixture plant can still be cash-positive so ranking logic stays testable', () => {
@@ -214,6 +284,68 @@ test('ranking prefers higher tonnes among feasible, then sale count, then cash, 
     ['a-site:abundance', 'a-site:methanol', 'b-site:abundance', 'c-site:coastal', 'miss:methanol'],
   );
   assert.ok(ranked[0].tonnes > ranked[2].tonnes);
+});
+
+test('near-miss ranking prefers operating cash- slates over idle cash≈0', () => {
+  const idle = {
+    siteId: 'idle-coast',
+    template: 'coastal',
+    tonnes: 0,
+    totalPositiveSaleTonnes: 0,
+    positiveSaleCount: 0,
+    annualNetCash: 0,
+    feasible: false,
+    met: false,
+    selected: { family: 'fuel', rate: 0 },
+    slate: {},
+    products: [],
+  };
+  const operating = {
+    siteId: 'dead-sea-operating',
+    template: 'abundance',
+    tonnes: 0,
+    totalPositiveSaleTonnes: 0,
+    positiveSaleCount: 0,
+    annualNetCash: -50000,
+    feasible: false,
+    met: false,
+    selected: { family: 'abundance', scale: 1, slateMode: 'minerals-only' },
+    slate: { lithium: 12 },
+    products: [{ id: 'lithium', tonnesPerYear: 12, annualRevenue: 1, positive: true }],
+  };
+  const richer = {
+    siteId: 'atacama-operating',
+    template: 'abundance',
+    tonnes: 40,
+    totalPositiveSaleTonnes: 40,
+    positiveSaleCount: 3,
+    annualNetCash: -80000,
+    feasible: false,
+    met: false,
+    selected: { family: 'abundance', scale: 1 },
+    slate: { lithium: 40 },
+    products: [{ id: 'lithium', tonnesPerYear: 40, annualRevenue: 1, positive: true }],
+  };
+  assert.equal(isIdleCandidate(idle), true);
+  assert.equal(isIdleCandidate(operating), false);
+  assert.equal(isIdleCandidate(richer), false);
+  assert.ok(compareNearMisses(operating, idle) < 0);
+  assert.ok(compareNearMisses(idle, operating) > 0);
+  const ranked = [idle, operating, richer].slice().sort(compareNearMisses);
+  assert.deepEqual(ranked.map(row => row.siteId), [
+    'atacama-operating',
+    'dead-sea-operating',
+    'idle-coast',
+  ]);
+  const search = searchAbundanceSites({
+    sites: [brineSite()],
+    templates: ['abundance'],
+    sizeOpts: FAST,
+  });
+  assert.ok(search.nearMisses.every(row => !row.idle));
+  if (search.nearMisses.length) {
+    assert.ok(search.nearMisses[0].tonnes > 0 || Object.keys(search.nearMisses[0].slate || {}).length > 0 || search.nearMisses[0].annualNetCash < 0);
+  }
 });
 
 test('CLI prints JSON and exits 0 with Dead Sea in the default set', () => {

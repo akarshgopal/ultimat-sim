@@ -1601,10 +1601,30 @@ const ABUNDANCE_SCALES = [0.25, 0.5, 1, 1.5, 2];
 const FUEL_RATES = [0, 2, 5, 10, 15, 20];
 const ABUNDANCE_DOWNSTREAM = Object.freeze(['chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']);
 
+function operatingRevenue(candidate) {
+  const fromObjective = Number(candidate?.objective?.annualRevenue);
+  if (Number.isFinite(fromObjective) && fromObjective > 0) return fromObjective;
+  const products = candidate?.objective?.products || candidate?.products || [];
+  let revenue = 0;
+  for (const product of products) revenue += Number(product.annualRevenue) || 0;
+  if (revenue > 0) return revenue;
+  return Number(candidate?.economics?.annualRevenue) || 0;
+}
+
 function betterCashflowCandidate(left, right) {
   if (!left) return right;
   if (!right) return left;
   if (left.objective.met !== right.objective.met) return left.objective.met ? left : right;
+  if (left.objective.met) {
+    if (left.objective.positiveSaleCount !== right.objective.positiveSaleCount) {
+      return left.objective.positiveSaleCount > right.objective.positiveSaleCount ? left : right;
+    }
+    return left.objective.annualNetCash >= right.objective.annualNetCash ? left : right;
+  }
+  const revLeft = operatingRevenue(left);
+  const revRight = operatingRevenue(right);
+  if ((revLeft > 0) !== (revRight > 0)) return revLeft > 0 ? left : right;
+  if (revLeft !== revRight) return revLeft > revRight ? left : right;
   if (left.objective.positiveSaleCount !== right.objective.positiveSaleCount) {
     return left.objective.positiveSaleCount > right.objective.positiveSaleCount ? left : right;
   }

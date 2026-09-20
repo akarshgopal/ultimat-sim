@@ -34,7 +34,13 @@ function siteDeadSeaAbundance() {
   node('salt-feed').siteResource = 'salt';
   node('water').siteResource = 'freshwater';
   node('air').siteResource = 'air';
-  node('power').economics = { installedCapex: solarKWp * 1000, fixedOM: solarKWp * 20, assetLifeYears: 25 };
+  node('power').economics = {
+    installedCapex: solarKWp * 1000,
+    fixedOM: solarKWp * 20,
+    assetLifeYears: 25,
+    quality: 'screening',
+    note: 'Round $1000/kWp screening PV CAPEX, not NREL ATB or a vendor quote.',
+  };
   definition.site = {
     id: 'dead-sea-pvgis-2026-09-06',
     name: 'Dead Sea industrial shore',

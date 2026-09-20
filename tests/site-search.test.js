@@ -45,24 +45,30 @@ test('default search sites union Dead Sea hub with SITE_PRESETS and do not inven
   assert.deepEqual(PLANT_TEMPLATES, ['abundance', 'coastal', 'methanol']);
 });
 
-test('when Dead Sea abundance is in the search set, returns ≥1 cash-positive candidate', () => {
+test('when Dead Sea abundance is in the search set, returns a scored candidate under the capital-inclusive gate', () => {
   const result = searchAbundanceSites({
     sites: [brineSite()],
     templates: ['abundance'],
     topN: 10,
     sizeOpts: FAST,
   });
-  assert.ok(result.feasibleCount >= 1, `feasibleCount ${result.feasibleCount}`);
-  assert.ok(result.ranking.length >= 1);
-  const winner = result.ranking[0];
+  const winner = result.ranking[0] || result.nearMisses[0];
+  assert.ok(winner, 'search should return a ranking or near-miss row');
   assert.equal(winner.siteId, DEAD_SEA_SITE_ID);
   assert.equal(winner.template, 'abundance');
-  assert.equal(winner.met, true);
-  assert.equal(winner.feasible, true);
-  assert.ok(winner.annualNetCash > 0);
-  assert.ok(winner.tonnes > 0);
-  assert.ok(winner.positiveSaleCount >= 1);
-  assert.ok(Array.isArray(winner.products) && winner.products.length >= 1);
+  assert.ok(Number.isFinite(winner.annualNetCash));
+  assert.equal(typeof winner.met, 'boolean');
+  assert.equal(winner.feasible, winner.met);
+  if (winner.met) {
+    assert.ok(winner.annualNetCash > 0);
+    assert.ok(result.feasibleCount >= 1);
+  } else {
+    assert.ok(winner.annualNetCash <= 0);
+    assert.equal(result.feasibleCount, 0);
+    assert.ok(result.nearMisses.length >= 1);
+  }
+  assert.ok(winner.tonnes >= 0);
+  assert.ok(Array.isArray(winner.products));
   assert.ok(winner.notes.some(note => /screening assumes intake\/concession/i.test(note)));
   assert.match(SCREENING_NOTE, /not a bankable permit/i);
 });
@@ -78,8 +84,12 @@ test('ranking is stable: same input yields the same top siteId+template order', 
   const second = searchAbundanceSites(opts);
   const key = row => [row.siteId, row.template, row.tonnes, row.positiveSaleCount, row.annualNetCash];
   assert.deepEqual(first.ranking.map(key), second.ranking.map(key));
-  assert.equal(first.ranking[0].siteId, second.ranking[0].siteId);
-  assert.equal(first.ranking[0].template, second.ranking[0].template);
+  assert.deepEqual(first.nearMisses.map(key), second.nearMisses.map(key));
+  const firstLead = first.ranking[0] || first.nearMisses[0];
+  const secondLead = second.ranking[0] || second.nearMisses[0];
+  assert.ok(firstLead && secondLead);
+  assert.equal(firstLead.siteId, secondLead.siteId);
+  assert.equal(firstLead.template, secondLead.template);
   assert.equal(first.feasibleCount, second.feasibleCount);
 });
 
@@ -107,11 +117,48 @@ test('presets without brine assay do not get an invented feasible abundance plan
     templates: ['abundance'],
     sizeOpts: FAST,
   });
-  assert.ok(mixed.feasibleCount >= 1);
-  assert.ok(mixed.ranking.every(row => row.siteId === DEAD_SEA_SITE_ID && row.template === 'abundance'));
+  const mixedHit = mixed.ranking.concat(mixed.nearMisses);
+  assert.ok(mixedHit.some(row => row.siteId === DEAD_SEA_SITE_ID && row.template === 'abundance'));
+  assert.ok(mixedHit.every(row => row.siteId === DEAD_SEA_SITE_ID && row.template === 'abundance'));
   assert.ok(mixed.skipped.some(row => row.siteId === 'uae-taweelah' && row.reason === 'no-brine-assay'));
   assert.equal(templateEligible(seawater, 'abundance').ok, false);
   assert.equal(templateEligible(brineSite(), 'coastal').ok, false);
+});
+
+test('a cheap test-fixture plant can still be cash-positive so ranking logic stays testable', () => {
+  const { sizeForPositiveCashflow } = require('../engine/size');
+  const { createAbundanceCase } = require('../cases/abundance');
+  const definition = createAbundanceCase();
+  for (const node of definition.graph.nodes) {
+    if (!node.economics) continue;
+    if (node.economics.capexRate != null) node.economics.capexRate = 0.001;
+    if (node.economics.disposition === 'sale') node.economics.unitPrice = 50;
+  }
+  const sized = sizeForPositiveCashflow({ definition, scales: [1], rates: [0] });
+  assert.equal(sized.objective.met, true);
+  assert.ok(sized.objective.annualNetCash > 0);
+  const ranked = rankCandidates([
+    {
+      siteId: 'fixture-rich',
+      template: 'abundance',
+      tonnes: 1,
+      positiveSaleCount: sized.objective.positiveSaleCount,
+      annualNetCash: sized.objective.annualNetCash,
+      feasible: true,
+      met: true,
+    },
+    {
+      siteId: 'miss',
+      template: 'abundance',
+      tonnes: 999,
+      positiveSaleCount: 9,
+      annualNetCash: -1,
+      feasible: false,
+      met: false,
+    },
+  ]);
+  assert.equal(ranked[0].siteId, 'fixture-rich');
+  assert.equal(ranked[1].siteId, 'miss');
 });
 
 test('ranking prefers higher tonnes among feasible, then sale count, then cash, then ids', () => {
@@ -183,8 +230,9 @@ test('CLI prints JSON and exits 0 with Dead Sea in the default set', () => {
   });
   assert.equal(ran.status, 0, ran.stderr || ran.stdout);
   const payload = JSON.parse(ran.stdout);
-  assert.ok(payload.feasibleCount >= 1);
-  assert.equal(payload.ranking[0].siteId, DEAD_SEA_SITE_ID);
-  assert.equal(payload.ranking[0].template, 'abundance');
-  assert.ok(payload.ranking[0].annualNetCash > 0);
+  const winner = (payload.ranking && payload.ranking[0]) || (payload.nearMisses && payload.nearMisses[0]);
+  assert.ok(winner);
+  assert.equal(winner.siteId, DEAD_SEA_SITE_ID);
+  assert.equal(winner.template, 'abundance');
+  assert.ok(Number.isFinite(winner.annualNetCash));
 });

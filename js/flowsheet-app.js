@@ -1541,6 +1541,7 @@
       ['CAPEX', current.installedCapex, previous.installedCapex, formatMoney],
       ['Annual revenue', current.annualRevenue, previous.annualRevenue, formatMoney],
       ['Annual cost', current.annualOperatingCost, previous.annualOperatingCost, formatMoney],
+      ['Annualized CAPEX', current.annualizedCapex, previous.annualizedCapex, formatMoney],
       ['Annual net cash', current.annualNetCash, previous.annualNetCash, formatMoney],
       ['NPV', current.npv, previous.npv, formatMoney],
       ['IRR', current.irr, previous.irr, formatRate],
@@ -2684,10 +2685,10 @@
     const landQuality = classifyQuality({ kind: 'land' });
     if (honesty) {
       if (!graph.nodes.length) honesty.textContent = 'Load a scenario or build on Process.';
-      else if (gate.length) honesty.textContent = `Not bankable — screening. ${gate.join('; ')}.`;
+      else if (gate.length) honesty.textContent = `Not bankable — screening. ${gate.join('; ')}. Capital-inclusive screening cash is R − OPEX − annualized CAPEX.`;
       else if (currentEconomics && (moneyQuality === 'screening' || moneyQuality === 'assumption')) {
-        honesty.textContent = 'Screening — not bankable. Assumptions dominate cashflow and land.';
-      } else if (currentEconomics) honesty.textContent = 'Plant cashflow for the loaded graph.';
+        honesty.textContent = 'Screening — not bankable. Assumptions dominate capital-inclusive screening cash (R − OPEX − annualized CAPEX) and land.';
+      } else if (currentEconomics) honesty.textContent = 'Plant cashflow is capital-inclusive (R − OPEX − annualized CAPEX). NPV/IRR stay DCF.';
       else honesty.textContent = 'Graph incomplete.';
     }
 
@@ -3203,8 +3204,9 @@
     const showBankable = corridorCount > 0 || economicsAcknowledgment();
     metrics.innerHTML = metricRows([
       ['CAPEX', formatUncertainMoney(networkResult.installedCapex, moneyQuality), { quality: moneyQuality }],
+      ['Annualized CAPEX', formatUncertainMoney(networkResult.annualizedCapex, moneyQuality), { quality: moneyQuality }],
       ['NPV', showBankable ? formatUncertainMoney(networkResult.npv, moneyQuality) : 'hidden until acknowledged / corridors', { quality: moneyQuality }],
-      ['Net cash', formatUncertainMoney(networkResult.annualNetCash, moneyQuality), { quality: moneyQuality }],
+      ['Net cash (R − OPEX − ann. CAPEX)', formatUncertainMoney(networkResult.annualNetCash, moneyQuality), { quality: moneyQuality }],
       ['Revenue', formatUncertainMoney(networkResult.annualRevenue, moneyQuality), { quality: moneyQuality }],
       ['Cost', formatUncertainMoney(networkResult.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
       ['Freight', corridorCount ? `${formatUncertainMoney(networkResult.freight, freightQuality)}/year` : 'Not modeled (no corridors)', { quality: corridorCount ? freightQuality : 'assumed', references: FREIGHT_CITES }],
@@ -3370,7 +3372,12 @@
     const economics = current.economics || (current.economics = defaultEconomics(current));
     const field = (key, label, step = '0.01') => `<label>${label}<input name="economics" data-economics="${key}" type="number" min="0" step="${step}" value="${economics[key] ?? 0}"></label>`;
     if (kind === 'source') return `<fieldset><legend>Economics</legend>${economics.unitCost != null ? field('unitCost', 'Delivered input cost') : `${field('installedCapex', 'Installed CAPEX', '100')}${field('fixedOM', 'Fixed O&M / year', '100')}${field('variableOM', 'Variable cost / output unit')}`}<p class="status-meta">Native unit is kg, kWh, or consumable unit. Zero values explore the physical limit.</p></fieldset>`;
-    if (kind === 'converter') return `<fieldset><legend>Economics</legend>${field('installedCapex', 'Installed CAPEX', '100')}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${field('variableOM', 'Variable O&M / activity unit')}${field('assetLifeYears', 'Asset life (years)', '1')}</fieldset>`;
+    if (kind === 'converter') {
+      const capexField = economics.capexRate != null && economics.installedCapex == null
+        ? field('capexRate', 'CAPEX rate / capacity unit', '1')
+        : field('installedCapex', 'Installed CAPEX', '100');
+      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${field('variableOM', 'Variable O&M / activity unit')}${field('assetLifeYears', 'Asset life (years)', '1')}</fieldset>`;
+    }
     return `<fieldset><legend>Destination economics</legend><label>Disposition<select name="economics" data-economics="disposition">${['sale', 'disposal', 'vent', 'reinjection'].map(value => `<option value="${value}"${economics.disposition === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>${field('unitPrice', 'Sale price / unit')}${field('annualDemandLimit', 'Annual demand limit', '1')}${field('disposalCost', 'Disposal cost / unit')}</fieldset>`;
   }
 
@@ -3418,12 +3425,14 @@
         ? `Screening — not bankable (${gate.join('; ')}). Acknowledge below to reveal IRR/NPV.`
         : '';
     }
-    status.textContent = `${currentEconomics.periodDays} operating days/year · screening co-product cashflow; edit assumptions in the inspector.`;
+    status.textContent = `${currentEconomics.periodDays} operating days/year · screening co-product cashflow; annual net cash is capital-inclusive (R − OPEX − annualized CAPEX). NPV/IRR use year-0 CAPEX + operating cash. Edit assumptions in the inspector.`;
     const rows = [
       ['Installed CAPEX', formatUncertainMoney(currentEconomics.installedCapex, moneyQuality), { quality: moneyQuality }],
+      ['Annualized CAPEX', formatUncertainMoney(currentEconomics.annualizedCapex, moneyQuality), { quality: moneyQuality }],
       ['Annual revenue', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), { quality: moneyQuality }],
       ['Annual operating cost', formatUncertainMoney(currentEconomics.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
-      ['Annual net cash', formatUncertainMoney(currentEconomics.annualNetCash, moneyQuality), { quality: moneyQuality }],
+      ['Annual operating cash (R − OPEX)', formatUncertainMoney(currentEconomics.annualOperatingCash, moneyQuality), { quality: moneyQuality }],
+      ['Annual net cash (R − OPEX − ann. CAPEX)', formatUncertainMoney(currentEconomics.annualNetCash, moneyQuality), { quality: moneyQuality }],
     ];
     if (showBankable) {
       rows.push(['NPV', formatUncertainMoney(currentEconomics.npv, moneyQuality), { quality: moneyQuality }]);

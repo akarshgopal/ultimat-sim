@@ -1,11 +1,12 @@
 (function exposeMethanolCase(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/atacama-pacific-seawater.js') : root.AtacamaPacificSeawater
+    typeof require === 'function' ? require('../data/atacama-pacific-seawater.js') : root.AtacamaPacificSeawater,
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.MethanolCase = api;
-})(globalThis, (model, assay) => {
+})(globalThis, (model, assay, tea) => {
 const { SUBSTANCES, streamMassKg } = model;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
 // Frozen PVGIS-ERA5 response: data/pvgis-mejillones.json, retrieved 2026-09-14.
@@ -26,7 +27,7 @@ const EVIDENCE = [
   { label: 'Air: 422.45 ppm, 2024 global estimate; dry O₂/N₂ balance is simplified', url: 'https://essd.copernicus.org/articles/17/965/2025/' },
   { label: 'DAC: solid-sorbent route; heat, capture and makeup rates are screening assumptions (IEA 2022)', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
   { label: 'NASEM 2019 Negative Emissions Technologies — DAC heat-dominated (DOI)', url: 'https://doi.org/10.17226/25259' },
-  { label: 'Methanol: CO₂ + 3 H₂ → CH₃OH + H₂O; 0.5 kWh/kg synthesis/compression and $0.40/kg product price are screening, not plant quotes' },
+  { label: 'Methanol: CO₂ + 3 H₂ → CH₃OH + H₂O; 0.5 kWh/kg synthesis/compression is screening. Product $0.40/kg is a commodity MeOH band mid, not a plant quote.' },
 ];
 
 function seawaterFromAssay(pacificAssay, massKg) {
@@ -87,12 +88,12 @@ function createMethanolCase(month = 0) {
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
-        { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { unitCost: 0.001 } },
+        { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { ...tea.bindCost('seawater'), unitCost: 0.001 } },
         {
           id: 'electricity',
           unit: 'electricity-source',
           params: { stream: { kind: 'electricity', kWh: electricityKWh } },
-          economics: { installedCapex: solarKWp * 1000, fixedOM: solarKWp * 20, assetLifeYears: 25 },
+          economics: { installedCapex: solarKWp * 1000, fixedOM: solarKWp * 20, assetLifeYears: 25, quality: 'screening', note: 'Round $1000/kWp screening PV CAPEX, not NREL ATB or a vendor quote.' },
         },
         {
           id: 'heat',
@@ -118,14 +119,14 @@ function createMethanolCase(month = 0) {
             consumablesPerKgCO2: 0.02,
             wasteHeatT_C: 40,
           },
-          economics: { installedCapex: 16425, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 },
+          economics: { installedCapex: 16425, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20, quality: 'screening', note: tea.fuelsCapexNote.note, evidence: tea.fuelsCapexNote.evidence },
         },
         {
           id: 'swro',
           unit: 'swro',
           capacity: 10,
           params: { recovery: 0.45, secKWhPerM3: 3.5, feedDensityKgM3: FEED_DENSITY_KG_M3, productDensityKgM3: 1000, ionRejection: 1 },
-          economics: { installedCapex: 1000, fixedOMPercent: 3, variableOM: 0, assetLifeYears: 20 },
+          economics: { installedCapex: 1000, fixedOMPercent: 3, variableOM: 0, assetLifeYears: 20, quality: 'screening', note: tea.fuelsCapexNote.note, evidence: tea.fuelsCapexNote.evidence },
         },
         { id: 'electrical-bus', unit: 'electrical-bus' },
         {
@@ -133,14 +134,14 @@ function createMethanolCase(month = 0) {
           unit: 'electrolyzer',
           capacity: 100,
           params: { secKWhPerKgH2: 55 },
-          economics: { installedCapex: 21000, fixedOMPercent: 3, variableOM: 0.03, assetLifeYears: 10 },
+          economics: { installedCapex: 21000, fixedOMPercent: 3, variableOM: 0.03, assetLifeYears: 10, quality: 'screening', note: tea.fuelsCapexNote.note, evidence: tea.fuelsCapexNote.evidence },
         },
         {
           id: 'methanol',
           unit: 'methanol',
           capacity: 100,
           params: { electricityKWhPerKg: 0.5, wasteHeatKWhPerKg: 0.43, wasteHeatT_C: 250 },
-          economics: { installedCapex: 12000, fixedOMPercent: 3, variableOM: 0.02, assetLifeYears: 20 },
+          economics: { installedCapex: 12000, fixedOMPercent: 3, variableOM: 0.02, assetLifeYears: 20, quality: 'screening', note: tea.fuelsCapexNote.note, evidence: tea.fuelsCapexNote.evidence },
         },
         { id: 'depleted-air', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'waste-heat', unit: 'heat-sink', economics: { disposition: 'vent' } },
@@ -148,7 +149,7 @@ function createMethanolCase(month = 0) {
         { id: 'oxygen', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'water-reject', unit: 'material-sink', economics: { disposition: 'disposal', disposalCost: 0.001 } },
         { id: 'spent-media', unit: 'consumable-sink', economics: { disposition: 'disposal', disposalCost: 1 } },
-        { id: 'methanol-product', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.4, annualDemandLimit: 1e12 } },
+        { id: 'methanol-product', unit: 'material-sink', economics: { disposition: 'sale', annualDemandLimit: 1e12, ...tea.bindPriceFields('methanol') } },
         { id: 'process-water', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.001, annualDemandLimit: 1e12 } },
       ],
       edges: [

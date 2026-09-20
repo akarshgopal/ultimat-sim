@@ -9,7 +9,7 @@
   else root.FlowsheetNetwork = api;
 })(globalThis, (model, solver, economics, footprint) => {
 const { scaleStream, streamMassKg } = model;
-const { evaluateEconomics } = economics;
+const { evaluateEconomics, capitalRecoveryFactor } = economics;
 const { estimateFootprint, pvLandHa } = footprint;
 
 // Sea 0.012 $/t·km sits in the UNCTAD Trade-and-Transport Dataset multimodal transport-cost intensity band for developing-economy imports (~0.011 $/t·km) vs developed (~0.019 $/t·km). Screening order-of-magnitude for bulk corridors, not a voyage quote.
@@ -180,11 +180,16 @@ function evaluateNetwork(network = {}) {
   const plantRevenue = plants.reduce((sum, plant) => sum + plant.economics.annualRevenue, 0);
   const annualRevenue = plantRevenue - transferredOriginRevenue;
   const annualOperatingCost = plants.reduce((sum, plant) => sum + plant.economics.annualOperatingCost, 0) + freight;
-  const annualNetCash = annualRevenue - annualOperatingCost;
+  const annualOperatingCash = annualRevenue - annualOperatingCost;
   const projectLifeYears = Math.max(1, ...plants.map(plant => plant.economics.projectLifeYears || 20));
   const discountRate = plants[0]?.economics.discountRate ?? 0.08;
+  const crf = capitalRecoveryFactor
+    ? capitalRecoveryFactor(discountRate, projectLifeYears)
+    : (discountRate ? discountRate * (1 + discountRate) ** projectLifeYears / ((1 + discountRate) ** projectLifeYears - 1) : 1 / projectLifeYears);
+  const annualizedCapex = installedCapex * crf;
+  const annualNetCash = annualOperatingCash - annualizedCapex;
   const cashFlows = [-installedCapex];
-  for (let year = 1; year <= projectLifeYears; year += 1) cashFlows.push(annualNetCash);
+  for (let year = 1; year <= projectLifeYears; year += 1) cashFlows.push(annualOperatingCash);
   const npv = cashFlows.reduce((sum, cashFlow, year) => sum + cashFlow / (1 + discountRate) ** year, 0);
 
   return {
@@ -197,12 +202,17 @@ function evaluateNetwork(network = {}) {
     transferred,
     transferredOriginRevenue,
     installedCapex,
+    annualizedCapex,
     annualRevenue,
     annualOperatingCost,
+    annualOperatingCash,
     annualNetCash,
+    cashFlows,
     npv,
     projectLifeYears,
     discountRate,
+    gateCashFormula: 'annualNetCash = annualRevenue − annualOperatingCost − annualizedCapex (capital-inclusive screening gate; CRF on installedCapex)',
+    dcfFormula: 'NPV cashFlows: year 0 = −installedCapex; years 1..N = annualOperatingCash (R−OPEX−freight); annualizedCapex is not subtracted again',
   };
 }
 

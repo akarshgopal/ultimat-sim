@@ -159,7 +159,11 @@ test('fuels plus minerals network rolls up CH4, NH3, and money', () => {
   assert.ok(result.installedCapex > result.plants[0].economics.installedCapex);
   assert.equal(result.npv, result.npv);
   assert.ok(Number.isFinite(result.npv));
-  assert.ok(result.annualNetCash === result.annualRevenue - result.annualOperatingCost);
+  assert.ok(Number.isFinite(result.annualizedCapex) && result.annualizedCapex > 0);
+  assert.equal(result.annualOperatingCash, result.annualRevenue - result.annualOperatingCost);
+  assert.ok(Math.abs(result.annualNetCash - (result.annualRevenue - result.annualOperatingCost - result.annualizedCapex)) < 1e-6);
+  assert.equal(result.cashFlows[0], -result.installedCapex);
+  assert.equal(result.cashFlows[1], result.annualOperatingCash);
   assert.equal(result.corridors.length, 0);
 });
 

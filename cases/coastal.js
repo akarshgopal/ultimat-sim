@@ -68,7 +68,13 @@ function createCoastalCase(month = 0) {
   node('dac').unit = 'dac-solid';
   node('dac').params.consumablesPerKgCO2 = 0.02;
   node('consumables').params.stream = { kind: 'consumable', amount: 1, unit: 'kg/day', label: 'Amine sorbent makeup', chemicalId: 'amine-sorbent' };
-  node('electricity').economics = { installedCapex: solarKWp * 1000, fixedOM: solarKWp * 20, assetLifeYears: 25 };
+  node('electricity').economics = {
+    installedCapex: solarKWp * 1000,
+    fixedOM: solarKWp * 20,
+    assetLifeYears: 25,
+    quality: 'screening',
+    note: 'Round $1000/kWp screening PV CAPEX, not NREL ATB or a vendor quote.',
+  };
   definition.graph.nodes.push({ id: 'spent-media', unit: 'consumable-sink', economics: { disposition: 'disposal', disposalCost: 1 } });
   definition.graph.edges.push({ from: { node: 'dac', port: 'spentMedia' }, to: { node: 'spent-media', port: 'in' } });
   const assumed = 'Assumed accessible quantity; no local supply agreement verified';

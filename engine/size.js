@@ -1779,7 +1779,7 @@ function searchAbundanceCashflow(seed, opts) {
           best = {
             mode: 'positive-cashflow',
             error: error.message,
-            objective: { met: false, positiveSaleCount: 0, annualNetCash: -Infinity, formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash' },
+            objective: { met: false, positiveSaleCount: 0, annualNetCash: -Infinity, formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).' },
             selected: { family: 'abundance', slateMode, scale },
             warnings: [error.message],
           };
@@ -1922,7 +1922,7 @@ function sizeForPositiveCashflow(opts = {}) {
         best = {
           mode: 'positive-cashflow',
           error: error.message,
-          objective: { met: false, positiveSaleCount: 0, annualNetCash: -Infinity, formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash' },
+          objective: { met: false, positiveSaleCount: 0, annualNetCash: -Infinity, formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).' },
           warnings: [error.message],
         };
       }

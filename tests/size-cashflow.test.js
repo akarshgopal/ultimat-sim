@@ -44,18 +44,29 @@ test('scorePositiveCashflow counts sale products only when plant net cash is pos
   assert.ok(negative.products.every(product => product.positive === false));
 });
 
-test('sizeForPositiveCashflow expands the abundance slate while staying cash-positive', () => {
+test('sizeForPositiveCashflow scores abundance with a capital-inclusive cash gate', () => {
   const original = createAbundanceCase();
   const snapshot = JSON.stringify(original);
+  const baseline = evaluateEconomics(original, solveOperation(original));
+  assert.ok(baseline.annualizedCapex > 0, 'unsized abundance CAPEX must scale with capexRate × capacity');
+  assert.ok(Math.abs(baseline.annualNetCash - (baseline.annualRevenue - baseline.annualOperatingCost - baseline.annualizedCapex)) < 1e-6);
   const sized = sizeForPositiveCashflow({ caseOrBuilder: createAbundanceCase });
   assert.equal(JSON.stringify(original), snapshot);
   assert.equal(sized.mode, 'positive-cashflow');
-  assert.equal(sized.objective.met, true);
-  assert.ok(sized.objective.positiveSaleCount >= 2);
+  assert.ok(sized.selected);
   assert.equal(sized.objective.annualNetCash, sized.economics.annualNetCash);
-  assert.ok(sized.objective.annualNetCash > 0);
-  assert.equal(sized.selected.family, 'abundance');
-  assert.equal(sized.selected.slateMode, 'full');
+  const econ = sized.economics;
+  assert.ok(econ.annualizedCapex >= 0);
+  assert.ok(Math.abs(econ.annualOperatingCash - (econ.annualRevenue - econ.annualOperatingCost)) < 1e-6);
+  assert.ok(Math.abs(econ.annualNetCash - (econ.annualRevenue - econ.annualOperatingCost - econ.annualizedCapex)) < 1e-6);
+  assert.equal(typeof sized.objective.met, 'boolean');
+  if (sized.objective.met) {
+    assert.ok(sized.objective.annualNetCash > 0);
+    assert.ok(sized.objective.positiveSaleCount >= 1);
+  } else {
+    assert.ok(sized.objective.annualNetCash <= 0);
+    assert.ok((sized.warnings || []).some(warning => /no cash-positive/i.test(warning)));
+  }
   assertClosed(sized.solved);
   assert.ok(sized.candidatesTried >= 3);
 });

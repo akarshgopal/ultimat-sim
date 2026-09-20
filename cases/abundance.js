@@ -13,11 +13,12 @@
       'atacama-lithium-brine': root.AtacamaLithiumBrine,
       'lake-mackay-wa-brine': root.LakeMackayWaBrine,
       'great-salt-lake-brine': root.GreatSaltLakeBrine,
-    }
+    },
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.AbundanceCase = api;
-})(globalThis, (model, assays) => {
+})(globalThis, (model, assays, tea) => {
 const { SUBSTANCES, streamMassKg } = model;
 const MASS_KG_PER_DAY = 100000;
 const DEFAULT_ASSAY_ID = 'dead-sea-brine';
@@ -58,28 +59,32 @@ function createAbundanceCase(options = {}) {
   const powerKWh = streamMassKg(brine) * 0.05 + causticKg * 2.5 + bromineKg * 0.2 + nitrogenKg * 0.25 + ammoniaKg * 0.6 + 10;
   const outputs = ['lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'raffinate'];
 
+  const sale = id => (id === 'raffinate'
+    ? { disposition: 'reinjection' }
+    : tea.bindSale(id));
   return {
-    meta: { assayId },
+    meta: { assayId, tea: tea.abundanceEvidence() },
+    teaEvidence: tea.abundanceEvidence(),
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'brine', unit: 'material-source', sourcePreset: 'brine', params: { stream: brine }, economics: { unitCost: 0.0002 } },
-        { id: 'salt-feed', unit: 'material-source', sourcePreset: 'salt', params: { stream: material('NaCl', causticMol) }, economics: { unitCost: 0.08 } },
-        { id: 'water', unit: 'material-source', sourcePreset: 'water', params: { stream: material('H2O', causticMol, 'liquid') }, economics: { unitCost: 0.001 } },
+        { id: 'brine', unit: 'material-source', sourcePreset: 'brine', params: { stream: brine }, economics: tea.bindCost('brine') },
+        { id: 'salt-feed', unit: 'material-source', sourcePreset: 'salt', params: { stream: material('NaCl', causticMol) }, economics: tea.bindCost('salt-feed') },
+        { id: 'water', unit: 'material-source', sourcePreset: 'water', params: { stream: material('H2O', causticMol, 'liquid') }, economics: tea.bindCost('water') },
         { id: 'air', unit: 'material-source', sourcePreset: 'air', params: { stream: air }, economics: { unitCost: 0 } },
-        { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: powerKWh } }, economics: { unitCost: 0.03 } },
+        { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: powerKWh } }, economics: tea.bindCost('power') },
         { id: 'power-bus', unit: 'electrical-bus' },
-        { id: 'minerals', unit: 'brine-minerals', capacity: streamMassKg(brine), params: { electricityKWhPerKgBrine: 0.05, lithiumRecovery: 0.9, bromideRecovery, magnesiumRecovery: 0.5, potashRecovery: 0.7, gypsumRecovery: 0.7, saltRecovery: 0.5 }, economics: { installedCapex: 500000, fixedOMPercent: 4, variableOM: 0.01, assetLifeYears: 20 } },
-        { id: 'chlor-alkali', unit: 'chlor-alkali', capacity: causticKg, params: { electricityKWhPerKg: 2.5 }, economics: { installedCapex: 100000, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 } },
-        { id: 'bromine-recovery', unit: 'bromine-recovery', capacity: bromineKg, params: { electricityKWhPerKg: 0.2 }, economics: { installedCapex: 75000, fixedOMPercent: 4, variableOM: 0.03, assetLifeYears: 20 } },
-        { id: 'asu', unit: 'asu', capacity: nitrogenKg, params: { nitrogenRecovery: 0.98, oxygenRecovery: 0.95, electricityKWhPerKgN2: 0.25 }, economics: { installedCapex: 50000, fixedOMPercent: 4, variableOM: 0.02, assetLifeYears: 20 } },
-        { id: 'ammonia', unit: 'ammonia', capacity: ammoniaKg, params: { electricityKWhPerKg: 0.6 }, economics: { installedCapex: 100000, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 } },
-        ...outputs.map(id => ({ id, unit: 'material-sink', economics: { disposition: id === 'raffinate' ? 'reinjection' : 'sale', unitPrice: { lithium: 5, magnesium: 0.2, potash: 0.3, gypsum: 0.05, salt: 0.08 }[id] || 0, annualDemandLimit: 1e12 } })),
-        { id: 'caustic', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.5, annualDemandLimit: 1e12 } },
-        { id: 'bromine', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 3, annualDemandLimit: 1e12 } },
-        { id: 'recovered-salt', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.08, annualDemandLimit: 1e12 } },
-        { id: 'ammonia-product', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.6, annualDemandLimit: 1e12 } },
-        { id: 'oxygen', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.05, annualDemandLimit: 1e12 } },
+        { id: 'minerals', unit: 'brine-minerals', capacity: streamMassKg(brine), params: { electricityKWhPerKgBrine: 0.05, lithiumRecovery: 0.9, bromideRecovery, magnesiumRecovery: 0.5, potashRecovery: 0.7, gypsumRecovery: 0.7, saltRecovery: 0.5 }, economics: tea.bindCapex('minerals', { variableOM: 0.01 }) },
+        { id: 'chlor-alkali', unit: 'chlor-alkali', capacity: causticKg, params: { electricityKWhPerKg: 2.5 }, economics: tea.bindCapex('chlor-alkali', { variableOM: 0.05 }) },
+        { id: 'bromine-recovery', unit: 'bromine-recovery', capacity: bromineKg, params: { electricityKWhPerKg: 0.2 }, economics: tea.bindCapex('bromine-recovery', { variableOM: 0.03 }) },
+        { id: 'asu', unit: 'asu', capacity: nitrogenKg, params: { nitrogenRecovery: 0.98, oxygenRecovery: 0.95, electricityKWhPerKgN2: 0.25 }, economics: tea.bindCapex('asu', { variableOM: 0.02 }) },
+        { id: 'ammonia', unit: 'ammonia', capacity: ammoniaKg, params: { electricityKWhPerKg: 0.6 }, economics: tea.bindCapex('ammonia', { variableOM: 0.05 }) },
+        ...outputs.map(id => ({ id, unit: 'material-sink', economics: sale(id) })),
+        { id: 'caustic', unit: 'material-sink', economics: tea.bindSale('caustic') },
+        { id: 'bromine', unit: 'material-sink', economics: tea.bindSale('bromine') },
+        { id: 'recovered-salt', unit: 'material-sink', economics: tea.bindSale('salt') },
+        { id: 'ammonia-product', unit: 'material-sink', economics: tea.bindSale('ammonia') },
+        { id: 'oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen') },
         { id: 'offgas', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [
@@ -109,5 +114,5 @@ function createAbundanceCase(options = {}) {
   };
 }
 
-return { createAbundanceCase };
+return { createAbundanceCase, TEA: tea };
 });

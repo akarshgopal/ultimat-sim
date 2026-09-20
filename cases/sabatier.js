@@ -1,9 +1,12 @@
 (function exposeSabatierCase(root, factory) {
   const commonJs = typeof module === 'object' && module.exports;
-  const api = factory(commonJs ? require('../engine/model') : root.FlowsheetModel);
+  const api = factory(
+    commonJs ? require('../engine/model') : root.FlowsheetModel,
+    commonJs ? require('../data/tea-screening.js') : root.TeaScreening
+  );
   if (commonJs) module.exports = api;
   else root.SabatierCase = api;
-})(globalThis, model => {
+})(globalThis, (model, tea) => {
 const { streamMassKg } = model;
 const H2O_KG_PER_KG_H2 = 18.01528 / 2.01588;
 const H2_KG_PER_KG_CH4 = 4 * 2.01588 / 16.04246;
@@ -133,12 +136,12 @@ function createSabatierCase(overrides = {}) {
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
-        { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { unitCost: 0.001 } },
+        { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { ...tea.bindCost('seawater'), unitCost: 0.001 } },
         {
           id: 'electricity',
           unit: 'electricity-source',
           params: { stream: { kind: 'electricity', kWh: electricityKWh } },
-          economics: { unitCost: 0.03 },
+          economics: { unitCost: 0.03, quality: 'screening', note: 'Industrial power screening $0.03/kWh; not a PPA.', evidence: tea.costs.power.evidence },
         },
         {
           id: 'heat',
@@ -152,29 +155,29 @@ function createSabatierCase(overrides = {}) {
           params: { stream: { kind: 'consumable', amount: 100, unit: 'kg/day', label: 'Sorbent makeup' } },
           economics: { unitCost: 2 },
         },
-        { id: 'dac', unit: 'dac', capacity: 100, params: params.dac, economics: { installedCapex: 16425, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20 } },
-        { id: 'swro', unit: 'swro', capacity: 10, params: params.swro, economics: { installedCapex: 1000, fixedOMPercent: 3, variableOM: 0, assetLifeYears: 20 } },
+        { id: 'dac', unit: 'dac', capacity: 100, params: params.dac, economics: { installedCapex: 16425, fixedOMPercent: 4, variableOM: 0.05, assetLifeYears: 20, quality: 'screening', note: tea.fuelsCapexNote.note, evidence: tea.fuelsCapexNote.evidence } },
+        { id: 'swro', unit: 'swro', capacity: 10, params: params.swro, economics: { installedCapex: 1000, fixedOMPercent: 3, variableOM: 0, assetLifeYears: 20, quality: 'screening', note: tea.fuelsCapexNote.note, evidence: tea.fuelsCapexNote.evidence } },
         { id: 'electrical-bus', unit: 'electrical-bus' },
         {
           id: 'electrolyzer',
           unit: 'electrolyzer',
           capacity: 100,
           params: params.electrolyzer,
-          economics: { installedCapex: 21000, fixedOMPercent: 3, variableOM: 0.03, assetLifeYears: 10 },
+          economics: { installedCapex: 21000, fixedOMPercent: 3, variableOM: 0.03, assetLifeYears: 10, quality: 'screening', note: tea.fuelsCapexNote.note, evidence: tea.fuelsCapexNote.evidence },
         },
         {
           id: 'sabatier',
           unit: 'sabatier',
           capacity: sabatierCapacity,
           params: params.sabatier,
-          economics: { installedCapex: 14000, fixedOMPercent: 3, variableOM: 0.02, assetLifeYears: 20 },
+          economics: { installedCapex: 14000, fixedOMPercent: 3, variableOM: 0.02, assetLifeYears: 20, quality: 'screening', note: tea.fuelsCapexNote.note, evidence: tea.fuelsCapexNote.evidence },
         },
         { id: 'depleted-air', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'waste-heat', unit: 'heat-sink', economics: { disposition: 'vent' } },
         { id: 'brine', unit: 'material-sink', economics: { disposition: 'disposal', disposalCost: 0.02 } },
         { id: 'oxygen', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'water-reject', unit: 'material-sink', economics: { disposition: 'disposal', disposalCost: 0.001 } },
-        { id: 'methane', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 1, annualDemandLimit: 1e12 } },
+        { id: 'methane', unit: 'material-sink', economics: { disposition: 'sale', annualDemandLimit: 1e12, ...tea.bindPriceFields('methane') } },
         ...(recycleWater
           ? [{ id: 'water-mixer', unit: 'material-mixer' }]
           : [{ id: 'sabatier-water', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 0.001, annualDemandLimit: 1e12 } }]),

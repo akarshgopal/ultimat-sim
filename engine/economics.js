@@ -86,14 +86,24 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
         deliveredAmount: sold,
         annualRevenue: revenue,
         annualDisposalCost: disposal,
+        unitPrice: number(economics.unitPrice, 0),
+        quality: economics.quality || null,
+        source: economics.source || null,
+        note: economics.note || null,
+        evidence: Array.isArray(economics.evidence) ? economics.evidence : null,
       });
     }
   }
 
-  const annualNetCash = annualRevenue - annualOperatingCost;
+  const annualOperatingCash = annualRevenue - annualOperatingCost;
+  const annualizedCapex = installedCapex * capitalRecoveryFactor(discountRate, projectLifeYears);
+  // Screening gate is capital-inclusive. NPV/IRR cashFlows stay DCF: year 0 is
+  // -installedCapex and years 1..N are operating cash (R−OPEX) plus replacements.
+  // Do not subtract annualizedCapex again inside cashFlows.
+  const annualNetCash = annualOperatingCash - annualizedCapex;
   const cashFlows = [-installedCapex];
   for (let year = 1; year <= projectLifeYears; year += 1) {
-    let cashFlow = annualNetCash;
+    let cashFlow = annualOperatingCash;
     for (const converter of converters) {
       if (converter.assetLifeYears < Infinity && year < projectLifeYears && year % converter.assetLifeYears === 0) {
         cashFlow -= converter.installedCapex;
@@ -104,7 +114,6 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
 
   const npv = netPresentValue(cashFlows, discountRate);
   const irr = approximateIRR(cashFlows);
-  const annualizedCapex = installedCapex * capitalRecoveryFactor(discountRate, projectLifeYears);
   const levelizedNumerator = annualizedCapex + annualOperatingCost;
   const delivered = sinks
     .filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0)
@@ -114,8 +123,10 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
     projectLifeYears,
     discountRate,
     installedCapex,
+    annualizedCapex,
     annualRevenue,
     annualOperatingCost,
+    annualOperatingCash,
     annualNetCash,
     breakdown,
     levelizedDeliveredCost: delivered.length === 1 ? delivered[0] : null,
@@ -123,6 +134,8 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
     npv,
     irr,
     sinks,
+    gateCashFormula: 'annualNetCash = annualRevenue − annualOperatingCost − annualizedCapex (capital-inclusive screening gate; CRF on installedCapex)',
+    dcfFormula: 'NPV/IRR cashFlows: year 0 = −installedCapex; years 1..N = annualOperatingCash (R−OPEX) plus replacements; annualizedCapex is not subtracted again',
   };
 }
 
@@ -202,26 +215,29 @@ function approximateIRR(cashFlows) {
 
 
 // Co-product cashflow score (post-solve dollars only).
-// Revenue-proportional OPEX: A_i = (R_i / R) * C when R > 0.
-// CM_i = R_i - A_i = R_i * (1 - C/R). So every active sale product is
-// positive-cash iff annualNetCash = R - C > 0. positiveSaleCount is then
-// the number of sale sinks with R_i > 0 when net cash > 0, else 0.
+// Gate cash is capital-inclusive: annualNetCash = R − C − annualizedCapex.
+// Revenue-proportional charge: A_i = (R_i / R) * (C + annualizedCapex) when R > 0.
+// CM_i = R_i - A_i, so every active sale product shares sign(R − C − annualizedCapex).
+// positiveSaleCount is the number of sale sinks with R_i > 0 when net cash > 0, else 0.
 function scorePositiveCashflow(economics = {}) {
   const sinks = Array.isArray(economics.sinks) ? economics.sinks : [];
   const annualOperatingCost = number(economics.annualOperatingCost, 0);
+  const annualizedCapex = number(economics.annualizedCapex, 0);
   const saleSinks = sinks.filter(sink => sink && sink.disposition === 'sale');
   const revenueTotal = saleSinks.reduce((sum, sink) => sum + number(sink.annualRevenue, 0), 0);
   const annualNetCash = economics.annualNetCash != null
     ? number(economics.annualNetCash, 0)
-    : revenueTotal - annualOperatingCost;
+    : revenueTotal - annualOperatingCost - annualizedCapex;
+  const chargedCost = annualOperatingCost + annualizedCapex;
   const products = saleSinks.map(sink => {
     const annualRevenue = number(sink.annualRevenue, 0);
-    const allocatedOpex = revenueTotal > 0 ? (annualRevenue / revenueTotal) * annualOperatingCost : 0;
+    const allocatedOpex = revenueTotal > 0 ? (annualRevenue / revenueTotal) * chargedCost : 0;
     const contributionMargin = annualRevenue - allocatedOpex;
     return {
       id: sink.id,
       annualRevenue,
       allocatedOpex,
+      allocatedCapex: revenueTotal > 0 ? (annualRevenue / revenueTotal) * annualizedCapex : 0,
       contributionMargin,
       positive: contributionMargin > 0,
       deliveredAmount: number(sink.deliveredAmount, 0),
@@ -232,15 +248,16 @@ function scorePositiveCashflow(economics = {}) {
   const positiveSaleCount = met ? active.length : 0;
   return {
     name: 'maximize-positive-sale-count',
-    formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. CM_i=R_i-(R_i/R)*C; sign(CM_i)=sign(R-C) when R_i>0.',
+    formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF). CM_i=R_i-(R_i/R)*(C+annualizedCapex); sign(CM_i)=sign(R-C-annualizedCapex) when R_i>0. NPV/IRR use year-0 CAPEX + operating cash (R−OPEX), not the annualized charge.',
     positiveSaleCount,
     annualNetCash,
     annualRevenue: revenueTotal,
     annualOperatingCost,
+    annualizedCapex,
     met,
     products,
   };
 }
 
-return { approximateIRR, evaluateEconomics, netPresentValue, scorePositiveCashflow };
+return { approximateIRR, capitalRecoveryFactor, evaluateEconomics, netPresentValue, scorePositiveCashflow };
 });

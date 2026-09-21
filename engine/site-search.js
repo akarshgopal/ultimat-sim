@@ -263,6 +263,13 @@ function templateEligible(site, template, rightsScenario) {
 
 function frozenSolarFor(site, template) {
   if (!site) return null;
+  const registered = pvgisSites?.frozenSolarFor?.(site, template);
+  if (registered) {
+    if ((site.id === 'spain-almeria' || site.id === 'almeria-pvgis-2026-09-05') && template === 'coastal') {
+      return { ...registered, keepHourly: true, nativeTemplate: 'coastal' };
+    }
+    return registered;
+  }
   if (site.id === 'spain-almeria' || site.id === 'almeria-pvgis-2026-09-05') {
     const monthly = coastal?.DAILY_PV?.slice?.() || null;
     return monthly ? {
@@ -297,8 +304,7 @@ function frozenSolarFor(site, template) {
       nativeTemplate: 'abundance',
     } : null;
   }
-  const extra = pvgisSites?.frozenSolarFor?.(site, template);
-  return extra || null;
+  return null;
 }
 
 function assumeScreeningBrine(definition) {

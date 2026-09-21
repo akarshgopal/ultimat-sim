@@ -117,7 +117,7 @@ test('new catalog presets are searchable: brine hubs abundance-eligible, desal c
   assert.equal(yanbu.hasBrineAssay, false);
   assert.equal(yanbu.seawaterAssayId, 'red-sea-seawater');
   assert.equal(templateEligible(yanbu, 'abundance').reason, 'no-brine-assay');
-  assert.equal(templateEligible(yanbu, 'coastal').reason, 'no-frozen-pvgis');
+  assert.equal(templateEligible(yanbu, 'coastal').ok, true);
   assert.equal(yanbu.rightsHints.seawaterIntake.status, 'assumed');
 });
 
@@ -272,6 +272,7 @@ test('presets without brine assay do not get an invented feasible abundance plan
 });
 
 test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack one', () => {
+  const pvgisSites = require('../data/pvgis-sites.js');
   const duqm = defaultSearchSites().find(site => site.id === 'oman-duqm');
   const mundra = defaultSearchSites().find(site => site.id === 'india-mundra');
   const walvis = defaultSearchSites().find(site => site.id === 'namibia-walvis-bay');
@@ -293,6 +294,9 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
     ['au-port-hedland', 'data/pvgis-port-hedland.json', 1779.01, -20.31, 118.576],
     ['morocco-agadir', 'data/pvgis-agadir.json', 1769.7, 30.427, -9.598],
     ['egypt-ain-sokhna', 'data/pvgis-ain-sokhna.json', 1817.08, 29.648, 32.356],
+    ['saudi-yanbu', 'data/pvgis-yanbu.json', 1836.01, 24.089, 38.064],
+    ['au-kwinana', 'data/pvgis-kwinana.json', 1200.43, -32.232, 115.77],
+    ['morocco-dakhla', 'data/pvgis-dakhla.json', 2001.69, 23.714, -15.937],
   ];
 
   for (const [id, file, eY, lat, lon] of frozenCoasts) {
@@ -329,34 +333,87 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
   }
 
   assert.equal(yanbu.hasSeawaterAssay, true);
-  assert.equal(frozenSolarFor(yanbu, 'coastal'), null);
-  assert.equal(frozenSolarFor(yanbu, 'methanol'), null);
-  assert.equal(templateEligible(yanbu, 'coastal').reason, 'no-frozen-pvgis');
-  assert.equal(templateEligible(yanbu, 'methanol').reason, 'no-frozen-pvgis');
-  const yanbuEval = evaluateCandidate(yanbu, 'coastal', FAST);
-  assert.equal(yanbuEval.status, 'skipped');
-  assert.equal(yanbuEval.reason, 'no-frozen-pvgis');
+  assert.ok(frozenSolarFor(yanbu, 'coastal'));
+  assert.ok(frozenSolarFor(yanbu, 'methanol'));
+  assert.equal(templateEligible(yanbu, 'coastal').ok, true);
+  assert.equal(templateEligible(yanbu, 'methanol').ok, true);
+
+  const unfrozen = {
+    id: 'no-pvgis-coast',
+    name: 'Unfrozen screening coast',
+    hasSeawaterAssay: true,
+    seawaterAssayId: 'red-sea-seawater',
+    assayId: 'red-sea-seawater',
+    assayKind: 'seawater',
+  };
+  assert.equal(frozenSolarFor(unfrozen, 'coastal'), null);
+  assert.equal(frozenSolarFor(unfrozen, 'methanol'), null);
+  assert.equal(templateEligible(unfrozen, 'coastal').reason, 'no-frozen-pvgis');
+  assert.equal(templateEligible(unfrozen, 'methanol').reason, 'no-frozen-pvgis');
+  const unfrozenEval = evaluateCandidate(unfrozen, 'coastal', FAST);
+  assert.equal(unfrozenEval.status, 'skipped');
+  assert.equal(unfrozenEval.reason, 'no-frozen-pvgis');
 
   assert.equal(duqm.assayId, 'arabian-sea-seawater');
   assert.equal(mundra.assayId, 'gulf-of-kutch-seawater');
   assert.equal(walvis.assayId, 'benguela-atlantic-seawater');
+  assert.ok(pvgisSites.BY_SITE_ID['chile-mejillones']);
+  assert.ok(pvgisSites.BY_SITE_ID['mejillones-pvgis-2026-09-14']);
+  assert.ok(pvgisSites.BY_SITE_ID['spain-almeria']);
+  assert.ok(pvgisSites.BY_SITE_ID['almeria-pvgis-2026-09-05']);
+  assert.ok(pvgisSites.BY_SITE_ID['dead-sea-pvgis-2026-09-06']);
+  assert.equal(require('../data/pvgis-mejillones.json').meta.retrieved, '2026-09-14');
+  assert.equal(require('../data/pvgis-almeria.json').meta.retrieved, '2026-09-05');
+  assert.equal(require('../data/pvgis-dead-sea.json').meta.retrieved, '2026-09-06');
   assert.ok(frozenSolarFor(almeria, 'coastal'));
+  assert.equal(frozenSolarFor(almeria, 'coastal').keepHourly, true);
+  assert.equal(frozenSolarFor(almeria, 'coastal').retrieved, '2026-09-05');
   assert.ok(frozenSolarFor(mejillones, 'methanol'));
+  assert.equal(frozenSolarFor(mejillones, 'methanol').retrieved, '2026-09-14');
+  assert.ok(frozenSolarFor({ id: 'almeria-pvgis-2026-09-05' }, 'coastal'));
+  assert.ok(frozenSolarFor({ id: 'mejillones-pvgis-2026-09-14' }, 'methanol'));
   assert.equal(templateEligible(almeria, 'coastal').ok, true);
   assert.equal(templateEligible(mejillones, 'methanol').ok, true);
   assert.equal(templateEligible(almeria, 'abundance').ok, false);
   assert.ok(frozenSolarFor(brineSite(), 'abundance'));
+  assert.equal(frozenSolarFor(brineSite(), 'abundance').retrieved, '2026-09-06');
   assert.equal(templateEligible(brineSite(), 'abundance').ok, true);
+
+  const inlandHubs = [
+    ['au-lake-mackay', 'data/pvgis-lake-mackay.json', 1369.45, -22.5, 128.5],
+    ['us-great-salt-lake', 'data/pvgis-great-salt-lake.json', 1729.31, 41.15, -112.55],
+    ['chile-salar-de-atacama', 'data/pvgis-salar-de-atacama.json', 1628.15, -23.5, -68.25],
+  ];
+  for (const [id, file, eY, lat, lon] of inlandHubs) {
+    const site = defaultSearchSites().find(row => row.id === id);
+    assert.ok(site, id);
+    assert.equal(site.hasBrineAssay, true, id);
+    const pvgis = require(path.join(__dirname, '..', file));
+    assert.equal(pvgis.outputs.totals.fixed.E_y, eY, id);
+    assert.equal(pvgis.inputs.location.latitude, lat, id);
+    assert.equal(pvgis.inputs.location.longitude, lon, id);
+    assert.equal(pvgis.inputs.meteo_data.radiation_db, 'PVGIS-ERA5', id);
+    assert.equal(pvgis.meta.retrieved, '2026-09-21', id);
+    const solar = frozenSolarFor(site, 'abundance');
+    assert.ok(solar, id);
+    assert.equal(solar.retrieved, '2026-09-21', id);
+    assert.match(solar.source, /PVGIS-ERA5/, id);
+    assert.equal(solar.dailyPVKWhPerKWp, eY / 365, id);
+    assert.equal(templateEligible(site, 'abundance').ok, true, id);
+    const evaluated = evaluateCandidate(site, 'abundance', FAST);
+    assert.equal(evaluated.status, 'ok', id);
+    assert.ok(!evaluated.notes.some(note => /No frozen PVGIS/i.test(note)), id);
+  }
 
   const searched = searchAbundanceSites({
     sites: [duqm, mundra, walvis, taweelah, yanbu],
     templates: ['coastal', 'methanol'],
     sizeOpts: FAST,
   });
-  assert.equal(searched.tried, 8);
-  assert.equal(searched.skippedCount, 2);
-  assert.ok(searched.skipped.every(row => row.siteId === 'saudi-yanbu' && row.reason === 'no-frozen-pvgis'));
-  assert.ok(!searched.skipped.some(row => ['oman-duqm', 'india-mundra', 'namibia-walvis-bay', 'uae-taweelah'].includes(row.siteId)));
+  assert.equal(searched.tried, 10);
+  assert.equal(searched.skippedCount, 0);
+  assert.ok(!searched.skipped.some(row => row.reason === 'no-frozen-pvgis'));
+  assert.ok(!searched.skipped.some(row => ['oman-duqm', 'india-mundra', 'namibia-walvis-bay', 'uae-taweelah', 'saudi-yanbu'].includes(row.siteId)));
 });
 
 test('a cheap test-fixture plant can still be cash-positive so ranking logic stays testable', () => {

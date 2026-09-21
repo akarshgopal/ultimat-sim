@@ -7,12 +7,14 @@
       'atacama-lithium-brine': require('../data/atacama-lithium-brine.js'),
       'lake-mackay-wa-brine': require('../data/lake-mackay-wa-brine.js'),
       'great-salt-lake-brine': require('../data/great-salt-lake-brine.js'),
+      'salton-sea-brine': require('../data/salton-sea-brine.js'),
     } : {
       'dead-sea-brine': root.DeadSeaBrine,
       'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
       'atacama-lithium-brine': root.AtacamaLithiumBrine,
       'lake-mackay-wa-brine': root.LakeMackayWaBrine,
       'great-salt-lake-brine': root.GreatSaltLakeBrine,
+      'salton-sea-brine': root.SaltonSeaBrine,
     },
     typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
   );

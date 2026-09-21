@@ -14,6 +14,7 @@ const REQUIRED_IDS = [
   'india-mundra',
   'texas-corpus-christi',
   'us-great-salt-lake',
+  'us-salton-sea',
   'egypt-ain-sokhna',
   'chile-mejillones',
   'chile-salar-de-atacama',
@@ -109,9 +110,22 @@ test('catalog expansion wires GSL inland, Atacama salar screening, and Gulf/Red 
   assert.equal(ras.kind, 'industrial-coast');
   assert.equal(ras.region, 'Gulf');
   assert.equal(ras.assayId, 'persian-gulf-seawater');
-  assert.equal(ras.brineAssayId, undefined);
+  assert.equal(ras.brineAssayId, 'persian-gulf-sabkha-brine');
   assert.equal(ras.rightsHints.seawaterIntake.status, 'assumed');
+  assert.match(ras.rightsHints.brineConcession.note, /not a mineral concession/i);
   assert.match(ras.notes, /not a Ras Al-Khair reject sample/i);
+
+  const salton = byId.get('us-salton-sea');
+  assert.equal(salton.kind, 'brine-hub');
+  assert.equal(salton.region, 'US West / California');
+  assert.equal(salton.latitude, 33.16);
+  assert.equal(salton.longitude, -115.62);
+  assert.equal(salton.brineAssayId, 'salton-sea-brine');
+  assert.equal(salton.assayId, undefined);
+  assert.ok(salton.evidence.some(item => /doi\.org\/10\.3390\/en14206805/.test(item.url)));
+  assert.ok(salton.evidence.some(item => /doi\.org\/10\.2172\/1782801/.test(item.url)));
+  assert.match(salton.notes, /not a mineral concession/i);
+  assert.match(salton.notes, /Not Texas Gulf seawater/i);
 
   const yanbu = byId.get('saudi-yanbu');
   assert.equal(yanbu.kind, 'industrial-coast');

@@ -17,6 +17,7 @@ test('demandByRegion maps preset.region strings and chile lithium ceiling ≠ me
   assert.equal(tea.resolveDemandRegion('Europe'), 'europe');
   assert.equal(tea.resolveDemandRegion('India'), 'india');
   assert.equal(tea.resolveDemandRegion('Texas/US Gulf'), 'texas');
+  assert.equal(tea.resolveDemandRegion('US West / California'), 'texas');
   assert.equal(tea.resolveDemandRegion('Southern Africa'), 'southern-africa');
   assert.equal(tea.resolveDemandRegion('unknown-basin'), 'default');
 

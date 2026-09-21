@@ -55,7 +55,7 @@ const DEMAND_REGION_LABELS = {
   australia: 'Australia screening offtake. Minerals inherit me-levant; USGS Australia lithium is hard-rock spodumene, not a brine offtake contract.',
   europe: 'Europe screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
   india: 'India screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
-  texas: 'Texas / US Gulf screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
+  texas: 'Texas / US Gulf screening offtake. US West / California (Imperial Valley geothermal) inherits this US table. Minerals inherit me-levant. Not a plant offtake contract.',
   'southern-africa': 'Southern Africa screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
   default: 'Default screening offtake (inherits Dead Sea / Middle East tables) for unmapped site.region. Not a plant offtake contract.',
 };
@@ -71,6 +71,7 @@ const REGION_STRING_TO_ID = {
   Australia: 'australia',
   India: 'india',
   'Texas/US Gulf': 'texas',
+  'US West / California': 'texas',
   'US West / Utah': 'default',
   'North Africa': 'default',
   'Southern Africa': 'southern-africa',

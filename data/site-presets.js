@@ -49,12 +49,13 @@
   Object.freeze({
     id: 'saudi-ras-al-khair',
     assayId: 'persian-gulf-seawater',
+    brineAssayId: 'persian-gulf-sabkha-brine',
     name: 'Ras Al-Khair, Eastern Province, Saudi Arabia',
     region: 'Gulf',
     latitude: 27.534,
     longitude: 49.171,
     kind: 'industrial-coast',
-    notes: 'Saudi Gulf industrial and SWCC desalination coast at Ras Al-Khair. Location preset only — not a SWCC connection, intake permit, or offtake. Persian Gulf seawater assay is basin-average screening, not a Ras Al-Khair reject sample. Live PVGIS on select.',
+    notes: 'Saudi Gulf industrial and SWCC desalination coast at Ras Al-Khair. Location preset only — not a SWCC connection, intake permit, or offtake. Persian Gulf seawater assay is basin-average screening, not a Ras Al-Khair reject sample. Geography-matched Abu Dhabi sabkha process-brine assay is Gulf regional screening, not a Ras Al-Khair concession sample. Live PVGIS on select.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Wikipedia: Ras Al-Khair', url: 'https://en.wikipedia.org/wiki/Ras_Al-Khair' }),
       Object.freeze({ label: 'OpenStreetMap: Ras Al-Khair industrial/desal coast', url: 'https://www.openstreetmap.org/#map=12/27.534/49.171' }),
@@ -64,7 +65,7 @@
       freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'Desalination capacity on this coast is not a freshwater right for this plant' }),
       seawaterIntake: Object.freeze({ kind: 'intake', status: 'assumed', authorize: true, note: 'Assumed Gulf seawater access for screening; no Ras Al-Khair intake permit on file' }),
       seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'No Gulf outfall permit verified' }),
-      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'No brine or mineral concession verified; desal-reject screening is not a concession' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Gulf sabkha process-brine assay (Abu Dhabi coastal aquifer means) is not a mineral concession' }),
     }),
   }),
   Object.freeze({
@@ -277,6 +278,29 @@
       seawaterIntake: Object.freeze({ kind: 'intake', status: 'unverified', authorize: false, note: 'Inland brine hub; no seawater intake' }),
       seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'Inland brine hub; no seawater outfall' }),
       brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Great Salt Lake process-brine assay is not a mineral concession' }),
+    }),
+  }),
+  Object.freeze({
+    id: 'us-salton-sea',
+    brineAssayId: 'salton-sea-brine',
+    name: 'Salton Sea geothermal field, Imperial Valley, California, USA',
+    region: 'US West / California',
+    latitude: 33.16,
+    longitude: -115.62,
+    kind: 'brine-hub',
+    notes: 'Salton Sea Known Geothermal Resource Area (Imperial Valley, CA). Location preset only — Stringfellow & Dobson 2021 Table 2 post-flash SSGF literature-mean assay is not a mineral concession, Controlled Thermal Resources lease, or EnergySource right. Not Texas Gulf seawater. Live PVGIS on select.',
+    evidence: Object.freeze([
+      Object.freeze({ label: 'Stringfellow & Dobson 2021, Energies Table 2: Salton Sea post-flash geothermal brine literature-mean majors (DOI)', url: 'https://doi.org/10.3390/en14206805' }),
+      Object.freeze({ label: 'NREL TEA lithium-from-geothermal-brines (OSTI 1782801) Table 1 SSGF production fluids (DOI)', url: 'https://doi.org/10.2172/1782801' }),
+      Object.freeze({ label: 'Wikipedia: Salton Sea Geothermal Field (context, not a concession)', url: 'https://en.wikipedia.org/wiki/Salton_Sea_Geothermal_Field' }),
+      Object.freeze({ label: 'OpenStreetMap: Salton Sea geothermal field, Imperial Valley', url: 'https://www.openstreetmap.org/#map=11/33.16/-115.62' }),
+    ]),
+    rightsHints: Object.freeze({
+      gridImport: Object.freeze({ kind: 'grid', status: 'unverified', authorize: false, note: 'No grid interconnection verified at this inland geothermal brine hub' }),
+      freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'No freshwater right verified' }),
+      seawaterIntake: Object.freeze({ kind: 'intake', status: 'unverified', authorize: false, note: 'Inland brine hub; no seawater intake' }),
+      seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'Inland brine hub; no seawater outfall' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Salton Sea geothermal process-brine assay is not a mineral concession' }),
     }),
   }),
   Object.freeze({

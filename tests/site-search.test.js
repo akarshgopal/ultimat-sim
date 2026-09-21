@@ -103,13 +103,27 @@ test('new catalog presets are searchable: brine hubs abundance-eligible, desal c
   const ras = searchSite('saudi-ras-al-khair');
   assert.ok(ras, 'saudi-ras-al-khair');
   assert.equal(ras.hasSeawaterAssay, true);
-  assert.equal(ras.hasBrineAssay, false);
+  assert.equal(ras.hasBrineAssay, true);
   assert.equal(ras.seawaterAssayId, 'persian-gulf-seawater');
-  assert.equal(ras.assayKind, 'seawater');
-  assert.equal(templateEligible(ras, 'abundance').ok, false);
-  assert.equal(templateEligible(ras, 'abundance').reason, 'no-brine-assay');
+  assert.equal(ras.brineAssayId, 'persian-gulf-sabkha-brine');
+  assert.equal(ras.assayKind, 'brine');
+  assert.equal(ras.assayId, 'persian-gulf-sabkha-brine');
+  assert.equal(templateEligible(ras, 'abundance').ok, true);
   assert.equal(templateEligible(ras, 'coastal').ok, true);
   assert.equal(ras.rightsHints.seawaterIntake.status, 'assumed');
+
+  const salton = searchSite('us-salton-sea');
+  assert.ok(salton, 'us-salton-sea');
+  assert.equal(salton.hasBrineAssay, true);
+  assert.equal(salton.hasSeawaterAssay, false);
+  assert.equal(salton.assayKind, 'brine');
+  assert.equal(salton.assayId, 'salton-sea-brine');
+  assert.equal(salton.brineAssayId, 'salton-sea-brine');
+  assert.equal(salton.kind, 'brine-hub');
+  assert.equal(salton.region, 'US West / California');
+  assert.equal(templateEligible(salton, 'abundance').ok, true);
+  assert.equal(templateEligible(salton, 'coastal').ok, false);
+  assert.equal(templateEligible(salton, 'coastal').reason, 'no-seawater-assay');
 
   const yanbu = searchSite('saudi-yanbu');
   assert.ok(yanbu, 'saudi-yanbu');
@@ -171,6 +185,15 @@ test('site-search plants bind regional TEA when site.region is set', () => {
   const methane = coastal.graph.nodes.find(node => node.id === 'methane');
   assert.equal(coastal.site.region, 'Europe');
   assert.equal(methane.economics.demandRegionId, 'europe');
+
+  const salton = searchSite('us-salton-sea');
+  const saltonPlant = buildAbundancePlant(salton);
+  assert.equal(saltonPlant.meta.assayId, 'salton-sea-brine');
+  assert.equal(saltonPlant.meta.demandRegionId, 'texas');
+  const saltonLi = saltonPlant.graph.nodes.find(node => node.id === 'lithium');
+  assert.equal(saltonLi.economics.demandRegionId, 'texas');
+  const saltonBrine = saltonPlant.graph.nodes.find(node => node.id === 'brine');
+  assert.ok(saltonBrine.params.stream.mol['Li+'] > 0);
 });
 
 test('buildAbundancePlant uses the site brine assay, not a Dead Sea clone, for Mejillones/Atacama', () => {

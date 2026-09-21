@@ -444,6 +444,49 @@ function uniqueSorted(values) {
   return [...new Set(values.filter(value => Number.isFinite(value)))].sort((left, right) => left - right);
 }
 
+function sameNumber(left, right) {
+  return Math.abs(Number(left) - Number(right)) < 1e-9;
+}
+
+function midPriceOf(bounds) {
+  if (Number.isFinite(Number(bounds?.priceMid))) return Number(bounds.priceMid);
+  const min = Number(bounds?.priceMin);
+  const max = Number(bounds?.priceMax);
+  if (Number.isFinite(min) && Number.isFinite(max)) return (min + max) / 2;
+  return Number.isFinite(min) ? min : null;
+}
+
+function summarizeTrial(trial) {
+  if (!trial) return null;
+  return {
+    price: trial.price,
+    capexFactor: trial.capexFactor,
+    rate: trial.rate,
+    annualNetCash: trial.annualNetCash,
+    positiveSaleCount: trial.positiveSaleCount,
+    met: Boolean(trial.met),
+  };
+}
+
+function pickBestTrial(left, right) {
+  if (!left) return right;
+  if (!right) return left;
+  if (left.met !== right.met) return left.met ? left : right;
+  return right.annualNetCash > left.annualNetCash ? right : left;
+}
+
+function pickMidTrial(trials, bounds) {
+  const price = midPriceOf(bounds);
+  if (!Number.isFinite(price)) return null;
+  let mid = null;
+  for (const trial of trials) {
+    if (sameNumber(trial.price, price) && sameNumber(trial.capexFactor, 1)) {
+      mid = pickBestTrial(mid, trial);
+    }
+  }
+  return mid;
+}
+
 function scorePriceCapex({ definition, solved, sink, price, capexFactor }) {
   if (!evaluateEconomics || !scorePositiveCashflow) {
     throw new Error('probeFuelCash needs FlowsheetEconomics');
@@ -475,16 +518,19 @@ function formatMoney(value) {
 // bands. Economics only — dollars never re-enter the physics solver. Optional
 // `rates` re-sizes each rate with sizeToProduct before the grid (true size ×
 // price × CAPEX; slower). Default is the given sized plant.
+// Rank gate is mid-band: tea-screening mid price × CAPEX factor 1.0. Edge
+// trials (e.g. capexFactor=0.05) stay diagnostic — they do not set `met`.
 function probeFuelCash(opts = {}) {
   const product = normalizeProduct(opts.product);
   const bounds = fuelScreeningBounds(product);
   const caseOrBuilder = opts.definition ?? opts.caseOrBuilder;
   if (!caseOrBuilder) throw new Error('probeFuelCash needs a case definition or builder');
   const seedSnapshot = typeof caseOrBuilder === 'function' ? null : JSON.stringify(caseOrBuilder);
-  const prices = uniqueSorted([bounds.priceMin, bounds.priceMid, bounds.priceMax]);
+  const midPrice = midPriceOf(bounds);
+  const prices = uniqueSorted([bounds.priceMin, midPrice, bounds.priceMax]);
   const capexFactors = uniqueSorted(
     opts.capexFactors && opts.capexFactors.length
-      ? opts.capexFactors
+      ? [...opts.capexFactors, 1]
       : [bounds.capexMin, 1, bounds.capexMax]
   );
   const rates = (opts.rates || []).map(Number).filter(rate => rate > 0);
@@ -530,13 +576,20 @@ function probeFuelCash(opts = {}) {
     throw new Error('probeFuelCash found no sized fuel plant to probe');
   }
 
-  let best = null;
+  const trials = [];
   const curve = [];
   for (const seed of seeds) {
     const sink = findProductSink(seed.definition, product);
     if (!sink) throw new Error(`probeFuelCash needs a ${product} sale sink`);
-    for (const price of prices) {
-      for (const capexFactor of capexFactors) {
+    // Mid-band first (rank gate), then the rest of the screening grid.
+    const orderedCapex = uniqueSorted(capexFactors).sort((left, right) => (
+      sameNumber(left, 1) === sameNumber(right, 1) ? left - right : (sameNumber(left, 1) ? -1 : 1)
+    ));
+    const orderedPrices = uniqueSorted(prices).sort((left, right) => (
+      sameNumber(left, midPrice) === sameNumber(right, midPrice) ? left - right : (sameNumber(left, midPrice) ? -1 : 1)
+    ));
+    for (const price of orderedPrices) {
+      for (const capexFactor of orderedCapex) {
         const scored = scorePriceCapex({
           definition: seed.definition,
           solved: seed.solved,
@@ -549,6 +602,7 @@ function probeFuelCash(opts = {}) {
           rate: seed.rate,
           selected: seed.selected,
         };
+        trials.push(trial);
         curve.push({
           rate: seed.rate,
           price,
@@ -557,12 +611,14 @@ function probeFuelCash(opts = {}) {
           positiveSaleCount: trial.positiveSaleCount,
           met: trial.met,
         });
-        if (!best) best = trial;
-        else if (trial.met !== best.met) best = trial.met ? trial : best;
-        else if (trial.annualNetCash > best.annualNetCash) best = trial;
       }
     }
   }
+
+  const best = trials.reduce((lead, trial) => pickBestTrial(lead, trial), null);
+  const mid = pickMidTrial(trials, bounds);
+  const midMet = Boolean(mid?.met);
+  const ranked = midMet ? mid : null;
 
   const diagnosticSeed = (best && seeds.find(seed => seed.rate === best.rate)) || seeds[0];
   const priceSweep = findFuelBreakEven({
@@ -583,11 +639,17 @@ function probeFuelCash(opts = {}) {
     'Prices and CAPEX are screening assumptions, not quotes or permits.',
     bounds.note,
   ];
+  const rateText = trial => (trial?.rate != null ? ` at ${trial.rate} kg/day` : '');
   let note;
-  if (best?.met) {
-    note = `Cash-positive under screening ${product} $${best.price}/kg × CAPEX factor ${best.capexFactor}`
-      + (best.rate != null ? ` at ${best.rate} kg/day` : '')
-      + ` (bestCash ${formatMoney(best.annualNetCash)}/y). ${bounds.note}`;
+  if (midMet) {
+    note = `Cash-positive at mid-band screening ${product} $${mid.price}/kg × CAPEX factor 1`
+      + rateText(mid)
+      + ` (midCash ${formatMoney(mid.annualNetCash)}/y). ${bounds.note}`;
+  } else if (best?.met) {
+    note = `Cash-positive only at screening band edge ${product} $${best.price}/kg × CAPEX factor ${best.capexFactor}`
+      + rateText(best)
+      + ` (bestCash ${formatMoney(best.annualNetCash)}/y); mid-band $${Number.isFinite(midPrice) ? midPrice : bounds.priceMin}/kg × CAPEX 1 cash ${formatMoney(mid?.annualNetCash)}/y. Not ranked as cash+. Not an invented fuel winner. ${bounds.note}`;
+    warnings.push(`Edge-of-band cash+ (CAPEX factor ${best.capexFactor}) is not a mid-band rank.`);
   } else {
     const beText = Number.isFinite(breakEvenPrice)
       ? `diagnostic breakEvenPrice $${formatMoney(breakEvenPrice)}/kg at sized plant / CAPEX factor 1`
@@ -604,25 +666,22 @@ function probeFuelCash(opts = {}) {
     throw new Error('probeFuelCash mutated the input definition');
   }
 
+  const reported = ranked || best;
   return {
     product,
-    met: Boolean(best?.met),
+    met: midMet,
+    midMet,
+    midCash: mid?.annualNetCash ?? null,
     bestCash: best?.annualNetCash ?? null,
     breakEvenPrice,
     breakEvenPriceInBand: Boolean(inBand),
-    best: best ? {
-      price: best.price,
-      capexFactor: best.capexFactor,
-      rate: best.rate,
-      annualNetCash: best.annualNetCash,
-      positiveSaleCount: best.positiveSaleCount,
-      met: best.met,
-    } : null,
+    mid: summarizeTrial(mid),
+    best: summarizeTrial(best),
     bounds,
     curve,
-    objective: best?.objective || null,
-    economics: best?.economics || null,
-    selected: best?.selected || null,
+    objective: reported?.objective || null,
+    economics: reported?.economics || null,
+    selected: reported?.selected || null,
     label: SCREENING_LABEL,
     note,
     warnings,

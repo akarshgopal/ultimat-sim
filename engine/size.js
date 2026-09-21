@@ -1603,6 +1603,10 @@ const FAST_SCALES = [1];
 const FAST_RATES = [0];
 const REFINE_MAX_EXTRA = 6;
 const ABUNDANCE_DOWNSTREAM = Object.freeze(['chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']);
+const ABUNDANCE_SALE_IDS = Object.freeze([
+  'lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'recovered-salt', 'caustic', 'bromine', 'bromide',
+]);
+const FUEL_SALE_IDS = Object.freeze(['methane', 'methanol', 'methanol-product', 'hydrogen', 'h2']);
 
 function operatingRevenue(candidate) {
   const fromObjective = Number(candidate?.objective?.annualRevenue);
@@ -1862,6 +1866,41 @@ function applyAbundanceScale(definition, baseline, scale, slateMode) {
   const power = electricityNode(definition);
   if (power) syncSiteResource(definition, power);
   definition.operation.boundaryLimitedBy = [];
+}
+
+function saleKgOf(product) {
+  return Number(product?.deliveredAmount) || 0;
+}
+
+function isAmmoniaSaleId(id) {
+  return id === 'ammonia' || id === 'ammonia-product';
+}
+
+// When brine-minerals dominate cash+/tonnes, report family=abundance even if a
+// joint/fuel search also tried ammonia rates. Ammonia on an abundance hub is a
+// co-product, not a fuel winner.
+function selectedForSlate(candidate) {
+  const selected = candidate?.selected;
+  if (!selected || typeof selected !== 'object') return selected;
+  const definition = candidate.definition;
+  const hasMinerals = Boolean(converter(definition, 'brine-minerals'));
+  if (!hasMinerals) return selected;
+  const products = candidate.objective?.products || candidate.products || [];
+  let mineralKg = 0;
+  let fuelKg = 0;
+  for (const product of products) {
+    if (!(Number(product?.annualRevenue) > 0)) continue;
+    const id = String(product.id || '');
+    const kg = saleKgOf(product);
+    if (ABUNDANCE_SALE_IDS.includes(id) || isAmmoniaSaleId(id)) mineralKg += kg;
+    else if (FUEL_SALE_IDS.includes(id)) fuelKg += kg;
+  }
+  if (!(mineralKg > 0 && mineralKg >= fuelKg)) return selected;
+  if (selected.family === 'abundance' && selected.product !== 'ammonia') return selected;
+  const next = { family: 'abundance' };
+  if (Number.isFinite(Number(selected.scale))) next.scale = Number(selected.scale);
+  if (selected.slateMode) next.slateMode = selected.slateMode;
+  return next;
 }
 
 function scoreSizedCandidate(definition, solved, selected, warnings = []) {
@@ -2132,6 +2171,7 @@ function sizeForPositiveCashflow(opts = {}) {
   }
   best.candidatesTried = tried;
   best.familiesSearched = familiesSearched;
+  best.selected = selectedForSlate(best);
   if (!best.objective.met) {
     const note = 'No cash-positive co-product slate under searched modes/scales';
     if (!(best.warnings || []).includes(note)) best.warnings = [...(best.warnings || []), note];

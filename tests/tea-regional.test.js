@@ -47,7 +47,7 @@ test('demandByRegion maps preset.region strings and chile lithium ceiling ≠ me
   assert.match(tea.getDemandForRegion('australia').lithium.note, /not a .*brine offtake|not a Lake Mackay brine/i);
   assert.ok(tea.getDemandForRegion('australia').lithium.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
 
-  const mineralKeys = ['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium'];
+  const mineralKeys = tea.MINERAL_DEMAND_KEYS;
   const regionalIds = ['australia', 'texas', 'southern-africa', 'india', 'europe', 'gulf'];
   const me = tea.getDemandForRegion('me-levant');
   for (const id of regionalIds) {
@@ -70,6 +70,57 @@ test('demandByRegion maps preset.region strings and chile lithium ceiling ≠ me
   assert.equal(tea.getDemandForRegion('europe').potash.value, 1e9);
   assert.equal(tea.getDemandForRegion('southern-africa').lithium.value, 2e5);
   assert.equal(tea.getDemandForRegion('chile-atacama').bromine.value, me.bromine.value);
+  assert.equal(tea.getDemandForRegion('chile-atacama').bromine.inherit, 'me-levant');
+});
+
+test('non-ME sites do not silently inherit ME lithium or fuel/chem caps without inherit:me-levant', () => {
+  const me = tea.getDemandForRegion('me-levant');
+  for (const key of Object.keys(me)) {
+    assert.equal(me[key].inherit, undefined, `me-levant ${key} is the source table, not an inherit`);
+  }
+
+  const chile = tea.getDemandForRegion('chile-atacama');
+  assert.equal(chile.lithium.inherit, undefined, 'Chile Li must not carry inherit:me-levant');
+  assert.notEqual(chile.lithium.value, me.lithium.value);
+  assert.equal(chile.lithium.value, 2e7);
+  assert.match(chile.lithium.note, /chile mine production/i);
+
+  const nonMe = ['chile-atacama', 'australia', 'texas', 'southern-africa', 'india', 'europe', 'gulf'];
+  for (const id of nonMe) {
+    const regional = tea.getDemandForRegion(id);
+    assert.equal(regional.lithium.inherit, undefined, `${id} lithium silent ME inherit`);
+    assert.notEqual(regional.lithium.value, me.lithium.value, `${id} lithium should be regionalized`);
+
+    for (const key of tea.FUEL_CHEM_DEMAND_KEYS) {
+      const row = regional[key];
+      const flagged = row.inherit === 'me-levant';
+      const regionalized = row.value !== me[key].value;
+      assert.ok(flagged || regionalized, `${id} ${key} silent ME fuel/chem cap`);
+      if (flagged) {
+        assert.equal(row.value, me[key].value, `${id} ${key} inherit must keep the me-levant cap`);
+        assert.match(row.note, /inherit/i, `${id} ${key} inherit note`);
+      }
+    }
+  }
+
+  for (const id of ['chile-atacama', 'australia', 'texas']) {
+    const regional = tea.getDemandForRegion(id);
+    assert.equal(regional.methane.inherit, 'me-levant', `${id} methane should flag inherit:me-levant`);
+    assert.equal(regional.hydrogen.inherit, 'me-levant', `${id} hydrogen should flag inherit:me-levant`);
+    assert.equal(tea.bindSale('methane', { region: id }).inherit, 'me-levant');
+    assert.equal(tea.bindSale('methanol', { region: id }).inherit, 'me-levant');
+    assert.equal(tea.bindSale('ammonia', { region: id }).inherit, 'me-levant');
+  }
+
+  const chileSale = tea.bindSale('lithium', { region: 'Atacama/Chile' });
+  assert.equal(chileSale.inherit, undefined);
+  assert.equal(chileSale.annualDemandLimit, 2e7);
+
+  const unmapped = tea.getDemandForRegion('unknown-basin');
+  assert.equal(unmapped.lithium.inherit, 'me-levant');
+  for (const key of tea.FUEL_CHEM_DEMAND_KEYS) {
+    assert.equal(unmapped[key].inherit, 'me-levant', `default ${key} must flag inherit:me-levant`);
+  }
 });
 
 test('bindSale / bindCost regional overlays: chile offtake and power ≠ me-levant defaults', () => {
@@ -145,6 +196,25 @@ test('capexMultiplierByRegion is a screening labor/construction proxy and bindCa
 
   const unbound = tea.bindCapex('minerals', { capacity: 1000 });
   assert.equal(unbound.capexRate, tea.packs.minerals.capexIntensity);
+
+  const chileLiPrice = tea.getPriceForRegion('lithium', 'chile-atacama');
+  assert.equal(chileLiPrice.value, 14);
+  assert.equal(chileLiPrice, tea.priceByRegion['chile-atacama'].lithium);
+  assert.match(chileLiPrice.note, /supply-side/i);
+  assert.match(chileLiPrice.note, /not a Chilean offtake contract/i);
+  assert.ok(chileLiPrice.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
+
+  const indiaSolar = tea.solarCapexByRegion.india;
+  assert.equal(indiaSolar.value, 525);
+  assert.equal(indiaSolar.unit, '$/kWp');
+  assert.ok(indiaSolar.evidence.some(item => /irena\.org/i.test(item.url || '')));
+  const indiaPv = tea.bindCapex('solar-pv', { region: 'India', capacity: 10 });
+  assert.equal(indiaPv.capexIntensity, 525);
+  assert.equal(indiaPv.installedCapex, 5250);
+  assert.notEqual(indiaPv.capexIntensity, tea.packs['solar-pv'].capexIntensity * tea.getCapexMultiplierForRegion('india'));
+  assert.match(indiaPv.note, /525/i);
+  const chilePv = tea.bindCapex('solar-pv', { region: 'chile-atacama', capacity: 10 });
+  assert.equal(chilePv.capexIntensity, tea.packs['solar-pv'].capexIntensity * tea.getCapexMultiplierForRegion('chile-atacama'));
 });
 
 test('createAbundanceCase({ region }) is backward compatible and binds chile Li cap', () => {

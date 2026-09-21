@@ -220,6 +220,7 @@ test('bundled land-prices data is finite, unique, and covers US+EU+CA+AU', () =>
     assert.ok(record.year >= 2010);
     assert.ok(record.source);
     assert.ok(record.citeUrl);
+    assert.ok(record.quality === 'cited' || record.quality === 'screening', record.id);
     if (record.kind === 'us-state') us += 1;
     if (record.kind === 'eu-country') eu += 1;
   }
@@ -239,6 +240,16 @@ test('bundled land-prices data is finite, unique, and covers US+EU+CA+AU', () =>
   assert.ok(landPriceById('US-IA', bundle).usdPerHa > 10000);
   assert.ok(landPriceById('ES', bundle).usdPerHa > 5000);
   assert.equal(landPriceById('US-AK', bundle), null);
+  for (const id of ['CL', 'IN', 'JP', 'ZA', 'AE', 'SA', 'QA', 'OM']) {
+    assert.ok(byId[id], id);
+    assert.ok(Number.isFinite(byId[id].usdPerHa) && byId[id].usdPerHa > 0, id);
+    assert.ok(byId[id].quality === 'cited' || byId[id].quality === 'screening', id);
+    assert.ok(byId[id].source);
+    assert.ok(byId[id].citeUrl);
+  }
+  assert.equal(byId.JP.quality, 'cited');
+  assert.equal(byId.SA.quality, 'cited');
+  assert.equal(byId.CL.quality, 'screening');
   assert.equal(landPriceAt(36.834, -2.463)?.id, 'ES');
   assert.equal(landPriceAt(27.8, -97.4)?.id, 'US-TX');
   assert.equal(landPriceAt(31.16, 35.43), null);
@@ -294,7 +305,9 @@ test('layerScoreAt prefers frozen PVGIS yield and completeness-weights missing l
 
   const chileLat = -23.1;
   const chileLon = -70.448;
-  assert.equal(landPriceAt(chileLat, chileLon), null, 'Chile has no cited national $/ha');
+  const chileLand = landPriceAt(chileLat, chileLon);
+  assert.ok(chileLand && chileLand.usdPerHa > 0, 'Chile has a land $/ha series');
+  assert.equal(chileLand.id, 'CL');
   const chileDaily = 1923.52 / 365;
   const chileFrozen = layerScoreAt(chileLat, chileLon, {
     dailyPVKWhPerKWp: chileDaily,
@@ -303,19 +316,45 @@ test('layerScoreAt prefers frozen PVGIS yield and completeness-weights missing l
   const chileScreen = layerScoreAt(chileLat, chileLon);
   const chileWater = waterAvailabilityScreening(chileLat, chileLon);
   const chileSunFrozen = Math.min(1, Math.max(0, chileDaily / PV_YIELD_SCORE_MAX));
-  const chileSunScreen = Math.min(1, Math.max(0, pvScreeningBand(chileLat, chileLon).typicalKWhPerKWpDay / PV_YIELD_SCORE_MAX));
   const naiveFrozen = (chileSunFrozen + chileWater.score) / 2;
   const completeFrozen = naiveFrozen * (2 / LAYER_SCORE_EXPECTED_PARTS);
-  const completeScreen = ((chileSunScreen + chileWater.score) / 2) * (2 / LAYER_SCORE_EXPECTED_PARTS);
-  assert.equal(chileFrozen, Math.round(completeFrozen * 1e4) / 1e4);
-  assert.equal(chileScreen, Math.round(completeScreen * 1e4) / 1e4);
-  assert.ok(chileFrozen < naiveFrozen, 'missing land must not silently over-weight sun+water');
+  assert.notEqual(chileFrozen, Math.round(completeFrozen * 1e4) / 1e4);
+  assert.ok(chileFrozen > completeFrozen, 'filled Chile land must not completeness-penalize');
   assert.notEqual(chileFrozen, chileScreen);
 
-  const landIndex = landIndexAt(chileLat, chileLon);
-  assert.ok(Number.isFinite(landIndex));
-  const fakeLandMean = (chileSunFrozen + chileWater.score + Math.min(1, Math.max(0, 1 - landIndex))) / 3;
-  assert.notEqual(chileFrozen, Math.round(fakeLandMean * 1e4) / 1e4);
+  const dsLat = 31.16;
+  const dsLon = 35.43;
+  assert.equal(landPriceAt(dsLat, dsLon), null, 'Dead Sea / Jordan still has no land $/ha');
+  const dsDaily = 4.2;
+  const dsFrozen = layerScoreAt(dsLat, dsLon, { dailyPVKWhPerKWp: dsDaily, frozen: true });
+  const dsWater = waterAvailabilityScreening(dsLat, dsLon);
+  const dsSun = Math.min(1, Math.max(0, dsDaily / PV_YIELD_SCORE_MAX));
+  const dsNaive = (dsSun + dsWater.score) / 2;
+  const dsComplete = dsNaive * (2 / LAYER_SCORE_EXPECTED_PARTS);
+  assert.equal(dsFrozen, Math.round(dsComplete * 1e4) / 1e4);
+  assert.ok(dsFrozen < dsNaive, 'missing land must not silently over-weight sun+water');
+});
+
+test('landPriceAt returns usdPerHa for Mejillones, Taweelah, Mundra, Tokyo-ish, Cape Town', () => {
+  const pins = [
+    { name: 'Mejillones', lat: -23.100, lon: -70.448, id: 'CL' },
+    { name: 'Taweelah', lat: 24.761, lon: 54.683, id: 'AE' },
+    { name: 'Mundra', lat: 22.737, lon: 69.710, id: 'IN' },
+    { name: 'Tokyo-ish', lat: 35.6895, lon: 139.6917, id: 'JP' },
+    { name: 'Cape Town', lat: -33.9249, lon: 18.4241, id: 'ZA' },
+  ];
+  for (const pin of pins) {
+    const record = landPriceAt(pin.lat, pin.lon);
+    assert.ok(record, pin.name);
+    assert.equal(record.id, pin.id, pin.name);
+    assert.ok(Number.isFinite(record.usdPerHa) && record.usdPerHa > 0, pin.name);
+    assert.ok(record.quality === 'cited' || record.quality === 'screening', pin.name);
+    const scored = layerScoreAt(pin.lat, pin.lon, { dailyPVKWhPerKWp: 5, frozen: true });
+    const water = waterAvailabilityScreening(pin.lat, pin.lon);
+    const sun = Math.min(1, Math.max(0, 5 / PV_YIELD_SCORE_MAX));
+    const twoLayer = ((sun + water.score) / 2) * (2 / LAYER_SCORE_EXPECTED_PARTS);
+    assert.notEqual(scored, Math.round(twoLayer * 1e4) / 1e4, `${pin.name} must not completeness-penalize missing land`);
+  }
 });
 
 test('web mercator helper and footprint circle stay available', () => {

@@ -1,8 +1,8 @@
 {
   "meta": {
-    "title": "Agricultural land values (official sources)",
+    "title": "Agricultural land values (official + labeled screening)",
     "units": "USD/ha",
-    "note": "Early siting proxy from official agricultural land-price statistics — not cadastral, not industrial parcel quotes, not transaction comps.",
+    "note": "Early siting proxy from official agricultural land-price statistics plus labeled screening national/regional proxies — not cadastral, not industrial parcel quotes, not transaction comps. Record quality is cited vs screening.",
     "acresPerHa": 2.47105,
     "fx": {
       "pair": "EURUSD",
@@ -31,6 +31,31 @@
         "id": "abares-farmland-2023",
         "label": "ABARES/DAFF Farmland Price Indicator national broadacre AUD/ha (2023)",
         "url": "https://www.agriculture.gov.au/about/news/broadacre-farmland-prices-strong-growth"
+      },
+      {
+        "id": "nca-japan-r7",
+        "label": "NCA Japan 令和7年田畑売買価格 (純農業地域 中田 yen/10a → USD/ha)",
+        "url": "https://www.nca.or.jp/upload/denpata_r7_youshi.pdf"
+      },
+      {
+        "id": "saudi-moj-ag-2023",
+        "label": "Saudi MoJ real-estate indicator 2023 agricultural-land deals (SAR/m² → USD/ha)",
+        "url": "https://www.alwatan.com.sa/article/1138667"
+      },
+      {
+        "id": "odepa-chile-screening",
+        "label": "Screening: Chile Central Valley cropland ads (ODEPA-family / broker order)",
+        "url": "https://www.odepa.gob.cl/estadisticas-del-sector/estadisticas-productivas"
+      },
+      {
+        "id": "wcdoa-za-2024",
+        "label": "Screening: Western Cape DoA Dec 2024 provincial agricultural land R/ha",
+        "url": "https://www.elsenburg.com/wp-content/uploads/2024/12/2024-Agric-land-prices-December.pdf"
+      },
+      {
+        "id": "india-gujarat-screening",
+        "label": "Screening: India Gujarat farmland acre-order (IIMA ISALPI context; not MOSPI official)",
+        "url": "https://www.iima.ac.in/sites/default/files/2025-12/ISALPI%20Index%20December%202025%20%20Release%20%20%281%29.pdf"
       }
     ],
     "fxExtra": {
@@ -47,11 +72,57 @@
         "date": "2026-09-11",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
+      },
+      "USDJPY": {
+        "pair": "USDJPY",
+        "rate": 157.89,
+        "date": "2026-09-18",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      },
+      "USDZAR": {
+        "pair": "USDZAR",
+        "rate": 16.2724,
+        "date": "2026-09-18",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      },
+      "USDINR": {
+        "pair": "USDINR",
+        "rate": 95.88,
+        "date": "2026-09-18",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      },
+      "USDSAR": {
+        "pair": "USDSAR",
+        "rate": 3.75,
+        "date": "2026-09-18",
+        "source": "Saudi riyal official peg (SAMA)",
+        "citeUrl": "https://www.sama.gov.sa/"
       }
     },
-    "generatedAt": "2026-09-13T19:13:13.512Z"
+    "generatedAt": "2026-09-21T08:35:41.033Z"
   },
   "records": [
+    {
+      "id": "AE",
+      "name": "United Arab Emirates",
+      "usdPerHa": 26535,
+      "year": 2023,
+      "source": "Screening GCC agricultural land $/ha — Saudi MoJ 2023 ag-land deal average as regional proxy (no published national farmland statistical series). Not cadastral, not industrial parcel quotes.",
+      "citeUrl": "https://www.alwatan.com.sa/article/1138667",
+      "unit": "USD/ha",
+      "kind": "country",
+      "quality": "screening",
+      "fx": {
+        "pair": "USDSAR",
+        "rate": 3.75,
+        "date": "2026-09-18",
+        "source": "Saudi riyal official peg (SAMA)",
+        "citeUrl": "https://www.sama.gov.sa/"
+      }
+    },
     {
       "id": "AT",
       "eurostatGeo": "AT",
@@ -70,7 +141,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "AU",
@@ -88,7 +160,8 @@
         "date": "2026-09-11",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "BE",
@@ -108,7 +181,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "BG",
@@ -128,7 +202,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "CA",
@@ -147,7 +222,19 @@
         "date": "2026-09-11",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
+    },
+    {
+      "id": "CL",
+      "name": "Chile",
+      "usdPerHa": 13000,
+      "year": 2025,
+      "source": "Screening agricultural land $/ha (Chile) — Central Valley cropland asking-price order ~USD 13,000/ha (ODEPA-family / broker ads). Not cadastral, not industrial Mejillones parcel quotes.",
+      "citeUrl": "https://www.odepa.gob.cl/estadisticas-del-sector/estadisticas-productivas",
+      "unit": "USD/ha",
+      "kind": "country",
+      "quality": "screening"
     },
     {
       "id": "CZ",
@@ -167,7 +254,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "DK",
@@ -187,7 +275,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "EE",
@@ -207,7 +296,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "ES",
@@ -227,7 +317,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "FI",
@@ -247,7 +338,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "FR",
@@ -267,7 +359,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "GB",
@@ -287,7 +380,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "GR",
@@ -307,7 +401,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "HR",
@@ -327,7 +422,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "HU",
@@ -347,7 +443,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "IE",
@@ -365,6 +462,27 @@
         "pair": "EURUSD",
         "rate": 1.1622,
         "date": "2026-09-04",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      },
+      "quality": "cited"
+    },
+    {
+      "id": "IN",
+      "name": "India",
+      "usdPerHa": 10309,
+      "inrPerAcre": 400000,
+      "inrPerHa": 988420,
+      "year": 2024,
+      "source": "Screening agricultural land $/ha (India) — Gujarat farmland acre-order ~₹4 lakh/acre → USD/ha. Not MOSPI/NABARD official, not cadastral, not Mundra SEZ quotes.",
+      "citeUrl": "https://www.iima.ac.in/sites/default/files/2025-12/ISALPI%20Index%20December%202025%20%20Release%20%20%281%29.pdf",
+      "unit": "USD/ha",
+      "kind": "country",
+      "quality": "screening",
+      "fx": {
+        "pair": "USDINR",
+        "rate": 95.88,
+        "date": "2026-09-18",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
       }
@@ -387,6 +505,27 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
+      },
+      "quality": "cited"
+    },
+    {
+      "id": "JP",
+      "name": "Japan",
+      "usdPerHa": 65299,
+      "jpyPer10a": 1031000,
+      "jpyPerHa": 10310000,
+      "year": 2025,
+      "source": "NCA 全国農業会議所 令和7年田畑売買価格等に関する調査結果 — 純農業地域 中田 103.1万円/10a → USD/ha",
+      "citeUrl": "https://www.nca.or.jp/upload/denpata_r7_youshi.pdf",
+      "unit": "USD/ha",
+      "kind": "country",
+      "quality": "cited",
+      "fx": {
+        "pair": "USDJPY",
+        "rate": 157.89,
+        "date": "2026-09-18",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
       }
     },
     {
@@ -407,7 +546,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "LU",
@@ -427,7 +567,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "LV",
@@ -447,7 +588,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "MT",
@@ -467,7 +609,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "NL",
@@ -487,6 +630,25 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
+      },
+      "quality": "cited"
+    },
+    {
+      "id": "OM",
+      "name": "Oman",
+      "usdPerHa": 26535,
+      "year": 2023,
+      "source": "Screening GCC agricultural land $/ha — Saudi MoJ 2023 ag-land deal average as regional proxy (no published national farmland statistical series). Not cadastral, not industrial parcel quotes.",
+      "citeUrl": "https://www.alwatan.com.sa/article/1138667",
+      "unit": "USD/ha",
+      "kind": "country",
+      "quality": "screening",
+      "fx": {
+        "pair": "USDSAR",
+        "rate": 3.75,
+        "date": "2026-09-18",
+        "source": "Saudi riyal official peg (SAMA)",
+        "citeUrl": "https://www.sama.gov.sa/"
       }
     },
     {
@@ -507,7 +669,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "PT",
@@ -527,6 +690,25 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
+      },
+      "quality": "cited"
+    },
+    {
+      "id": "QA",
+      "name": "Qatar",
+      "usdPerHa": 26535,
+      "year": 2023,
+      "source": "Screening GCC agricultural land $/ha — Saudi MoJ 2023 ag-land deal average as regional proxy (no published national farmland statistical series). Not cadastral, not industrial parcel quotes.",
+      "citeUrl": "https://www.alwatan.com.sa/article/1138667",
+      "unit": "USD/ha",
+      "kind": "country",
+      "quality": "screening",
+      "fx": {
+        "pair": "USDSAR",
+        "rate": 3.75,
+        "date": "2026-09-18",
+        "source": "Saudi riyal official peg (SAMA)",
+        "citeUrl": "https://www.sama.gov.sa/"
       }
     },
     {
@@ -547,6 +729,26 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
+      },
+      "quality": "cited"
+    },
+    {
+      "id": "SA",
+      "name": "Saudi Arabia",
+      "usdPerHa": 26535,
+      "sarPerHa": 99507,
+      "year": 2023,
+      "source": "Saudi Ministry of Justice real-estate indicator 2023 — 1,571 agricultural-land deals, SAR 2.180 billion on 219.1 million m² → USD/ha",
+      "citeUrl": "https://www.alwatan.com.sa/article/1138667",
+      "unit": "USD/ha",
+      "kind": "country",
+      "quality": "cited",
+      "fx": {
+        "pair": "USDSAR",
+        "rate": 3.75,
+        "date": "2026-09-18",
+        "source": "Saudi riyal official peg (SAMA)",
+        "citeUrl": "https://www.sama.gov.sa/"
       }
     },
     {
@@ -567,7 +769,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "SI",
@@ -587,7 +790,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "SK",
@@ -607,7 +811,8 @@
         "date": "2026-09-04",
         "source": "Frankfurter (ECB reference rates)",
         "citeUrl": "https://www.frankfurter.app/"
-      }
+      },
+      "quality": "cited"
     },
     {
       "id": "US-AL",
@@ -618,7 +823,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-AR",
@@ -629,7 +835,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-AZ",
@@ -640,7 +847,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-CA",
@@ -651,7 +859,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-CO",
@@ -662,7 +871,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-CT",
@@ -673,7 +883,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-DE",
@@ -684,7 +895,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-FL",
@@ -695,7 +907,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-GA",
@@ -706,7 +919,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-IA",
@@ -717,7 +931,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-ID",
@@ -728,7 +943,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-IL",
@@ -739,7 +955,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-IN",
@@ -750,7 +967,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-KS",
@@ -761,7 +979,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-KY",
@@ -772,7 +991,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-LA",
@@ -783,7 +1003,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-MA",
@@ -794,7 +1015,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-MD",
@@ -805,7 +1027,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-ME",
@@ -816,7 +1039,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-MI",
@@ -827,7 +1051,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-MN",
@@ -838,7 +1063,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-MO",
@@ -849,7 +1075,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-MS",
@@ -860,7 +1087,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-MT",
@@ -871,7 +1099,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-NC",
@@ -882,7 +1111,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-ND",
@@ -893,7 +1123,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-NE",
@@ -904,7 +1135,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-NH",
@@ -915,7 +1147,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-NJ",
@@ -926,7 +1159,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-NM",
@@ -937,7 +1171,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-NV",
@@ -948,7 +1183,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-NY",
@@ -959,7 +1195,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-OH",
@@ -970,7 +1207,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-OK",
@@ -981,7 +1219,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-OR",
@@ -992,7 +1231,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-PA",
@@ -1003,7 +1243,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-RI",
@@ -1014,7 +1255,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-SC",
@@ -1025,7 +1267,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-SD",
@@ -1036,7 +1279,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-TN",
@@ -1047,7 +1291,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-TX",
@@ -1058,7 +1303,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-UT",
@@ -1069,7 +1315,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-VA",
@@ -1080,7 +1327,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-VT",
@@ -1091,7 +1339,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-WA",
@@ -1102,7 +1351,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-WI",
@@ -1113,7 +1363,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-WV",
@@ -1124,7 +1375,8 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
     },
     {
       "id": "US-WY",
@@ -1135,7 +1387,27 @@
       "source": "USDA NASS Land Values 2025 — farm real estate average",
       "citeUrl": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf",
       "unit": "USD/ha",
-      "kind": "us-state"
+      "kind": "us-state",
+      "quality": "cited"
+    },
+    {
+      "id": "ZA",
+      "name": "South Africa",
+      "usdPerHa": 1433,
+      "zarPerHa": 23317,
+      "year": 2024,
+      "source": "Screening agricultural land $/ha (South Africa) — Western Cape DoA Dec 2024 provincial sheet R23,317/ha as national/regional proxy. Not cadastral, not Cape Town industrial parcel quotes.",
+      "citeUrl": "https://www.elsenburg.com/wp-content/uploads/2024/12/2024-Agric-land-prices-December.pdf",
+      "unit": "USD/ha",
+      "kind": "country",
+      "quality": "screening",
+      "fx": {
+        "pair": "USDZAR",
+        "rate": 16.2724,
+        "date": "2026-09-18",
+        "source": "Frankfurter (ECB reference rates)",
+        "citeUrl": "https://www.frankfurter.app/"
+      }
     }
   ]
 }

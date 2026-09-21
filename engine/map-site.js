@@ -165,7 +165,7 @@ const LAYER_SOURCES = Object.freeze({
     available: true,
     render: 'choropleth',
     units: 'USD/ha',
-    note: 'Official agricultural land values (USDA NASS farm real estate by US state; Eurostat apri_lprc arable land by country). Early siting proxy only — not cadastral, not industrial parcel quotes, not transaction comps. Transparent where unpublished.',
+    note: 'Agricultural land values in USD/ha: official series (USDA NASS, Eurostat, StatCan, ABARES, NCA Japan, Saudi MoJ deals) plus labeled screening national/regional proxies (ODEPA-family Chile ads, Gujarat acre-order, Western Cape sheets, GCC MoJ proxy). Early siting proxy only — not cadastral, not industrial parcel quotes, not transaction comps. Record quality is cited vs screening. Transparent where unpublished.',
     data: 'data/land-prices.json',
     admin: 'data/land-admin.geojson',
     cite: Object.freeze({
@@ -180,6 +180,14 @@ const LAYER_SOURCES = Object.freeze({
       Object.freeze({
         label: 'Eurostat apri_lprc agricultural land prices (ARA EUR/ha → USD)',
         url: 'https://ec.europa.eu/eurostat/databrowser/view/apri_lprc/default/table',
+      }),
+      Object.freeze({
+        label: 'NCA Japan farmland prices (yen/10a → USD/ha)',
+        url: 'https://www.nca.or.jp/upload/denpata_r7_youshi.pdf',
+      }),
+      Object.freeze({
+        label: 'Screening: ODEPA-family Chile ads, Western Cape sheets, Gujarat acre-order, GCC MoJ proxy',
+        url: 'https://www.odepa.gob.cl/estadisticas-del-sector/estadisticas-productivas',
       }),
     ]),
     legend: Object.freeze([
@@ -784,6 +792,33 @@ function pointInPolygon(lon, lat, geometry) {
   return false;
 }
 
+// Natural Earth 110m coasts sit tens of km inland of industrial pins (Mejillones, Duqm, Ras Laffan).
+const LAND_ADMIN_SNAP_KM = 80;
+
+function minVertexDistanceKm(latitude, longitude, geometry) {
+  let best = Infinity;
+  function walk(coords) {
+    if (!Array.isArray(coords) || !coords.length) return;
+    if (typeof coords[0] === 'number') {
+      const lon = finiteNumber(coords[0]);
+      const lat = finiteNumber(coords[1]);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      const km = distanceKm({ latitude, longitude }, { latitude: lat, longitude: lon });
+      if (km < best) best = km;
+      return;
+    }
+    for (const child of coords) walk(child);
+  }
+  walk(geometry?.coordinates);
+  return best;
+}
+
+function pricedRecordForFeature(feature, bundle) {
+  const record = landPriceById(feature?.properties?.id, bundle);
+  if (record && Number.isFinite(record.usdPerHa) && record.usdPerHa > 0) return record;
+  return null;
+}
+
 function landPriceAt(latitude, longitude, bundle = getLandPricesBundle(), admin = getLandAdminGeoJSON()) {
   const coords = coordsFrom(latitude, longitude);
   if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude) || coords.latitude < -90 || coords.latitude > 90) {
@@ -791,13 +826,17 @@ function landPriceAt(latitude, longitude, bundle = getLandPricesBundle(), admin 
   }
   const features = admin?.features;
   if (!Array.isArray(features) || !features.length) return null;
+  let nearest = null;
   for (const feature of features) {
-    if (!pointInPolygon(coords.longitude, coords.latitude, feature?.geometry)) continue;
-    const record = landPriceById(feature.properties?.id, bundle);
-    if (record && Number.isFinite(record.usdPerHa) && record.usdPerHa > 0) return record;
-    return null;
+    if (pointInPolygon(coords.longitude, coords.latitude, feature?.geometry)) {
+      return pricedRecordForFeature(feature, bundle);
+    }
+    const km = minVertexDistanceKm(coords.latitude, coords.longitude, feature?.geometry);
+    if (!Number.isFinite(km) || km > LAND_ADMIN_SNAP_KM) continue;
+    if (!nearest || km < nearest.km) nearest = { feature, km };
   }
-  return null;
+  if (!nearest) return null;
+  return pricedRecordForFeature(nearest.feature, bundle);
 }
 
 function landCostScore(usdPerHa) {

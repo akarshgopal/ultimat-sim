@@ -16,7 +16,11 @@
   else root.FlowsheetSiteSearch = api;
 })(globalThis, (sizeApi, networkApi, coastal, methanol, abundance, networkCase, sitePresets, siteAssays, pvgisSites, mapSite, sensitivityApi) => {
 
-const PLANT_TEMPLATES = Object.freeze(['abundance', 'coastal', 'methanol']);
+const MATERIALS_TEMPLATES = Object.freeze(['abundance']);
+const FUEL_TEMPLATES = Object.freeze(['coastal', 'methanol']);
+const PLANT_TEMPLATES = Object.freeze([...MATERIALS_TEMPLATES, ...FUEL_TEMPLATES]);
+const PATH_MATERIALS = 'materials';
+const PATH_FUELS = 'fuels-screening';
 const DEAD_SEA_SITE_ID = 'dead-sea-pvgis-2026-09-06';
 const SCREENING_NOTE = 'Screening assumes intake/concession for evaluation only; not a bankable permit.';
 const LAYER_SOFT_NOTE = 'Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives.';
@@ -212,9 +216,36 @@ function normalizeSite(site) {
   };
 }
 
-function normalizeTemplates(templates) {
+function normalizeSearchPath(value) {
+  if (value == null || value === '') return PATH_MATERIALS;
+  const raw = String(value).trim().toLowerCase();
+  if (raw === PATH_MATERIALS || raw === 'abundance' || raw === 'materials-maximizer') {
+    return PATH_MATERIALS;
+  }
+  if (raw === PATH_FUELS || raw === 'fuels' || raw === 'fuel') return PATH_FUELS;
+  throw new Error(`Unknown search path ${value}`);
+}
+
+function defaultTemplatesForPath(pathName) {
+  return pathName === PATH_FUELS ? FUEL_TEMPLATES.slice() : MATERIALS_TEMPLATES.slice();
+}
+
+function pathNote(pathName, templates) {
+  const plant = (templates || []).filter(id => PLANT_TEMPLATES.includes(id));
+  if (plant.length && plant.every(id => FUEL_TEMPLATES.includes(id))) {
+    return 'Fuels screening path: coastal/methanol only; not the materials maximizer.';
+  }
+  if (plant.length && plant.every(id => id === 'abundance')) {
+    return 'Materials maximizer path: abundance only; fuels do not enter this ranking.';
+  }
+  return pathName === PATH_FUELS
+    ? 'Fuels screening path requested; mixed templates also evaluated.'
+    : 'Mixed plant templates; this ranking is not the default materials maximizer.';
+}
+
+function normalizeTemplates(templates, pathName = PATH_MATERIALS) {
   const requested = templates == null
-    ? PLANT_TEMPLATES.slice()
+    ? defaultTemplatesForPath(pathName)
     : (Array.isArray(templates) ? templates : String(templates).split(','))
       .map(item => String(item || '').trim())
       .filter(Boolean);
@@ -1065,7 +1096,16 @@ function searchAbundanceSites(opts = {}) {
   const sites = (Array.isArray(rawSites) ? rawSites : [])
     .map(normalizeSite)
     .filter(Boolean);
-  const templates = normalizeTemplates(opts.templates);
+  const requestedPath = normalizeSearchPath(opts.path);
+  const templates = normalizeTemplates(opts.templates, requestedPath);
+  const plantTemplates = templates.filter(id => PLANT_TEMPLATES.includes(id));
+  const pathName = opts.templates == null
+    ? requestedPath
+    : (plantTemplates.length && plantTemplates.every(id => FUEL_TEMPLATES.includes(id))
+      ? PATH_FUELS
+      : (plantTemplates.length && plantTemplates.every(id => id === 'abundance')
+        ? PATH_MATERIALS
+        : requestedPath));
   const topN = Number.isFinite(Number(opts.topN)) && Number(opts.topN) > 0 ? Math.floor(Number(opts.topN)) : 10;
   const rightsScenario = normalizeRightsScenario(opts.rightsScenario);
   const sizeOpts = resolveSizeOpts({ ...(opts.sizeOpts || {}), rightsScenario });
@@ -1101,15 +1141,24 @@ function searchAbundanceSites(opts = {}) {
     skipped,
     skippedCount: skipped.length,
     sitesTried: sites.length,
+    path: pathName,
     templates,
     rightsScenario,
-    notes: [scenarioNote(rightsScenario), LAYER_SOFT_NOTE],
+    notes: [pathNote(pathName, templates), scenarioNote(rightsScenario), LAYER_SOFT_NOTE],
 
   };
 }
 
+function searchFuelSites(opts = {}) {
+  return searchAbundanceSites({ ...opts, path: PATH_FUELS });
+}
+
 return {
+  MATERIALS_TEMPLATES,
+  FUEL_TEMPLATES,
   PLANT_TEMPLATES,
+  PATH_MATERIALS,
+  PATH_FUELS,
   DEAD_SEA_SITE_ID,
   SCREENING_NOTE,
   LAYER_SOFT_NOTE,
@@ -1126,6 +1175,7 @@ return {
   FAST_SCALES,
   FAST_RATES,
   searchAbundanceSites,
+  searchFuelSites,
   rankCandidates,
   compareNearMisses,
   rankNearMisses,

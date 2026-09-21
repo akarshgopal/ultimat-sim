@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
 const test = require('node:test');
 
 const { findFuelBreakEven, probeFuelCash, fuelScreeningBounds } = require('../engine/sensitivity');
@@ -212,6 +214,55 @@ test('probeFuelCash ranks cash+ only at mid-band, not capexFactor=0.05 alone', (
   assert.ok(midHit.midCash > 0);
   assert.equal(midHit.mid.capexFactor, 1);
   assert.match(midHit.note, /mid-band/i);
+});
+
+test('fuel-breakeven hunt proves midCash << 0 and uses frozen PVGIS for overlay coasts', () => {
+  const script = path.join(__dirname, '..', 'scripts', 'fuel-breakeven.mjs');
+  const ran = spawnSync(process.execPath, [script], {
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+  assert.equal(ran.status, 0, ran.stderr || ran.stdout);
+  const report = JSON.parse(ran.stdout);
+  const blob = JSON.stringify(report);
+  assert.ok(!/no frozen typical-day PVGIS in-repo/i.test(blob));
+  assert.ok(!/no Gulf typical-day in-repo/i.test(blob));
+  assert.ok(!/Almer[ií]a frozen PVGIS retained/i.test(blob));
+  assert.ok(Array.isArray(report.notRun));
+  assert.equal(report.notRun.length, 0);
+  assert.ok(report.proof);
+  assert.ok(Array.isArray(report.proof.rows));
+  assert.ok(report.proof.rows.length >= 6);
+  assert.equal(report.proof.midPositiveCount, 0);
+  assert.match(report.proof.conclusion, /midCash|materials maximizer/i);
+  assert.ok(report.proof.cites.some(cite => /green-premium/i.test(cite)));
+  assert.ok(report.proof.cites.some(cite => /0\.40\/kg|commodity/i.test(cite)));
+
+  const byId = id => report.proof.rows.filter(row => row.siteId === id);
+  assert.ok(byId('spain-almeria').length >= 1);
+  assert.ok(byId('chile-mejillones').length >= 1);
+  assert.ok(byId('uae-taweelah').length >= 1);
+  assert.ok(byId('au-port-hedland').length >= 1);
+  assert.ok(byId('saudi-oxagon').length >= 1);
+  for (const row of report.proof.rows) {
+    assert.equal(row.midMet, false, row.siteId);
+    assert.equal(row.feasible, false, row.siteId);
+    assert.ok(Number.isFinite(row.midCash), row.siteId);
+    assert.ok(row.midCash < 0, `${row.siteId} ${row.template} midCash=${row.midCash}`);
+    assert.match(row.solar, /frozen/i, row.siteId);
+    assert.ok(!/missing/i.test(row.solar), row.siteId);
+  }
+
+  const overlay = report.runs.find(row => row.site?.id === 'uae-taweelah');
+  assert.ok(overlay);
+  assert.match(overlay.site.solar, /frozen/i);
+  assert.match(overlay.site.solar, /PVGIS-ERA5/i);
+  const hedland = report.runs.find(row => row.site?.id === 'au-port-hedland');
+  assert.ok(hedland);
+  assert.match(hedland.site.solar, /frozen/i);
+  const oxagon = report.runs.find(row => row.site?.id === 'saudi-oxagon');
+  assert.ok(oxagon);
+  assert.match(oxagon.site.solar, /frozen/i);
 });
 
 test('sizeForPositiveCashflow still scores the tiny H2 plant without sensitivity side effects', () => {

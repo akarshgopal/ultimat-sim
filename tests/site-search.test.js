@@ -6,11 +6,16 @@ const test = require('node:test');
 const SITE_PRESETS = require('../data/site-presets.js');
 const {
   searchAbundanceSites,
+  searchFuelSites,
   rankCandidates,
   compareNearMisses,
   isIdleCandidate,
   defaultSearchSites,
   PLANT_TEMPLATES,
+  MATERIALS_TEMPLATES,
+  FUEL_TEMPLATES,
+  PATH_MATERIALS,
+  PATH_FUELS,
   DEAD_SEA_SITE_ID,
   SCREENING_NOTE,
   LAYER_SOFT_NOTE,
@@ -78,6 +83,8 @@ test('default search sites union Dead Sea hub with SITE_PRESETS and do not inven
   assert.equal(mejillones.seawaterAssayId, 'atacama-pacific-seawater');
   assert.equal(templateEligible(mejillones, 'abundance').ok, true);
   assert.equal(templateEligible(mejillones, 'coastal').ok, true);
+  assert.deepEqual(MATERIALS_TEMPLATES, ['abundance']);
+  assert.deepEqual(FUEL_TEMPLATES, ['coastal', 'methanol']);
   assert.deepEqual(PLANT_TEMPLATES, ['abundance', 'coastal', 'methanol']);
 });
 
@@ -939,6 +946,63 @@ test('abundance winners report selected.family abundance, not fuel/ammonia', () 
   const mineralIds = new Set(['lithium', 'salt', 'magnesium', 'potash', 'gypsum', 'caustic', 'bromine', 'bromide']);
   assert.ok((abundance.products || []).some(product => mineralIds.has(product.id)));
 });
+test('default materials maximizer is abundance-only and does not depend on fuels', () => {
+  const sites = [brineSite(), searchSite('chile-mejillones'), searchSite('spain-almeria')];
+  const materials = searchAbundanceSites({ sites, sizeOpts: FAST });
+  assert.equal(materials.path, PATH_MATERIALS);
+  assert.deepEqual(materials.templates, MATERIALS_TEMPLATES.slice());
+  assert.ok(materials.notes.some(note => /abundance only|fuels do not enter/i.test(note)));
+  const materialRows = materials.ranking.concat(materials.nearMisses, materials.skipped);
+  assert.ok(materialRows.length >= 1);
+  assert.ok(materialRows.every(row => row.template === 'abundance'));
+  assert.ok(!materialRows.some(row => row.template === 'coastal' || row.template === 'methanol'));
+  assert.equal(materials.tried, 2, 'Almería has no brine assay; Dead Sea + Mejillones abundance only');
+
+  const mixed = searchAbundanceSites({
+    sites,
+    templates: ['abundance', 'methanol'],
+    sizeOpts: FAST,
+  });
+  const abundanceKey = row => [row.siteId, row.template, row.annualNetCash, row.feasible];
+  assert.deepEqual(
+    materials.ranking.map(abundanceKey),
+    mixed.ranking.filter(row => row.template === 'abundance').map(abundanceKey)
+  );
+  assert.ok(mixed.notes.some(note => /mixed plant templates/i.test(note)));
+
+  const fuels = searchFuelSites({ sites, sizeOpts: FAST });
+  assert.equal(fuels.path, PATH_FUELS);
+  assert.deepEqual(fuels.templates, FUEL_TEMPLATES.slice());
+  const fuelRows = fuels.ranking.concat(fuels.nearMisses, fuels.skipped);
+  assert.ok(fuelRows.length >= 1);
+  assert.ok(fuelRows.every(row => row.template === 'coastal' || row.template === 'methanol'));
+  assert.ok(!fuelRows.some(row => row.template === 'abundance'));
+  assert.ok(fuels.notes.some(note => /fuels screening path/i.test(note)));
+});
+
+test('CLI --path fuels searches coastal/methanol, not abundance', () => {
+  const script = path.join(__dirname, '..', 'scripts', 'abundance-site-search.mjs');
+  const ran = spawnSync(process.execPath, [
+    script,
+    '--fast',
+    '--path', 'fuels',
+    '--sites', 'spain-almeria,chile-mejillones',
+    '--top', '5',
+  ], {
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+  assert.equal(ran.status, 0, ran.stderr || ran.stdout);
+  const payload = JSON.parse(ran.stdout);
+  assert.equal(payload.path, PATH_FUELS);
+  assert.deepEqual(payload.templates, FUEL_TEMPLATES.slice());
+  assert.equal(payload.cli.path, PATH_FUELS);
+  assert.ok(payload.tried >= 1);
+  assert.ok(!(payload.ranking || []).some(row => row.template === 'abundance'));
+  assert.ok(!(payload.nearMisses || []).some(row => row.template === 'abundance'));
+  assert.ok(!(payload.skipped || []).some(row => row.template === 'abundance'));
+});
+
 test('CLI prints JSON and exits 0 with Dead Sea in the default set', () => {
   const script = path.join(__dirname, '..', 'scripts', 'abundance-site-search.mjs');
   const ran = spawnSync(process.execPath, [

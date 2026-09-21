@@ -8,6 +8,10 @@
       'lake-mackay-wa-brine': require('../data/lake-mackay-wa-brine.js'),
       'great-salt-lake-brine': require('../data/great-salt-lake-brine.js'),
       'salton-sea-brine': require('../data/salton-sea-brine.js'),
+      'red-sea-sabkha-brine': require('../data/red-sea-sabkha-brine.js'),
+      'kutch-subsoil-brine': require('../data/kutch-subsoil-brine.js'),
+      'texas-gulf-desal-brine': require('../data/texas-gulf-desal-brine.js'),
+      'mediterranean-swro-brine': require('../data/mediterranean-swro-brine.js'),
     } : {
       'dead-sea-brine': root.DeadSeaBrine,
       'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
@@ -15,6 +19,10 @@
       'lake-mackay-wa-brine': root.LakeMackayWaBrine,
       'great-salt-lake-brine': root.GreatSaltLakeBrine,
       'salton-sea-brine': root.SaltonSeaBrine,
+      'red-sea-sabkha-brine': root.RedSeaSabkhaBrine,
+      'kutch-subsoil-brine': root.KutchSubsoilBrine,
+      'texas-gulf-desal-brine': root.TexasGulfDesalBrine,
+      'mediterranean-swro-brine': root.MediterraneanSwroBrine,
     },
     typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
   );

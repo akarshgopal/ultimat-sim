@@ -131,6 +131,17 @@ test('catalog expansion wires GSL inland, Atacama salar screening, and Gulf/Red 
   assert.equal(yanbu.kind, 'industrial-coast');
   assert.equal(yanbu.region, 'Red Sea');
   assert.equal(yanbu.assayId, 'red-sea-seawater');
-  assert.equal(yanbu.brineAssayId, undefined);
+  assert.equal(yanbu.brineAssayId, 'red-sea-sabkha-brine');
   assert.equal(yanbu.rightsHints.seawaterIntake.status, 'assumed');
+  assert.match(yanbu.rightsHints.brineConcession.note, /not a mineral concession/i);
+
+  const kwinana = byId.get('au-kwinana');
+  assert.equal(kwinana.brineAssayId, 'lake-mackay-wa-brine');
+  assert.match(kwinana.notes, /Lake Mackay/i);
+
+  const duqm = byId.get('oman-duqm');
+  assert.equal(duqm.brineAssayId, undefined);
+  assert.equal(duqm.permanentSkip.abundance.reason, 'no-brine-assay');
+  assert.match(duqm.permanentSkip.abundance.notes, /Permanent skip/i);
+  assert.match(duqm.notes, /permanently skipped/i);
 });

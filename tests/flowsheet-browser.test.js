@@ -25,6 +25,10 @@ test('root chrome exposes four tabs and keeps Network copy without Empire', () =
   assert.ok(html.indexOf('data/lake-mackay-wa-brine.js') < html.indexOf('data/site-assays.js'));
   assert.ok(html.indexOf('data/great-salt-lake-brine.js') < html.indexOf('data/site-assays.js'));
   assert.ok(html.indexOf('data/salton-sea-brine.js') < html.indexOf('data/site-assays.js'));
+  assert.ok(html.indexOf('data/red-sea-sabkha-brine.js') < html.indexOf('data/site-assays.js'));
+  assert.ok(html.indexOf('data/kutch-subsoil-brine.js') < html.indexOf('data/site-assays.js'));
+  assert.ok(html.indexOf('data/texas-gulf-desal-brine.js') < html.indexOf('data/site-assays.js'));
+  assert.ok(html.indexOf('data/mediterranean-swro-brine.js') < html.indexOf('data/site-assays.js'));
   assert.ok(html.indexOf('data/arabian-sea-seawater.js') < html.indexOf('data/site-assays.js'));
   assert.ok(html.indexOf('data/gulf-of-kutch-seawater.js') < html.indexOf('data/site-assays.js'));
   assert.ok(html.indexOf('data/benguela-atlantic-seawater.js') < html.indexOf('data/site-assays.js'));

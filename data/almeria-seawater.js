@@ -4,6 +4,7 @@
 })(globalThis, {
   "meta": {
     "retrieved": "2026-09-06",
+    "id": "almeria-seawater",
     "site": {
       "latitude": 36.834,
       "longitude": -2.463,

@@ -4,7 +4,10 @@
  * Sources: USDA NASS Land Values 2025 (farm real estate $/acre by state);
  * Eurostat apri_lprc ARA EUR/ha (latest year per NUTS0);
  * Statistics Canada 32-10-0047-01 (CAD/acre → USD/ha);
- * ABARES/DAFF Farmland Price Indicator (AUD/ha → USD/ha).
+ * ABARES/DAFF Farmland Price Indicator (AUD/ha → USD/ha);
+ * plus labeled national/regional series for Chile / Gulf / India / Japan / South Africa
+ * (NCA Japan cited; Saudi MoJ 2023 ag-land deals cited; ODEPA-family ads, Gujarat
+ * acre-order, Western Cape sheets, and GCC MoJ proxy are screening).
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -37,6 +40,37 @@ const FX_CADUSD = Object.freeze({
   date: '2026-09-11',
   source: 'Frankfurter (ECB reference rates)',
   citeUrl: 'https://www.frankfurter.app/',
+});
+
+// Frankfurter (ECB) USD quotes, 2026-09-18. usdPerHa = local / USDxxx.
+const FX_USDJPY = Object.freeze({
+  pair: 'USDJPY',
+  rate: 157.89,
+  date: '2026-09-18',
+  source: 'Frankfurter (ECB reference rates)',
+  citeUrl: 'https://www.frankfurter.app/',
+});
+const FX_USDZAR = Object.freeze({
+  pair: 'USDZAR',
+  rate: 16.2724,
+  date: '2026-09-18',
+  source: 'Frankfurter (ECB reference rates)',
+  citeUrl: 'https://www.frankfurter.app/',
+});
+const FX_USDINR = Object.freeze({
+  pair: 'USDINR',
+  rate: 95.88,
+  date: '2026-09-18',
+  source: 'Frankfurter (ECB reference rates)',
+  citeUrl: 'https://www.frankfurter.app/',
+});
+// Saudi riyal official peg (SAMA). AED/QAR/OMR are similarly dollar-pegged.
+const FX_USDSAR = Object.freeze({
+  pair: 'USDSAR',
+  rate: 3.75,
+  date: '2026-09-18',
+  source: 'Saudi riyal official peg (SAMA)',
+  citeUrl: 'https://www.sama.gov.sa/',
 });
 
 // Statistics Canada Table 32-10-0047-01 — Value per acre of farm land and buildings at July 1, 2025 (CAD/acre).
@@ -93,6 +127,7 @@ function buildUsRecords() {
     citeUrl: 'https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf',
     unit: 'USD/ha',
     kind: 'us-state',
+    quality: 'cited',
   }));
 }
 
@@ -111,6 +146,7 @@ function buildCanadaRecords() {
       citeUrl: 'https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210004701',
       unit: 'USD/ha',
       kind: 'country',
+      quality: 'cited',
       fx: { ...FX_CADUSD },
     };
   });
@@ -127,6 +163,7 @@ function buildAustraliaRecords() {
     citeUrl: 'https://www.agriculture.gov.au/about/news/broadacre-farmland-prices-strong-growth',
     unit: 'USD/ha',
     kind: 'country',
+    quality: 'cited',
     fx: { ...FX_AUDUSD },
   }));
 }
@@ -188,10 +225,140 @@ function extractEurostat(apriPath) {
       citeUrl: 'https://ec.europa.eu/eurostat/databrowser/view/apri_lprc/default/table',
       unit: 'USD/ha',
       kind: 'eu-country',
+      quality: 'cited',
       fx: { ...FX },
     });
   }
   return out;
+}
+
+// NCA 全国農業会議所 令和7年田畑売買価格 — 純農業地域 中田 103.1万円/10a (published 2026-03-19).
+const NCA_2025_JPY_PER_10A = 1031000;
+
+// Western Cape DoA Dec 2024 provincial agricultural land sheet — Western Cape R23,317/ha.
+const WCDOA_2024_ZAR_PER_HA = 23317;
+
+// Screening Central Valley cropland asking-price order (ODEPA-family / broker ads).
+const CHILE_SCREENING_USD_PER_HA = 13000;
+
+// Screening Gujarat farmland acre-order (not MOSPI/NABARD official).
+const INDIA_SCREENING_INR_PER_ACRE = 400000;
+
+// Saudi MoJ real-estate indicator 2023: 1,571 ag-land deals, SAR 2,180,103,242 on 219,089,383 m².
+const SAUDI_MOJ_2023_SAR = 2180103242;
+const SAUDI_MOJ_2023_M2 = 219089383;
+
+function buildExtraRecords() {
+  const jpyPerHa = NCA_2025_JPY_PER_10A * 10;
+  const inrPerHa = INDIA_SCREENING_INR_PER_ACRE * ACRES_PER_HA;
+  const sarPerHa = (SAUDI_MOJ_2023_SAR / SAUDI_MOJ_2023_M2) * 10000;
+  const saudiUsd = roundMoney(sarPerHa / FX_USDSAR.rate);
+  const gulfProxyNote = 'Screening GCC agricultural land $/ha — Saudi MoJ 2023 ag-land deal average as regional proxy (no published national farmland statistical series). Not cadastral, not industrial parcel quotes.';
+  const gulfCite = 'https://www.alwatan.com.sa/article/1138667';
+
+  return [
+    {
+      id: 'CL',
+      name: 'Chile',
+      usdPerHa: CHILE_SCREENING_USD_PER_HA,
+      year: 2025,
+      source: 'Screening agricultural land $/ha (Chile) — Central Valley cropland asking-price order ~USD 13,000/ha (ODEPA-family / broker ads). Not cadastral, not industrial Mejillones parcel quotes.',
+      citeUrl: 'https://www.odepa.gob.cl/estadisticas-del-sector/estadisticas-productivas',
+      unit: 'USD/ha',
+      kind: 'country',
+      quality: 'screening',
+    },
+    {
+      id: 'IN',
+      name: 'India',
+      usdPerHa: roundMoney(inrPerHa / FX_USDINR.rate),
+      inrPerAcre: INDIA_SCREENING_INR_PER_ACRE,
+      inrPerHa: roundMoney(inrPerHa),
+      year: 2024,
+      source: 'Screening agricultural land $/ha (India) — Gujarat farmland acre-order ~₹4 lakh/acre → USD/ha. Not MOSPI/NABARD official, not cadastral, not Mundra SEZ quotes.',
+      citeUrl: 'https://www.iima.ac.in/sites/default/files/2025-12/ISALPI%20Index%20December%202025%20%20Release%20%20%281%29.pdf',
+      unit: 'USD/ha',
+      kind: 'country',
+      quality: 'screening',
+      fx: { ...FX_USDINR },
+    },
+    {
+      id: 'JP',
+      name: 'Japan',
+      usdPerHa: roundMoney(jpyPerHa / FX_USDJPY.rate),
+      jpyPer10a: NCA_2025_JPY_PER_10A,
+      jpyPerHa,
+      year: 2025,
+      source: 'NCA 全国農業会議所 令和7年田畑売買価格等に関する調査結果 — 純農業地域 中田 103.1万円/10a → USD/ha',
+      citeUrl: 'https://www.nca.or.jp/upload/denpata_r7_youshi.pdf',
+      unit: 'USD/ha',
+      kind: 'country',
+      quality: 'cited',
+      fx: { ...FX_USDJPY },
+    },
+    {
+      id: 'ZA',
+      name: 'South Africa',
+      usdPerHa: roundMoney(WCDOA_2024_ZAR_PER_HA / FX_USDZAR.rate),
+      zarPerHa: WCDOA_2024_ZAR_PER_HA,
+      year: 2024,
+      source: 'Screening agricultural land $/ha (South Africa) — Western Cape DoA Dec 2024 provincial sheet R23,317/ha as national/regional proxy. Not cadastral, not Cape Town industrial parcel quotes.',
+      citeUrl: 'https://www.elsenburg.com/wp-content/uploads/2024/12/2024-Agric-land-prices-December.pdf',
+      unit: 'USD/ha',
+      kind: 'country',
+      quality: 'screening',
+      fx: { ...FX_USDZAR },
+    },
+    {
+      id: 'SA',
+      name: 'Saudi Arabia',
+      usdPerHa: saudiUsd,
+      sarPerHa: roundMoney(sarPerHa),
+      year: 2023,
+      source: 'Saudi Ministry of Justice real-estate indicator 2023 — 1,571 agricultural-land deals, SAR 2.180 billion on 219.1 million m² → USD/ha',
+      citeUrl: gulfCite,
+      unit: 'USD/ha',
+      kind: 'country',
+      quality: 'cited',
+      fx: { ...FX_USDSAR },
+    },
+    {
+      id: 'AE',
+      name: 'United Arab Emirates',
+      usdPerHa: saudiUsd,
+      year: 2023,
+      source: gulfProxyNote,
+      citeUrl: gulfCite,
+      unit: 'USD/ha',
+      kind: 'country',
+      quality: 'screening',
+      fx: { ...FX_USDSAR },
+    },
+    {
+      id: 'QA',
+      name: 'Qatar',
+      usdPerHa: saudiUsd,
+      year: 2023,
+      source: gulfProxyNote,
+      citeUrl: gulfCite,
+      unit: 'USD/ha',
+      kind: 'country',
+      quality: 'screening',
+      fx: { ...FX_USDSAR },
+    },
+    {
+      id: 'OM',
+      name: 'Oman',
+      usdPerHa: saudiUsd,
+      year: 2023,
+      source: gulfProxyNote,
+      citeUrl: gulfCite,
+      unit: 'USD/ha',
+      kind: 'country',
+      quality: 'screening',
+      fx: { ...FX_USDSAR },
+    },
+  ];
 }
 
 function quantizeCoords(coords, decimals = 2) {
@@ -258,26 +425,139 @@ function toUmd(globalName, json, headerComment) {
   return `${headerComment}\n(function exposeLandData(root, data) {\n  if (typeof module === 'object' && module.exports) module.exports = data;\n  root.${globalName} = data;\n})(typeof globalThis !== 'undefined' ? globalThis : this, ${body});\n`;
 }
 
+const EXTRA_SOURCES = [
+  {
+    id: 'nca-japan-r7',
+    label: 'NCA Japan 令和7年田畑売買価格 (純農業地域 中田 yen/10a → USD/ha)',
+    url: 'https://www.nca.or.jp/upload/denpata_r7_youshi.pdf',
+  },
+  {
+    id: 'saudi-moj-ag-2023',
+    label: 'Saudi MoJ real-estate indicator 2023 agricultural-land deals (SAR/m² → USD/ha)',
+    url: 'https://www.alwatan.com.sa/article/1138667',
+  },
+  {
+    id: 'odepa-chile-screening',
+    label: 'Screening: Chile Central Valley cropland ads (ODEPA-family / broker order)',
+    url: 'https://www.odepa.gob.cl/estadisticas-del-sector/estadisticas-productivas',
+  },
+  {
+    id: 'wcdoa-za-2024',
+    label: 'Screening: Western Cape DoA Dec 2024 provincial agricultural land R/ha',
+    url: 'https://www.elsenburg.com/wp-content/uploads/2024/12/2024-Agric-land-prices-December.pdf',
+  },
+  {
+    id: 'india-gujarat-screening',
+    label: 'Screening: India Gujarat farmland acre-order (IIMA ISALPI context; not MOSPI official)',
+    url: 'https://www.iima.ac.in/sites/default/files/2025-12/ISALPI%20Index%20December%202025%20%20Release%20%20%281%29.pdf',
+  },
+];
+
+function extraFx() {
+  return {
+    AUDUSD: FX_AUDUSD,
+    CADUSD: FX_CADUSD,
+    USDJPY: FX_USDJPY,
+    USDZAR: FX_USDZAR,
+    USDINR: FX_USDINR,
+    USDSAR: FX_USDSAR,
+  };
+}
+
+function mergeRecords(existing, extras) {
+  const byId = new Map();
+  for (const r of existing) {
+    if (!r?.id) continue;
+    if (r.quality == null && (r.kind === 'us-state' || r.kind === 'eu-country' || r.kind === 'country')) {
+      byId.set(r.id, { ...r, quality: 'cited' });
+    } else {
+      byId.set(r.id, r);
+    }
+  }
+  for (const r of extras) {
+    byId.set(r.id, r);
+  }
+  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function writeBundle(bundle, admin) {
+  writeFileSync(join(DATA, 'land-prices.json'), JSON.stringify(bundle, null, 2) + '\n');
+  writeFileSync(join(DATA, 'land-prices.js'), toUmd(
+    'LAND_PRICES',
+    bundle,
+    '// Agricultural land prices (USDA NASS 2025 + Eurostat + StatCan + ABARES + NCA/MoJ + labeled screening). Generated by scripts/build-land-prices.mjs.',
+  ));
+  writeFileSync(join(DATA, 'land-admin.geojson'), JSON.stringify(admin));
+  writeFileSync(join(DATA, 'land-admin.js'), toUmd(
+    'LAND_ADMIN_GEOJSON',
+    admin,
+    '// Compact Natural Earth 110m admin polygons for land choropleth. Generated by scripts/build-land-prices.mjs.',
+  ));
+}
+
+function stampAdminHasPrice(admin, priceIds) {
+  for (const feature of admin.features || []) {
+    const id = feature?.properties?.id;
+    if (!id) continue;
+    feature.properties.hasPrice = priceIds.has(id);
+  }
+  return admin;
+}
+
 const apriPath = '/tmp/apri_lprc.json';
-if (!existsSync(apriPath)) {
-  throw new Error('Missing /tmp/apri_lprc.json');
+const extras = buildExtraRecords();
+const canRebuild = existsSync(apriPath)
+  && existsSync('/tmp/ne_countries.geojson')
+  && existsSync('/tmp/ne_states.geojson');
+
+if (!canRebuild) {
+  const existing = JSON.parse(readFileSync(join(DATA, 'land-prices.json'), 'utf8'));
+  const admin = JSON.parse(readFileSync(join(DATA, 'land-admin.geojson'), 'utf8'));
+  const records = mergeRecords(existing.records || [], extras);
+  const sources = [...(existing.meta?.sources || [])];
+  for (const src of EXTRA_SOURCES) {
+    if (!sources.some((s) => s.id === src.id)) sources.push(src);
+  }
+  const bundle = {
+    ...existing,
+    meta: {
+      ...existing.meta,
+      title: 'Agricultural land values (official + labeled screening)',
+      note: 'Early siting proxy from official agricultural land-price statistics plus labeled screening national/regional proxies — not cadastral, not industrial parcel quotes, not transaction comps. Record quality is cited vs screening.',
+      sources,
+      fxExtra: { ...(existing.meta?.fxExtra || {}), ...extraFx() },
+      generatedAt: new Date().toISOString(),
+    },
+    records,
+  };
+  const priceIds = new Set(bundle.records.map((r) => r.id));
+  stampAdminHasPrice(admin, priceIds);
+  writeBundle(bundle, admin);
+  console.log(JSON.stringify({
+    mode: 'merge-extras',
+    extraIds: extras.map((r) => r.id),
+    totalRecords: bundle.records.length,
+    sample: Object.fromEntries(extras.map((r) => [r.id, { usdPerHa: r.usdPerHa, quality: r.quality }])),
+  }, null, 2));
+  process.exit(0);
 }
 
 const us = buildUsRecords();
 const eu = extractEurostat(apriPath);
 const ca = buildCanadaRecords();
 const au = buildAustraliaRecords();
+const extra = extras;
 const byId = new Map();
-for (const r of [...us, ...eu, ...ca, ...au]) {
+for (const r of [...us, ...eu, ...ca, ...au, ...extra]) {
   if (byId.has(r.id)) throw new Error(`Duplicate id ${r.id}`);
   byId.set(r.id, r);
 }
 
 const bundle = {
   meta: {
-    title: 'Agricultural land values (official sources)',
+    title: 'Agricultural land values (official + labeled screening)',
     units: 'USD/ha',
-    note: 'Early siting proxy from official agricultural land-price statistics — not cadastral, not industrial parcel quotes, not transaction comps.',
+    note: 'Early siting proxy from official agricultural land-price statistics plus labeled screening national/regional proxies — not cadastral, not industrial parcel quotes, not transaction comps. Record quality is cited vs screening.',
     acresPerHa: ACRES_PER_HA,
     fx: FX,
     sources: [
@@ -301,8 +581,9 @@ const bundle = {
         label: 'ABARES/DAFF Farmland Price Indicator national broadacre AUD/ha (2023)',
         url: 'https://www.agriculture.gov.au/about/news/broadacre-farmland-prices-strong-growth',
       },
+      ...EXTRA_SOURCES,
     ],
-    fxExtra: { AUDUSD: FX_AUDUSD, CADUSD: FX_CADUSD },
+    fxExtra: extraFx(),
     generatedAt: new Date().toISOString(),
   },
   records: [...byId.values()].sort((a, b) => a.id.localeCompare(b.id)),
@@ -310,29 +591,19 @@ const bundle = {
 
 const priceIds = new Set(bundle.records.map((r) => r.id));
 const admin = buildAdmin(priceIds);
-
-writeFileSync(join(DATA, 'land-prices.json'), JSON.stringify(bundle, null, 2) + '\n');
-writeFileSync(join(DATA, 'land-prices.js'), toUmd(
-  'LAND_PRICES',
-  bundle,
-  '// Cited agricultural land prices (USDA NASS 2025 + Eurostat + StatCan + ABARES). Generated by scripts/build-land-prices.mjs.',
-));
-writeFileSync(join(DATA, 'land-admin.geojson'), JSON.stringify(admin));
-writeFileSync(join(DATA, 'land-admin.js'), toUmd(
-  'LAND_ADMIN_GEOJSON',
-  admin,
-  '// Compact Natural Earth 110m admin polygons for land choropleth. Generated by scripts/build-land-prices.mjs.',
-));
+writeBundle(bundle, admin);
 
 const usCount = us.length;
 const euCount = eu.length;
 const adminBytes = Buffer.byteLength(JSON.stringify(admin));
 const priceBytes = Buffer.byteLength(JSON.stringify(bundle));
 console.log(JSON.stringify({
+  mode: 'rebuild',
   usStates: usCount,
   euCountries: euCount,
   canada: ca.length,
   australia: au.length,
+  extras: extra.length,
   totalRecords: bundle.records.length,
   adminFeatures: admin.features.length,
   landPricesJsonBytes: priceBytes,
@@ -340,5 +611,12 @@ console.log(JSON.stringify({
   fx: FX,
   fxAud: FX_AUDUSD,
   fxCad: FX_CADUSD,
-  sample: { IA: byId.get('US-IA') || byId.get('IA'), ES: byId.get('ES'), CA: byId.get('CA'), AU: byId.get('AU') },
+  sample: {
+    IA: byId.get('US-IA') || byId.get('IA'),
+    ES: byId.get('ES'),
+    CA: byId.get('CA'),
+    AU: byId.get('AU'),
+    CL: byId.get('CL'),
+    JP: byId.get('JP'),
+  },
 }, null, 2));

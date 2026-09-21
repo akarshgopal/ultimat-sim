@@ -69,28 +69,19 @@ Requires Node.js 18 or newer; no external runtime packages are needed.
 The live site is https://akarshgopal.github.io/ultimat-sim/ — pushes to main rebuild via GitHub Pages.
 
 
-## Site-hunt limitation list (14 points)
+## Fixed this round
 
-Status of the abundance / multi-site search limitation list after Phase 2 merges (PVGIS remaining, catalog brine, soft-rank frozen, rights/demand depth, hunt honesty). Screening TEA only — not bankable permits or offtake contracts.
+- **#12 Doc drift (narrow) + README scaffold.** `scripts/fuel-breakeven.mjs` location overlays bind frozen per-site PVGIS from `data/pvgis-sites.js` when present (`uae-taweelah`, `au-port-hedland`, `saudi-oxagon` already have series). Stale “no frozen typical-day PVGIS in-repo” / “no Gulf typical-day” labels are gone; missing frozen PVGIS keeps plant-template solar rather than inventing kWh/kWp. Other tickets land via merge.
 
-| # | Item | Status |
-|---|------|--------|
-| 1 | Expand preset catalog (cited brine/coastal presets; not open-world GIS) | **done** — Great Salt Lake, **Salton Sea** (Imperial Valley geothermal), additional desal/DLE coasts on `SITE_PRESETS`; search-eligible. Still not an open-world GIS crawler. |
-| 2 | Assay-aware abundance wiring | **done** (prior) |
-| 3 | Dual-assay coasts (seawater + process brine) | **done** — Gulf sabkha also pinned on **Ras Al-Khair** (same assay as Taweelah/Ras Laffan; no invented chemistry) |
-| 4 | Process-brine eligibility pins | **done** (prior) |
-| 5 | Rights scenarios that bite | **done** — `screening-assumes-intake-concession` (default), `screening-assumes-intake-only` (concession not assumed → abundance `no-concession`), `no-rights` (skip/infeasible), `offtake-limited` (demand haircut); CLI `--rights-scenario` |
-| 6 | Regional demand / offtake tables | **done** — Chile Li special; AU/TX/SA/IN/EU/Gulf mineral ceilings use USGS MCS production/trade proxies (not pure me-levant inherit); offtake-limited haircuts the regional tables |
-| 7 | Denser / continuous-ish resize in cashflow search | **done** — coarse grid then bounded refine; site-search `SEARCH_RATES` denser `[0,1,2,5,10]`; `FAST_*` for tests |
-| 8 | Non-idle near-misses | **done** (prior) |
-| 9 | Freeze more PVGIS (Duqm, Mundra, Walvis Bay, …) | **done** — catalog fuel coasts (incl. Yanbu/Kwinana/Dakhla) + inland hubs (Lake Mackay, GSL, Salar) frozen; Almería/Mejillones/Dead Sea in `BY_SITE_ID`; no Almería reuse | **done** — catalog coasts + inland hubs (Yanbu, Kwinana, Dakhla, Lake Mackay, GSL, Salar) have frozen PVGIS; Almería/Mejillones/Dead Sea registered in `BY_SITE_ID`; no Almería reuse |
-| 10 | Millero seawater assays | **done** (prior) |
-| 11 | Map-layer soft rank (secondary) | **done** — `layerScore`/`softRank` tie-break only; skip if layers missing; prefers frozen PVGIS yield; completeness-weights missing land $/ha |
-| 12 | Process-brine catalog coverage | **done** — Salton Sea geothermal Li assay + Ras Al-Khair sabkha dual-assay pin; further basins still open |
-| 13 | Regional TEA overlays (power $/kWh, prices, optional CAPEX) | **done** — regional power overlays + demand regions + screening CAPEX location multipliers (labor/construction proxy, ~0.7–1.3 vs US Gulf-ish 1.0; not plant quotes) |
-| 14 | Fuel cash+ path | **done / partial** — `probeFuelCash` price×CAPEX within tea-screening bands; rank gate is mid-band (mid price × CAPEX 1.0). Edge cash+ (e.g. capexFactor=0.05) stays annotated near-miss; CH₄ vs MeOH share the same rule |
+## Won't fix (OOS)
 
-Leftover gaps after Phase 2 (2026-09-21): open-world GIS crawler intentionally out of scope (closed cited catalog — Salton Sea + Ras Al-Khair dual-assay expand it only); real government permits/concessions out of scope; screening TEA only (not bankable quotes); fuel cash+ rank requires mid-band (edge `screening-edge` probe stays near-miss — CH₄/MeOH still rarely mid-cash+); land $/ha still missing for Chile/Gulf/India/Japan/SA (soft-rank completeness-weights); further brine basins (Uyuni, Qaidam, Danakil, …) not yet catalogued; grid/freshwater/discharge rights axes beyond intake/concession still shallow. CAPEX intensity multipliers remain screening labor/construction proxies (not plant quotes).
+- Open-world GIS crawler (closed cited catalog only).
+- Real government permits as bankable.
+- Screening TEA only (inherent).
+
+## Empty fixable backlog
+
+- Official national land $/ha still unpublished for Chile, India, Gulf states, Japan, and South Africa in this worktree (ODEPA classified ads, NCA Japan farmland surveys, and Western Cape provincial transaction sheets are not the same class as NASS/Eurostat/StatCan/ABARES). Soft-rank completeness-weights missing land. Land wiring is another branch.
 
 
 ## License

@@ -44,6 +44,9 @@ const WATER_BODIES = Object.freeze([
 ]);
 
 const COLORMAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
+const LAYER_SCORE_EXPECTED_PARTS = 3;
+// Matches pvScreeningBand's upper clamp; frozen PVGIS daily yield is scored on the same scale.
+const PV_YIELD_SCORE_MAX = 6.8;
 
 // GSA / Solargis-style ramp for annual GHI (kWh/m²·year). Stops ≈ daily 0–10 × 365.
 const GSA_GHI_RAMP = Object.freeze([
@@ -389,7 +392,7 @@ function pvScreeningBand(latitude, longitude) {
   else if (absLat < 50) cloud = 0.88;
   else if (absLat < 60) cloud = 0.72;
   else cloud = 0.50;
-  const typicalKWhPerKWpDay = clamp(5.5 * geometry * cloud, 0.7, 6.8);
+  const typicalKWhPerKWpDay = clamp(5.5 * geometry * cloud, 0.7, PV_YIELD_SCORE_MAX);
   const typicalKWhPerKWpYear = typicalKWhPerKWpDay * 365;
   let band = 'poor';
   if (typicalKWhPerKWpDay >= 5.0) band = 'excellent';
@@ -806,17 +809,51 @@ function landCostScore(usdPerHa) {
   return clamp(1 - (Math.log(usdPerHa) - Math.log(lo)) / span, 0, 1);
 }
 
-// Secondary siting score from sun/water/land helpers. Null when layers are missing — not a gate.
-function layerScoreAt(latitude, longitude) {
+function layerScoreOverrides(latitude, longitude, overrides) {
+  if (overrides && typeof overrides === 'object' && !Array.isArray(overrides)) return overrides;
+  if (latitude && typeof latitude === 'object' && !Array.isArray(latitude)
+    && longitude && typeof longitude === 'object' && !Array.isArray(longitude)) {
+    return longitude;
+  }
+  return {};
+}
+
+function frozenDailyYieldKWh(overrides) {
+  const daily = finiteNumber(overrides?.dailyPVKWhPerKWp);
+  if (daily > 0) return daily;
+  const yearly = finiteNumber(overrides?.yearlyPVKWhPerKWp ?? overrides?.E_y);
+  if (yearly > 0) return yearly / 365;
+  return null;
+}
+
+function pvYieldScore(dailyKWhPerKWp) {
+  if (!Number.isFinite(dailyKWhPerKWp) || !(dailyKWhPerKWp > 0)) return null;
+  return clamp(dailyKWhPerKWp / PV_YIELD_SCORE_MAX, 0, 1);
+}
+
+// Secondary siting score from sun/water/cited-land. Frozen PVGIS daily/yearly
+// yield (overrides.dailyPVKWhPerKWp or yearlyPVKWhPerKWp/E_y) replaces the
+// latitude screening band when present. Missing land $/ha is omitted; the mean
+// of available layers is scaled by completeness (n/3) so sun+water are not
+// silently over-weighted. Null when layers are missing — not a gate.
+function layerScoreAt(latitude, longitude, overrides) {
   const coords = coordsFrom(latitude, longitude);
   if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude) || coords.latitude < -90 || coords.latitude > 90) {
     return null;
   }
 
+  const extra = layerScoreOverrides(latitude, longitude, overrides);
   const parts = [];
-  const pv = pvScreeningBand(coords);
-  if (pv.band !== 'unknown' && Number.isFinite(pv.typicalKWhPerKWpDay)) {
-    parts.push(clamp(pv.typicalKWhPerKWpDay / 6.8, 0, 1));
+  const frozenDaily = frozenDailyYieldKWh(extra);
+  if (frozenDaily != null) {
+    const sun = pvYieldScore(frozenDaily);
+    if (sun != null) parts.push(sun);
+  } else {
+    const pv = pvScreeningBand(coords);
+    if (pv.band !== 'unknown' && Number.isFinite(pv.typicalKWhPerKWpDay)) {
+      const sun = pvYieldScore(pv.typicalKWhPerKWpDay);
+      if (sun != null) parts.push(sun);
+    }
   }
   const water = waterAvailabilityScreening(coords);
   if (water.band !== 'unknown' && Number.isFinite(water.score)) {
@@ -826,14 +863,12 @@ function layerScoreAt(latitude, longitude) {
   if (priced) {
     const land = landCostScore(priced.usdPerHa);
     if (land != null) parts.push(land);
-  } else {
-    const landIndex = landIndexAt(coords);
-    if (Number.isFinite(landIndex)) parts.push(clamp(1 - landIndex, 0, 1));
   }
 
   if (!parts.length) return null;
-  const score = parts.reduce((sum, value) => sum + value, 0) / parts.length;
-  return Math.round(score * 1e4) / 1e4;
+  const completeness = parts.length / LAYER_SCORE_EXPECTED_PARTS;
+  const mean = parts.reduce((sum, value) => sum + value, 0) / parts.length;
+  return Math.round(mean * completeness * 1e4) / 1e4;
 }
 
 function webMercatorToLatLng(z, tileX, tileY, px, py, tileSize = 256) {
@@ -1021,6 +1056,8 @@ return {
   WATER_BODIES,
   LAYER_SOURCES,
   COLORMAP_LAYER_IDS,
+  LAYER_SCORE_EXPECTED_PARTS,
+  PV_YIELD_SCORE_MAX,
   GSA_GHI_RAMP,
   GSA_IRRAD,
   LAND_USD_HA_RAMP,

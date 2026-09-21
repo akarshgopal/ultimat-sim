@@ -504,6 +504,34 @@ test('soft rank breaks equal-primary ties; missing layers do not exclude', () =>
   assert.equal(noLayers.softRank, null);
 });
 
+test('soft rank uses frozen PVGIS yield when present and still scores sites without land $/ha', () => {
+  const mapSite = require('../engine/map-site');
+  const duqm = searchSite('oman-duqm');
+  const solar = frozenSolarFor(duqm, 'coastal');
+  assert.ok(solar?.dailyPVKWhPerKWp > 0);
+  const scored = evaluateCandidate(duqm, 'coastal', FAST);
+  const expected = mapSite.layerScoreAt(duqm.latitude, duqm.longitude, {
+    dailyPVKWhPerKWp: solar.dailyPVKWhPerKWp,
+    frozen: true,
+  });
+  const screening = mapSite.layerScoreAt(duqm.latitude, duqm.longitude);
+  assert.equal(scored.layerScore, expected);
+  assert.equal(scored.softRank, expected);
+  assert.notEqual(expected, screening);
+  assert.equal(mapSite.landPriceAt(duqm.latitude, duqm.longitude), null);
+
+  const mejillones = searchSite('chile-mejillones');
+  const mejSolar = frozenSolarFor(mejillones, 'methanol');
+  const mejEval = evaluateCandidate(mejillones, 'methanol', FAST);
+  assert.equal(mejEval.layerScore, mapSite.layerScoreAt(mejillones.latitude, mejillones.longitude, {
+    dailyPVKWhPerKWp: mejSolar.dailyPVKWhPerKWp,
+    frozen: true,
+  }));
+  assert.equal(mejEval.softRank, mejEval.layerScore);
+  assert.equal(typeof mejEval.layerScore, 'number');
+  assert.equal(mapSite.landPriceAt(mejillones.latitude, mejillones.longitude), null);
+});
+
 test('near-miss ranking prefers operating cash- slates over idle cash≈0', () => {
   const idle = {
     siteId: 'idle-coast',

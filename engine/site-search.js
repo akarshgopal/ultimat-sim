@@ -654,7 +654,12 @@ function slateFromNetwork(definition, site) {
 
 function layerScoreForSite(site) {
   if (typeof mapSite?.layerScoreAt !== 'function') return null;
-  const score = mapSite.layerScoreAt(site?.latitude, site?.longitude);
+  const solar = frozenSolarFor(site);
+  const daily = Number(solar?.dailyPVKWhPerKWp);
+  const overrides = Number.isFinite(daily) && daily > 0
+    ? { dailyPVKWhPerKWp: daily, frozen: true }
+    : undefined;
+  const score = mapSite.layerScoreAt(site?.latitude, site?.longitude, overrides);
   return Number.isFinite(score) ? score : null;
 }
 

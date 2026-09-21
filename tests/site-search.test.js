@@ -15,9 +15,11 @@ const {
   SCREENING_NOTE,
   LAYER_SOFT_NOTE,
   RIGHTS_SCREENING,
+  RIGHTS_INTAKE_ONLY,
   RIGHTS_NO_RIGHTS,
   RIGHTS_OFFTAKE,
   RIGHTS_NONE,
+  OFFTAKE_DEMAND_FACTOR,
   FAST_SCALES,
   FAST_RATES,
   templateEligible,
@@ -742,6 +744,81 @@ test('no-rights makes screening-cash+ Mejillones abundance infeasible/skipped; o
   assert.equal(payload.rightsScenario, RIGHTS_NO_RIGHTS);
   assert.equal(payload.feasibleCount, 0);
   assert.equal(payload.cli.rightsScenario, RIGHTS_NO_RIGHTS);
+});
+
+test('screening-assumes-intake-only skips abundance (no concession) but keeps fuel intake', () => {
+  const mejillones = searchSite('chile-mejillones');
+  assert.equal(templateEligible(mejillones, 'abundance').ok, true);
+  assert.equal(templateEligible(mejillones, 'methanol').ok, true);
+  assert.equal(templateEligible(mejillones, 'abundance', RIGHTS_INTAKE_ONLY).ok, false);
+  assert.equal(templateEligible(mejillones, 'abundance', RIGHTS_INTAKE_ONLY).reason, 'no-concession');
+  assert.equal(templateEligible(mejillones, 'methanol', RIGHTS_INTAKE_ONLY).ok, true);
+  assert.equal(templateEligible(mejillones, 'coastal', RIGHTS_INTAKE_ONLY).ok, true);
+  assert.equal(templateEligible(mejillones, 'methanol', RIGHTS_NO_RIGHTS).ok, false);
+
+  const screening = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['abundance', 'methanol'],
+    sizeOpts: FAST,
+  });
+  const screeningAbund = screening.ranking.find(row => row.template === 'abundance')
+    || screening.nearMisses.find(row => row.template === 'abundance');
+  assert.ok(screeningAbund, 'screening should evaluate Mejillones abundance');
+  assert.equal(screeningAbund.feasible, true);
+  assert.ok(screeningAbund.annualNetCash > 0);
+
+  const intakeOnly = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['abundance', 'methanol'],
+    rightsScenario: 'screening-assumes-intake-only',
+    sizeOpts: FAST,
+  });
+  assert.equal(intakeOnly.rightsScenario, RIGHTS_INTAKE_ONLY);
+  assert.ok(!intakeOnly.ranking.some(row => row.template === 'abundance'));
+  const skippedAbund = intakeOnly.skipped.find(row => row.siteId === 'chile-mejillones' && row.template === 'abundance');
+  assert.ok(skippedAbund);
+  assert.equal(skippedAbund.reason, 'no-concession');
+  assert.equal(skippedAbund.feasible, false);
+  assert.equal(skippedAbund.rightsScenario, RIGHTS_INTAKE_ONLY);
+  assert.ok(!intakeOnly.skipped.some(row => row.template === 'methanol'));
+  assert.ok(intakeOnly.tried >= 1, 'methanol should still be evaluated under intake-only');
+
+  const plant = buildAbundancePlant(mejillones, RIGHTS_INTAKE_ONLY);
+  assert.equal(plant.site.rights.brineConcession.authorize, false);
+  assert.equal(plant.site.rights.brineConcession.status, 'unverified');
+  const fuel = buildFuelPlant(mejillones, 'methanol', RIGHTS_INTAKE_ONLY);
+  assert.equal(fuel.site.rights.seawaterIntake.authorize, true);
+  assert.equal(fuel.site.rights.brineConcession.authorize, false);
+
+  const cli = spawnSync(process.execPath, [
+    path.join(__dirname, '..', 'scripts/abundance-site-search.mjs'),
+    '--fast',
+    '--templates', 'abundance,methanol',
+    '--sites', 'chile-mejillones',
+    '--rights-scenario', 'screening-assumes-intake-only',
+  ], { encoding: 'utf8', timeout: 60000 });
+  assert.equal(cli.status, 0, cli.stderr || cli.stdout);
+  const payload = JSON.parse(cli.stdout);
+  assert.equal(payload.rightsScenario, RIGHTS_INTAKE_ONLY);
+  assert.ok(!payload.ranking.some(row => row.template === 'abundance'));
+  assert.ok(payload.skipped.some(row => row.template === 'abundance' && row.reason === 'no-concession'));
+  assert.equal(payload.cli.rightsScenario, RIGHTS_INTAKE_ONLY);
+});
+
+test('offtake-limited haircut applies to regional mineral ceilings, not a shared me-levant table', () => {
+  const chile = buildAbundancePlant(searchSite('chile-mejillones'), RIGHTS_OFFTAKE);
+  const australia = buildAbundancePlant(searchSite('au-lake-mackay'), RIGHTS_OFFTAKE);
+  const levant = buildAbundancePlant(brineSite(), RIGHTS_OFFTAKE);
+  const li = def => def.graph.nodes.find(node => node.id === 'lithium').economics.annualDemandLimit;
+  const br = def => def.graph.nodes.find(node => node.id === 'bromine').economics.annualDemandLimit;
+  assert.equal(li(chile), 2e7 * OFFTAKE_DEMAND_FACTOR);
+  assert.equal(li(australia), 5e6 * OFFTAKE_DEMAND_FACTOR);
+  assert.equal(li(levant), 1e6 * OFFTAKE_DEMAND_FACTOR);
+  assert.notEqual(li(chile), li(australia));
+  assert.notEqual(li(australia), li(levant));
+  assert.equal(br(australia), 2e6 * OFFTAKE_DEMAND_FACTOR);
+  assert.equal(br(levant), 2e8 * OFFTAKE_DEMAND_FACTOR);
+  assert.notEqual(br(australia), br(levant));
 });
 
 test('coastal/methanol get a screening price×CAPEX probe: cash+ inside bands or documented near-miss', () => {

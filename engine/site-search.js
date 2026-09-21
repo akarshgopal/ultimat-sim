@@ -21,13 +21,15 @@ const DEAD_SEA_SITE_ID = 'dead-sea-pvgis-2026-09-06';
 const SCREENING_NOTE = 'Screening assumes intake/concession for evaluation only; not a bankable permit.';
 const LAYER_SOFT_NOTE = 'Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives.';
 const RIGHTS_SCREENING = 'screening-assumes-intake-concession';
+const RIGHTS_INTAKE_ONLY = 'screening-assumes-intake-only';
 const RIGHTS_NO_RIGHTS = 'no-rights';
 const RIGHTS_OFFTAKE = 'offtake-limited';
 const RIGHTS_NONE = 'no-rights-modeled';
-const RIGHTS_SCENARIOS = Object.freeze([RIGHTS_SCREENING, RIGHTS_NO_RIGHTS, RIGHTS_OFFTAKE]);
+const RIGHTS_SCENARIOS = Object.freeze([RIGHTS_SCREENING, RIGHTS_INTAKE_ONLY, RIGHTS_NO_RIGHTS, RIGHTS_OFFTAKE]);
 // 0.1× Chile Li still exceeds catalog plant scale; 0.01× binds so offtake actually changes cash.
 const OFFTAKE_DEMAND_FACTOR = 0.01;
 const NO_RIGHTS_NOTE = 'No-rights scenario: intake/concession are not assumed. A literature assay is not a mineral concession; not a bankable permit.';
+const INTAKE_ONLY_NOTE = 'Screening-assumes-intake-only: seawater intake may be assumed for evaluation; brine concession is not. A literature assay is not a mineral concession; not a bankable permit.';
 const OFFTAKE_NOTE = `Offtake-limited scenario: regional demand caps scaled by ${OFFTAKE_DEMAND_FACTOR} for screening; not a plant offtake contract. ${SCREENING_NOTE}`;
 const MAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
 const SEARCH_SCALES = Object.freeze([0.25, 0.5, 1, 2, 4]);
@@ -57,6 +59,9 @@ function normalizeRightsScenario(value) {
   if (raw === RIGHTS_SCREENING || raw === 'screening' || raw === 'screening-assumes') {
     return RIGHTS_SCREENING;
   }
+  if (raw === RIGHTS_INTAKE_ONLY || raw === 'intake-only' || raw === 'assumes-intake-only') {
+    return RIGHTS_INTAKE_ONLY;
+  }
   if (raw === RIGHTS_NO_RIGHTS || raw === 'none') return RIGHTS_NO_RIGHTS;
   if (raw === RIGHTS_OFFTAKE || raw === 'ofstake-limited' || raw === 'offtake') {
     return RIGHTS_OFFTAKE;
@@ -66,8 +71,13 @@ function normalizeRightsScenario(value) {
 
 function scenarioNote(scenario) {
   if (scenario === RIGHTS_NO_RIGHTS) return NO_RIGHTS_NOTE;
+  if (scenario === RIGHTS_INTAKE_ONLY) return INTAKE_ONLY_NOTE;
   if (scenario === RIGHTS_OFFTAKE) return OFFTAKE_NOTE;
   return SCREENING_NOTE;
+}
+
+function templateNeedsConcession(template) {
+  return template === 'abundance';
 }
 
 function templateNeedsIntakeOrConcession(template) {
@@ -258,6 +268,13 @@ function templateEligible(site, template, rightsScenario) {
       notes: 'Intake/concession would be required and are not assumed in the no-rights scenario.',
     };
   }
+  if (scenario === RIGHTS_INTAKE_ONLY && templateNeedsConcession(template)) {
+    return {
+      ok: false,
+      reason: 'no-concession',
+      notes: 'Brine concession would be required and is not assumed in the screening-assumes-intake-only scenario.',
+    };
+  }
   return { ok: true };
 }
 
@@ -367,22 +384,42 @@ function applyRegionalTea(definition, region) {
   }
 }
 
-function revokeAssumedIntakeAndConcession(definition) {
+function revokeRight(definition, key, kind, note) {
   definition.site = definition.site || {};
   definition.site.rights = definition.site.rights || {};
-  for (const key of ['seawaterIntake', 'brineConcession']) {
-    const prev = definition.site.rights[key] && typeof definition.site.rights[key] === 'object'
-      ? definition.site.rights[key]
-      : {};
-    definition.site.rights[key] = {
-      kind: prev.kind || (key === 'brineConcession' ? 'concession' : 'intake'),
-      status: 'unverified',
-      authorize: false,
-      note: prev.note
-        ? `${prev.note} No-rights scenario does not assume this right.`
-        : 'No-rights scenario: intake/concession not assumed; not a permit.',
-    };
-  }
+  const prev = definition.site.rights[key] && typeof definition.site.rights[key] === 'object'
+    ? definition.site.rights[key]
+    : {};
+  definition.site.rights[key] = {
+    kind: prev.kind || kind,
+    status: 'unverified',
+    authorize: false,
+    note: prev.note ? `${prev.note} ${note}` : note,
+  };
+}
+
+function revokeAssumedIntakeAndConcession(definition) {
+  revokeRight(
+    definition,
+    'seawaterIntake',
+    'intake',
+    'No-rights scenario: intake/concession not assumed; not a permit.'
+  );
+  revokeRight(
+    definition,
+    'brineConcession',
+    'concession',
+    'No-rights scenario: intake/concession not assumed; not a permit.'
+  );
+}
+
+function revokeAssumedConcession(definition) {
+  revokeRight(
+    definition,
+    'brineConcession',
+    'concession',
+    'Intake-only scenario does not assume a brine concession; a literature assay is not a mineral concession.'
+  );
 }
 
 function applyOfftakeDemandHaircut(definition, factor = OFFTAKE_DEMAND_FACTOR) {
@@ -398,6 +435,10 @@ function applyOfftakeDemandHaircut(definition, factor = OFFTAKE_DEMAND_FACTOR) {
 function applyRightsScenario(definition, template, scenario) {
   if (scenario === RIGHTS_NO_RIGHTS) {
     revokeAssumedIntakeAndConcession(definition);
+    return;
+  }
+  if (scenario === RIGHTS_INTAKE_ONLY) {
+    revokeAssumedConcession(definition);
     return;
   }
   if (template === 'abundance') assumeScreeningBrine(definition);
@@ -865,10 +906,14 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       caps: sizeOpts.caps,
     });
   } catch (error) {
-    if (rightsScenario === RIGHTS_NO_RIGHTS && /cannot assume|no feasible/i.test(error.message || '')) {
+    if ((rightsScenario === RIGHTS_NO_RIGHTS || rightsScenario === RIGHTS_INTAKE_ONLY)
+      && /cannot assume|no feasible/i.test(error.message || '')) {
+      const intakeOnly = rightsScenario === RIGHTS_INTAKE_ONLY;
       return skippedRow(site, template, {
-        reason: 'no-rights',
-        notes: 'Size/solve cannot grow unauthorized intake or brine concession.',
+        reason: intakeOnly ? 'no-concession' : 'no-rights',
+        notes: intakeOnly
+          ? 'Size/solve cannot grow unauthorized brine concession.'
+          : 'Size/solve cannot grow unauthorized intake or brine concession.',
       }, rightsScenario);
     }
     return errorRow(site, template, error, notes, rightsScenario);
@@ -1032,6 +1077,7 @@ return {
   SCREENING_NOTE,
   LAYER_SOFT_NOTE,
   RIGHTS_SCREENING,
+  RIGHTS_INTAKE_ONLY,
   RIGHTS_NO_RIGHTS,
   RIGHTS_OFFTAKE,
   RIGHTS_NONE,

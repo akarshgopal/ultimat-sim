@@ -166,12 +166,13 @@ const costs = {
 };
 
 function pack({
-  capexIntensity, intensityUnit, scaleExponent, refCapacity, precompute,
+  capexIntensity, capexIntensityBand, intensityUnit, scaleExponent, refCapacity, precompute,
   fixedOmPercent, variableOm, assetLifeYears, fixedOmPerCapacity,
   quality, source, note, evidence,
 }) {
   return {
     capexIntensity,
+    capexIntensityBand: capexIntensityBand ?? null,
     intensityUnit,
     scaleExponent: scaleExponent ?? null,
     refCapacity: refCapacity ?? null,
@@ -189,12 +190,13 @@ function pack({
 
 const packs = {
   minerals: pack({
-    capexIntensity: 80, intensityUnit: '$/(kg brine/day)',
+    capexIntensity: 12, intensityUnit: '$/(kg brine/day)',
+    capexIntensityBand: { low: 3, mid: 12, high: 40 },
     fixedOmPercent: 4, variableOm: 0.01, assetLifeYears: 20,
-    quality: 'screening', source: 'NREL DLE TEA order (OSTI 1782801)',
-    note: 'installedCapex = 80 $/ (kg brine/day) × capacity (scale exponent omitted). Screening brine-throughput intensity so CAPEX grows with size. Scaled from NREL TEA lithium-from-geothermal-brines (OSTI 1782801 / NREL/TP-5700-79178): example ~$52.3M CAPEX / 20,000 t/y LCE ≈ $2,615 per t-y LCE. Multi-product Dead Sea minerals ≠ Salton Sea DLE — OOM informed by that order, not a quote.',
+    quality: 'screening', source: 'NREL DLE TEA Table 3 brine-throughput conversion (OSTI 1782801)',
+    note: 'installedCapex = 12 $/ (kg brine/day) × capacity (scale exponent omitted). Screening brine-throughput intensity so CAPEX grows with size. Derived from NREL TEA lithium-from-geothermal-brines (OSTI 1782801 / NREL/TP-5700-79178, doi:10.2172/1782801) Table 3 / Ventura modeled Salton Sea IX: ~$52.3M CAPEX, 20,000 t/y LCE, Li ~400 mg/L, recovery ~90%. LCE/Li ≈ 5.323 → Li mass ≈ 3.76e6 kg/y → brine ≈ 1.04e7 m³/y ≈ 2.86e7 kg brine/day (ρ≈1) → ≈ $1.83 /(kg brine/day) (optimistic modeled). Same NREL table peer PEAs, converted the same way (screening arithmetic, not independent bankable quotes): EnergySource ~$15, Standard Lithium ~$6, Vulcan ~$10, Lake Resources Kachi ~$11, E3 Metals ~$4 /(kg brine/day). Literature DLE brine-throughput band ≈ $2–15 /(kg brine/day). Multi-product Dead Sea minerals hub ≠ Salton Sea Li-only DLE. Screening mid $12 is peer-PEA central (~$10–15); band low $3 / mid $12 / high $40 (conservative FOAK / multi-product uplift; still below the old unsupported $80 OOM, which was ~5–40× above the cited conversion). Dead Sea demo scale (1e5 kg brine/day) is cash-positive at this mid because 4% fixed O&M tracks installed CAPEX — the old ~+$80k operating margin / −$801k gate cash was an artifact of the $80 OOM, not a reason to keep $80 or to drop to NREL $1.83. Even mid=20 stays cash+; high=40 is cash−. Screening OOM, not bankable.',
     evidence: [
-      { label: 'NREL TEA: lithium from geothermal brines (OSTI 1782801 / NREL/TP-5700-79178)', url: NREL_DLE, doi: '10.2172/1782801' },
+      { label: 'NREL TEA: lithium from geothermal brines (OSTI 1782801 / NREL/TP-5700-79178); Table 3 Ventura IX + same-table peer PEAs (not independent bankable quotes)', url: NREL_DLE, doi: '10.2172/1782801' },
     ],
   }),
   'chlor-alkali': pack({
@@ -288,7 +290,9 @@ const packs = {
 const capex = Object.fromEntries(
   ['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia'].map(key => {
     const item = packs[key];
-    return [key, row(item.capexIntensity, item.intensityUnit, item.quality, item.source, item.note, item.evidence)];
+    const snapshot = row(item.capexIntensity, item.intensityUnit, item.quality, item.source, item.note, item.evidence);
+    if (item.capexIntensityBand) snapshot.capexIntensityBand = item.capexIntensityBand;
+    return [key, snapshot];
   })
 );
 
@@ -572,6 +576,7 @@ function bindCapexPack(processKey, extra = {}) {
     assetLifeYears: extra.assetLifeYears ?? item.assetLifeYears,
     variableOM: extra.variableOM ?? item.variableOm,
   };
+  if (item.capexIntensityBand) fields.capexIntensityBand = item.capexIntensityBand;
   if (merged.scaleExponent != null) {
     fields.scaleExponent = merged.scaleExponent;
     fields.refCapacity = merged.refCapacity;
@@ -657,7 +662,7 @@ function snapshot(map, keys) {
 function snapshotPacks(keys) {
   return keys.map(key => {
     const item = packs[key];
-    return {
+    const snapshot = {
       key,
       capexIntensity: item.capexIntensity,
       unit: item.intensityUnit,
@@ -670,6 +675,8 @@ function snapshotPacks(keys) {
       note: item.note,
       evidence: item.evidence,
     };
+    if (item.capexIntensityBand) snapshot.capexIntensityBand = item.capexIntensityBand;
+    return snapshot;
   });
 }
 

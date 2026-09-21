@@ -115,7 +115,7 @@ function siteDeadSeaAbundance() {
       { label: 'Alsabbagh et al. 2021: Li+ 18 mg/L Dead Sea water', url: 'https://doi.org/10.1016/j.mineng.2021.107038' },
       { label: 'USGS salt statistics (purchased-salt context)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
     ],
-    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Brine composition is the frozen Dead Sea open-water ion assay (data/dead-sea-brine.json); a literature assay is not a mineral concession. Freshwater and purchased salt are explicit assumptions. Grid, brine concession, and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
+    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Brine composition is the frozen Dead Sea open-water ion assay (data/dead-sea-brine.json); a literature assay is not a mineral concession. Minerals CAPEX uses the tea-screening DLE brine-throughput mid (not the old $80 OOM). Dead Sea demo scale is cash-positive at that mid because 4% fixed O&M tracks CAPEX; high-band $40 stays cash-negative. Screening, not bankable. Freshwater and purchased salt are explicit assumptions. Grid, brine concession, and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
   };
   return definition;
 }

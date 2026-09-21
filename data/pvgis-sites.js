@@ -3,10 +3,26 @@
     'oman-duqm': require('./pvgis-duqm.json'),
     'india-mundra': require('./pvgis-mundra.json'),
     'namibia-walvis-bay': require('./pvgis-walvis-bay.json'),
+    'uae-taweelah': require('./pvgis-taweelah.json'),
+    'qatar-ras-laffan': require('./pvgis-ras-laffan.json'),
+    'saudi-oxagon': require('./pvgis-oxagon.json'),
+    'saudi-ras-al-khair': require('./pvgis-ras-al-khair.json'),
+    'texas-corpus-christi': require('./pvgis-corpus-christi.json'),
+    'au-port-hedland': require('./pvgis-port-hedland.json'),
+    'morocco-agadir': require('./pvgis-agadir.json'),
+    'egypt-ain-sokhna': require('./pvgis-ain-sokhna.json'),
   } : {
     'oman-duqm': root.PvgisDuqm,
     'india-mundra': root.PvgisMundra,
     'namibia-walvis-bay': root.PvgisWalvisBay,
+    'uae-taweelah': root.PvgisTaweelah,
+    'qatar-ras-laffan': root.PvgisRasLaffan,
+    'saudi-oxagon': root.PvgisOxagon,
+    'saudi-ras-al-khair': root.PvgisRasAlKhair,
+    'texas-corpus-christi': root.PvgisCorpusChristi,
+    'au-port-hedland': root.PvgisPortHedland,
+    'morocco-agadir': root.PvgisAgadir,
+    'egypt-ain-sokhna': root.PvgisAinSokhna,
   };
   const api = factory(raw);
   if (typeof module === 'object' && module.exports) module.exports = api;

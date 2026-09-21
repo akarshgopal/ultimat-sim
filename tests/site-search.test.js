@@ -625,6 +625,37 @@ test('soft rank uses frozen PVGIS yield when present and still scores sites with
   assert.equal(mapSite.landPriceAt(mejillones.latitude, mejillones.longitude), null);
 });
 
+test('Lake Mackay abundance near-miss reports active materials count while cash≤0', () => {
+  const mackay = searchSite('au-lake-mackay');
+  const row = evaluateCandidate(mackay, 'abundance', FAST);
+  assert.equal(row.status, 'ok');
+  assert.equal(row.template, 'abundance');
+  assert.equal(row.met, false);
+  assert.equal(row.feasible, false);
+  assert.equal(row.idle, false);
+  assert.ok(row.annualNetCash <= 0);
+  assert.ok(row.tonnes > 0);
+  assert.ok(row.totalPositiveSaleTonnes > 0);
+  assert.ok(row.activeSaleCount > 0, 'producing near-miss must not report 0 materials');
+  assert.equal(row.activeSaleCount, row.products.length);
+  assert.equal(row.positiveSaleCount, row.activeSaleCount, 'search row count is reporting, not met-gated');
+  assert.ok(row.products.every(product => product.annualRevenue > 0));
+  assert.ok(row.products.every(product => product.positive && product.active));
+
+  const search = searchAbundanceSites({
+    sites: [mackay],
+    templates: ['abundance'],
+    sizeOpts: FAST,
+  });
+  assert.equal(search.feasibleCount, 0);
+  assert.ok(search.nearMisses.length >= 1);
+  const miss = search.nearMisses[0];
+  assert.equal(miss.siteId, 'au-lake-mackay');
+  assert.ok(miss.activeSaleCount > 0);
+  assert.ok(miss.tonnes > 0);
+  assert.ok(!(miss.annualNetCash > 0));
+});
+
 test('near-miss ranking prefers operating cash- slates over idle cash≈0', () => {
   const idle = {
     siteId: 'idle-coast',

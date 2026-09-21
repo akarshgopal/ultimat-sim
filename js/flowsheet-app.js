@@ -937,7 +937,7 @@
     const { before, after, objective } = lastCashflowCompare;
     const delta = (after ?? 0) - (before ?? 0);
     const met = objective?.met;
-    const products = objective?.positiveSaleCount ?? 0;
+    const products = objective?.activeSaleCount ?? objective?.positiveSaleCount ?? 0;
     const deltaLabel = `${delta >= 0 ? '+' : ''}${formatCashflowMoney(delta)}`;
     el.hidden = false;
     el.innerHTML = `<strong>${met ? 'Objective met' : 'Objective not met'}</strong>
@@ -3072,7 +3072,7 @@
         const heatNote = lastSizing.heatCoveredKWh != null || lastSizing.heatResidualKWh != null
           ? ` · heat covered ${formatNumber(lastSizing.heatCoveredKWh || 0)} / residual ${formatNumber(lastSizing.heatResidualKWh || 0)} kWh`
           : '';
-        return `${obj.positiveSaleCount || 0} positive-sale products · net cash ${formatCashflowMoney(obj.annualNetCash)} · ${slate}${scale}${heatNote}${metNote}`;
+        return `${obj.activeSaleCount ?? obj.positiveSaleCount ?? 0} positive-sale products · net cash ${formatCashflowMoney(obj.annualNetCash)} · ${slate}${scale}${heatNote}${metNote}`;
       }
       if (lastSizing) {
         const iters = lastSizing.iterations;

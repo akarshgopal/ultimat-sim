@@ -660,8 +660,6 @@ function buildPlant(site, template, rightsScenario) {
 }
 
 function saleProducts(objective, economics) {
-  const scored = Array.isArray(objective?.products) ? objective.products : [];
-  const byId = new Map(scored.map(product => [product.id, product]));
   const products = [];
   let tonnes = 0;
   for (const sink of economics?.sinks || []) {
@@ -669,12 +667,13 @@ function saleProducts(objective, economics) {
     const kgYear = finiteNumber(sink.deliveredAmount, 0);
     const tonnesPerYear = kgYear / 1000;
     tonnes += tonnesPerYear;
-    const scoredProduct = byId.get(sink.id);
     products.push({
       id: sink.id,
       tonnesPerYear,
       annualRevenue: finiteNumber(sink.annualRevenue, 0),
-      positive: scoredProduct ? Boolean(scoredProduct.positive) : true,
+      // Reporting: this is an active R_i>0 sale. Cash gate is row.met, not CM sign.
+      positive: true,
+      active: true,
     });
   }
   products.sort((left, right) => {
@@ -682,6 +681,17 @@ function saleProducts(objective, economics) {
     return String(left.id).localeCompare(String(right.id), 'en');
   });
   return { tonnes, products };
+}
+
+function reportingSaleCount(objective, products) {
+  const fromActive = finiteNumber(objective?.activeSaleCount, NaN);
+  if (Number.isFinite(fromActive) && fromActive > 0) return fromActive;
+  if (Array.isArray(products) && products.length) return products.length;
+  return finiteNumber(objective?.positiveSaleCount, 0);
+}
+
+function saleCountOf(row) {
+  return finiteNumber(row?.activeSaleCount, finiteNumber(row?.positiveSaleCount, 0));
 }
 
 function slateFromNetwork(definition, site) {
@@ -747,8 +757,8 @@ function compareCandidates(left, right) {
   const tonnesLeft = finiteNumber(left?.tonnes ?? left?.totalPositiveSaleTonnes, 0);
   const tonnesRight = finiteNumber(right?.tonnes ?? right?.totalPositiveSaleTonnes, 0);
   if (tonnesLeft !== tonnesRight) return tonnesRight - tonnesLeft;
-  const countLeft = finiteNumber(left?.positiveSaleCount, 0);
-  const countRight = finiteNumber(right?.positiveSaleCount, 0);
+  const countLeft = saleCountOf(left);
+  const countRight = saleCountOf(right);
   if (countLeft !== countRight) return countRight - countLeft;
   const cashLeft = finiteNumber(left?.annualNetCash, 0);
   const cashRight = finiteNumber(right?.annualNetCash, 0);
@@ -765,7 +775,7 @@ function rankCandidates(candidates = []) {
 function hasOperatingSlate(row) {
   const tonnes = finiteNumber(row?.tonnes ?? row?.totalPositiveSaleTonnes, 0);
   if (tonnes > 0) return true;
-  if (finiteNumber(row?.positiveSaleCount, 0) > 0) return true;
+  if (saleCountOf(row) > 0) return true;
   if (Array.isArray(row?.products) && row.products.some(product => finiteNumber(product.tonnesPerYear, 0) > 0)) {
     return true;
   }
@@ -791,8 +801,8 @@ function compareNearMisses(left, right) {
   const tonnesLeft = finiteNumber(left?.tonnes ?? left?.totalPositiveSaleTonnes, 0);
   const tonnesRight = finiteNumber(right?.tonnes ?? right?.totalPositiveSaleTonnes, 0);
   if (tonnesLeft !== tonnesRight) return tonnesRight - tonnesLeft;
-  const countLeft = finiteNumber(left?.positiveSaleCount, 0);
-  const countRight = finiteNumber(right?.positiveSaleCount, 0);
+  const countLeft = saleCountOf(left);
+  const countRight = saleCountOf(right);
   if (countLeft !== countRight) return countRight - countLeft;
   const cashLeft = finiteNumber(left?.annualNetCash, 0);
   const cashRight = finiteNumber(right?.annualNetCash, 0);
@@ -858,6 +868,7 @@ function skippedRow(site, template, eligibility, rightsScenario) {
     tonnes: 0,
     totalPositiveSaleTonnes: 0,
     positiveSaleCount: 0,
+    activeSaleCount: 0,
     products: [],
     met: false,
     feasible: false,
@@ -883,6 +894,7 @@ function errorRow(site, template, error, notes = [], rightsScenario) {
     tonnes: 0,
     totalPositiveSaleTonnes: 0,
     positiveSaleCount: 0,
+    activeSaleCount: 0,
     products: [],
     met: false,
     feasible: false,
@@ -948,7 +960,10 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
   let annualNetCash = jsonNumber(objective.annualNetCash ?? economics.annualNetCash);
   let met = Boolean(objective.met) && annualNetCash != null && annualNetCash > 0;
   let { tonnes, products } = saleProducts(objective, economics);
-  let positiveSaleCount = finiteNumber(objective.positiveSaleCount, met ? products.length : 0);
+  // Row counts are reporting: active R_i>0 sinks even when cash≤0. Maximizer
+  // still uses objective.met + objective.positiveSaleCount (met-gated).
+  let activeSaleCount = reportingSaleCount(objective, products);
+  let positiveSaleCount = activeSaleCount;
   let selected = selectedFamilyForRow(template, sized.selected || null, products);
   const slate = slateFromNetwork(sized.definition, site);
   const fuelProduct = fuelProductForTemplate(template);
@@ -974,6 +989,7 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
     tonnes,
     totalPositiveSaleTonnes: tonnes,
     positiveSaleCount,
+    activeSaleCount,
     products,
     met,
     feasible: met,
@@ -1018,7 +1034,8 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       annualNetCash = jsonNumber(probe.midCash ?? probe.mid?.annualNetCash);
       tonnes = probed.tonnes;
       products = probed.products;
-      positiveSaleCount = finiteNumber(probe.objective?.positiveSaleCount, probed.products.length);
+      activeSaleCount = reportingSaleCount(probe.objective, probed.products);
+      positiveSaleCount = activeSaleCount;
       selected = {
         ...(selected || {}),
         screeningPrice: probe.mid?.price,
@@ -1033,6 +1050,7 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       row.totalPositiveSaleTonnes = tonnes;
       row.products = products;
       row.positiveSaleCount = positiveSaleCount;
+      row.activeSaleCount = activeSaleCount;
       row.selected = selected;
       row.notes = notes.filter(note => !/no cash-positive/i.test(note));
       if (probe.note && !row.notes.includes(probe.note)) row.notes.push(probe.note);

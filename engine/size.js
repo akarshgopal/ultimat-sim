@@ -1618,6 +1618,9 @@ function operatingRevenue(candidate) {
   return Number(candidate?.economics?.annualRevenue) || 0;
 }
 
+// Maximizer: max positiveSaleCount s.t. met (cash>0); ties -> max cash.
+// positiveSaleCount is met-gated in scorePositiveCashflow. Do not substitute
+// activeSaleCount here — that unconstrained count is reporting-only.
 function betterCashflowCandidate(left, right) {
   if (!left) return right;
   if (!right) return left;
@@ -1750,6 +1753,7 @@ function refineAxis({ coarse, evaluate, enabled, maxExtra = REFINE_MAX_EXTRA }) 
         objective: {
           met: false,
           positiveSaleCount: 0,
+          activeSaleCount: 0,
           annualNetCash: -Infinity,
           formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).',
         },
@@ -2118,7 +2122,7 @@ function searchJointCashflow(seed, opts) {
     }
   }
   if (!best) {
-    return { candidatesTried: tried, objective: { met: false, positiveSaleCount: 0, annualNetCash: -Infinity } };
+    return { candidatesTried: tried, objective: { met: false, positiveSaleCount: 0, activeSaleCount: 0, annualNetCash: -Infinity } };
   }
   best.candidatesTried = tried;
   return best;
@@ -2153,7 +2157,7 @@ function sizeForPositiveCashflow(opts = {}) {
         best = {
           mode: 'positive-cashflow',
           error: error.message,
-          objective: { met: false, positiveSaleCount: 0, annualNetCash: -Infinity, formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).' },
+          objective: { met: false, positiveSaleCount: 0, activeSaleCount: 0, annualNetCash: -Infinity, formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).' },
           warnings: [error.message],
         };
       }

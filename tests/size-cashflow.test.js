@@ -28,8 +28,10 @@ test('scorePositiveCashflow counts sale products only when plant net cash is pos
   });
   assert.equal(positive.met, true);
   assert.equal(positive.positiveSaleCount, 2);
+  assert.equal(positive.activeSaleCount, 2);
   assert.ok(positive.products.every(product => product.id === 'vent' || product.positive));
   assert.ok(positive.products.find(product => product.id === 'a').contributionMargin > 0);
+  assert.ok(positive.products.find(product => product.id === 'a').active);
 
   const negative = scorePositiveCashflow({
     annualOperatingCost: 200,
@@ -40,8 +42,24 @@ test('scorePositiveCashflow counts sale products only when plant net cash is pos
     ],
   });
   assert.equal(negative.met, false);
-  assert.equal(negative.positiveSaleCount, 0);
+  assert.equal(negative.positiveSaleCount, 0, 'maximizer count stays met-gated');
+  assert.equal(negative.activeSaleCount, 2, 'reporting count is active R_i>0 sinks even when cash≤0');
   assert.ok(negative.products.every(product => product.positive === false));
+  assert.ok(negative.products.every(product => product.active === true));
+});
+
+test('sizeForPositiveCashflow on Lake Mackay reports activeSaleCount when cash≤0', () => {
+  const sized = sizeForPositiveCashflow({
+    caseOrBuilder: () => createAbundanceCase({ assayId: 'lake-mackay-wa-brine', region: 'Australia' }),
+    scales: [1],
+    rates: [0],
+    refine: false,
+  });
+  assert.equal(sized.objective.met, false);
+  assert.ok(sized.objective.annualNetCash <= 0);
+  assert.equal(sized.objective.positiveSaleCount, 0, 'maximizer count stays 0 when cash≤0');
+  assert.ok(sized.objective.activeSaleCount > 0, 'reporting count of R_i>0 sinks is honest');
+  assert.ok(sized.objective.products.filter(product => product.active).length > 0);
 });
 
 test('sizeForPositiveCashflow scores abundance with a capital-inclusive cash gate', () => {

@@ -218,7 +218,9 @@ function approximateIRR(cashFlows) {
 // Gate cash is capital-inclusive: annualNetCash = R − C − annualizedCapex.
 // Revenue-proportional charge: A_i = (R_i / R) * (C + annualizedCapex) when R > 0.
 // CM_i = R_i - A_i, so every active sale product shares sign(R − C − annualizedCapex).
-// positiveSaleCount is the number of sale sinks with R_i > 0 when net cash > 0, else 0.
+// Maximizer field: positiveSaleCount = |{R_i>0}| when met, else 0 (max count s.t. cash>0).
+// Reporting field: activeSaleCount = |{sale sinks with R_i>0}| regardless of met.
+// product.active is R_i>0; product.positive follows CM_i (same sign as plant cash).
 function scorePositiveCashflow(economics = {}) {
   const sinks = Array.isArray(economics.sinks) ? economics.sinks : [];
   const annualOperatingCost = number(economics.annualOperatingCost, 0);
@@ -240,16 +242,19 @@ function scorePositiveCashflow(economics = {}) {
       allocatedCapex: revenueTotal > 0 ? (annualRevenue / revenueTotal) * annualizedCapex : 0,
       contributionMargin,
       positive: contributionMargin > 0,
+      active: annualRevenue > 0,
       deliveredAmount: number(sink.deliveredAmount, 0),
     };
   });
-  const active = products.filter(product => product.annualRevenue > 0);
+  const active = products.filter(product => product.active);
   const met = annualNetCash > 0 && active.length > 0;
+  const activeSaleCount = active.length;
   const positiveSaleCount = met ? active.length : 0;
   return {
     name: 'maximize-positive-sale-count',
-    formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF). CM_i=R_i-(R_i/R)*(C+annualizedCapex); sign(CM_i)=sign(R-C-annualizedCapex) when R_i>0. NPV/IRR use year-0 CAPEX + operating cash (R−OPEX), not the annualized charge.',
+    formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF). positiveSaleCount is met-gated; activeSaleCount is |{R_i>0}| even when cash≤0. CM_i=R_i-(R_i/R)*(C+annualizedCapex); sign(CM_i)=sign(R-C-annualizedCapex) when R_i>0. NPV/IRR use year-0 CAPEX + operating cash (R−OPEX), not the annualized charge.',
     positiveSaleCount,
+    activeSaleCount,
     annualNetCash,
     annualRevenue: revenueTotal,
     annualOperatingCost,

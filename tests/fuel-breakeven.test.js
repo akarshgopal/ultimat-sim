@@ -1,10 +1,16 @@
 const assert = require('node:assert/strict');
+<<<<<<< HEAD
 const { spawnSync } = require('node:child_process');
+=======
+const fs = require('node:fs');
+>>>>>>> feat/doc-pvgis
 const path = require('node:path');
 const test = require('node:test');
 
 const { findFuelBreakEven, probeFuelCash, fuelScreeningBounds } = require('../engine/sensitivity');
 const { sizeForPositiveCashflow } = require('../engine/size');
+const pvgisSites = require('../data/pvgis-sites');
+const { frozenSolarFor } = require('../engine/site-search');
 
 function waterStream(kg = 20) {
   return { kind: 'material', mol: { H2O: kg * 1000 / 18.01528 }, phase: 'liquid', T_C: 25, P_bar: 1 };
@@ -216,6 +222,7 @@ test('probeFuelCash ranks cash+ only at mid-band, not capexFactor=0.05 alone', (
   assert.match(midHit.note, /mid-band/i);
 });
 
+<<<<<<< HEAD
 test('fuel-breakeven hunt proves midCash << 0 and uses frozen PVGIS for overlay coasts', () => {
   const script = path.join(__dirname, '..', 'scripts', 'fuel-breakeven.mjs');
   const ran = spawnSync(process.execPath, [script], {
@@ -263,6 +270,22 @@ test('fuel-breakeven hunt proves midCash << 0 and uses frozen PVGIS for overlay 
   const oxagon = report.runs.find(row => row.site?.id === 'saudi-oxagon');
   assert.ok(oxagon);
   assert.match(oxagon.site.solar, /frozen/i);
+=======
+test('fuel-breakeven overlay claims match frozen PVGIS already in-repo', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'fuel-breakeven.mjs'), 'utf8');
+  assert.doesNotMatch(src, /no frozen typical-day PVGIS in-repo/i);
+  assert.doesNotMatch(src, /no Gulf typical-day in-repo/i);
+  assert.doesNotMatch(src, /this preset has no frozen typical-day in-repo/i);
+  assert.match(src, /frozenSolarFor/);
+  assert.match(src, /data\/pvgis-sites\.js/);
+  for (const id of ['uae-taweelah', 'au-port-hedland', 'saudi-oxagon']) {
+    assert.ok(pvgisSites.BY_SITE_ID[id], id);
+    const solar = frozenSolarFor({ id }, 'coastal');
+    assert.ok(solar?.dailyPVKWhPerKWp > 0, id);
+    assert.match(solar.source, /PVGIS-ERA5/, id);
+    assert.equal(solar.keepHourly, false, id);
+  }
+>>>>>>> feat/doc-pvgis
 });
 
 test('sizeForPositiveCashflow still scores the tiny H2 plant without sensitivity side effects', () => {

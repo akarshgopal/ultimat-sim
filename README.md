@@ -69,9 +69,9 @@ Requires Node.js 18 or newer; no external runtime packages are needed.
 The live site is https://akarshgopal.github.io/ultimat-sim/ — pushes to main rebuild via GitHub Pages.
 
 
-## Site-hunt limitation list (14 points)
+## Fixed this round
 
-Status of the abundance / multi-site search limitation list after Phase 2 merges (PVGIS remaining, catalog brine, soft-rank frozen, rights/demand depth, hunt honesty). Screening TEA only — not bankable permits or offtake contracts.
+- **#12 Doc drift (narrow) + README scaffold.** `scripts/fuel-breakeven.mjs` location overlays bind frozen per-site PVGIS from `data/pvgis-sites.js` when present (`uae-taweelah`, `au-port-hedland`, `saudi-oxagon` already have series). Stale “no frozen typical-day PVGIS in-repo” / “no Gulf typical-day” labels are gone; missing frozen PVGIS keeps plant-template solar rather than inventing kWh/kWp. Other tickets land via merge.
 
 | # | Item | Status |
 |---|------|--------|

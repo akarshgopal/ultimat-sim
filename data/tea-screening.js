@@ -9,11 +9,19 @@
 // CAPEX formula (packs): installedCapex = capexIntensity × capacity
 //   × (capacity / refCapacity)^(scaleExponent − 1)  when scaleExponent and refCapacity are set;
 //   otherwise installedCapex = capexIntensity × capacity (exponent omitted).
-// Binders expose that as capexRate (= intensity) so evaluateEconomics uses rate × node.capacity,
+// Regional CAPEX× (capexMultiplierByRegion): screening labor/construction/EPC location
+// factor vs US Gulf-ish 1.0. bindCapexPack({ region }) uses
+//   capexIntensity_region = pack.capexIntensity × multiplier[region]
+//   (unmapped `default` omitted → 1). solar-pv may instead use a cited regional TIC
+// overlay in solarCapexByRegion (IRENA solar module/BOS spread is wider than process-plant
+// labor — do not stack that overlay with the damped multiplier).
+// Binders expose intensity as capexRate so evaluateEconomics uses rate × node.capacity,
 // except solar-pv which precomputes installedCapex because kWp is not electricity-source capacity.
 // Demand caps are regional offtake ceilings keyed by demandByRegion (me-levant default),
-// not plant contracts. bindSale(key, { region }) / getDemandForRegion(region) map
-// SITE_PRESETS.region strings onto those tables. Screening, not bankable quotes.
+// not plant contracts. Fuels/chemicals outside a cited regional series copy me-levant
+// only with inherit:'me-levant' plus a note — never a silent copy. bindSale(key, { region })
+// / getDemandForRegion(region) map SITE_PRESETS.region strings onto those tables.
+// Screening, not bankable quotes.
 
 function row(value, unit, quality, source, note, evidence) {
   return { value, unit, quality, source, note, evidence };
@@ -54,14 +62,14 @@ const WB_ICP = 'https://www.worldbank.org/en/programs/icp/brief/ICP2021';
 const DEFAULT_DEMAND_REGION_ID = 'me-levant';
 const DEMAND_REGION_LABELS = {
   'me-levant': 'Dead Sea / Levant screening offtake (Red Sea and Arabian Sea inherit). Not a plant offtake contract.',
-  gulf: 'Gulf screening offtake. Mineral ceilings use USGS MCS Gulf/Oman/Saudi production or non-producer proxies, not Dead Sea tables. Not a DEWA/EWEC/KAHRAMAA contract.',
-  'chile-atacama': 'Atacama / Chile screening offtake. Lithium ceiling reflects USGS Chile mine-production order (supply-side, not a contract). Other minerals inherit me-levant. Not a plant offtake contract.',
-  australia: 'Australia screening offtake. Mineral ceilings use USGS MCS Australia production/trade proxies (Li is hard-rock spodumene, not a Lake Mackay brine offtake). Not a plant offtake contract.',
-  europe: 'Europe screening offtake. Mineral ceilings use USGS MCS Europe production/trade proxies (Portugal Li, Germany/Spain potash, etc.). Not a plant offtake contract.',
-  india: 'India screening offtake. Mineral ceilings use USGS MCS India production/trade proxies. Not a plant offtake contract.',
-  texas: 'Texas / US Gulf screening offtake. US West / California (Imperial Valley geothermal) inherits this US table. Mineral ceilings use USGS MCS US production/trade proxies (Arkansas Br, US salt/gypsum; US Li withheld). Not a plant offtake contract.',
-  'southern-africa': 'Southern Africa screening offtake. Mineral ceilings use USGS MCS non-producer / Namibia-removed Li proxies, not Dead Sea tables. Not a plant offtake contract.',
-  default: 'Default screening offtake (inherits Dead Sea / Middle East tables) for unmapped site.region. Not a plant offtake contract.',
+  gulf: 'Gulf screening offtake. Mineral ceilings use USGS MCS Gulf/Oman/Saudi production or non-producer proxies, not Dead Sea tables. Fuels/chemicals without a cited Gulf series inherit me-levant (inherit:me-levant on those rows). Not a DEWA/EWEC/KAHRAMAA contract.',
+  'chile-atacama': 'Atacama / Chile screening offtake. Lithium ceiling reflects USGS Chile mine-production order (supply-side, not a contract) — not a silent ME Li cap. Other minerals and fuels/chemicals inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  australia: 'Australia screening offtake. Mineral ceilings use USGS MCS Australia production/trade proxies (Li is hard-rock spodumene, not a Lake Mackay brine offtake). Fuels/chemicals without a cited Australia series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  europe: 'Europe screening offtake. Mineral ceilings use USGS MCS Europe production/trade proxies (Portugal Li, Germany/Spain potash, etc.). Fuels/chemicals without a cited Europe series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  india: 'India screening offtake. Mineral ceilings use USGS MCS India production/trade proxies. Fuels/chemicals without a cited India series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  texas: 'Texas / US Gulf screening offtake. US West / California (Imperial Valley geothermal) inherits this US table. Mineral ceilings use USGS MCS US production/trade proxies (Arkansas Br, US salt/gypsum; US Li withheld). Fuels/chemicals without a cited US series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  'southern-africa': 'Southern Africa screening offtake. Mineral ceilings use USGS MCS non-producer / Namibia-removed Li proxies, not Dead Sea tables. Fuels/chemicals without a cited regional series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  default: 'Default screening offtake for unmapped site.region. Copies Dead Sea / Middle East tables with inherit:me-levant on every row. Not a plant offtake contract.',
 };
 const DEMAND_REGION = DEMAND_REGION_LABELS[DEFAULT_DEMAND_REGION_ID];
 const EDITOR_DEMAND_DEFAULT = 1e6; // kg/y screening editor seed; not unlimited offtake
@@ -375,8 +383,11 @@ const demand = {
   ),
 };
 
-function cloneDemandRow(item, extraNote) {
-  return {
+const MINERAL_DEMAND_KEYS = Object.freeze(['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium']);
+const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water']);
+
+function cloneDemandRow(item, extraNote, extra = {}) {
+  const cloned = {
     value: item.value,
     unit: item.unit,
     quality: item.quality,
@@ -384,12 +395,15 @@ function cloneDemandRow(item, extraNote) {
     note: extraNote ? `${item.note} ${extraNote}` : item.note,
     evidence: item.evidence,
   };
+  if (item.inherit) cloned.inherit = item.inherit;
+  if (extra.inherit) cloned.inherit = extra.inherit;
+  return cloned;
 }
 
-function inheritDemand(base, inheritNote, overrides = {}) {
+function inheritDemand(base, inheritNote, overrides = {}, inheritFrom = DEFAULT_DEMAND_REGION_ID) {
   const out = {};
   for (const [key, item] of Object.entries(base)) {
-    out[key] = overrides[key] || cloneDemandRow(item, inheritNote);
+    out[key] = overrides[key] || cloneDemandRow(item, inheritNote, { inherit: inheritFrom });
   }
   return out;
 }
@@ -676,12 +690,14 @@ const powerByRegion = {
   ),
 };
 
-// Product $/kg stays the global screening band unless a regional series is cited.
+// Product $/kg stays the global screening band unless a regional series is cited in priceByRegion.
 // Lithium is the USGS LCE proxy in every region (Chile is supply-side, not a LiCl contract).
 // Screening labor/construction/EPC location multipliers vs a US Gulf-ish baseline of 1.0.
+// Applied as capexIntensity_region = pack.capexIntensity × multiplier[region] in bindCapexPack.
 // Building-cost / ICP / IRENA installed-cost families as direction only; process equipment
 // is internationally traded so the construction spread is damped into ~0.7–1.3. Not plant quotes.
 // NREL ATB location adjustment is US-only; IEA electrolyzer $/kW is technology-family, not geography.
+// solar-pv may use solarCapexByRegion (cited IRENA TIC) instead of this damped multiplier.
 // Unmapped `default` omitted → getCapexMultiplierForRegion returns 1.
 const CAPEX_LOC_EVIDENCE = [
   { label: 'Turner & Townsend Global Construction Market Intelligence 2026 (location-index / building-cost family; not a process-plant quote)', url: TT_GCMI },
@@ -732,6 +748,27 @@ const capexMultiplierByRegion = {
   // default omitted → 1
 };
 
+// Cited product-price overlays. Keys absent here stay on the global prices table.
+const priceByRegion = {
+  'chile-atacama': {
+    lithium: row(
+      14, '$/kg', 'cited', 'USGS MCS 2025 lithium',
+      'USGS MCS 2025 battery-grade Li₂CO₃ annual avg ~$14,000/t (2024e). Model product is Li salt / LiCl-like — LCE proxy for screening, not a LiCl contract. Chile is supply-side (USGS MCS Chile mine-production order); this USGS LCE proxy is not a Chilean offtake contract.',
+      [{ label: 'USGS Mineral Commodity Summaries 2025 — Lithium (battery-grade Li₂CO₃ ~$14,000/t 2024e); Chile supply-side, not a LiCl contract', url: USGS_LI }]
+    ),
+  },
+};
+
+// Cited solar-pv TIC overlays. Replaces pack $1000/kWp × location multiplier for solar-pv
+// only — IRENA module/BOS spread is wider than the damped process-plant CAPEX×. Not EPC quotes.
+const solarCapexByRegion = {
+  india: row(
+    525, '$/kWp', 'screening', 'IRENA 2024 India utility-PV TIC',
+    'India utility-scale solar TIC screening overlay $525/kWp (IRENA Renewable Power Generation Costs in 2024; vs US ~$1,058/kW). Replaces pack $1000/kWp × India 0.75 process-plant CAPEX× for solar-pv only. Not a Mundra EPC quote.',
+    [{ label: 'IRENA Renewable Power Generation Costs in 2024 — India utility-PV TIC ~$525/kW (not a plant quote)', url: IRENA_COSTS_2024 }]
+  ),
+};
+
 function resolveDemandRegion(region) {
   if (region == null || region === '') return DEFAULT_DEMAND_REGION_ID;
   const raw = String(region).trim();
@@ -755,14 +792,10 @@ function getCostForRegion(key, region) {
 }
 
 function getPriceForRegion(key, region) {
-  const item = must(prices, key, 'price');
   const id = resolveDemandRegion(region);
-  if (key === 'lithium' && id === 'chile-atacama') {
-    return {
-      ...item,
-      note: `${item.note} Chile is supply-side (USGS MCS Chile mine-production order); this USGS LCE proxy is not a Chilean offtake contract.`,
-    };
-  }
+  const overlay = priceByRegion[id] && priceByRegion[id][key];
+  if (overlay) return overlay;
+  const item = must(prices, key, 'price');
   if (key === 'lithium' && id && id !== 'me-levant' && id !== 'default') {
     return {
       ...item,
@@ -805,23 +838,30 @@ function installedCapexFromPack(pack, capacity) {
   return intensity * size;
 }
 
+function solarCapexOverlay(region) {
+  if (region == null || region === '') return null;
+  const id = resolveDemandRegion(region);
+  return solarCapexByRegion[id] || null;
+}
+
 function bindCapexPack(processKey, extra = {}) {
   const item = must(packs, processKey, 'pack');
   const capacity = extra.capacity;
-  const regionMul = extra.region != null ? getCapexMultiplierForRegion(extra.region) : 1;
+  const solarOverlay = processKey === 'solar-pv' ? solarCapexOverlay(extra.region) : null;
+  const regionMul = extra.region != null && !solarOverlay ? getCapexMultiplierForRegion(extra.region) : 1;
   const merged = {
     ...item,
     scaleExponent: extra.scaleExponent ?? item.scaleExponent,
     refCapacity: extra.refCapacity ?? item.refCapacity,
-    capexIntensity: extra.capexIntensity ?? item.capexIntensity * regionMul,
+    capexIntensity: extra.capexIntensity ?? (solarOverlay ? solarOverlay.value : item.capexIntensity * regionMul),
   };
   const scaled = merged.scaleExponent != null && merged.refCapacity != null && Number.isFinite(capacity);
   const precompute = extra.precompute != null ? extra.precompute : (item.precompute || scaled);
   const fields = {
-    quality: item.quality,
-    source: item.source,
-    note: item.note,
-    evidence: item.evidence,
+    quality: solarOverlay ? solarOverlay.quality : item.quality,
+    source: solarOverlay ? solarOverlay.source : item.source,
+    note: solarOverlay ? solarOverlay.note : item.note,
+    evidence: solarOverlay ? solarOverlay.evidence : item.evidence,
     capexIntensity: merged.capexIntensity,
     assetLifeYears: extra.assetLifeYears ?? item.assetLifeYears,
     variableOM: extra.variableOM ?? item.variableOm,
@@ -852,7 +892,7 @@ function bindSale(key, extra = {}) {
   const region = extra && extra.region;
   const item = getPriceForRegion(key, region);
   const cap = must(getDemandForRegion(region), key, 'demand');
-  return {
+  const bound = {
     disposition: 'sale',
     unitPrice: item.value,
     annualDemandLimit: cap.value,
@@ -862,6 +902,8 @@ function bindSale(key, extra = {}) {
     evidence: item.evidence,
     demandRegionId: resolveDemandRegion(region),
   };
+  if (cap.inherit) bound.inherit = cap.inherit;
+  return bound;
 }
 
 function bindSaleForRegion(region) {
@@ -897,7 +939,7 @@ function bindPriceFields(key) {
 function snapshot(map, keys) {
   return keys.map(key => {
     const item = map[key];
-    return {
+    const snap = {
       key,
       value: item.value,
       unit: item.unit,
@@ -906,6 +948,8 @@ function snapshot(map, keys) {
       note: item.note,
       evidence: item.evidence,
     };
+    if (item.inherit) snap.inherit = item.inherit;
+    return snap;
   });
 }
 
@@ -965,6 +1009,10 @@ return {
   DEMAND_REGIONS,
   powerByRegion,
   capexMultiplierByRegion,
+  priceByRegion,
+  solarCapexByRegion,
+  MINERAL_DEMAND_KEYS,
+  FUEL_CHEM_DEMAND_KEYS,
   REGION_STRING_TO_ID,
   DEFAULT_DEMAND_REGION_ID,
   DEMAND_REGION_LABELS,

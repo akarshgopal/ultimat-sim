@@ -144,9 +144,10 @@ test('new catalog presets are searchable: brine hubs abundance-eligible, desal c
   const yanbu = searchSite('saudi-yanbu');
   assert.ok(yanbu, 'saudi-yanbu');
   assert.equal(yanbu.hasSeawaterAssay, true);
-  assert.equal(yanbu.hasBrineAssay, false);
+  assert.equal(yanbu.hasBrineAssay, true);
   assert.equal(yanbu.seawaterAssayId, 'red-sea-seawater');
-  assert.equal(templateEligible(yanbu, 'abundance').reason, 'no-brine-assay');
+  assert.equal(yanbu.brineAssayId, 'red-sea-sabkha-brine');
+  assert.equal(templateEligible(yanbu, 'abundance').ok, true);
   assert.equal(templateEligible(yanbu, 'coastal').ok, true);
   assert.equal(yanbu.rightsHints.seawaterIntake.status, 'assumed');
 
@@ -185,6 +186,40 @@ test('catalog basins evaluate on the abundance template with FAST sizing', () =>
   const uyuni = evaluateCandidate(searchSite('bolivia-uyuni'), 'abundance', FAST);
   assert.equal(uyuni.idle, false);
   assert.ok(uyuni.met || (uyuni.tonnes > 0 && !uyuni.idle), 'Uyuni should rank or be a non-idle near-miss');
+});
+
+test('ticket-5 coasts are dual-assay or explicit permanent-skip, never silent no-brine-assay', () => {
+  const dual = {
+    'saudi-oxagon': 'red-sea-sabkha-brine',
+    'egypt-ain-sokhna': 'red-sea-sabkha-brine',
+    'saudi-yanbu': 'red-sea-sabkha-brine',
+    'au-kwinana': 'lake-mackay-wa-brine',
+    'india-mundra': 'kutch-subsoil-brine',
+    'texas-corpus-christi': 'texas-gulf-desal-brine',
+    'spain-almeria': 'mediterranean-swro-brine',
+  };
+  const skipped = ['oman-duqm', 'morocco-agadir', 'morocco-dakhla', 'namibia-walvis-bay'];
+  for (const [id, brineId] of Object.entries(dual)) {
+    const site = searchSite(id);
+    assert.equal(site.hasSeawaterAssay, true, id);
+    assert.equal(site.hasBrineAssay, true, id);
+    assert.equal(site.brineAssayId, brineId, id);
+    assert.equal(templateEligible(site, 'abundance').ok, true, id);
+    assert.equal(templateEligible(site, 'coastal').ok, true, id);
+    assert.equal(resolveAbundanceAssayId(site), brineId, id);
+  }
+  for (const id of skipped) {
+    const site = searchSite(id);
+    assert.equal(site.hasSeawaterAssay, true, id);
+    assert.equal(site.hasBrineAssay, false, id);
+    assert.equal(site.permanentSkip.abundance.reason, 'no-brine-assay', id);
+    assert.match(site.permanentSkip.abundance.notes, /Permanent skip/i, id);
+    const eligibility = templateEligible(site, 'abundance');
+    assert.equal(eligibility.ok, false, id);
+    assert.equal(eligibility.reason, 'no-brine-assay', id);
+    assert.match(eligibility.notes, /Permanent skip/i, id);
+    assert.equal(resolveAbundanceAssayId(site), null, id);
+  }
 });
 
 test('when Dead Sea abundance is in the search set, returns a scored candidate under the capital-inclusive gate', () => {
@@ -314,9 +349,9 @@ test('ranking is stable: same input yields the same top siteId+template order', 
 });
 
 test('presets without brine assay do not get an invented feasible abundance plant', () => {
-  const seawater = searchSite('spain-almeria');
+  const seawater = searchSite('oman-duqm');
   const gulf = searchSite('uae-taweelah');
-  const noAssay = searchSite('oman-duqm');
+  const noAssay = searchSite('morocco-agadir');
   assert.equal(seawater.hasSeawaterAssay, true);
   assert.equal(seawater.hasBrineAssay, false);
   assert.equal(gulf.hasSeawaterAssay, true);
@@ -324,8 +359,8 @@ test('presets without brine assay do not get an invented feasible abundance plan
   assert.equal(gulf.assayId, 'persian-gulf-sabkha-brine');
   assert.equal(noAssay.hasSeawaterAssay, true);
   assert.equal(noAssay.hasBrineAssay, false);
-  assert.equal(noAssay.assayId, 'arabian-sea-seawater');
-  assert.equal(noAssay.seawaterAssayId, 'arabian-sea-seawater');
+  assert.equal(noAssay.assayId, 'morocco-atlantic-seawater');
+  assert.equal(noAssay.seawaterAssayId, 'morocco-atlantic-seawater');
 
   const skipped = searchAbundanceSites({
     sites: [seawater, noAssay],
@@ -356,7 +391,7 @@ test('presets without brine assay do not get an invented feasible abundance plan
   const mixedHit = mixed.ranking.concat(mixed.nearMisses);
   assert.ok(mixedHit.some(row => row.siteId === DEAD_SEA_SITE_ID && row.template === 'abundance'));
   assert.ok(mixedHit.every(row => row.siteId === DEAD_SEA_SITE_ID && row.template === 'abundance'));
-  assert.ok(mixed.skipped.some(row => row.siteId === 'spain-almeria' && row.reason === 'no-brine-assay'));
+  assert.ok(mixed.skipped.some(row => row.siteId === 'oman-duqm' && row.reason === 'no-brine-assay'));
   assert.equal(templateEligible(seawater, 'abundance').ok, false);
   assert.equal(templateEligible(gulf, 'abundance').ok, true);
   assert.equal(templateEligible(brineSite(), 'coastal').ok, false);
@@ -456,7 +491,8 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
   assert.equal(unfrozenEval.reason, 'no-frozen-pvgis');
 
   assert.equal(duqm.assayId, 'arabian-sea-seawater');
-  assert.equal(mundra.assayId, 'gulf-of-kutch-seawater');
+  assert.equal(mundra.seawaterAssayId, 'gulf-of-kutch-seawater');
+  assert.equal(mundra.assayId, 'kutch-subsoil-brine');
   assert.equal(walvis.assayId, 'benguela-atlantic-seawater');
   assert.ok(pvgisSites.BY_SITE_ID['chile-mejillones']);
   assert.ok(pvgisSites.BY_SITE_ID['mejillones-pvgis-2026-09-14']);
@@ -475,7 +511,7 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
   assert.ok(frozenSolarFor({ id: 'mejillones-pvgis-2026-09-14' }, 'methanol'));
   assert.equal(templateEligible(almeria, 'coastal').ok, true);
   assert.equal(templateEligible(mejillones, 'methanol').ok, true);
-  assert.equal(templateEligible(almeria, 'abundance').ok, false);
+  assert.equal(templateEligible(almeria, 'abundance').ok, true);
   assert.ok(frozenSolarFor(brineSite(), 'abundance'));
   assert.equal(frozenSolarFor(brineSite(), 'abundance').retrieved, '2026-09-06');
   assert.equal(templateEligible(brineSite(), 'abundance').ok, true);

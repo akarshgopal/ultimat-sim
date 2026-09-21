@@ -21,6 +21,10 @@
       'qaidam-brine': require('./qaidam-brine.js'),
       'danakil-brine': require('./danakil-brine.js'),
       'searles-lake-brine': require('./searles-lake-brine.js'),
+      'red-sea-sabkha-brine': require('./red-sea-sabkha-brine.js'),
+      'kutch-subsoil-brine': require('./kutch-subsoil-brine.js'),
+      'texas-gulf-desal-brine': require('./texas-gulf-desal-brine.js'),
+      'mediterranean-swro-brine': require('./mediterranean-swro-brine.js'),
     } : {
       'almeria-seawater': root.AlmeriaSeawater,
       'persian-gulf-seawater': root.PersianGulfSeawater,
@@ -41,6 +45,10 @@
       'qaidam-brine': root.QaidamBrine,
       'danakil-brine': root.DanakilBrine,
       'searles-lake-brine': root.SearlesLakeBrine,
+      'red-sea-sabkha-brine': root.RedSeaSabkhaBrine,
+      'kutch-subsoil-brine': root.KutchSubsoilBrine,
+      'texas-gulf-desal-brine': root.TexasGulfDesalBrine,
+      'mediterranean-swro-brine': root.MediterraneanSwroBrine,
     }
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -77,12 +85,19 @@
     'chile-salar-de-atacama': 'atacama-lithium-brine',
     'au-port-hedland': 'lake-mackay-wa-brine',
     'au-lake-mackay': 'lake-mackay-wa-brine',
+    'au-kwinana': 'lake-mackay-wa-brine',
     'us-great-salt-lake': 'great-salt-lake-brine',
     'us-salton-sea': 'salton-sea-brine',
     'bolivia-uyuni': 'uyuni-lithium-brine',
     'china-qaidam': 'qaidam-brine',
     'ethiopia-danakil': 'danakil-brine',
     'us-searles-lake': 'searles-lake-brine',
+    'saudi-oxagon': 'red-sea-sabkha-brine',
+    'egypt-ain-sokhna': 'red-sea-sabkha-brine',
+    'saudi-yanbu': 'red-sea-sabkha-brine',
+    'india-mundra': 'kutch-subsoil-brine',
+    'texas-corpus-christi': 'texas-gulf-desal-brine',
+    'spain-almeria': 'mediterranean-swro-brine',
   });
 
   const BRINE_ASSAY_IDS = Object.freeze([
@@ -95,6 +110,10 @@
     'qaidam-brine',
     'danakil-brine',
     'searles-lake-brine',
+    'red-sea-sabkha-brine',
+    'kutch-subsoil-brine',
+    'texas-gulf-desal-brine',
+    'mediterranean-swro-brine',
   ]);
 
   const SCREENING_INTAKE_M3_PER_DAY = 0.1;

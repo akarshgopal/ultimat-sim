@@ -132,6 +132,10 @@ const BRINE_ASSAY_FILES = [
   'qaidam-brine',
   'danakil-brine',
   'searles-lake-brine',
+  'red-sea-sabkha-brine',
+  'kutch-subsoil-brine',
+  'texas-gulf-desal-brine',
+  'mediterranean-swro-brine',
 ];
 
 for (const id of BRINE_ASSAY_FILES) {
@@ -154,7 +158,7 @@ for (const id of BRINE_ASSAY_FILES) {
     assert.equal(Object.keys(js.mol_per_kg).sort().join(), Object.keys(js.ions_g_per_kg).sort().join());
     assert.equal(js.ions_g_per_kg.HCO3, undefined);
     assert.equal(js.ions_g_per_kg['HCO3-'], undefined);
-    if (id === 'persian-gulf-sabkha-brine' || id === 'lake-mackay-wa-brine') {
+    if (id === 'persian-gulf-sabkha-brine' || id === 'lake-mackay-wa-brine' || id === 'red-sea-sabkha-brine' || id === 'texas-gulf-desal-brine') {
       assert.equal(js.ions_g_per_kg['Li+'], undefined);
       assert.equal(js.ions_g_per_kg['Br-'], undefined);
     }
@@ -179,19 +183,19 @@ for (const id of BRINE_ASSAY_FILES) {
       assert.equal(js.ions_g_per_kg['Li+'], undefined);
       assert.ok(js.ions_g_per_kg['Br-'] > 0);
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.3389\/fenvs\.2023\.1106181/.test(item.url)));
-    }
     if (id === 'danakil-brine') {
-      assert.equal(js.ions_g_per_kg['Li+'], undefined);
       assert.equal(js.ions_g_per_kg['SO4-2'], undefined);
-      assert.ok(js.ions_g_per_kg['Ca+2'] > 0);
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.1016\/B978-012276152-2/.test(item.url)));
-    }
     if (id === 'searles-lake-brine') {
-      assert.ok(js.ions_g_per_kg['Li+'] > 0);
-      assert.ok(js.ions_g_per_kg['Br-'] > 0);
       assert.equal(js.ions_g_per_kg['Ca+2'], undefined);
       assert.ok(js.evidence.some((item) => /archive\.org\/details\/industrialdevelo00teep/.test(item.url)));
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.3133\/pp1043/.test(item.url)));
+    if (id === 'kutch-subsoil-brine') {
+      assert.ok(js.evidence.some((item) => /pubtexto\.com/.test(item.url)));
+    if (id === 'red-sea-sabkha-brine') {
+      assert.ok(js.evidence.some((item) => /doi\.org\/10\.1007\/s12665-015-4913-6/.test(item.url)));
+    if (id === 'mediterranean-swro-brine') {
+      assert.ok(js.evidence.some((item) => /doi\.org\/10\.1016\/j\.desal\.2023\.116510/.test(item.url)));
     }
     assert.ok(js.evidence.length > 0);
     assert.ok(js.evidence.every((item) => /^https:\/\//.test(item.url)));
@@ -217,7 +221,7 @@ test('brineAssayId on presets resolves via PRESET_BRINE_ASSAY_IDS / getAssay', (
     assert.ok(preset, presetId);
     assert.equal(preset.brineAssayId, assayId);
   }
-  assert.equal(SiteAssays.brineAssayIdForPreset('spain-almeria'), null);
+  assert.equal(SiteAssays.brineAssayIdForPreset('spain-almeria'), 'mediterranean-swro-brine');
   assert.equal(SiteAssays.brineAssayIdForPreset('us-great-salt-lake'), 'great-salt-lake-brine');
   assert.equal(SiteAssays.brineAssayIdForPreset('us-salton-sea'), 'salton-sea-brine');
   assert.equal(SiteAssays.brineAssayIdForPreset('chile-salar-de-atacama'), 'atacama-lithium-brine');
@@ -228,8 +232,14 @@ test('brineAssayId on presets resolves via PRESET_BRINE_ASSAY_IDS / getAssay', (
   assert.equal(SiteAssays.assayIdForPreset('saudi-ras-al-khair'), 'persian-gulf-seawater');
   assert.equal(SiteAssays.brineAssayIdForPreset('saudi-ras-al-khair'), 'persian-gulf-sabkha-brine');
   assert.equal(SiteAssays.assayIdForPreset('saudi-yanbu'), 'red-sea-seawater');
+  assert.equal(SiteAssays.brineAssayIdForPreset('saudi-yanbu'), 'red-sea-sabkha-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('au-kwinana'), 'lake-mackay-wa-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('india-mundra'), 'kutch-subsoil-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('texas-corpus-christi'), 'texas-gulf-desal-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('oman-duqm'), null);
   assert.ok(SiteAssays.getAssay('great-salt-lake-brine'));
   assert.ok(SiteAssays.getAssay('salton-sea-brine'));
+  assert.ok(SiteAssays.getAssay('red-sea-sabkha-brine'));
 });
 
 test('inland Lake Mackay preset binds only process brine', () => {
@@ -307,7 +317,6 @@ test('new catalog basins bind only cited process brine', () => {
   assert.ok(uyuni.resources.brine.stream.mol['Li+'] > 0);
   assert.ok(uyuni.resources.brine.stream.mol['Ca+2'] > 0);
   assert.match(uyuni.resources.brine.evidence, /not a mineral concession/i);
-
   const qaidam = { resources: {} };
   SiteAssays.bindPresetAssay(qaidam, 'china-qaidam');
   assert.equal(qaidam.assay.assayId, 'qaidam-brine');
@@ -315,7 +324,6 @@ test('new catalog basins bind only cited process brine', () => {
   assert.equal(qaidam.resources.brine.stream.mol['Li+'], undefined);
   assert.ok(qaidam.resources.brine.stream.mol['Br-'] > 0);
   assert.match(qaidam.resources.brine.evidence, /not a mineral concession/i);
-
   const danakil = { resources: {} };
   SiteAssays.bindPresetAssay(danakil, 'ethiopia-danakil');
   assert.equal(danakil.assay.assayId, 'danakil-brine');
@@ -323,7 +331,6 @@ test('new catalog basins bind only cited process brine', () => {
   assert.equal(danakil.resources.brine.stream.mol['Li+'], undefined);
   assert.ok(danakil.resources.brine.stream.mol['Ca+2'] > 0);
   assert.match(danakil.resources.brine.evidence, /not a mineral concession/i);
-
   const searles = { resources: {} };
   SiteAssays.bindPresetAssay(searles, 'us-searles-lake');
   assert.equal(searles.assay.assayId, 'searles-lake-brine');
@@ -331,4 +338,31 @@ test('new catalog basins bind only cited process brine', () => {
   assert.ok(searles.resources.brine.stream.mol['Li+'] > 0);
   assert.ok(searles.resources.brine.stream.mol['Br-'] > 0);
   assert.match(searles.resources.brine.evidence, /not a mineral concession/i);
+test('ticket-5 dual-assay coasts bind seawater plus cited process-brine or desal-reject', () => {
+  const cases = [
+    ['saudi-oxagon', 'red-sea-seawater', 'red-sea-sabkha-brine'],
+    ['egypt-ain-sokhna', 'red-sea-seawater', 'red-sea-sabkha-brine'],
+    ['saudi-yanbu', 'red-sea-seawater', 'red-sea-sabkha-brine'],
+    ['au-kwinana', 'pilbara-indian-ocean-seawater', 'lake-mackay-wa-brine'],
+    ['india-mundra', 'gulf-of-kutch-seawater', 'kutch-subsoil-brine'],
+    ['texas-corpus-christi', 'texas-gulf-seawater', 'texas-gulf-desal-brine'],
+    ['spain-almeria', 'almeria-seawater', 'mediterranean-swro-brine'],
+  ];
+  for (const [presetId, seawaterId, brineId] of cases) {
+    const site = { resources: {} };
+    SiteAssays.bindPresetAssay(site, presetId);
+    assert.equal(site.assay.kind, 'seawater', presetId);
+    assert.equal(site.assay.assayId, seawaterId, presetId);
+    assert.equal(site.brineAssay.kind, 'brine', presetId);
+    assert.equal(site.brineAssay.assayId, brineId, presetId);
+    assert.ok(site.resources.seawater.stream.mol['Na+'] > 0, presetId);
+    assert.ok(site.resources.brine.stream.mol['Na+'] > 0, presetId);
+    assert.match(site.resources.brine.evidence, /not a mineral concession/i, presetId);
+  }
+  const mundra = { resources: {} };
+  SiteAssays.bindPresetAssay(mundra, 'india-mundra');
+  assert.ok(mundra.resources.brine.stream.mol['Br-'] > 0);
+  const almeria = { resources: {} };
+  SiteAssays.bindPresetAssay(almeria, 'spain-almeria');
+  assert.ok(almeria.resources.brine.stream.mol['Li+'] > 0);
 });

@@ -194,6 +194,7 @@ function presetSearchSite(preset) {
     rightsHints: preset.rightsHints ? clone(preset.rightsHints) : null,
     evidence: Array.isArray(preset.evidence) ? clone(preset.evidence) : [],
     notes: preset.notes || '',
+    permanentSkip: preset.permanentSkip ? clone(preset.permanentSkip) : null,
     source: 'SITE_PRESETS',
   };
 }
@@ -242,6 +243,7 @@ function normalizeSite(site) {
     brineAssayId: site.brineAssayId || row.brineAssayId,
     seawaterAssayId: site.seawaterAssayId || row.seawaterAssayId,
     assayKind: site.assayKind || row.assayKind,
+    permanentSkip: site.permanentSkip || row.permanentSkip || null,
   };
 }
 
@@ -296,10 +298,11 @@ function templateEligible(site, template, rightsScenario) {
   }
   if (template === 'abundance') {
     if (!site?.hasBrineAssay) {
+      const skip = site?.permanentSkip?.abundance;
       return {
         ok: false,
-        reason: 'no-brine-assay',
-        notes: 'Seawater Millero assays are not brine assays; abundance template skipped.',
+        reason: skip?.reason || 'no-brine-assay',
+        notes: skip?.notes || 'Seawater Millero assays are not brine assays; abundance template skipped.',
       };
     }
   } else if (template === 'coastal' || template === 'methanol') {

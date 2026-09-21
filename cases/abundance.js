@@ -12,6 +12,10 @@
       'qaidam-brine': require('../data/qaidam-brine.js'),
       'danakil-brine': require('../data/danakil-brine.js'),
       'searles-lake-brine': require('../data/searles-lake-brine.js'),
+      'red-sea-sabkha-brine': require('../data/red-sea-sabkha-brine.js'),
+      'kutch-subsoil-brine': require('../data/kutch-subsoil-brine.js'),
+      'texas-gulf-desal-brine': require('../data/texas-gulf-desal-brine.js'),
+      'mediterranean-swro-brine': require('../data/mediterranean-swro-brine.js'),
     } : {
       'dead-sea-brine': root.DeadSeaBrine,
       'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
@@ -23,6 +27,10 @@
       'qaidam-brine': root.QaidamBrine,
       'danakil-brine': root.DanakilBrine,
       'searles-lake-brine': root.SearlesLakeBrine,
+      'red-sea-sabkha-brine': root.RedSeaSabkhaBrine,
+      'kutch-subsoil-brine': root.KutchSubsoilBrine,
+      'texas-gulf-desal-brine': root.TexasGulfDesalBrine,
+      'mediterranean-swro-brine': root.MediterraneanSwroBrine,
     },
     typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
   );

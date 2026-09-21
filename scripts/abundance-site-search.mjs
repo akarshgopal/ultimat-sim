@@ -14,6 +14,8 @@ const {
   SEARCH_SCALES,
   SEARCH_RATES,
   PLANT_TEMPLATES,
+  MATERIALS_TEMPLATES,
+  FUEL_TEMPLATES,
   RIGHTS_SCENARIOS,
 } = require('../engine/site-search.js');
 
@@ -32,6 +34,7 @@ function parseArgs(argv) {
     fast: false,
     nearMisses: true,
     rightsScenario: undefined,
+    path: undefined,
   };
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -45,6 +48,8 @@ function parseArgs(argv) {
     else if (arg.startsWith('--sites=')) opts.siteIds = parseList(arg.slice('--sites='.length));
     else if (arg === '--rights-scenario') opts.rightsScenario = next();
     else if (arg.startsWith('--rights-scenario=')) opts.rightsScenario = arg.slice('--rights-scenario='.length);
+    else if (arg === '--path') opts.path = next();
+    else if (arg.startsWith('--path=')) opts.path = arg.slice('--path='.length);
     else if (arg === '--no-near-misses') opts.nearMisses = false;
     else if (arg === '--help' || arg === '-h') opts.help = true;
     else {
@@ -59,7 +64,8 @@ function parseArgs(argv) {
 function usage() {
   return `Usage: node scripts/abundance-site-search.mjs [options]
   --top N                 ranking length (default 10)
-  --templates a,b,c       subset of ${PLANT_TEMPLATES.join(',')}
+  --path materials|fuels  default materials (${MATERIALS_TEMPLATES.join(',')}); fuels = ${FUEL_TEMPLATES.join(',')}
+  --templates a,b,c       subset of ${PLANT_TEMPLATES.join(',')} (overrides --path)
   --sites id,id           subset of default search sites (Dead Sea + SITE_PRESETS)
   --fast                  tiny scales/rates for CI
   --no-near-misses        omit cash<=0 rows
@@ -82,6 +88,7 @@ if (args.siteIds) {
 const result = searchAbundanceSites({
   sites,
   templates: args.templates,
+  path: args.path,
   topN: Number.isFinite(args.topN) && args.topN > 0 ? args.topN : 10,
   nearMisses: args.nearMisses,
   rightsScenario: args.rightsScenario,
@@ -93,7 +100,8 @@ const result = searchAbundanceSites({
 result.cli = {
   fast: args.fast,
   topN: Number.isFinite(args.topN) ? args.topN : 10,
-  templates: args.templates || PLANT_TEMPLATES.slice(),
+  path: result.path,
+  templates: result.templates.slice(),
   sites: sites.map(site => site.id),
   rightsScenario: result.rightsScenario,
 };

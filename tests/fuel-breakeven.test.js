@@ -162,16 +162,56 @@ test('probeFuelCash documents a CH4 near-miss inside the green-premium × CAPEX 
   assert.equal(probe.label, 'screening');
   assert.equal(probe.product, 'CH4');
   assert.equal(typeof probe.met, 'boolean');
+  assert.equal(probe.met, probe.midMet);
   assert.ok(Number.isFinite(probe.bestCash));
+  assert.ok(Number.isFinite(probe.midCash));
   assert.ok(probe.note);
   assert.match(probe.note, /screening/i);
-  if (probe.met) {
-    assert.ok(probe.bestCash > 0);
+  if (probe.midMet) {
+    assert.ok(probe.midCash > 0);
   } else {
-    assert.ok(probe.bestCash <= 0);
+    assert.ok(!(probe.midCash > 0));
     assert.ok(probe.breakEvenPrice === null || Number.isFinite(probe.breakEvenPrice));
     assert.match(probe.note, /not an invented fuel winner/i);
   }
+});
+
+test('probeFuelCash ranks cash+ only at mid-band, not capexFactor=0.05 alone', () => {
+  const definition = {
+    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    graph: {
+      nodes: [
+        {
+          id: 'ch4-src',
+          unit: 'material-source',
+          params: { stream: methaneStream(1) },
+          economics: { unitCost: 0.5, installedCapex: 10000, assetLifeYears: 20, fixedOMPercent: 0 },
+        },
+        { id: 'methane', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 1, annualDemandLimit: 1e12 } },
+      ],
+      edges: [
+        { from: { node: 'ch4-src', port: 'out' }, to: { node: 'methane', port: 'in' } },
+      ],
+    },
+    operation: { setpoints: {} },
+  };
+  const probe = probeFuelCash({ definition, product: 'CH4' });
+  assert.equal(probe.midMet, false);
+  assert.equal(probe.met, false);
+  assert.ok(probe.midCash <= 0);
+  assert.ok(probe.bestCash > 0);
+  assert.equal(probe.best.capexFactor, 0.05);
+  assert.equal(probe.mid.capexFactor, 1);
+  assert.match(probe.note, /band edge|not ranked/i);
+  assert.match(probe.note, /not an invented fuel winner/i);
+
+  const cheap = tinyMethanePlant({ unitPrice: 1, unitCost: 0.1 });
+  const midHit = probeFuelCash({ definition: cheap, product: 'CH4' });
+  assert.equal(midHit.midMet, true);
+  assert.equal(midHit.met, true);
+  assert.ok(midHit.midCash > 0);
+  assert.equal(midHit.mid.capexFactor, 1);
+  assert.match(midHit.note, /mid-band/i);
 });
 
 test('sizeForPositiveCashflow still scores the tiny H2 plant without sensitivity side effects', () => {

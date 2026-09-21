@@ -253,6 +253,19 @@ test('sizeForPositiveCashflow refines a coarse scale grid that can miss cash+', 
   )) < 1e-6);
 });
 
+test('abundance cash+ winner reports selected.family abundance, not fuel/ammonia', () => {
+  const sized = sizeForPositiveCashflow({
+    caseOrBuilder: () => createAbundanceCase({ assayId: 'atacama-lithium-brine', region: 'Atacama/Chile' }),
+    scales: [1],
+    rates: [0, 5],
+    refine: false,
+  });
+  assert.ok(sized.familiesSearched.includes('abundance'));
+  assert.equal(sized.selected.family, 'abundance');
+  assert.notEqual(sized.selected.product, 'ammonia');
+  assert.notEqual(sized.selected.family, 'fuel');
+});
+
 test('sizeForPositiveCashflow on minerals plus hydrogen searches joint candidates', () => {
   const sized = sizeForPositiveCashflow({
     definition: mineralsAndHydrogenPlant(),

@@ -33,7 +33,7 @@ const INTAKE_ONLY_NOTE = 'Screening-assumes-intake-only: seawater intake may be 
 const OFFTAKE_NOTE = `Offtake-limited scenario: regional demand caps scaled by ${OFFTAKE_DEMAND_FACTOR} for screening; not a plant offtake contract. ${SCREENING_NOTE}`;
 const MAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
 const SEARCH_SCALES = Object.freeze([0.25, 0.5, 1, 2, 4]);
-const SEARCH_RATES = Object.freeze([0, 2, 5]);
+const SEARCH_RATES = Object.freeze([0, 1, 2, 5, 10]);
 const FAST_SCALES = Object.freeze([1]);
 const FAST_RATES = Object.freeze([0]);
 const IDLE_CASH_EPS = 1e-6;
@@ -530,14 +530,15 @@ function bindSeawaterAssay(definition, site, intakeM3PerDay) {
 }
 
 function resolveAbundanceAssayId(site) {
-  if (!site) return 'dead-sea-brine';
-  if (site.assayKind === 'brine' && site.assayId) return site.assayId;
+  if (!site) return null;
+  if (isDeadSeaHub(site)) return site.brineAssayId || site.assayId || 'dead-sea-brine';
+  if (site.hasBrineAssay === false) return null;
+  if (site.assayKind === 'brine' && site.assayId && isBrineAssayId(site.assayId)) return site.assayId;
   if (site.brineAssayId) return site.brineAssayId;
   const mapped = siteAssays?.brineAssayIdForPreset?.(site.id);
   if (mapped) return mapped;
-  if (isDeadSeaHub(site)) return 'dead-sea-brine';
   if (site.hasBrineAssay && site.assayId && isBrineAssayId(site.assayId)) return site.assayId;
-  return 'dead-sea-brine';
+  return null;
 }
 
 function nodeById(definition, id) {
@@ -624,6 +625,7 @@ function buildAbundancePlant(site, rightsScenario) {
   }
   const scenario = normalizeRightsScenario(rightsScenario);
   const assayId = resolveAbundanceAssayId(site);
+  if (!assayId) throw new Error('Abundance plant needs a cited brine assay');
   // Regional offtake: createAbundanceCase({ region }) maps site.region via TeaScreening.
   const definition = abundance.createAbundanceCase({ assayId, region: site.region });
   const solar = frozenSolarFor(site, 'abundance');
@@ -820,6 +822,29 @@ function assayIdForRow(site, template) {
   return site.seawaterAssayId || (site.assayKind === 'seawater' ? site.assayId : null);
 }
 
+const ABUNDANCE_SALE_IDS = Object.freeze([
+  'lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'recovered-salt', 'caustic', 'bromine', 'bromide',
+]);
+const FUEL_SALE_IDS = Object.freeze(['methane', 'methanol', 'methanol-product', 'hydrogen', 'h2']);
+
+function selectedFamilyForRow(template, selected, products) {
+  if (!selected || template !== 'abundance') return selected;
+  let mineralTonnes = 0;
+  let fuelTonnes = 0;
+  for (const product of products || []) {
+    const tonnes = finiteNumber(product?.tonnesPerYear, 0);
+    const id = String(product?.id || '');
+    if (ABUNDANCE_SALE_IDS.includes(id) || id === 'ammonia' || id === 'ammonia-product') mineralTonnes += tonnes;
+    else if (FUEL_SALE_IDS.includes(id)) fuelTonnes += tonnes;
+  }
+  if (!(mineralTonnes > 0 && mineralTonnes >= fuelTonnes)) return selected;
+  if (selected.family === 'abundance' && selected.product !== 'ammonia') return selected;
+  const next = { family: 'abundance' };
+  if (Number.isFinite(Number(selected.scale))) next.scale = Number(selected.scale);
+  if (selected.slateMode) next.slateMode = selected.slateMode;
+  return next;
+}
+
 function skippedRow(site, template, eligibility, rightsScenario) {
   const scenario = normalizeRightsScenario(rightsScenario);
   return withLayerScore({
@@ -924,7 +949,7 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
   let met = Boolean(objective.met) && annualNetCash != null && annualNetCash > 0;
   let { tonnes, products } = saleProducts(objective, economics);
   let positiveSaleCount = finiteNumber(objective.positiveSaleCount, met ? products.length : 0);
-  let selected = sized.selected || null;
+  let selected = selectedFamilyForRow(template, sized.selected || null, products);
   const slate = slateFromNetwork(sized.definition, site);
   const fuelProduct = fuelProductForTemplate(template);
   if (!met) {
@@ -970,10 +995,14 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       product: fuelProduct,
       selected,
     });
+    const midMet = Boolean(probe.midMet ?? probe.met);
     row.breakEvenPrice = probe.breakEvenPrice;
     row.bestCash = probe.bestCash;
+    row.midCash = probe.midCash;
     row.fuelProbe = {
-      met: probe.met,
+      met: midMet,
+      midMet,
+      mid: probe.mid,
       best: probe.best,
       bounds: probe.bounds,
       label: probe.label,
@@ -983,17 +1012,17 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
     row.notes = notes.filter(note => (
       note !== 'No cash-positive fuel slate under searched rates at TEA screening prices; not an invented fuel winner.'
     ));
-    if (probe.met) {
+    if (midMet) {
       const probed = saleProducts(probe.objective, probe.economics);
       met = true;
-      annualNetCash = jsonNumber(probe.bestCash);
+      annualNetCash = jsonNumber(probe.midCash ?? probe.mid?.annualNetCash);
       tonnes = probed.tonnes;
       products = probed.products;
       positiveSaleCount = finiteNumber(probe.objective?.positiveSaleCount, probed.products.length);
       selected = {
         ...(selected || {}),
-        screeningPrice: probe.best?.price,
-        capexFactor: probe.best?.capexFactor,
+        screeningPrice: probe.mid?.price,
+        capexFactor: 1,
         label: 'screening',
       };
       row.met = true;
@@ -1007,8 +1036,16 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       row.selected = selected;
       row.notes = notes.filter(note => !/no cash-positive/i.test(note));
       if (probe.note && !row.notes.includes(probe.note)) row.notes.push(probe.note);
-    } else if (Number.isFinite(probe.bestCash)) {
-      row.annualNetCash = probe.bestCash;
+    } else {
+      selected = {
+        ...(selected || {}),
+        screeningPrice: probe.best?.price,
+        capexFactor: probe.best?.capexFactor,
+        label: 'screening-edge',
+      };
+      row.selected = selected;
+      if (Number.isFinite(probe.midCash)) row.annualNetCash = probe.midCash;
+      else if (Number.isFinite(probe.bestCash)) row.annualNetCash = probe.bestCash;
     }
   }
   return row;

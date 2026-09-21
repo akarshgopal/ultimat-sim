@@ -8,6 +8,10 @@
       'lake-mackay-wa-brine': require('../data/lake-mackay-wa-brine.js'),
       'great-salt-lake-brine': require('../data/great-salt-lake-brine.js'),
       'salton-sea-brine': require('../data/salton-sea-brine.js'),
+      'uyuni-lithium-brine': require('../data/uyuni-lithium-brine.js'),
+      'qaidam-brine': require('../data/qaidam-brine.js'),
+      'danakil-brine': require('../data/danakil-brine.js'),
+      'searles-lake-brine': require('../data/searles-lake-brine.js'),
     } : {
       'dead-sea-brine': root.DeadSeaBrine,
       'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
@@ -15,6 +19,10 @@
       'lake-mackay-wa-brine': root.LakeMackayWaBrine,
       'great-salt-lake-brine': root.GreatSaltLakeBrine,
       'salton-sea-brine': root.SaltonSeaBrine,
+      'uyuni-lithium-brine': root.UyuniLithiumBrine,
+      'qaidam-brine': root.QaidamBrine,
+      'danakil-brine': root.DanakilBrine,
+      'searles-lake-brine': root.SearlesLakeBrine,
     },
     typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
   );

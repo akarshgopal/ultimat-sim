@@ -17,6 +17,10 @@
       'lake-mackay-wa-brine': require('./lake-mackay-wa-brine.js'),
       'great-salt-lake-brine': require('./great-salt-lake-brine.js'),
       'salton-sea-brine': require('./salton-sea-brine.js'),
+      'uyuni-lithium-brine': require('./uyuni-lithium-brine.js'),
+      'qaidam-brine': require('./qaidam-brine.js'),
+      'danakil-brine': require('./danakil-brine.js'),
+      'searles-lake-brine': require('./searles-lake-brine.js'),
     } : {
       'almeria-seawater': root.AlmeriaSeawater,
       'persian-gulf-seawater': root.PersianGulfSeawater,
@@ -33,6 +37,10 @@
       'lake-mackay-wa-brine': root.LakeMackayWaBrine,
       'great-salt-lake-brine': root.GreatSaltLakeBrine,
       'salton-sea-brine': root.SaltonSeaBrine,
+      'uyuni-lithium-brine': root.UyuniLithiumBrine,
+      'qaidam-brine': root.QaidamBrine,
+      'danakil-brine': root.DanakilBrine,
+      'searles-lake-brine': root.SearlesLakeBrine,
     }
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -71,6 +79,10 @@
     'au-lake-mackay': 'lake-mackay-wa-brine',
     'us-great-salt-lake': 'great-salt-lake-brine',
     'us-salton-sea': 'salton-sea-brine',
+    'bolivia-uyuni': 'uyuni-lithium-brine',
+    'china-qaidam': 'qaidam-brine',
+    'ethiopia-danakil': 'danakil-brine',
+    'us-searles-lake': 'searles-lake-brine',
   });
 
   const BRINE_ASSAY_IDS = Object.freeze([
@@ -79,6 +91,10 @@
     'lake-mackay-wa-brine',
     'great-salt-lake-brine',
     'salton-sea-brine',
+    'uyuni-lithium-brine',
+    'qaidam-brine',
+    'danakil-brine',
+    'searles-lake-brine',
   ]);
 
   const SCREENING_INTAKE_M3_PER_DAY = 0.1;

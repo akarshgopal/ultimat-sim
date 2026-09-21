@@ -42,7 +42,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -220,6 +220,10 @@ test('Location presets populate by region and applying Almería sets coords, nam
   assert.match(picker.innerHTML, /uae-taweelah/);
   assert.match(picker.innerHTML, /texas-corpus-christi/);
   assert.match(picker.innerHTML, /us-salton-sea/);
+  assert.match(picker.innerHTML, /bolivia-uyuni/);
+  assert.match(picker.innerHTML, /china-qaidam/);
+  assert.match(picker.innerHTML, /ethiopia-danakil/);
+  assert.match(picker.innerHTML, /us-searles-lake/);
   assert.match(picker.innerHTML, /saudi-ras-al-khair/);
   assert.match(picker.innerHTML, /india-mundra/);
   assert.match(picker.innerHTML, /au-port-hedland/);

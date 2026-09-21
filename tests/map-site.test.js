@@ -6,6 +6,8 @@ const test = require('node:test');
 const {
   LAYER_SOURCES,
   COLORMAP_LAYER_IDS,
+  LAYER_SCORE_EXPECTED_PARTS,
+  PV_YIELD_SCORE_MAX,
   GSA_GHI_RAMP,
   GSA_IRRAD,
   LAND_USD_HA_RAMP,
@@ -250,6 +252,70 @@ test('bundled land-prices data is finite, unique, and covers US+EU+CA+AU', () =>
   assert.ok(landAdmin.features.length > 50);
   const priced = landAdmin.features.filter(f => f.properties.hasPrice);
   assert.ok(priced.length >= 60);
+});
+
+test('layerScoreAt prefers frozen PVGIS yield and completeness-weights missing land $/ha', () => {
+  assert.equal(LAYER_SCORE_EXPECTED_PARTS, 3);
+  assert.equal(PV_YIELD_SCORE_MAX, 6.8);
+
+  const almeriaLat = 36.834;
+  const almeriaLon = -2.463;
+  const screening = layerScoreAt(almeriaLat, almeriaLon);
+  const almeriaDaily = 1716.39 / 365;
+  const frozen = layerScoreAt(almeriaLat, almeriaLon, {
+    dailyPVKWhPerKWp: almeriaDaily,
+    frozen: true,
+  });
+  const fromYear = layerScoreAt(almeriaLat, almeriaLon, {
+    yearlyPVKWhPerKWp: 1716.39,
+    frozen: true,
+  });
+  const fromCoordsObject = layerScoreAt(
+    { latitude: almeriaLat, longitude: almeriaLon },
+    { dailyPVKWhPerKWp: almeriaDaily, frozen: true },
+  );
+  assert.ok(Number.isFinite(screening));
+  assert.ok(Number.isFinite(frozen));
+  assert.notEqual(frozen, screening);
+  assert.equal(fromYear, frozen);
+  assert.equal(fromCoordsObject, frozen);
+
+  const hot = layerScoreAt(almeriaLat, almeriaLon, { dailyPVKWhPerKWp: PV_YIELD_SCORE_MAX, frozen: true });
+  const cold = layerScoreAt(almeriaLat, almeriaLon, { dailyPVKWhPerKWp: 1, frozen: true });
+  assert.ok(hot > frozen);
+  assert.ok(frozen > cold);
+
+  assert.ok(landPriceAt(almeriaLat, almeriaLon), 'Spain has a cited land $/ha series');
+  const waterAlm = waterAvailabilityScreening(almeriaLat, almeriaLon);
+  const twoLayerMean = (
+    Math.min(1, Math.max(0, almeriaDaily / PV_YIELD_SCORE_MAX)) + waterAlm.score
+  ) / 2;
+  assert.notEqual(frozen, Math.round(twoLayerMean * 1e4) / 1e4);
+
+  const chileLat = -23.1;
+  const chileLon = -70.448;
+  assert.equal(landPriceAt(chileLat, chileLon), null, 'Chile has no cited national $/ha');
+  const chileDaily = 1923.52 / 365;
+  const chileFrozen = layerScoreAt(chileLat, chileLon, {
+    dailyPVKWhPerKWp: chileDaily,
+    frozen: true,
+  });
+  const chileScreen = layerScoreAt(chileLat, chileLon);
+  const chileWater = waterAvailabilityScreening(chileLat, chileLon);
+  const chileSunFrozen = Math.min(1, Math.max(0, chileDaily / PV_YIELD_SCORE_MAX));
+  const chileSunScreen = Math.min(1, Math.max(0, pvScreeningBand(chileLat, chileLon).typicalKWhPerKWpDay / PV_YIELD_SCORE_MAX));
+  const naiveFrozen = (chileSunFrozen + chileWater.score) / 2;
+  const completeFrozen = naiveFrozen * (2 / LAYER_SCORE_EXPECTED_PARTS);
+  const completeScreen = ((chileSunScreen + chileWater.score) / 2) * (2 / LAYER_SCORE_EXPECTED_PARTS);
+  assert.equal(chileFrozen, Math.round(completeFrozen * 1e4) / 1e4);
+  assert.equal(chileScreen, Math.round(completeScreen * 1e4) / 1e4);
+  assert.ok(chileFrozen < naiveFrozen, 'missing land must not silently over-weight sun+water');
+  assert.notEqual(chileFrozen, chileScreen);
+
+  const landIndex = landIndexAt(chileLat, chileLon);
+  assert.ok(Number.isFinite(landIndex));
+  const fakeLandMean = (chileSunFrozen + chileWater.score + Math.min(1, Math.max(0, 1 - landIndex))) / 3;
+  assert.notEqual(chileFrozen, Math.round(fakeLandMean * 1e4) / 1e4);
 });
 
 test('web mercator helper and footprint circle stay available', () => {

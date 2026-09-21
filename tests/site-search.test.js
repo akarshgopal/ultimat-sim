@@ -18,8 +18,12 @@ const {
   RIGHTS_INTAKE_ONLY,
   RIGHTS_NO_RIGHTS,
   RIGHTS_OFFTAKE,
+  RIGHTS_NO_GRID,
+  RIGHTS_FRESHWATER,
+  RIGHTS_DISCHARGE,
   RIGHTS_NONE,
   OFFTAKE_DEMAND_FACTOR,
+  NO_GRID_POWER_USD_PER_KWH,
   FAST_SCALES,
   FAST_RATES,
   SEARCH_RATES,
@@ -814,6 +818,103 @@ test('screening-assumes-intake-only skips abundance (no concession) but keeps fu
   assert.ok(!payload.ranking.some(row => row.template === 'abundance'));
   assert.ok(payload.skipped.some(row => row.template === 'abundance' && row.reason === 'no-concession'));
   assert.equal(payload.cli.rightsScenario, RIGHTS_INTAKE_ONLY);
+});
+
+test('no-grid / freshwater-constrained / discharge-limited change cash or feasible set', () => {
+  const mejillones = searchSite('chile-mejillones');
+  const almeria = searchSite('spain-almeria');
+
+  assert.equal(templateEligible(mejillones, 'abundance', RIGHTS_NO_GRID).ok, true);
+  assert.equal(templateEligible(mejillones, 'abundance', RIGHTS_FRESHWATER).ok, false);
+  assert.equal(templateEligible(mejillones, 'abundance', RIGHTS_FRESHWATER).reason, 'no-freshwater');
+  assert.equal(templateEligible(mejillones, 'methanol', RIGHTS_FRESHWATER).ok, true);
+  assert.equal(templateEligible(mejillones, 'coastal', RIGHTS_FRESHWATER).ok, true);
+  assert.equal(templateEligible(mejillones, 'abundance', RIGHTS_DISCHARGE).ok, true);
+  assert.equal(templateEligible(mejillones, 'methanol', RIGHTS_DISCHARGE).ok, false);
+  assert.equal(templateEligible(mejillones, 'methanol', RIGHTS_DISCHARGE).reason, 'no-discharge');
+  assert.equal(templateEligible(almeria, 'coastal', RIGHTS_DISCHARGE).ok, false);
+  assert.equal(templateEligible(almeria, 'coastal', RIGHTS_DISCHARGE).reason, 'no-discharge');
+
+  const screening = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['abundance'],
+    sizeOpts: FAST,
+  });
+  const winner = screening.ranking[0];
+  assert.ok(winner, 'Mejillones abundance should be cash+ under screening');
+  assert.equal(winner.feasible, true);
+  assert.ok(winner.annualNetCash > 0);
+
+  const noGrid = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['abundance'],
+    rightsScenario: 'no-grid',
+    sizeOpts: FAST,
+  });
+  assert.equal(noGrid.rightsScenario, RIGHTS_NO_GRID);
+  const noGridHit = noGrid.ranking[0] || noGrid.nearMisses[0];
+  assert.ok(noGridHit, 'no-grid should still evaluate Mejillones abundance');
+  assert.equal(noGridHit.rightsScenario, RIGHTS_NO_GRID);
+  assert.ok(Number.isFinite(noGridHit.annualNetCash));
+  const cashDrop = (winner.annualNetCash - noGridHit.annualNetCash) / Math.abs(winner.annualNetCash);
+  assert.ok(
+    cashDrop > 0.10,
+    `no-grid Mejillones abundance cash drop should exceed 10% (got ${(cashDrop * 100).toFixed(1)}%; screening ${winner.annualNetCash} vs no-grid ${noGridHit.annualNetCash})`
+  );
+  const noGridPlant = buildAbundancePlant(mejillones, RIGHTS_NO_GRID);
+  const power = noGridPlant.graph.nodes.find(node => node.id === 'power');
+  assert.equal(power.economics.unitCost, NO_GRID_POWER_USD_PER_KWH);
+  assert.equal(noGridPlant.site.rights.gridImport.authorize, false);
+
+  const fresh = searchAbundanceSites({
+    sites: [mejillones],
+    templates: ['abundance'],
+    rightsScenario: 'freshwater-constrained',
+    sizeOpts: FAST,
+  });
+  assert.equal(fresh.rightsScenario, RIGHTS_FRESHWATER);
+  assert.equal(fresh.feasibleCount, 0);
+  assert.equal(fresh.ranking.length, 0);
+  const skippedFresh = fresh.skipped.find(row => row.siteId === 'chile-mejillones' && row.template === 'abundance');
+  assert.ok(skippedFresh);
+  assert.equal(skippedFresh.reason, 'no-freshwater');
+  assert.equal(skippedFresh.feasible, false);
+  assert.equal(skippedFresh.rightsScenario, RIGHTS_FRESHWATER);
+  const freshPlant = buildAbundancePlant(mejillones, RIGHTS_FRESHWATER);
+  assert.equal(freshPlant.site.rights.freshwater.authorize, false);
+  assert.equal(freshPlant.site.rights.freshwater.status, 'unverified');
+
+  const discharge = searchAbundanceSites({
+    sites: [mejillones, almeria],
+    templates: ['methanol', 'coastal'],
+    rightsScenario: 'discharge-limited',
+    sizeOpts: FAST,
+  });
+  assert.equal(discharge.rightsScenario, RIGHTS_DISCHARGE);
+  assert.equal(discharge.tried, 0);
+  assert.ok(discharge.skipped.length >= 2);
+  assert.ok(discharge.skipped.every(row => row.reason === 'no-discharge'));
+  assert.ok(discharge.skipped.every(row => row.rightsScenario === RIGHTS_DISCHARGE));
+  const fuel = buildFuelPlant(mejillones, 'methanol', RIGHTS_DISCHARGE);
+  assert.equal(fuel.site.rights.seawaterDischarge.authorize, false);
+  assert.equal(fuel.site.rights.seawaterDischarge.status, 'unverified');
+  assert.equal(fuel.site.rights.seawaterIntake.authorize, true);
+
+  const cli = spawnSync(process.execPath, [
+    path.join(__dirname, '..', 'scripts/abundance-site-search.mjs'),
+    '--fast',
+    '--templates', 'abundance',
+    '--sites', 'chile-mejillones',
+    '--rights-scenario', 'no-grid',
+  ], { encoding: 'utf8', timeout: 60000 });
+  assert.equal(cli.status, 0, cli.stderr || cli.stdout);
+  const payload = JSON.parse(cli.stdout);
+  assert.equal(payload.rightsScenario, RIGHTS_NO_GRID);
+  assert.equal(payload.cli.rightsScenario, RIGHTS_NO_GRID);
+  const cliHit = payload.ranking[0] || payload.nearMisses[0];
+  assert.ok(cliHit);
+  assert.ok(Number.isFinite(cliHit.annualNetCash));
+  assert.ok((winner.annualNetCash - cliHit.annualNetCash) / Math.abs(winner.annualNetCash) > 0.10);
 });
 
 test('offtake-limited haircut applies to regional mineral ceilings, not a shared me-levant table', () => {

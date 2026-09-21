@@ -24,13 +24,24 @@ const RIGHTS_SCREENING = 'screening-assumes-intake-concession';
 const RIGHTS_INTAKE_ONLY = 'screening-assumes-intake-only';
 const RIGHTS_NO_RIGHTS = 'no-rights';
 const RIGHTS_OFFTAKE = 'offtake-limited';
+const RIGHTS_NO_GRID = 'no-grid';
+const RIGHTS_FRESHWATER = 'freshwater-constrained';
+const RIGHTS_DISCHARGE = 'discharge-limited';
 const RIGHTS_NONE = 'no-rights-modeled';
-const RIGHTS_SCENARIOS = Object.freeze([RIGHTS_SCREENING, RIGHTS_INTAKE_ONLY, RIGHTS_NO_RIGHTS, RIGHTS_OFFTAKE]);
+const RIGHTS_SCENARIOS = Object.freeze([
+  RIGHTS_SCREENING, RIGHTS_INTAKE_ONLY, RIGHTS_NO_RIGHTS, RIGHTS_OFFTAKE,
+  RIGHTS_NO_GRID, RIGHTS_FRESHWATER, RIGHTS_DISCHARGE,
+]);
 // 0.1× Chile Li still exceeds catalog plant scale; 0.01× binds so offtake actually changes cash.
 const OFFTAKE_DEMAND_FACTOR = 0.01;
+// Islanded / no-interconnection screening overlay (~diesel genset order). Chile industrial mid is ~$0.07/kWh — too small to move cash 10%.
+const NO_GRID_POWER_USD_PER_KWH = 0.5;
 const NO_RIGHTS_NOTE = 'No-rights scenario: intake/concession are not assumed. A literature assay is not a mineral concession; not a bankable permit.';
 const INTAKE_ONLY_NOTE = 'Screening-assumes-intake-only: seawater intake may be assumed for evaluation; brine concession is not. A literature assay is not a mineral concession; not a bankable permit.';
 const OFFTAKE_NOTE = `Offtake-limited scenario: regional demand caps scaled by ${OFFTAKE_DEMAND_FACTOR} for screening; not a plant offtake contract. ${SCREENING_NOTE}`;
+const NO_GRID_NOTE = `No-grid scenario: expensive grid-power overlay $${NO_GRID_POWER_USD_PER_KWH}/kWh screening (islanded / no cheap interconnection); not a PPA. ${SCREENING_NOTE}`;
+const FRESHWATER_NOTE = 'Freshwater-constrained scenario: no freshwater right. Process-water plants skip; not a municipal allocation. Screening assumes intake/concession for evaluation only; not a bankable permit.';
+const DISCHARGE_NOTE = 'Discharge-limited scenario: no seawater outfall permit. Coastal/methanol plants skip; not a discharge right. Screening assumes intake/concession for evaluation only; not a bankable permit.';
 const MAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
 const SEARCH_SCALES = Object.freeze([0.25, 0.5, 1, 2, 4]);
 const SEARCH_RATES = Object.freeze([0, 1, 2, 5, 10]);
@@ -66,6 +77,13 @@ function normalizeRightsScenario(value) {
   if (raw === RIGHTS_OFFTAKE || raw === 'ofstake-limited' || raw === 'offtake') {
     return RIGHTS_OFFTAKE;
   }
+  if (raw === RIGHTS_NO_GRID || raw === 'nogrid' || raw === 'grid-denied') return RIGHTS_NO_GRID;
+  if (raw === RIGHTS_FRESHWATER || raw === 'freshwater' || raw === 'no-freshwater') {
+    return RIGHTS_FRESHWATER;
+  }
+  if (raw === RIGHTS_DISCHARGE || raw === 'discharge' || raw === 'no-discharge') {
+    return RIGHTS_DISCHARGE;
+  }
   throw new Error(`Unknown rightsScenario ${value}`);
 }
 
@@ -73,6 +91,9 @@ function scenarioNote(scenario) {
   if (scenario === RIGHTS_NO_RIGHTS) return NO_RIGHTS_NOTE;
   if (scenario === RIGHTS_INTAKE_ONLY) return INTAKE_ONLY_NOTE;
   if (scenario === RIGHTS_OFFTAKE) return OFFTAKE_NOTE;
+  if (scenario === RIGHTS_NO_GRID) return NO_GRID_NOTE;
+  if (scenario === RIGHTS_FRESHWATER) return FRESHWATER_NOTE;
+  if (scenario === RIGHTS_DISCHARGE) return DISCHARGE_NOTE;
   return SCREENING_NOTE;
 }
 
@@ -82,6 +103,14 @@ function templateNeedsConcession(template) {
 
 function templateNeedsIntakeOrConcession(template) {
   return template === 'abundance' || template === 'coastal' || template === 'methanol';
+}
+
+function templateNeedsFreshwater(template) {
+  return template === 'abundance';
+}
+
+function templateNeedsDischarge(template) {
+  return template === 'coastal' || template === 'methanol';
 }
 
 function presetList() {
@@ -275,6 +304,20 @@ function templateEligible(site, template, rightsScenario) {
       notes: 'Brine concession would be required and is not assumed in the screening-assumes-intake-only scenario.',
     };
   }
+  if (scenario === RIGHTS_FRESHWATER && templateNeedsFreshwater(template)) {
+    return {
+      ok: false,
+      reason: 'no-freshwater',
+      notes: 'Process freshwater would be required and is denied in the freshwater-constrained scenario.',
+    };
+  }
+  if (scenario === RIGHTS_DISCHARGE && templateNeedsDischarge(template)) {
+    return {
+      ok: false,
+      reason: 'no-discharge',
+      notes: 'Seawater outfall would be required and is denied in the discharge-limited scenario.',
+    };
+  }
   return { ok: true };
 }
 
@@ -432,6 +475,61 @@ function applyOfftakeDemandHaircut(definition, factor = OFFTAKE_DEMAND_FACTOR) {
   }
 }
 
+function isElectricitySourceNode(node) {
+  return node?.unit === 'electricity-source'
+    || node?.id === 'power'
+    || node?.id === 'electricity'
+    || node?.siteResource === 'electricity';
+}
+
+function applyNoGridPowerOverlay(definition) {
+  revokeRight(
+    definition,
+    'gridImport',
+    'grid',
+    'No-grid scenario: no cheap interconnection; expensive grid-power overlay applied to electricity sources.'
+  );
+  const nodes = definition?.graph?.nodes || [];
+  for (const node of nodes) {
+    if (!isElectricitySourceNode(node)) continue;
+    const prev = node.economics && typeof node.economics === 'object' ? node.economics : {};
+    const extra = `No-grid scenario: expensive grid-power overlay $${NO_GRID_POWER_USD_PER_KWH}/kWh screening; not a PPA.`;
+    node.economics = {
+      ...prev,
+      unitCost: NO_GRID_POWER_USD_PER_KWH,
+      note: prev.note ? `${prev.note} ${extra}` : extra,
+    };
+  }
+}
+
+function applyFreshwaterConstraint(definition) {
+  revokeRight(
+    definition,
+    'freshwater',
+    'freshwater',
+    'Freshwater-constrained scenario: no freshwater right; not a municipal allocation.'
+  );
+  const resource = definition?.site?.resources?.freshwater;
+  if (resource) {
+    resource.stream = {
+      kind: 'material',
+      mol: { H2O: 0 },
+      phase: 'liquid',
+      T_C: 25,
+      P_bar: 1,
+    };
+  }
+}
+
+function applyDischargeLimit(definition) {
+  revokeRight(
+    definition,
+    'seawaterDischarge',
+    'discharge',
+    'Discharge-limited scenario: no seawater outfall permit; not a discharge right.'
+  );
+}
+
 function applyRightsScenario(definition, template, scenario) {
   if (scenario === RIGHTS_NO_RIGHTS) {
     revokeAssumedIntakeAndConcession(definition);
@@ -443,6 +541,9 @@ function applyRightsScenario(definition, template, scenario) {
   }
   if (template === 'abundance') assumeScreeningBrine(definition);
   if (scenario === RIGHTS_OFFTAKE) applyOfftakeDemandHaircut(definition);
+  if (scenario === RIGHTS_NO_GRID) applyNoGridPowerOverlay(definition);
+  if (scenario === RIGHTS_FRESHWATER) applyFreshwaterConstraint(definition);
+  if (scenario === RIGHTS_DISCHARGE) applyDischargeLimit(definition);
 }
 
 
@@ -931,15 +1032,28 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       caps: sizeOpts.caps,
     });
   } catch (error) {
-    if ((rightsScenario === RIGHTS_NO_RIGHTS || rightsScenario === RIGHTS_INTAKE_ONLY)
-      && /cannot assume|no feasible/i.test(error.message || '')) {
-      const intakeOnly = rightsScenario === RIGHTS_INTAKE_ONLY;
-      return skippedRow(site, template, {
-        reason: intakeOnly ? 'no-concession' : 'no-rights',
-        notes: intakeOnly
-          ? 'Size/solve cannot grow unauthorized brine concession.'
-          : 'Size/solve cannot grow unauthorized intake or brine concession.',
-      }, rightsScenario);
+    if (/cannot assume|no feasible/i.test(error.message || '')) {
+      if (rightsScenario === RIGHTS_NO_RIGHTS || rightsScenario === RIGHTS_INTAKE_ONLY) {
+        const intakeOnly = rightsScenario === RIGHTS_INTAKE_ONLY;
+        return skippedRow(site, template, {
+          reason: intakeOnly ? 'no-concession' : 'no-rights',
+          notes: intakeOnly
+            ? 'Size/solve cannot grow unauthorized brine concession.'
+            : 'Size/solve cannot grow unauthorized intake or brine concession.',
+        }, rightsScenario);
+      }
+      if (rightsScenario === RIGHTS_FRESHWATER) {
+        return skippedRow(site, template, {
+          reason: 'no-freshwater',
+          notes: 'Size/solve cannot grow unauthorized freshwater.',
+        }, rightsScenario);
+      }
+      if (rightsScenario === RIGHTS_DISCHARGE) {
+        return skippedRow(site, template, {
+          reason: 'no-discharge',
+          notes: 'Size/solve cannot grow unauthorized seawater discharge.',
+        }, rightsScenario);
+      }
     }
     return errorRow(site, template, error, notes, rightsScenario);
   }
@@ -1117,9 +1231,13 @@ return {
   RIGHTS_INTAKE_ONLY,
   RIGHTS_NO_RIGHTS,
   RIGHTS_OFFTAKE,
+  RIGHTS_NO_GRID,
+  RIGHTS_FRESHWATER,
+  RIGHTS_DISCHARGE,
   RIGHTS_NONE,
   RIGHTS_SCENARIOS,
   OFFTAKE_DEMAND_FACTOR,
+  NO_GRID_POWER_USD_PER_KWH,
   MAP_LAYER_IDS,
   SEARCH_SCALES,
   SEARCH_RATES,

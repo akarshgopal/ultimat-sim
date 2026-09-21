@@ -40,8 +40,35 @@ test('demandByRegion maps preset.region strings and chile lithium ceiling ≠ me
   assert.ok(tea.getDemandForRegion('chile-atacama').lithium.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
 
   const auLi = tea.getDemandForRegion('australia').lithium.value;
-  assert.equal(auLi, meLi);
+  assert.equal(auLi, 5e6);
+  assert.notEqual(auLi, meLi);
   assert.match(tea.getDemandForRegion('australia').lithium.note, /hard-rock/i);
+  assert.match(tea.getDemandForRegion('australia').lithium.note, /not a .*brine offtake|not a Lake Mackay brine/i);
+  assert.ok(tea.getDemandForRegion('australia').lithium.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
+
+  const mineralKeys = ['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium'];
+  const regionalIds = ['australia', 'texas', 'southern-africa', 'india', 'europe', 'gulf'];
+  const me = tea.getDemandForRegion('me-levant');
+  for (const id of regionalIds) {
+    const regional = tea.getDemandForRegion(id);
+    const differs = mineralKeys.some(key => regional[key].value !== me[key].value);
+    assert.ok(differs, `${id} mineral ceilings should not purely inherit me-levant`);
+    for (const key of mineralKeys) {
+      assert.match(regional[key].note, /not a .*contract|not an offtake/i, `${id} ${key}`);
+      assert.equal(regional[key].quality, 'screening');
+      assert.ok(
+        regional[key].evidence.some(item => /usgs\.gov/i.test(item.url || '')),
+        `${id} ${key} should cite USGS`
+      );
+    }
+  }
+  assert.equal(tea.getDemandForRegion('gulf').bromine.value, 5e6);
+  assert.notEqual(tea.getDemandForRegion('gulf').bromine.value, me.bromine.value);
+  assert.equal(tea.getDemandForRegion('india').bromine.value, 3e6);
+  assert.equal(tea.getDemandForRegion('texas').salt.value, 8e9);
+  assert.equal(tea.getDemandForRegion('europe').potash.value, 1e9);
+  assert.equal(tea.getDemandForRegion('southern-africa').lithium.value, 2e5);
+  assert.equal(tea.getDemandForRegion('chile-atacama').bromine.value, me.bromine.value);
 });
 
 test('bindSale / bindCost regional overlays: chile offtake and power ≠ me-levant defaults', () => {

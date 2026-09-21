@@ -20,13 +20,17 @@ function row(value, unit, quality, source, note, evidence) {
 }
 
 const USGS_LI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-lithium.pdf';
+const USGS_LI_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-lithium.pdf';
 const USGS_BR = 'https://pubs.usgs.gov/periodicals/mcs2024/mcs2024-bromine.pdf';
 const USGS_BR_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-bromine.pdf';
 const USGS_K = 'https://pubs.usgs.gov/periodicals/mcs2024/mcs2024-potash.pdf';
 const USGS_K_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-potash.pdf';
 const USGS_SALT = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-salt.pdf';
+const USGS_SALT_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-salt.pdf';
 const USGS_GYP = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-gypsum.pdf';
+const USGS_GYP_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-gypsum.pdf';
 const USGS_MG = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-compounds.pdf';
+const USGS_MG_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-magnesium-compounds.pdf';
 const NREL_DLE = 'https://doi.org/10.2172/1782801';
 const NREL_ATB = 'https://atb.nrel.gov/';
 const NREL_ATB_DOI = 'https://doi.org/10.25984/2377191';
@@ -50,13 +54,13 @@ const WB_ICP = 'https://www.worldbank.org/en/programs/icp/brief/ICP2021';
 const DEFAULT_DEMAND_REGION_ID = 'me-levant';
 const DEMAND_REGION_LABELS = {
   'me-levant': 'Dead Sea / Levant screening offtake (Red Sea and Arabian Sea inherit). Not a plant offtake contract.',
-  gulf: 'Gulf screening offtake. Minerals inherit me-levant tables; not a DEWA/EWEC/KAHRAMAA contract.',
+  gulf: 'Gulf screening offtake. Mineral ceilings use USGS MCS Gulf/Oman/Saudi production or non-producer proxies, not Dead Sea tables. Not a DEWA/EWEC/KAHRAMAA contract.',
   'chile-atacama': 'Atacama / Chile screening offtake. Lithium ceiling reflects USGS Chile mine-production order (supply-side, not a contract). Other minerals inherit me-levant. Not a plant offtake contract.',
-  australia: 'Australia screening offtake. Minerals inherit me-levant; USGS Australia lithium is hard-rock spodumene, not a brine offtake contract.',
-  europe: 'Europe screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
-  india: 'India screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
-  texas: 'Texas / US Gulf screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
-  'southern-africa': 'Southern Africa screening offtake. Minerals inherit me-levant. Not a plant offtake contract.',
+  australia: 'Australia screening offtake. Mineral ceilings use USGS MCS Australia production/trade proxies (Li is hard-rock spodumene, not a Lake Mackay brine offtake). Not a plant offtake contract.',
+  europe: 'Europe screening offtake. Mineral ceilings use USGS MCS Europe production/trade proxies (Portugal Li, Germany/Spain potash, etc.). Not a plant offtake contract.',
+  india: 'India screening offtake. Mineral ceilings use USGS MCS India production/trade proxies. Not a plant offtake contract.',
+  texas: 'Texas / US Gulf screening offtake. Mineral ceilings use USGS MCS US production/trade proxies (Arkansas Br, US salt/gypsum; US Li withheld). Not a plant offtake contract.',
+  'southern-africa': 'Southern Africa screening offtake. Mineral ceilings use USGS MCS non-producer / Namibia-removed Li proxies, not Dead Sea tables. Not a plant offtake contract.',
   default: 'Default screening offtake (inherits Dead Sea / Middle East tables) for unmapped site.region. Not a plant offtake contract.',
 };
 const DEMAND_REGION = DEMAND_REGION_LABELS[DEFAULT_DEMAND_REGION_ID];
@@ -390,13 +394,13 @@ function inheritDemand(base, inheritNote, overrides = {}) {
 }
 
 const CHILE_INHERIT_NOTE = 'Inherited me-levant screening offtake; Chile table only regionalizes lithium. Not a plant contract.';
-const AUSTRALIA_INHERIT_NOTE = 'Inherited me-levant screening offtake. USGS MCS 2025 Australia lithium mine production 2024e ~88,000 t Li content is hard-rock spodumene, not a Lake Mackay brine offtake. Not a plant contract.';
+const AUSTRALIA_INHERIT_NOTE = 'Inherited me-levant screening offtake for fuels/chemicals without a cited Australia mineral series. Not a plant contract.';
 const DEFAULT_INHERIT_NOTE = 'Inherited me-levant screening offtake (unmapped site.region). Not a plant contract.';
-const GULF_INHERIT_NOTE = 'Inherited me-levant screening offtake for Gulf geography. Not a plant contract.';
-const EUROPE_INHERIT_NOTE = 'Inherited me-levant screening offtake for Europe geography. Not a plant contract.';
-const INDIA_INHERIT_NOTE = 'Inherited me-levant screening offtake for India geography. Not a plant contract.';
-const TEXAS_INHERIT_NOTE = 'Inherited me-levant screening offtake for Texas / US Gulf geography. Not a plant contract.';
-const SOUTHERN_AFRICA_INHERIT_NOTE = 'Inherited me-levant screening offtake for Southern Africa geography. Not a plant contract.';
+const GULF_INHERIT_NOTE = 'Inherited me-levant screening offtake for Gulf fuels/chemicals without a cited Gulf mineral series. Not a plant contract.';
+const EUROPE_INHERIT_NOTE = 'Inherited me-levant screening offtake for Europe fuels/chemicals without a cited Europe mineral series. Not a plant contract.';
+const INDIA_INHERIT_NOTE = 'Inherited me-levant screening offtake for India fuels/chemicals without a cited India mineral series. Not a plant contract.';
+const TEXAS_INHERIT_NOTE = 'Inherited me-levant screening offtake for Texas / US Gulf fuels/chemicals without a cited US mineral series. Not a plant contract.';
+const SOUTHERN_AFRICA_INHERIT_NOTE = 'Inherited me-levant screening offtake for Southern Africa fuels/chemicals without a cited regional mineral series. Not a plant contract.';
 
 const demandChile = inheritDemand(demand, CHILE_INHERIT_NOTE, {
   lithium: row(
@@ -406,13 +410,205 @@ const demandChile = inheritDemand(demand, CHILE_INHERIT_NOTE, {
   ),
 });
 
-const demandAustralia = inheritDemand(demand, AUSTRALIA_INHERIT_NOTE);
+const demandAustralia = inheritDemand(demand, AUSTRALIA_INHERIT_NOTE, {
+  lithium: row(
+    5e6, 'kg/year', 'screening', 'USGS MCS Australia Li production order',
+    'Conservative 5,000 t/y LCE-proxy ceiling, well below USGS MCS 2026 Australia mine production 2025e ~92,000 t lithium content. That production is hard-rock spodumene, not a Lake Mackay brine offtake. Not a plant contract and not a LiCl quote.',
+    [{ label: 'USGS MCS 2026 lithium — Australia mine production 2025e ~92,000 t Li content (hard-rock spodumene); not a brine offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    2e6, 'kg/year', 'screening', 'USGS MCS bromine; Australia not listed',
+    'Conservative 2,000 t/y regional ceiling. USGS MCS 2026 bromine world table lists Israel, Jordan, China, India, Japan, Ukraine, and withheld US — Australia is not a listed producer. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — Australia not a listed producer; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS potash; Australia not listed',
+    'Conservative 100 kt/y regional ceiling. USGS MCS 2026 potash world table does not list Australia among producers (Canada, Belarus, Russia, China, Germany, Israel, Jordan, …). Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 potash — Australia not a listed producer; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    3e9, 'kg/year', 'screening', 'USGS MCS Australia salt production',
+    'Conservative 3 Mt/y regional industrial/export ceiling, below USGS MCS 2026 Australia salt production 2025e ~12 Mt. Solar-salt trade proxy, not a Lake Mackay or Port Hedland offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — Australia production 2025e ~12 Mt; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    1e9, 'kg/year', 'screening', 'USGS MCS Australia gypsum production',
+    'Conservative 1 Mt/y regional construction/ag ceiling, below USGS MCS 2026 Australia gypsum 2025e ~4.2 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — Australia production 2025e ~4.2 Mt; not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    5e7, 'kg/year', 'screening', 'USGS MCS Australia magnesite; brine compound',
+    'Conservative 50 kt/y brine-Mg-compound ceiling, not Mg-metal and not magnesite offtake. USGS MCS 2026 magnesite Australia 2025e ~400 kt gross. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — Australia magnesite 2025e ~400 kt gross; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
 const demandDefault = inheritDemand(demand, DEFAULT_INHERIT_NOTE);
-const demandGulf = inheritDemand(demand, GULF_INHERIT_NOTE);
-const demandEurope = inheritDemand(demand, EUROPE_INHERIT_NOTE);
-const demandIndia = inheritDemand(demand, INDIA_INHERIT_NOTE);
-const demandTexas = inheritDemand(demand, TEXAS_INHERIT_NOTE);
-const demandSouthernAfrica = inheritDemand(demand, SOUTHERN_AFRICA_INHERIT_NOTE);
+
+const demandGulf = inheritDemand(demand, GULF_INHERIT_NOTE, {
+  lithium: row(
+    5e5, 'kg/year', 'screening', 'USGS MCS lithium; Gulf not listed',
+    'Conservative 500 t/y LCE-proxy ceiling. USGS MCS 2026 lithium world table does not list Gulf states as mine producers (Australia, Chile, China, Argentina, …). Not a Dead Sea inherit and not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 lithium — Gulf states not listed as mine producers; not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    5e6, 'kg/year', 'screening', 'USGS MCS bromine; Gulf ≠ Dead Sea',
+    'Conservative 5,000 t/y regional ceiling. USGS MCS 2026 bromine producers are Israel, Jordan, China, India, Japan, Ukraine, and withheld US — not KSA/UAE/Qatar. Dead Sea Br is Levant, not Gulf. Not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — Gulf states not listed; Dead Sea is Levant not Gulf; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS potash; Gulf not listed',
+    'Conservative 100 kt/y regional ceiling. USGS MCS 2026 potash lists Israel/Jordan Dead Sea, not Gulf states. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 potash — Gulf states not listed as producers; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    1e9, 'kg/year', 'screening', 'USGS MCS Saudi salt production',
+    'Conservative 1 Mt/y regional industrial ceiling, below USGS MCS 2026 Saudi Arabia salt 2025e ~2.4 Mt. Not a SWCC/DEWA offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — Saudi Arabia production 2025e ~2.4 Mt; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS Oman/Saudi gypsum',
+    'Conservative 2 Mt/y regional construction ceiling, below USGS MCS 2026 Oman gypsum 2025e ~14 Mt and Saudi Arabia ~3.8 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — Oman ~14 Mt and Saudi Arabia ~3.8 Mt (2025e); not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS magnesite; Gulf not listed',
+    'Conservative 20 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 magnesite world table does not list Gulf states. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — Gulf states not listed magnesite producers; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandEurope = inheritDemand(demand, EUROPE_INHERIT_NOTE, {
+  lithium: row(
+    2e5, 'kg/year', 'screening', 'USGS MCS Portugal Li production order',
+    'Conservative 200 t/y LCE-proxy ceiling, below USGS MCS 2026 Portugal mine production 2025e ~380 t lithium content (Europe’s listed producer). Not a brine offtake and not a plant contract.',
+    [{ label: 'USGS MCS 2026 lithium — Portugal mine production 2025e ~380 t Li content; not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    5e6, 'kg/year', 'screening', 'USGS MCS bromine; Europe small',
+    'Conservative 5,000 t/y regional ceiling. USGS MCS 2026 bromine lists Ukraine ~6,000 t 2025e; Western Europe is not a listed elemental-Br producer. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — Ukraine ~6,000 t 2025e; Western Europe not a listed producer; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    1e9, 'kg/year', 'screening', 'USGS MCS Germany/Spain potash',
+    'Conservative 1 Mt/y regional ceiling, below USGS MCS 2026 Germany potash 2025e ~3 Mt K₂O plus Spain ~450 kt. Screening offtake, not a K+S contract.',
+    [{ label: 'USGS MCS 2026 potash — Germany ~3 Mt and Spain ~450 kt K₂O (2025e); not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    8e9, 'kg/year', 'screening', 'USGS MCS Europe salt production',
+    'Conservative 8 Mt/y regional industrial ceiling, below USGS MCS 2026 Germany ~15 Mt, Netherlands ~5.4 Mt, Spain ~4 Mt, France ~4.5 Mt, UK ~2.6 Mt, Poland ~4.1 Mt (2025e). Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — Europe producers (Germany ~15 Mt, Spain ~4 Mt, … 2025e); not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS Europe gypsum production',
+    'Conservative 2 Mt/y regional construction ceiling, below USGS MCS 2026 Spain gypsum 2025e ~11 Mt, Germany ~4.7 Mt, France ~2.4 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — Spain ~11 Mt, Germany ~4.7 Mt, France ~2.4 Mt (2025e); not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    5e7, 'kg/year', 'screening', 'USGS MCS Europe magnesite; brine compound',
+    'Conservative 50 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 magnesite 2025e: Austria ~650 kt, Spain ~640 kt, Slovakia ~330 kt, Greece ~130 kt gross. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — Europe magnesite (Austria/Spain/Slovakia/Greece 2025e); brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandIndia = inheritDemand(demand, INDIA_INHERIT_NOTE, {
+  lithium: row(
+    2e5, 'kg/year', 'screening', 'USGS MCS lithium; India not listed',
+    'Conservative 200 t/y LCE-proxy ceiling. USGS MCS 2026 lithium world table does not list India as a mine producer. Not a Dead Sea inherit and not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 lithium — India not listed as a mine producer; not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    3e6, 'kg/year', 'screening', 'USGS MCS India bromine production',
+    'Conservative 3,000 t/y regional ceiling, below USGS MCS 2026 India bromine 2025e ~7,000 t. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — India production 2025e ~7,000 t; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS potash; India not listed',
+    'Conservative 100 kt/y regional ceiling. USGS MCS 2026 potash world table does not list India among producers. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 potash — India not a listed producer; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    4e9, 'kg/year', 'screening', 'USGS MCS India salt production',
+    'Conservative 4 Mt/y regional industrial ceiling, below USGS MCS 2026 India salt 2025e ~30 Mt. Not a Mundra offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — India production 2025e ~30 Mt; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    1e9, 'kg/year', 'screening', 'USGS MCS India gypsum production',
+    'Conservative 1 Mt/y regional construction/ag ceiling, below USGS MCS 2026 India gypsum 2025e ~4.3 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — India production 2025e ~4.3 Mt; not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS India magnesite; brine compound',
+    'Conservative 20 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 India magnesite 2025e ~85 kt gross. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — India magnesite 2025e ~85 kt gross; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandTexas = inheritDemand(demand, TEXAS_INHERIT_NOTE, {
+  lithium: row(
+    5e5, 'kg/year', 'screening', 'USGS MCS US lithium; production withheld',
+    'Conservative 500 t/y LCE-proxy ceiling. USGS MCS 2026 US lithium mine production is withheld (W); the listed US source is a Nevada brine operation, not a Texas Gulf offtake. Not a plant contract.',
+    [{ label: 'USGS MCS 2026 lithium — US mine production withheld (W); Nevada brine, not Texas Gulf; not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS US bromine; production withheld',
+    'Conservative 20,000 t/y regional ceiling. USGS MCS 2026: the United States is a leading bromine producer (Arkansas underground brines) but production is withheld (W). Arkansas brines are not a Texas Gulf offtake. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — US production withheld (W); Arkansas brines, not Texas Gulf offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    2e8, 'kg/year', 'screening', 'USGS MCS US potash production',
+    'Conservative 200 kt/y regional ceiling, below USGS MCS 2026 US potash 2025e ~500 kt K₂O. Not a Texas Gulf offtake contract.',
+    [{ label: 'USGS MCS 2026 potash — US production 2025e ~500 kt K₂O; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    8e9, 'kg/year', 'screening', 'USGS MCS US salt; Texas a top state',
+    'Conservative 8 Mt/y regional industrial ceiling, below USGS MCS 2026 US salt 2025e ~40 Mt. Texas is among the top producing States. Screening, not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — US production 2025e ~40 Mt (Texas among top States); not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS US gypsum; Texas a leading state',
+    'Conservative 2 Mt/y regional construction ceiling, below USGS MCS 2026 US crude gypsum 2025e ~20 Mt. Texas is a leading crude-gypsum State. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — US crude production 2025e ~20 Mt (Texas a leading State); not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS US Mg compounds; seawater/brine',
+    'Conservative 100 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 US magnesium-compounds production 2025e ~400 kt MgO from seawater and brines (CA/DE seawater, MI well brines, UT lake brines) — not a Texas Gulf offtake. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — US production 2025e ~400 kt MgO (seawater/brines); brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandSouthernAfrica = inheritDemand(demand, SOUTHERN_AFRICA_INHERIT_NOTE, {
+  lithium: row(
+    2e5, 'kg/year', 'screening', 'USGS MCS lithium; Namibia removed',
+    'Conservative 200 t/y LCE-proxy ceiling. USGS MCS 2026: Namibia was temporarily removed from lithium mine production owing to legal uncertainties. Zimbabwe ~28,000 t 2025e is not a Walvis Bay / Namibia offtake. Not a plant contract.',
+    [{ label: 'USGS MCS 2026 lithium — Namibia temporarily removed from mine production; not a Walvis offtake', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    2e6, 'kg/year', 'screening', 'USGS MCS bromine; Southern Africa not listed',
+    'Conservative 2,000 t/y regional ceiling. USGS MCS 2026 bromine world table does not list Namibia or South Africa. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — Southern Africa not a listed producer; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    5e7, 'kg/year', 'screening', 'USGS MCS potash; Southern Africa not listed',
+    'Conservative 50 kt/y regional ceiling. USGS MCS 2026 potash world table does not list Namibia or South Africa among producers. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 potash — Southern Africa not a listed producer; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    5e8, 'kg/year', 'screening', 'USGS MCS salt; Southern Africa not listed',
+    'Conservative 500 kt/y regional industrial ceiling. USGS MCS 2026 salt country table does not list Namibia or South Africa among the named producers. Not a Namport offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — Southern Africa not among named country producers; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e8, 'kg/year', 'screening', 'USGS MCS gypsum; Southern Africa not listed',
+    'Conservative 200 kt/y regional construction ceiling. USGS MCS 2026 gypsum country table does not list Namibia or South Africa among the named producers. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — Southern Africa not among named country producers; not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    1e7, 'kg/year', 'screening', 'USGS MCS magnesite; Southern Africa not listed',
+    'Conservative 10 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 magnesite world table does not list Namibia or South Africa. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — Southern Africa not listed magnesite producers; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
 
 const demandByRegion = {
   'me-levant': demand,

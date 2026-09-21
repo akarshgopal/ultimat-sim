@@ -108,7 +108,7 @@ test('new catalog presets are searchable: brine hubs abundance-eligible, desal c
   assert.equal(ras.assayKind, 'seawater');
   assert.equal(templateEligible(ras, 'abundance').ok, false);
   assert.equal(templateEligible(ras, 'abundance').reason, 'no-brine-assay');
-  assert.equal(templateEligible(ras, 'coastal').reason, 'no-frozen-pvgis');
+  assert.equal(templateEligible(ras, 'coastal').ok, true);
   assert.equal(ras.rightsHints.seawaterIntake.status, 'assumed');
 
   const yanbu = searchSite('saudi-yanbu');
@@ -276,6 +276,7 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
   const mundra = defaultSearchSites().find(site => site.id === 'india-mundra');
   const walvis = defaultSearchSites().find(site => site.id === 'namibia-walvis-bay');
   const taweelah = defaultSearchSites().find(site => site.id === 'uae-taweelah');
+  const yanbu = defaultSearchSites().find(site => site.id === 'saudi-yanbu');
   const almeria = defaultSearchSites().find(site => site.id === 'spain-almeria');
   const mejillones = defaultSearchSites().find(site => site.id === 'chile-mejillones');
   const almeriaSolar = frozenSolarFor(almeria, 'coastal');
@@ -284,6 +285,14 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
     ['oman-duqm', 'data/pvgis-duqm.json', 1770.4, 19.65, 57.7],
     ['india-mundra', 'data/pvgis-mundra.json', 1654.06, 22.737, 69.71],
     ['namibia-walvis-bay', 'data/pvgis-walvis-bay.json', 2000.67, -22.957, 14.505],
+    ['uae-taweelah', 'data/pvgis-taweelah.json', 1758.02, 24.761, 54.683],
+    ['qatar-ras-laffan', 'data/pvgis-ras-laffan.json', 1760.51, 25.888, 51.557],
+    ['saudi-oxagon', 'data/pvgis-oxagon.json', 1847.62, 28.131, 34.921],
+    ['saudi-ras-al-khair', 'data/pvgis-ras-al-khair.json', 1753.58, 27.534, 49.171],
+    ['texas-corpus-christi', 'data/pvgis-corpus-christi.json', 1477.75, 27.813, -97.396],
+    ['au-port-hedland', 'data/pvgis-port-hedland.json', 1779.01, -20.31, 118.576],
+    ['morocco-agadir', 'data/pvgis-agadir.json', 1769.7, 30.427, -9.598],
+    ['egypt-ain-sokhna', 'data/pvgis-ain-sokhna.json', 1817.08, 29.648, 32.356],
   ];
 
   for (const [id, file, eY, lat, lon] of frozenCoasts) {
@@ -319,14 +328,14 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
     assert.notEqual(evaluated.reason, 'no-frozen-pvgis', id);
   }
 
-  assert.equal(taweelah.hasSeawaterAssay, true);
-  assert.equal(frozenSolarFor(taweelah, 'coastal'), null);
-  assert.equal(frozenSolarFor(taweelah, 'methanol'), null);
-  assert.equal(templateEligible(taweelah, 'coastal').reason, 'no-frozen-pvgis');
-  assert.equal(templateEligible(taweelah, 'methanol').reason, 'no-frozen-pvgis');
-  const taweelahEval = evaluateCandidate(taweelah, 'coastal', FAST);
-  assert.equal(taweelahEval.status, 'skipped');
-  assert.equal(taweelahEval.reason, 'no-frozen-pvgis');
+  assert.equal(yanbu.hasSeawaterAssay, true);
+  assert.equal(frozenSolarFor(yanbu, 'coastal'), null);
+  assert.equal(frozenSolarFor(yanbu, 'methanol'), null);
+  assert.equal(templateEligible(yanbu, 'coastal').reason, 'no-frozen-pvgis');
+  assert.equal(templateEligible(yanbu, 'methanol').reason, 'no-frozen-pvgis');
+  const yanbuEval = evaluateCandidate(yanbu, 'coastal', FAST);
+  assert.equal(yanbuEval.status, 'skipped');
+  assert.equal(yanbuEval.reason, 'no-frozen-pvgis');
 
   assert.equal(duqm.assayId, 'arabian-sea-seawater');
   assert.equal(mundra.assayId, 'gulf-of-kutch-seawater');
@@ -340,14 +349,14 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
   assert.equal(templateEligible(brineSite(), 'abundance').ok, true);
 
   const searched = searchAbundanceSites({
-    sites: [duqm, mundra, walvis, taweelah],
+    sites: [duqm, mundra, walvis, taweelah, yanbu],
     templates: ['coastal', 'methanol'],
     sizeOpts: FAST,
   });
-  assert.equal(searched.tried, 6);
+  assert.equal(searched.tried, 8);
   assert.equal(searched.skippedCount, 2);
-  assert.ok(searched.skipped.every(row => row.siteId === 'uae-taweelah' && row.reason === 'no-frozen-pvgis'));
-  assert.ok(!searched.skipped.some(row => ['oman-duqm', 'india-mundra', 'namibia-walvis-bay'].includes(row.siteId)));
+  assert.ok(searched.skipped.every(row => row.siteId === 'saudi-yanbu' && row.reason === 'no-frozen-pvgis'));
+  assert.ok(!searched.skipped.some(row => ['oman-duqm', 'india-mundra', 'namibia-walvis-bay', 'uae-taweelah'].includes(row.siteId)));
 });
 
 test('a cheap test-fixture plant can still be cash-positive so ranking logic stays testable', () => {

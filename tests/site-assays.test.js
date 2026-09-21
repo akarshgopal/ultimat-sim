@@ -183,21 +183,33 @@ for (const id of BRINE_ASSAY_FILES) {
       assert.equal(js.ions_g_per_kg['Li+'], undefined);
       assert.ok(js.ions_g_per_kg['Br-'] > 0);
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.3389\/fenvs\.2023\.1106181/.test(item.url)));
+    }
     if (id === 'danakil-brine') {
       assert.equal(js.ions_g_per_kg['SO4-2'], undefined);
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.1016\/B978-012276152-2/.test(item.url)));
+    }
     if (id === 'searles-lake-brine') {
       assert.equal(js.ions_g_per_kg['Ca+2'], undefined);
       assert.ok(js.evidence.some((item) => /archive\.org\/details\/industrialdevelo00teep/.test(item.url)));
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.3133\/pp1043/.test(item.url)));
+    }
     if (id === 'kutch-subsoil-brine') {
+      assert.ok(js.ions_g_per_kg['Br-'] > 0);
+      assert.equal(js.ions_g_per_kg['Li+'], undefined);
       assert.ok(js.evidence.some((item) => /pubtexto\.com/.test(item.url)));
+    }
     if (id === 'red-sea-sabkha-brine') {
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.1007\/s12665-015-4913-6/.test(item.url)));
+    }
     if (id === 'mediterranean-swro-brine') {
+      assert.ok(js.ions_g_per_kg['Li+'] > 0);
+      assert.equal(js.ions_g_per_kg['Br-'], undefined);
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.1016\/j\.desal\.2023\.116510/.test(item.url)));
     }
-    assert.ok(js.evidence.length > 0);
+    if (id === 'texas-gulf-desal-brine') {
+      assert.ok(js.evidence.some((item) => /pcca\.com|Port of Corpus Christi|Outfall/i.test(JSON.stringify(js.evidence))));
+    }
+        assert.ok(js.evidence.length > 0);
     assert.ok(js.evidence.every((item) => /^https:\/\//.test(item.url)));
     assert.ok(!js.evidence.some((item) => /doi\.org\/10\.1016\/j\.dsr\.2007\.10\.001/.test(item.url)));
     assert.equal(SiteAssays.getAssay(id), js);
@@ -338,6 +350,8 @@ test('new catalog basins bind only cited process brine', () => {
   assert.ok(searles.resources.brine.stream.mol['Li+'] > 0);
   assert.ok(searles.resources.brine.stream.mol['Br-'] > 0);
   assert.match(searles.resources.brine.evidence, /not a mineral concession/i);
+});
+
 test('ticket-5 dual-assay coasts bind seawater plus cited process-brine or desal-reject', () => {
   const cases = [
     ['saudi-oxagon', 'red-sea-seawater', 'red-sea-sabkha-brine'],

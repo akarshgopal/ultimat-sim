@@ -266,6 +266,7 @@ test('fuel-breakeven hunt proves midCash << 0 and uses frozen PVGIS for overlay 
   const oxagon = report.runs.find(row => row.site?.id === 'saudi-oxagon');
   assert.ok(oxagon);
   assert.match(oxagon.site.solar, /frozen/i);
+});
 
 test('fuel-breakeven overlay claims match frozen PVGIS already in-repo', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'fuel-breakeven.mjs'), 'utf8');

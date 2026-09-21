@@ -56,7 +56,7 @@ function rightsFromHints(hints = {}) {
 
 function applyFrozenSolar(definition, solar) {
   if (!solar) {
-    return 'Solar yield remains the case frozen PVGIS series; this overlay has no frozen typical-day in-repo.';
+    return 'Solar yield remains the case plant-template PVGIS series; this overlay has no matching frozen series in data/pvgis-sites.js (not inventing kWh/kWp).';
   }
   definition.site = definition.site || {};
   definition.site.dailyPVKWhPerKWp = solar.dailyPVKWhPerKWp;

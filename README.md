@@ -71,28 +71,24 @@ The live site is https://akarshgopal.github.io/ultimat-sim/ — pushes to main r
 
 ## Fixed this round
 
-- **#12 Doc drift (narrow) + README scaffold.** `scripts/fuel-breakeven.mjs` location overlays bind frozen per-site PVGIS from `data/pvgis-sites.js` when present (`uae-taweelah`, `au-port-hedland`, `saudi-oxagon` already have series). Stale “no frozen typical-day PVGIS in-repo” / “no Gulf typical-day” labels are gone; missing frozen PVGIS keeps plant-template solar rather than inventing kWh/kWp. Other tickets land via merge.
+- **#1 Catalog basins** — Cited Uyuni, Qaidam (Kunteyi), Danakil (Dallol), Searles Lake assays + presets; searchable in abundance. Uyuni and Searles cash+ in ranking; Qaidam/Danakil operating near-misses.
+- **#5 Process-brine / dual-assay coasts** — Dual-assay: Oxagon/Ain Sokhna/Yanbu (Jizan sabkha), Kwinana (Lake Mackay regional), Mundra (Kutch), Corpus Christi (PCCA desal-reject), Almería (Mediterranean SWRO reject). Permanent-skip with reason (not silent): Duqm, Agadir, Dakhla, Walvis.
+- **#6 Fuel mid-band cash+** — Mid-band cash− everywhere after size retune; fuels screening isolated (`searchFuelSites` / `--path fuels`). Default materials path is abundance-only. Proof table below / `node scripts/fuel-breakeven.mjs`.
+- **#7 Rights depth** — `no-grid` (power cost spike), `freshwater-constrained`, `discharge-limited` change feasible set or cash >10% on demo sites.
+- **#8 Land $/ha** — Chile, Gulf (AE/SA/QA/OM), India, Japan, South Africa filled (cited or labeled screening); soft-rank no longer completeness-penalizes those regions for missing land.
+- **#9 Demand/TEA depth** — Non-ME fuel/chem offtake carries explicit `inherit:'me-levant'` + note; Chile Li price overlay; India solar-pv IRENA TIC overlay. Tests assert no silent ME Li/fuel caps.
+- **#11 Near-miss materials reporting** — `activeSaleCount` / honest co-product counts when cash≤0 but producing (Dead Sea / Mackay covered in tests).
+- **#12 Doc drift** — `fuel-breakeven.mjs` binds frozen PVGIS for overlay coasts; no stale “missing PVGIS” claims for sites that have freezes.
 
-| # | Item | Status |
-|---|------|--------|
-| 1 | Expand preset catalog (cited brine/coastal presets; not open-world GIS) | **done** — Great Salt Lake, Salton Sea, **Uyuni**, **Qaidam**, **Danakil**, **Searles Lake**, additional desal/DLE coasts on `SITE_PRESETS`; search-eligible. Still not an open-world GIS crawler. |
-| 2 | Assay-aware abundance wiring | **done** (prior) |
-| 3 | Dual-assay coasts (seawater + process brine) | **done** — remaining catalog coasts: Kwinana→Lake Mackay; Oxagon/Sokhna/Yanbu→Jizan Red Sea sabkha; Mundra→Kutch sub-soil; Corpus Christi→PCCA desal-reject; Almería→Villar Mediterranean SWRO reject. Duqm/Agadir/Dakhla/Walvis are explicit `permanentSkip` (no cited mean; not silent) |
-| 4 | Process-brine eligibility pins | **done** (prior) |
-| 5 | Rights scenarios that bite | **done** — `screening-assumes-intake-concession` (default), `screening-assumes-intake-only` (concession not assumed → abundance `no-concession`), `no-rights` (skip/infeasible), `offtake-limited` (demand haircut), `no-grid` (expensive power overlay), `freshwater-constrained` (abundance `no-freshwater`), `discharge-limited` (coastal/methanol `no-discharge`); CLI `--rights-scenario` |
-| 6 | Regional demand / offtake tables | **done** — Chile Li special (no silent ME Li); AU/TX/SA/IN/EU/Gulf mineral ceilings use USGS MCS production/trade proxies; fuels/chems inherit me-levant only with `inherit:'me-levant'` + note; offtake-limited haircuts the regional tables |
-| 7 | Denser / continuous-ish resize in cashflow search | **done** — coarse grid then bounded refine; site-search `SEARCH_RATES` denser `[0,1,2,5,10]`; `FAST_*` for tests |
-| 8 | Non-idle near-misses | **done** (prior) |
-| 9 | Freeze more PVGIS (Duqm, Mundra, Walvis Bay, …) | **done** — catalog fuel coasts (incl. Yanbu/Kwinana/Dakhla) + inland hubs (Lake Mackay, GSL, Salar) frozen; Almería/Mejillones/Dead Sea in `BY_SITE_ID`; no Almería reuse | **done** — catalog coasts + inland hubs (Yanbu, Kwinana, Dakhla, Lake Mackay, GSL, Salar) have frozen PVGIS; Almería/Mejillones/Dead Sea registered in `BY_SITE_ID`; no Almería reuse |
-| 10 | Millero seawater assays | **done** (prior) |
-| 11 | Map-layer soft rank (secondary) | **done** — `layerScore`/`softRank` tie-break only; skip if layers missing; prefers frozen PVGIS yield; completeness-weights missing land $/ha |
-| 12 | Process-brine catalog coverage | **done** — Salton Sea + Ras Al-Khair + Uyuni/Qaidam/Danakil/Searles inland; Red Sea sabkha / Kutch / Texas desal-reject / Mediterranean SWRO on coasts |
-| 13 | Regional TEA overlays (power $/kWh, prices, optional CAPEX) | **done** — regional power overlays + demand regions + screening CAPEX location multipliers (labor/construction proxy, ~0.7–1.3 vs US Gulf-ish 1.0; not plant quotes) |
-| 14 | Fuel cash+ path | **done** — mid-band (tea-screening mid price × CAPEX 1.0) stays cash− on every frozen-PVGIS fuel coast after size retune at 2/5/10 kg/day. Fuels screening is a separate path (`searchFuelSites` / `--path fuels`) and does not enter the materials maximizer. Edge `capexFactor=0.05` is not a rank. Proof: `node scripts/fuel-breakeven.mjs` |
+## Won't fix (OOS)
 
-Leftover gaps after Phase 2 (2026-09-21): open-world GIS crawler intentionally out of scope (closed cited catalog — Uyuni/Qaidam/Danakil/Searles expand the brine list); real government permits/concessions out of scope; screening TEA only (not bankable quotes). Fuel mid-band cash− proven; fuels path isolated from materials maximizer. Land $/ha filled for Chile/Gulf/India/Japan/SA. Grid/freshwater/discharge screening scenarios overlay cost or skip — still not real permits. CAPEX intensity multipliers remain screening labor/construction proxies (not plant quotes); India solar-pv uses the cited IRENA TIC overlay. Bolivia Uyuni inherits Chile TEA; Qaidam inherits default; Danakil inherits Red Sea/Levant — not new offtake tables.
+- Open-world GIS crawler (closed cited catalog only).
+- Real government permits as bankable.
+- Screening TEA only (inherent — not bankable quotes or offtake contracts).
 
- Ticket #5: Oxagon/Ain Sokhna/Yanbu/Mundra/Corpus/Almería/Kwinana dual-assay; Duqm/Agadir/Dakhla/Walvis permanent-skip (no cited local process-brine — not silent).
+## Empty fixable backlog
+
+No remaining fixable tickets from this round’s done-criteria. Further basin/coast expansion is catalog growth, not an open limitation list.
 
 ### Fuel mid-band proof (screening, not quotes)
 
@@ -107,6 +103,25 @@ Gate: tea-screening **mid price × CAPEX factor 1.0**. CH₄ $1/kg is a screenin
 | Oxagon | methanol | PVGIS-ERA5 2026-09-21 | ≈ −5,200 | ≈ 1.84 | mid $0.40/kg |
 
 `midCash ≪ 0` everywhere in that hunt. Band-edge cash+ (MeOH $0.50/kg × CAPEX 0.05) is not a mid-band rank. Materials ranking never includes coastal/methanol unless `--path fuels` or `--templates` opts in.
+
+### Prior Phase 2 status (reference)
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Expand preset catalog | **done** — GSL, Salton Sea, Uyuni, Qaidam, Danakil, Searles, desal/DLE coasts; not open-world GIS |
+| 2 | Assay-aware abundance wiring | **done** (prior) |
+| 3 | Dual-assay coasts | **done** — Gulf + Red Sea sabkha, Kwinana/Mundra/Corpus/Almería; 4 permanent-skips |
+| 4 | Process-brine eligibility pins | **done** (prior) |
+| 5 | Rights scenarios that bite | **done** — intake/concession/offtake + no-grid / freshwater-constrained / discharge-limited |
+| 6 | Regional demand / offtake tables | **done** — USGS mineral ceilings; fuels/chems `inherit:'me-levant'` explicit |
+| 7 | Denser resize in cashflow search | **done** (prior) |
+| 8 | Non-idle near-misses | **done** (prior) |
+| 9 | Freeze more PVGIS | **done** (prior) |
+| 10 | Millero seawater assays | **done** (prior) |
+| 11 | Map-layer soft rank | **done** — frozen PVGIS + land completeness for Chile/Gulf/India/Japan/SA |
+| 12 | Process-brine catalog coverage | **done** — inland basins + coast dual-assay / permanent-skip |
+| 13 | Regional TEA overlays | **done** — power, CAPEX×, Chile Li price, India solar TIC |
+| 14 | Fuel cash+ path | **done** — mid-band cash− proven; fuels path isolated from materials maximizer |
 
 
 ## License

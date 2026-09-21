@@ -1178,7 +1178,7 @@ test('default materials maximizer is abundance-only and does not depend on fuels
   assert.ok(materialRows.length >= 1);
   assert.ok(materialRows.every(row => row.template === 'abundance'));
   assert.ok(!materialRows.some(row => row.template === 'coastal' || row.template === 'methanol'));
-  assert.equal(materials.tried, 2, 'Almería has no brine assay; Dead Sea + Mejillones abundance only');
+  assert.equal(materials.tried, 3, 'Dead Sea + Mejillones + Almería (Mediterranean SWRO reject dual-assay) abundance');
 
   const mixed = searchAbundanceSites({
     sites,

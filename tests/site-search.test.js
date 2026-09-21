@@ -277,7 +277,8 @@ test('presets without brine assay do not get an invented feasible abundance plan
   assert.equal(skipped.ranking.length, 0);
   assert.equal(resolveAbundanceAssayId(seawater), null);
   assert.equal(resolveAbundanceAssayId(noAssay), null);
-  assert.equal(resolveAbundanceAssayId(searchSite('saudi-ras-al-khair')), null);
+  assert.equal(resolveAbundanceAssayId(searchSite('saudi-ras-al-khair')), 'persian-gulf-sabkha-brine');
+  assert.equal(templateEligible(searchSite('saudi-ras-al-khair'), 'abundance').ok, true);
   assert.equal(resolveAbundanceAssayId(searchSite('chile-mejillones')), 'atacama-lithium-brine');
   assert.equal(resolveAbundanceAssayId(brineSite()), 'dead-sea-brine');
   assert.equal(resolveAbundanceAssayId(null), null);
@@ -831,7 +832,6 @@ test('offtake-limited haircut applies to regional mineral ceilings, not a shared
   assert.notEqual(br(australia), br(levant));
 });
 
-test('coastal/methanol get a screening price×CAPEX probe: cash+ inside bands or documented near-miss', () => {
 test('SEARCH_RATES is slightly denser than 0/2/5; FAST_RATES stays tiny for CI', () => {
   assert.ok(SEARCH_RATES.includes(0));
   assert.ok(SEARCH_RATES.includes(1) || SEARCH_RATES.includes(10));

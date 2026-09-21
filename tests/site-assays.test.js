@@ -128,6 +128,10 @@ const BRINE_ASSAY_FILES = [
   'lake-mackay-wa-brine',
   'great-salt-lake-brine',
   'salton-sea-brine',
+  'uyuni-lithium-brine',
+  'qaidam-brine',
+  'danakil-brine',
+  'searles-lake-brine',
 ];
 
 for (const id of BRINE_ASSAY_FILES) {
@@ -165,6 +169,30 @@ for (const id of BRINE_ASSAY_FILES) {
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.3390\/en14206805/.test(item.url)));
       assert.ok(js.evidence.some((item) => /doi\.org\/10\.2172\/1782801/.test(item.url)));
     }
+    if (id === 'uyuni-lithium-brine') {
+      assert.ok(js.ions_g_per_kg['Li+'] > 0);
+      assert.ok(js.ions_g_per_kg['Ca+2'] > 0);
+      assert.equal(js.ions_g_per_kg['Br-'], undefined);
+      assert.ok(js.evidence.some((item) => /doi\.org\/10\.3389\/fceng\.2022\.1008680/.test(item.url)));
+    }
+    if (id === 'qaidam-brine') {
+      assert.equal(js.ions_g_per_kg['Li+'], undefined);
+      assert.ok(js.ions_g_per_kg['Br-'] > 0);
+      assert.ok(js.evidence.some((item) => /doi\.org\/10\.3389\/fenvs\.2023\.1106181/.test(item.url)));
+    }
+    if (id === 'danakil-brine') {
+      assert.equal(js.ions_g_per_kg['Li+'], undefined);
+      assert.equal(js.ions_g_per_kg['SO4-2'], undefined);
+      assert.ok(js.ions_g_per_kg['Ca+2'] > 0);
+      assert.ok(js.evidence.some((item) => /doi\.org\/10\.1016\/B978-012276152-2/.test(item.url)));
+    }
+    if (id === 'searles-lake-brine') {
+      assert.ok(js.ions_g_per_kg['Li+'] > 0);
+      assert.ok(js.ions_g_per_kg['Br-'] > 0);
+      assert.equal(js.ions_g_per_kg['Ca+2'], undefined);
+      assert.ok(js.evidence.some((item) => /archive\.org\/details\/industrialdevelo00teep/.test(item.url)));
+      assert.ok(js.evidence.some((item) => /doi\.org\/10\.3133\/pp1043/.test(item.url)));
+    }
     assert.ok(js.evidence.length > 0);
     assert.ok(js.evidence.every((item) => /^https:\/\//.test(item.url)));
     assert.ok(!js.evidence.some((item) => /doi\.org\/10\.1016\/j\.dsr\.2007\.10\.001/.test(item.url)));
@@ -193,6 +221,10 @@ test('brineAssayId on presets resolves via PRESET_BRINE_ASSAY_IDS / getAssay', (
   assert.equal(SiteAssays.brineAssayIdForPreset('us-great-salt-lake'), 'great-salt-lake-brine');
   assert.equal(SiteAssays.brineAssayIdForPreset('us-salton-sea'), 'salton-sea-brine');
   assert.equal(SiteAssays.brineAssayIdForPreset('chile-salar-de-atacama'), 'atacama-lithium-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('bolivia-uyuni'), 'uyuni-lithium-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('china-qaidam'), 'qaidam-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('ethiopia-danakil'), 'danakil-brine');
+  assert.equal(SiteAssays.brineAssayIdForPreset('us-searles-lake'), 'searles-lake-brine');
   assert.equal(SiteAssays.assayIdForPreset('saudi-ras-al-khair'), 'persian-gulf-seawater');
   assert.equal(SiteAssays.brineAssayIdForPreset('saudi-ras-al-khair'), 'persian-gulf-sabkha-brine');
   assert.equal(SiteAssays.assayIdForPreset('saudi-yanbu'), 'red-sea-seawater');
@@ -261,4 +293,42 @@ test('Ras Al-Khair dual-assay binds Gulf seawater and sabkha brine', () => {
   assert.ok(ras.resources.brine.stream.mol['Na+'] > 0);
   assert.equal(ras.resources.brine.stream.mol['Li+'], undefined);
   assert.match(ras.resources.brine.evidence, /not a mineral concession/i);
+});
+
+test('new catalog basins bind only cited process brine', () => {
+  const uyuni = { resources: {} };
+  SiteAssays.bindPresetAssay(uyuni, 'bolivia-uyuni');
+  assert.equal(uyuni.assay.kind, 'brine');
+  assert.equal(uyuni.assay.quality, 'cited');
+  assert.equal(uyuni.assay.assayId, 'uyuni-lithium-brine');
+  assert.equal(uyuni.brineAssay.assayId, 'uyuni-lithium-brine');
+  assert.doesNotMatch(uyuni.assay.summary, /Millero|Pilson/);
+  assert.equal(uyuni.resources.seawater, undefined);
+  assert.ok(uyuni.resources.brine.stream.mol['Li+'] > 0);
+  assert.ok(uyuni.resources.brine.stream.mol['Ca+2'] > 0);
+  assert.match(uyuni.resources.brine.evidence, /not a mineral concession/i);
+
+  const qaidam = { resources: {} };
+  SiteAssays.bindPresetAssay(qaidam, 'china-qaidam');
+  assert.equal(qaidam.assay.assayId, 'qaidam-brine');
+  assert.equal(qaidam.resources.seawater, undefined);
+  assert.equal(qaidam.resources.brine.stream.mol['Li+'], undefined);
+  assert.ok(qaidam.resources.brine.stream.mol['Br-'] > 0);
+  assert.match(qaidam.resources.brine.evidence, /not a mineral concession/i);
+
+  const danakil = { resources: {} };
+  SiteAssays.bindPresetAssay(danakil, 'ethiopia-danakil');
+  assert.equal(danakil.assay.assayId, 'danakil-brine');
+  assert.equal(danakil.resources.seawater, undefined);
+  assert.equal(danakil.resources.brine.stream.mol['Li+'], undefined);
+  assert.ok(danakil.resources.brine.stream.mol['Ca+2'] > 0);
+  assert.match(danakil.resources.brine.evidence, /not a mineral concession/i);
+
+  const searles = { resources: {} };
+  SiteAssays.bindPresetAssay(searles, 'us-searles-lake');
+  assert.equal(searles.assay.assayId, 'searles-lake-brine');
+  assert.equal(searles.resources.seawater, undefined);
+  assert.ok(searles.resources.brine.stream.mol['Li+'] > 0);
+  assert.ok(searles.resources.brine.stream.mol['Br-'] > 0);
+  assert.match(searles.resources.brine.evidence, /not a mineral concession/i);
 });

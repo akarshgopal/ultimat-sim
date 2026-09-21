@@ -72,6 +72,8 @@ const REGION_STRING_TO_ID = {
   'Red Sea': 'me-levant',
   'Arabian Sea': 'me-levant',
   'Atacama/Chile': 'chile-atacama',
+  'Bolivia / Uyuni': 'chile-atacama',
+  'China / Qaidam': 'default',
   Australia: 'australia',
   India: 'india',
   'Texas/US Gulf': 'texas',

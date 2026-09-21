@@ -138,6 +138,42 @@ test('new catalog presets are searchable: brine hubs abundance-eligible, desal c
   assert.equal(templateEligible(yanbu, 'abundance').reason, 'no-brine-assay');
   assert.equal(templateEligible(yanbu, 'coastal').ok, true);
   assert.equal(yanbu.rightsHints.seawaterIntake.status, 'assumed');
+
+  const basins = [
+    ['bolivia-uyuni', 'uyuni-lithium-brine', 'Bolivia / Uyuni'],
+    ['china-qaidam', 'qaidam-brine', 'China / Qaidam'],
+    ['ethiopia-danakil', 'danakil-brine', 'Red Sea'],
+    ['us-searles-lake', 'searles-lake-brine', 'US West / California'],
+  ];
+  for (const [id, assayId, region] of basins) {
+    const site = searchSite(id);
+    assert.ok(site, id);
+    assert.equal(site.hasBrineAssay, true, id);
+    assert.equal(site.hasSeawaterAssay, false, id);
+    assert.equal(site.assayKind, 'brine', id);
+    assert.equal(site.assayId, assayId, id);
+    assert.equal(site.brineAssayId, assayId, id);
+    assert.equal(site.kind, 'brine-hub', id);
+    assert.equal(site.region, region, id);
+    assert.equal(templateEligible(site, 'abundance').ok, true, id);
+    assert.equal(templateEligible(site, 'coastal').ok, false, id);
+    assert.equal(templateEligible(site, 'coastal').reason, 'no-seawater-assay', id);
+  }
+});
+
+test('catalog basins evaluate on the abundance template with FAST sizing', () => {
+  const ids = ['bolivia-uyuni', 'china-qaidam', 'ethiopia-danakil', 'us-searles-lake'];
+  for (const id of ids) {
+    const evaluated = evaluateCandidate(searchSite(id), 'abundance', FAST);
+    assert.equal(evaluated.status, 'ok', id);
+    assert.equal(evaluated.template, 'abundance', id);
+    assert.equal(evaluated.siteId, id);
+    assert.ok(Number.isFinite(evaluated.annualNetCash), id);
+    assert.notEqual(evaluated.reason, 'no-brine-assay', id);
+  }
+  const uyuni = evaluateCandidate(searchSite('bolivia-uyuni'), 'abundance', FAST);
+  assert.equal(uyuni.idle, false);
+  assert.ok(uyuni.met || (uyuni.tonnes > 0 && !uyuni.idle), 'Uyuni should rank or be a non-idle near-miss');
 });
 
 test('when Dead Sea abundance is in the search set, returns a scored candidate under the capital-inclusive gate', () => {
@@ -199,6 +235,24 @@ test('site-search plants bind regional TEA when site.region is set', () => {
   assert.equal(saltonLi.economics.demandRegionId, 'texas');
   const saltonBrine = saltonPlant.graph.nodes.find(node => node.id === 'brine');
   assert.ok(saltonBrine.params.stream.mol['Li+'] > 0);
+
+  const uyuniPlant = buildAbundancePlant(searchSite('bolivia-uyuni'));
+  assert.equal(uyuniPlant.meta.assayId, 'uyuni-lithium-brine');
+  assert.equal(uyuniPlant.meta.demandRegionId, 'chile-atacama');
+  assert.ok(uyuniPlant.graph.nodes.find(node => node.id === 'brine').params.stream.mol['Li+'] > 0);
+
+  const qaidamPlant = buildAbundancePlant(searchSite('china-qaidam'));
+  assert.equal(qaidamPlant.meta.assayId, 'qaidam-brine');
+  assert.equal(qaidamPlant.meta.demandRegionId, 'default');
+
+  const danakilPlant = buildAbundancePlant(searchSite('ethiopia-danakil'));
+  assert.equal(danakilPlant.meta.assayId, 'danakil-brine');
+  assert.equal(danakilPlant.meta.demandRegionId, 'me-levant');
+
+  const searlesPlant = buildAbundancePlant(searchSite('us-searles-lake'));
+  assert.equal(searlesPlant.meta.assayId, 'searles-lake-brine');
+  assert.equal(searlesPlant.meta.demandRegionId, 'texas');
+  assert.ok(searlesPlant.graph.nodes.find(node => node.id === 'brine').params.stream.mol['Li+'] > 0);
 });
 
 test('buildAbundancePlant uses the site brine assay, not a Dead Sea clone, for Mejillones/Atacama', () => {

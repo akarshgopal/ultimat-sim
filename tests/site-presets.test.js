@@ -15,9 +15,13 @@ const REQUIRED_IDS = [
   'texas-corpus-christi',
   'us-great-salt-lake',
   'us-salton-sea',
+  'us-searles-lake',
   'egypt-ain-sokhna',
   'chile-mejillones',
   'chile-salar-de-atacama',
+  'bolivia-uyuni',
+  'china-qaidam',
+  'ethiopia-danakil',
   'namibia-walvis-bay',
   'oman-duqm',
   'spain-almeria',
@@ -133,4 +137,53 @@ test('catalog expansion wires GSL inland, Atacama salar screening, and Gulf/Red 
   assert.equal(yanbu.assayId, 'red-sea-seawater');
   assert.equal(yanbu.brineAssayId, undefined);
   assert.equal(yanbu.rightsHints.seawaterIntake.status, 'assumed');
+});
+
+test('catalog basins wire Uyuni, Qaidam, Danakil, and Searles as inland brine hubs', () => {
+  const byId = new Map(SITE_PRESETS.map(site => [site.id, site]));
+
+  const uyuni = byId.get('bolivia-uyuni');
+  assert.equal(uyuni.kind, 'brine-hub');
+  assert.equal(uyuni.region, 'Bolivia / Uyuni');
+  assert.equal(uyuni.latitude, -20.29);
+  assert.equal(uyuni.longitude, -67.61);
+  assert.equal(uyuni.brineAssayId, 'uyuni-lithium-brine');
+  assert.equal(uyuni.assayId, undefined);
+  assert.ok(uyuni.evidence.some(item => /doi\.org\/10\.3389\/fceng\.2022\.1008680/.test(item.url)));
+  assert.match(uyuni.notes, /not a .*concession/i);
+  assert.match(uyuni.notes, /inherits Atacama\/Chile TEA/i);
+
+  const qaidam = byId.get('china-qaidam');
+  assert.equal(qaidam.kind, 'brine-hub');
+  assert.equal(qaidam.region, 'China / Qaidam');
+  assert.equal(qaidam.latitude, 38.15);
+  assert.equal(qaidam.longitude, 90.87);
+  assert.equal(qaidam.brineAssayId, 'qaidam-brine');
+  assert.equal(qaidam.assayId, undefined);
+  assert.ok(qaidam.evidence.some(item => /doi\.org\/10\.3389\/fenvs\.2023\.1106181/.test(item.url)));
+  assert.match(qaidam.notes, /not a .*concession/i);
+  assert.match(qaidam.notes, /default TEA/i);
+
+  const danakil = byId.get('ethiopia-danakil');
+  assert.equal(danakil.kind, 'brine-hub');
+  assert.equal(danakil.region, 'Red Sea');
+  assert.equal(danakil.latitude, 14.24);
+  assert.equal(danakil.longitude, 40.3);
+  assert.equal(danakil.brineAssayId, 'danakil-brine');
+  assert.equal(danakil.assayId, undefined);
+  assert.ok(danakil.evidence.some(item => /doi\.org\/10\.1016\/B978-012276152-2/.test(item.url)));
+  assert.match(danakil.notes, /not an Allana\/ICL potash concession/i);
+  assert.match(danakil.notes, /Not Red Sea seawater/i);
+
+  const searles = byId.get('us-searles-lake');
+  assert.equal(searles.kind, 'brine-hub');
+  assert.equal(searles.region, 'US West / California');
+  assert.equal(searles.latitude, 35.73);
+  assert.equal(searles.longitude, -117.37);
+  assert.equal(searles.brineAssayId, 'searles-lake-brine');
+  assert.equal(searles.assayId, undefined);
+  assert.ok(searles.evidence.some(item => /archive\.org\/details\/industrialdevelo00teep/.test(item.url)));
+  assert.ok(searles.evidence.some(item => /doi\.org\/10\.3133\/pp1043/.test(item.url)));
+  assert.match(searles.notes, /not a .*concession/i);
+  assert.match(searles.notes, /Not Texas Gulf seawater/i);
 });

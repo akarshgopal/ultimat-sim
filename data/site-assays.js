@@ -16,6 +16,7 @@
       'atacama-lithium-brine': require('./atacama-lithium-brine.js'),
       'lake-mackay-wa-brine': require('./lake-mackay-wa-brine.js'),
       'great-salt-lake-brine': require('./great-salt-lake-brine.js'),
+      'salton-sea-brine': require('./salton-sea-brine.js'),
     } : {
       'almeria-seawater': root.AlmeriaSeawater,
       'persian-gulf-seawater': root.PersianGulfSeawater,
@@ -31,6 +32,7 @@
       'atacama-lithium-brine': root.AtacamaLithiumBrine,
       'lake-mackay-wa-brine': root.LakeMackayWaBrine,
       'great-salt-lake-brine': root.GreatSaltLakeBrine,
+      'salton-sea-brine': root.SaltonSeaBrine,
     }
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -62,11 +64,13 @@
   const PRESET_BRINE_ASSAY_IDS = Object.freeze({
     'uae-taweelah': 'persian-gulf-sabkha-brine',
     'qatar-ras-laffan': 'persian-gulf-sabkha-brine',
+    'saudi-ras-al-khair': 'persian-gulf-sabkha-brine',
     'chile-mejillones': 'atacama-lithium-brine',
     'chile-salar-de-atacama': 'atacama-lithium-brine',
     'au-port-hedland': 'lake-mackay-wa-brine',
     'au-lake-mackay': 'lake-mackay-wa-brine',
     'us-great-salt-lake': 'great-salt-lake-brine',
+    'us-salton-sea': 'salton-sea-brine',
   });
 
   const BRINE_ASSAY_IDS = Object.freeze([
@@ -74,6 +78,7 @@
     'atacama-lithium-brine',
     'lake-mackay-wa-brine',
     'great-salt-lake-brine',
+    'salton-sea-brine',
   ]);
 
   const SCREENING_INTAKE_M3_PER_DAY = 0.1;

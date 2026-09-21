@@ -44,6 +44,9 @@ const IRENA_MEOH = 'https://www.irena.org/publications/2021/Jan/Innovation-Outlo
 const IEA_ELEC = 'https://www.iea.org/reports/electricity-2024';
 const IEA_ELEC_2026 = 'https://www.iea.org/reports/electricity-2026';
 const EIA_EPA = 'https://www.eia.gov/electricity/annual/';
+const TT_GCMI = 'https://publications.turnerandtownsend.com/global-construction-market-intelligence-2026/methodology';
+const IRENA_COSTS_2024 = 'https://www.irena.org/Publications/2025/Jun/Renewable-Power-Generation-Costs-in-2024';
+const WB_ICP = 'https://www.worldbank.org/en/programs/icp/brief/ICP2021';
 const DEFAULT_DEMAND_REGION_ID = 'me-levant';
 const DEMAND_REGION_LABELS = {
   'me-levant': 'Dead Sea / Levant screening offtake (Red Sea and Arabian Sea inherit). Not a plant offtake contract.',
@@ -474,9 +477,59 @@ const powerByRegion = {
 
 // Product $/kg stays the global screening band unless a regional series is cited.
 // Lithium is the USGS LCE proxy in every region (Chile is supply-side, not a LiCl contract).
-// Regional CAPEX intensity multipliers are omitted (factor 1). NREL ATB location
-// adjustment is US-only; IEA electrolyzer $/kW is technology-family, not geography.
-const capexMultiplierByRegion = {};
+// Screening labor/construction/EPC location multipliers vs a US Gulf-ish baseline of 1.0.
+// Building-cost / ICP / IRENA installed-cost families as direction only; process equipment
+// is internationally traded so the construction spread is damped into ~0.7–1.3. Not plant quotes.
+// NREL ATB location adjustment is US-only; IEA electrolyzer $/kW is technology-family, not geography.
+// Unmapped `default` omitted → getCapexMultiplierForRegion returns 1.
+const CAPEX_LOC_EVIDENCE = [
+  { label: 'Turner & Townsend Global Construction Market Intelligence 2026 (location-index / building-cost family; not a process-plant quote)', url: TT_GCMI },
+  { label: 'World Bank ICP 2021 construction price levels (family; not a plant quote)', url: WB_ICP },
+  { label: 'IRENA Renewable Power Generation Costs in 2024 (regional installed-cost direction only; solar TIC is not the minerals multiplier)', url: IRENA_COSTS_2024 },
+];
+const capexMultiplierByRegion = {
+  'me-levant': row(
+    0.85, '×', 'screening', 'labor/construction location proxy',
+    'Levant / Dead Sea screening CAPEX intensity vs US Gulf-ish baseline 1.0. Labor/EPC construction-cost proxy: Turner & Townsend GCMI Middle East building costs sit below US/Europe; World Bank ICP MENA construction price levels sit below North America. Process equipment is traded so the construction spread is damped into ~0.7–1.3. Not a Dead Sea plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  gulf: row(
+    0.9, '×', 'screening', 'labor/construction location proxy',
+    'Gulf screening CAPEX intensity vs US Gulf-ish baseline 1.0. Labor cheaper than US; imported craft and boom activity can offset. T&T UAE/KSA building costs sit below US coastal cities. Slightly above Levant. Not a DEWA/NEOM/KAHRAMAA plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  'chile-atacama': row(
+    1.05, '×', 'screening', 'labor/construction location proxy',
+    'Atacama / Chile screening CAPEX intensity vs US Gulf-ish baseline 1.0. T&T Santiago building costs sit below US coastal cities; Atacama remoteness and imported kit is a small premium vs US Gulf process-plant baseline. Screening, not an SQM/Albemarle quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  india: row(
+    0.75, '×', 'screening', 'labor/construction location proxy',
+    'India screening CAPEX intensity vs US Gulf-ish baseline 1.0. Lowest labor/EPC in this set. T&T Mumbai building costs well below US. IRENA 2024 India utility-PV TIC ~$525/kW vs US ~$1,058/kW is a wider solar-module/BOS spread — damped to 0.75 for process-plant location. Not a Mundra plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  australia: row(
+    1.15, '×', 'screening', 'labor/construction location proxy',
+    'Australia screening CAPEX intensity vs US Gulf-ish baseline 1.0. High labor and preliminaries (T&T Australia/NZ construction-cost family). Screening premium vs US Gulf. Not a Pilbara/Kwinana/Lake Mackay plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  europe: row(
+    1.2, '×', 'screening', 'labor/construction location proxy',
+    'Europe screening CAPEX intensity vs US Gulf-ish baseline 1.0. Highest labor/regulation in this set. T&T European building costs sit above Middle East/India. Screening, not a Eurostat contract or plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  texas: row(
+    1.0, '×', 'screening', 'labor/construction location proxy',
+    'Texas / US Gulf screening CAPEX intensity = 1.0 (the pack-intensity baseline geography). Not an USGC EPC quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  'southern-africa': row(
+    0.95, '×', 'screening', 'labor/construction location proxy',
+    'Southern Africa screening CAPEX intensity vs US Gulf-ish baseline 1.0. T&T Cape Town/Johannesburg building costs sit below US/Europe and above India. Labor cheaper; imported kit. Screening, not a Namport/Walvis plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  // default omitted → 1
+};
 
 function resolveDemandRegion(region) {
   if (region == null || region === '') return DEFAULT_DEMAND_REGION_ID;

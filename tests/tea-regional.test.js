@@ -86,9 +86,37 @@ test('bindSale / bindCost regional overlays: chile offtake and power ≠ me-leva
   assert.ok(chilePower.evidence.some(item => /iea\.org.*electricity/i.test(item.url || '')));
   assert.ok(texasPower.evidence.some(item => /eia\.gov\/electricity/i.test(item.url || '')));
   assert.equal(tea.bindCost('brine', { region: 'chile-atacama' }).unitCost, tea.costs.brine.value);
-  assert.equal(tea.getCapexMultiplierForRegion('Europe'), 1);
-  assert.equal(tea.getCapexMultiplierForRegion('chile-atacama'), 1);
   assert.equal(chileSale.unitPrice, tea.prices.lithium.value);
+});
+
+test('capexMultiplierByRegion is a screening labor/construction proxy and bindCapex applies it', () => {
+  const shifted = ['chile-atacama', 'india', 'gulf', 'australia', 'me-levant'];
+  for (const id of shifted) {
+    const mul = tea.getCapexMultiplierForRegion(id);
+    assert.notEqual(mul, 1, `${id} CAPEX multiplier should not be the omitted-table default of 1`);
+    assert.ok(mul >= 0.7 && mul <= 1.3, `${id} CAPEX multiplier ${mul} should stay in the ~0.7–1.3 screening band`);
+    const row = tea.capexMultiplierByRegion[id];
+    assert.equal(row.quality, 'screening');
+    assert.equal(row.unit, '×');
+    assert.ok(row.evidence.some(item => /turnerandtownsend|worldbank\.org\/en\/programs\/icp|irena\.org/i.test(item.url || '')));
+  }
+
+  assert.equal(tea.getCapexMultiplierForRegion('Atacama/Chile'), tea.getCapexMultiplierForRegion('chile-atacama'));
+  assert.equal(tea.getCapexMultiplierForRegion('India'), tea.getCapexMultiplierForRegion('india'));
+  assert.equal(tea.getCapexMultiplierForRegion('Gulf'), tea.getCapexMultiplierForRegion('gulf'));
+  assert.equal(tea.getCapexMultiplierForRegion('Australia'), tea.getCapexMultiplierForRegion('australia'));
+  assert.equal(tea.getCapexMultiplierForRegion('Levant'), tea.getCapexMultiplierForRegion('me-levant'));
+  assert.equal(tea.getCapexMultiplierForRegion('Texas/US Gulf'), 1);
+  assert.equal(tea.getCapexMultiplierForRegion('unknown-basin'), 1);
+
+  const chileMul = tea.getCapexMultiplierForRegion('chile-atacama');
+  const chileBound = tea.bindCapex('minerals', { region: 'Atacama/Chile', capacity: 1000 });
+  assert.equal(chileBound.capexIntensity, tea.packs.minerals.capexIntensity * chileMul);
+  assert.equal(chileBound.capexRate, tea.packs.minerals.capexIntensity * chileMul);
+  assert.notEqual(chileBound.capexRate, tea.packs.minerals.capexIntensity);
+
+  const unbound = tea.bindCapex('minerals', { capacity: 1000 });
+  assert.equal(unbound.capexRate, tea.packs.minerals.capexIntensity);
 });
 
 test('createAbundanceCase({ region }) is backward compatible and binds chile Li cap', () => {

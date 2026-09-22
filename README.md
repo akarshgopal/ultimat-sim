@@ -79,7 +79,7 @@ The live site is https://akarshgopal.github.io/ultimat-sim/ — pushes to main r
 - **#9 Demand/TEA depth** — Non-ME fuel/chem offtake carries explicit `inherit:'me-levant'` + note; Chile Li price overlay; India solar-pv IRENA TIC overlay. Tests assert no silent ME Li/fuel caps.
 - **#11 Near-miss materials reporting** — `activeSaleCount` / honest co-product counts when cash≤0 but producing (Dead Sea / Mackay covered in tests).
 - **#12 Doc drift** — `fuel-breakeven.mjs` binds frozen PVGIS for overlay coasts; no stale “missing PVGIS” claims for sites that have freezes.
-- **#15 Abundance solar for new inland basins** — JRC PVGIS-ERA5 PVcalc was unreachable (TLS handshake closed before a certificate), so freezes for Uyuni, Qaidam, Danakil, Searles Lake, and Salton Sea are pending. Non-Dead-Sea abundance sites without a freeze use `pvScreeningBand` typical yield (quality screening) and record that it is a latitude screening band, not local PVGIS and not a Dead Sea clone. The Dead Sea hub keeps its frozen series.
+- **#15 Frozen PVGIS for post-catalog inland basins** — Live PVGIS-ERA5 PVcalc series for `bolivia-uyuni`, `china-qaidam`, `ethiopia-danakil`, `us-searles-lake`, and `us-salton-sea`. Abundance no longer screens them on Dead Sea kWh/kWp; `softRank` uses frozen daily yield. Defense-in-depth: any future non-Dead-Sea abundance site without a freeze uses `pvScreeningBand` (not a Dead Sea clone) and says so.
 
 ## Won't fix (OOS)
 

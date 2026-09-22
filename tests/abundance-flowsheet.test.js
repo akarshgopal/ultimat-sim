@@ -135,7 +135,6 @@ test('TEA pack CAPEX scales with capacity and is not the old fuel-path toy lump'
   const mineralsSmall = packCapex('minerals', 1000);
   assert.equal(mineralsLarge, intensity * 100000);
   assert.equal(mineralsSmall, intensity * 1000);
-  assert.equal(mineralsLarge / mineralsSmall, 100);
   assert.notEqual(mineralsLarge, 80 * 100000);
 
   const electrolyzer = packCapex('electrolyzer', 100);
@@ -186,7 +185,6 @@ test('abundance sale products do not ship annualDemandLimit 1e12', () => {
   const sales = definition.graph.nodes.filter(node => node.economics?.disposition === 'sale');
   assert.ok(sales.length >= 8);
   for (const node of sales) {
-    assert.notEqual(node.economics.annualDemandLimit, 1e12, node.id);
     assert.ok(node.economics.annualDemandLimit < 1e12, node.id);
     assert.ok(node.economics.annualDemandLimit > 0, node.id);
     assert.equal(node.economics.annualDemandLimit, tea.demand[productKey[node.id]].value, node.id);

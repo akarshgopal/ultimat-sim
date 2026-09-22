@@ -38,7 +38,6 @@ test('solar land uses panel area / GCR rather than 1.6 ha/MWp', () => {
   assert.notEqual(ha, 80);
   const panelAreaM2 = (solarKWp / 1000) * 1e6 / ((20 / 100) * 1000);
   const landAreaM2 = panelAreaM2 / 0.45;
-  assert.equal(panelAreaM2, 250000);
   assert.ok(Math.abs(ha - landAreaM2 / SQM_PER_HA) < 1e-12);
   const solar = estimateSolar(solarKWp);
   assert.equal(solar.panelAreaM2, panelAreaM2);

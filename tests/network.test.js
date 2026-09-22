@@ -157,7 +157,6 @@ test('fuels plus minerals network rolls up CH4, NH3, and money', () => {
   assert.notEqual(result.landHa, crude);
   assert.ok(result.plants.every(plant => plant.footprint && plant.footprint.totalHa > 0));
   assert.ok(result.installedCapex > result.plants[0].economics.installedCapex);
-  assert.equal(result.npv, result.npv);
   assert.ok(Number.isFinite(result.npv));
   assert.ok(Number.isFinite(result.annualizedCapex) && result.annualizedCapex > 0);
   assert.equal(result.annualOperatingCash, result.annualRevenue - result.annualOperatingCost);

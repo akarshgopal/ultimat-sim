@@ -21,7 +21,6 @@ test('integrated DAC + SWRO/electrolysis + Sabatier closes stoichiometry and bal
   const definition = createSabatierCase();
   const sales = definition.graph.nodes.filter(node => node.economics?.disposition === 'sale');
   for (const node of sales) {
-    assert.notEqual(node.economics.annualDemandLimit, 1e12, node.id);
     assert.ok(node.economics.annualDemandLimit < 1e12, node.id);
   }
   const electrolyzer = definition.graph.nodes.find(node => node.id === 'electrolyzer');

@@ -21,7 +21,6 @@ test('methanol plant uses solid-sorbent DAC, cited Mejillones site, and closes b
 
   const sales = definition.graph.nodes.filter(node => node.economics?.disposition === 'sale');
   for (const node of sales) {
-    assert.notEqual(node.economics.annualDemandLimit, 1e12, node.id);
     assert.ok(node.economics.annualDemandLimit < 1e12, node.id);
   }
   assert.equal(definition.graph.nodes.find(node => node.id === 'electrolyzer').economics.capexRate, 3250);

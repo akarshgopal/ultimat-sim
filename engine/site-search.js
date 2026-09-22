@@ -46,6 +46,7 @@ const OFFTAKE_NOTE = `Offtake-limited scenario: regional demand caps scaled by $
 const NO_GRID_NOTE = `No-grid scenario: expensive grid-power overlay $${NO_GRID_POWER_USD_PER_KWH}/kWh screening (islanded / no cheap interconnection); not a PPA. ${SCREENING_NOTE}`;
 const FRESHWATER_NOTE = 'Freshwater-constrained scenario: no freshwater right. Process-water plants skip; not a municipal allocation. Screening assumes intake/concession for evaluation only; not a bankable permit.';
 const DISCHARGE_NOTE = 'Discharge-limited scenario: no seawater outfall permit. Coastal/methanol plants skip; not a discharge right. Screening assumes intake/concession for evaluation only; not a bankable permit.';
+const SCREENING_BAND_PV_NOTE = 'Latitude screening band yield (pvScreeningBand), not a local PVGIS series and not a Dead Sea clone.';
 const MAP_LAYER_IDS = Object.freeze(['pvgis', 'water', 'land']);
 const SEARCH_SCALES = Object.freeze([0.25, 0.5, 1, 2, 4]);
 const SEARCH_RATES = Object.freeze([0, 1, 2, 5, 10]);
@@ -680,12 +681,24 @@ function nodeById(definition, id) {
   return (definition.graph?.nodes || []).find(item => item.id === id);
 }
 
+function abundancePvYield(site, solar) {
+  const frozen = Number(solar?.dailyPVKWhPerKWp);
+  if (frozen > 0) return { dailyPV: frozen, screening: false };
+  if (isDeadSeaHub(site)) {
+    return { dailyPV: Number(networkCase?.DEAD_SEA_PV) || 0, screening: false };
+  }
+  const band = mapSite?.pvScreeningBand?.(site?.latitude, site?.longitude);
+  const typical = Number(band?.typicalKWhPerKWpDay);
+  return { dailyPV: typical > 0 ? typical : 0, screening: true };
+}
+
 function attachAbundanceSite(definition, site, solar) {
   const tea = abundance?.TEA;
   const powerNode = nodeById(definition, 'power');
   const brineNode = nodeById(definition, 'brine');
   const powerKWh = Number(powerNode?.params?.stream?.kWh) || 0;
-  const dailyPV = Number(solar?.dailyPVKWhPerKWp) || Number(networkCase?.DEAD_SEA_PV) || 0;
+  const picked = abundancePvYield(site, solar);
+  const dailyPV = picked.dailyPV;
   const solarKWp = dailyPV > 0 ? powerKWh / dailyPV : 0;
   if (powerNode) {
     powerNode.siteResource = 'electricity';
@@ -706,13 +719,24 @@ function attachAbundanceSite(definition, site, solar) {
   definition.site = definition.site || {};
   definition.site.solarKWp = solarKWp;
   definition.site.dailyPVKWhPerKWp = dailyPV;
+  if (picked.screening) {
+    definition.site.meteo = {
+      dailyPVKWhPerKWp: dailyPV,
+      quality: 'screening',
+      source: 'pvScreeningBand',
+      notes: SCREENING_BAND_PV_NOTE,
+    };
+    definition.site.notes = [definition.site.notes, SCREENING_BAND_PV_NOTE].filter(Boolean).join(' ');
+  }
   definition.site.resources = {
     electricity: powerNode?.params?.stream ? {
       stream: clone(powerNode.params.stream),
-      quality: solar ? 'cited' : 'literature-estimate',
+      quality: solar ? 'cited' : (picked.screening ? 'screening' : 'literature-estimate'),
       evidence: solar
         ? `Frozen ${solar.source} × array sized to the hub load`
-        : 'Screening PV yield × array sized to the hub load; not a local PVGIS series',
+        : picked.screening
+          ? SCREENING_BAND_PV_NOTE
+          : 'Screening PV yield × array sized to the hub load; not a local PVGIS series',
     } : undefined,
     brine: brineNode?.params?.stream ? {
       stream: clone(brineNode.params.stream),
@@ -1056,7 +1080,8 @@ function evaluateCandidate(site, template, sizeOpts = {}) {
       notes: 'Coastal/methanol templates need a frozen per-site PVGIS series; not applied with another site\'s kWh/kWp.',
     }, rightsScenario);
   }
-  if (!solar) notes.push('No frozen PVGIS series for this site; screening uses the plant-template solar, not a local yield.');
+  if (!solar && template === 'abundance' && !isDeadSeaHub(site)) notes.push(SCREENING_BAND_PV_NOTE);
+  else if (!solar) notes.push('No frozen PVGIS series for this site; screening uses the plant-template solar, not a local yield.');
   let definition;
   try {
     definition = buildPlant(site, template, rightsScenario);

@@ -174,7 +174,7 @@ test('new catalog presets are searchable: brine hubs abundance-eligible, desal c
 });
 
 test('catalog basins evaluate on the abundance template with FAST sizing', () => {
-  const ids = ['bolivia-uyuni', 'china-qaidam', 'ethiopia-danakil', 'us-searles-lake'];
+  const ids = ['bolivia-uyuni', 'china-qaidam', 'ethiopia-danakil', 'us-searles-lake', 'us-salton-sea'];
   for (const id of ids) {
     const evaluated = evaluateCandidate(searchSite(id), 'abundance', FAST);
     assert.equal(evaluated.status, 'ok', id);
@@ -182,6 +182,8 @@ test('catalog basins evaluate on the abundance template with FAST sizing', () =>
     assert.equal(evaluated.siteId, id);
     assert.ok(Number.isFinite(evaluated.annualNetCash), id);
     assert.notEqual(evaluated.reason, 'no-brine-assay', id);
+    assert.ok(!evaluated.notes.some(note => /No frozen PVGIS/i.test(note)), id);
+    assert.ok(!evaluated.notes.some(note => /plant-template solar/i.test(note)), id);
   }
   const uyuni = evaluateCandidate(searchSite('bolivia-uyuni'), 'abundance', FAST);
   assert.equal(uyuni.idle, false);
@@ -540,6 +542,38 @@ test('coastal/methanol use per-site frozen PVGIS and skip coasts that still lack
     const evaluated = evaluateCandidate(site, 'abundance', FAST);
     assert.equal(evaluated.status, 'ok', id);
     assert.ok(!evaluated.notes.some(note => /No frozen PVGIS/i.test(note)), id);
+  }
+
+  const expansionBasins = [
+    ['bolivia-uyuni', 'data/pvgis-uyuni.json', 1785.73, -20.29, -67.61],
+    ['china-qaidam', 'data/pvgis-qaidam.json', 1849.61, 38.15, 90.87],
+    ['ethiopia-danakil', 'data/pvgis-danakil.json', 1630.69, 14.24, 40.3],
+    ['us-searles-lake', 'data/pvgis-searles-lake.json', 1872.54, 35.73, -117.37],
+    ['us-salton-sea', 'data/pvgis-salton-sea.json', 1810.68, 33.16, -115.62],
+  ];
+  for (const [id, file, eY, lat, lon] of expansionBasins) {
+    assert.ok(pvgisSites.BY_SITE_ID[id], id);
+    const site = defaultSearchSites().find(row => row.id === id);
+    assert.ok(site, id);
+    assert.equal(site.hasBrineAssay, true, id);
+    const pvgis = require(path.join(__dirname, '..', file));
+    assert.equal(pvgis.outputs.totals.fixed.E_y, eY, id);
+    assert.equal(pvgis.inputs.location.latitude, lat, id);
+    assert.equal(pvgis.inputs.location.longitude, lon, id);
+    assert.equal(pvgis.inputs.meteo_data.radiation_db, 'PVGIS-ERA5', id);
+    assert.equal(pvgis.meta.retrieved, '2026-09-22', id);
+    assert.ok(pvgis.meta.query, id);
+    assert.match(pvgis.meta.notes, new RegExp(id));
+    const solar = frozenSolarFor({ id }, 'abundance');
+    assert.ok(solar, id);
+    assert.equal(solar.retrieved, '2026-09-22', id);
+    assert.match(solar.source, /PVGIS-ERA5/, id);
+    assert.equal(solar.dailyPVKWhPerKWp, eY / 365, id);
+    assert.equal(templateEligible(site, 'abundance').ok, true, id);
+    const evaluated = evaluateCandidate(site, 'abundance', FAST);
+    assert.equal(evaluated.status, 'ok', id);
+    assert.ok(!evaluated.notes.some(note => /No frozen PVGIS/i.test(note)), id);
+    assert.ok(!evaluated.notes.some(note => /plant-template solar/i.test(note)), id);
   }
 
   const searched = searchAbundanceSites({

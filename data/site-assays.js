@@ -25,6 +25,13 @@
       'kutch-subsoil-brine': require('./kutch-subsoil-brine.js'),
       'texas-gulf-desal-brine': require('./texas-gulf-desal-brine.js'),
       'mediterranean-swro-brine': require('./mediterranean-swro-brine.js'),
+      'dead-sea-brine': require('./dead-sea-brine.js'),
+      'hombre-muerto-lithium-brine': require('./hombre-muerto-lithium-brine.js'),
+      'maricunga-lithium-brine': require('./maricunga-lithium-brine.js'),
+      'clayton-valley-brine': require('./clayton-valley-brine.js'),
+      'zabuye-lithium-brine': require('./zabuye-lithium-brine.js'),
+      'patagonian-atlantic-seawater': require('./patagonian-atlantic-seawater.js'),
+      'levantine-mediterranean-seawater': require('./levantine-mediterranean-seawater.js'),
     } : {
       'almeria-seawater': root.AlmeriaSeawater,
       'persian-gulf-seawater': root.PersianGulfSeawater,
@@ -74,6 +81,9 @@
     'oman-duqm': 'arabian-sea-seawater',
     'india-mundra': 'gulf-of-kutch-seawater',
     'namibia-walvis-bay': 'benguela-atlantic-seawater',
+    'argentina-puerto-madryn': 'patagonian-atlantic-seawater',
+    'israel-ashkelon': 'levantine-mediterranean-seawater',
+    'djibouti-doraleh': 'red-sea-seawater',
   });
 
   /** Preset id → process-brine assay file id. Literature brine is not a mineral concession. */
@@ -98,6 +108,13 @@
     'india-mundra': 'kutch-subsoil-brine',
     'texas-corpus-christi': 'texas-gulf-desal-brine',
     'spain-almeria': 'mediterranean-swro-brine',
+    'argentina-hombre-muerto': 'hombre-muerto-lithium-brine',
+    'argentina-puerto-madryn': 'hombre-muerto-lithium-brine',
+    'chile-salar-de-maricunga': 'maricunga-lithium-brine',
+    'us-clayton-valley': 'clayton-valley-brine',
+    'china-zabuye': 'zabuye-lithium-brine',
+    'israel-ashkelon': 'dead-sea-brine',
+    'djibouti-doraleh': 'danakil-brine',
   });
 
   const BRINE_ASSAY_IDS = Object.freeze([
@@ -114,6 +131,11 @@
     'kutch-subsoil-brine',
     'texas-gulf-desal-brine',
     'mediterranean-swro-brine',
+    'dead-sea-brine',
+    'hombre-muerto-lithium-brine',
+    'maricunga-lithium-brine',
+    'clayton-valley-brine',
+    'zabuye-lithium-brine',
   ]);
 
   const SCREENING_INTAKE_M3_PER_DAY = 0.1;

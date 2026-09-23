@@ -16,6 +16,10 @@
       'kutch-subsoil-brine': require('../data/kutch-subsoil-brine.js'),
       'texas-gulf-desal-brine': require('../data/texas-gulf-desal-brine.js'),
       'mediterranean-swro-brine': require('../data/mediterranean-swro-brine.js'),
+      'hombre-muerto-lithium-brine': require('../data/hombre-muerto-lithium-brine.js'),
+      'maricunga-lithium-brine': require('../data/maricunga-lithium-brine.js'),
+      'clayton-valley-brine': require('../data/clayton-valley-brine.js'),
+      'zabuye-lithium-brine': require('../data/zabuye-lithium-brine.js'),
     } : {
       'dead-sea-brine': root.DeadSeaBrine,
       'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
@@ -31,6 +35,10 @@
       'kutch-subsoil-brine': root.KutchSubsoilBrine,
       'texas-gulf-desal-brine': root.TexasGulfDesalBrine,
       'mediterranean-swro-brine': root.MediterraneanSwroBrine,
+      'hombre-muerto-lithium-brine': root.HombreMuertoLithiumBrine,
+      'maricunga-lithium-brine': root.MaricungaLithiumBrine,
+      'clayton-valley-brine': root.ClaytonValleyBrine,
+      'zabuye-lithium-brine': root.ZabuyeLithiumBrine,
     },
     typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
   );

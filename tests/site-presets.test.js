@@ -25,6 +25,13 @@ const REQUIRED_IDS = [
   'namibia-walvis-bay',
   'oman-duqm',
   'spain-almeria',
+  'argentina-hombre-muerto',
+  'chile-salar-de-maricunga',
+  'us-clayton-valley',
+  'china-zabuye',
+  'argentina-puerto-madryn',
+  'israel-ashkelon',
+  'djibouti-doraleh',
 ];
 
 test('SITE_PRESETS export unique ids and finite lat/lon on globalThis and module.exports', () => {
@@ -197,4 +204,67 @@ test('catalog basins wire Uyuni, Qaidam, Danakil, and Searles as inland brine hu
   assert.ok(searles.evidence.some(item => /doi\.org\/10\.3133\/pp1043/.test(item.url)));
   assert.match(searles.notes, /not a .*concession/i);
   assert.match(searles.notes, /Not Texas Gulf seawater/i);
+});
+
+test('catalog growth wires Hombre Muerto, Maricunga, Clayton Valley, Zabuye hubs and Madryn/Ashkelon/Doraleh dual-assay coasts', () => {
+  const byId = new Map(SITE_PRESETS.map(site => [site.id, site]));
+  const SiteAssays = require('../data/site-assays.js');
+
+  const hombre = byId.get('argentina-hombre-muerto');
+  assert.equal(hombre.kind, 'brine-hub');
+  assert.equal(hombre.region, 'Argentina / Puna');
+  assert.equal(hombre.brineAssayId, 'hombre-muerto-lithium-brine');
+  assert.equal(hombre.assayId, undefined);
+  assert.ok(hombre.evidence.some(item => /doi\.org\/10\.3389\/fceng\.2022\.1008680/.test(item.url)));
+  assert.match(hombre.notes, /not a mineral concession/i);
+  assert.match(hombre.notes, /inherits Atacama\/Chile TEA/i);
+  assert.match(hombre.rightsHints.brineConcession.note, /not a mineral concession/i);
+  assert.equal(hombre.rightsHints.seawaterIntake.status, 'unverified');
+  assert.equal(SiteAssays.brineAssayIdForPreset('argentina-hombre-muerto'), 'hombre-muerto-lithium-brine');
+  assert.ok(SiteAssays.getAssay('hombre-muerto-lithium-brine'));
+
+  const maricunga = byId.get('chile-salar-de-maricunga');
+  assert.equal(maricunga.kind, 'brine-hub');
+  assert.equal(maricunga.region, 'Atacama/Chile');
+  assert.equal(maricunga.brineAssayId, 'maricunga-lithium-brine');
+  assert.ok(maricunga.evidence.some(item => /Maricunga_DFS|maricunga/i.test(item.url)));
+  assert.match(maricunga.notes, /Not Salar de Atacama/i);
+  assert.match(maricunga.rightsHints.brineConcession.note, /not a mineral concession/i);
+
+  const clayton = byId.get('us-clayton-valley');
+  assert.equal(clayton.kind, 'brine-hub');
+  assert.equal(clayton.region, 'US West / Nevada');
+  assert.equal(clayton.brineAssayId, 'clayton-valley-brine');
+  assert.match(clayton.notes, /SO4 not reported/i);
+  assert.ok(clayton.evidence.some(item => /usgs\.gov\/of\/2013\/1006/i.test(item.url)));
+
+  const zabuye = byId.get('china-zabuye');
+  assert.equal(zabuye.kind, 'brine-hub');
+  assert.equal(zabuye.region, 'China / Tibet');
+  assert.equal(zabuye.brineAssayId, 'zabuye-lithium-brine');
+  assert.match(zabuye.notes, /Not Qaidam/i);
+  assert.ok(SiteAssays.getAssay('zabuye-lithium-brine'));
+
+  const madryn = byId.get('argentina-puerto-madryn');
+  assert.equal(madryn.kind, 'industrial-coast');
+  assert.equal(madryn.assayId, 'patagonian-atlantic-seawater');
+  assert.equal(madryn.brineAssayId, 'hombre-muerto-lithium-brine');
+  assert.equal(madryn.rightsHints.seawaterIntake.status, 'assumed');
+  assert.equal(madryn.rightsHints.seawaterIntake.authorize, true);
+  assert.match(madryn.rightsHints.brineConcession.note, /not a mineral concession/i);
+  assert.equal(SiteAssays.assayIdForPreset('argentina-puerto-madryn'), 'patagonian-atlantic-seawater');
+
+  const ashkelon = byId.get('israel-ashkelon');
+  assert.equal(ashkelon.kind, 'industrial-coast');
+  assert.equal(ashkelon.assayId, 'levantine-mediterranean-seawater');
+  assert.equal(ashkelon.brineAssayId, 'dead-sea-brine');
+  assert.ok(SiteAssays.getAssay('dead-sea-brine'), 'dead-sea-brine must be registered for Ashkelon');
+  assert.match(ashkelon.notes, /not an IDE/i);
+
+  const doraleh = byId.get('djibouti-doraleh');
+  assert.equal(doraleh.kind, 'industrial-coast');
+  assert.equal(doraleh.assayId, 'red-sea-seawater');
+  assert.equal(doraleh.brineAssayId, 'danakil-brine');
+  assert.equal(doraleh.region, 'Red Sea');
+  assert.match(doraleh.notes, /not a port lease/i);
 });

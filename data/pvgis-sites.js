@@ -108,9 +108,23 @@
     };
   }
 
+  // Catalog growth 2026-09: no frozen ERA5 yet (JRC TLS unavailable from CI box).
+  // These presets use latitude screening-band solar in site notes — do NOT clone
+  // Dead Sea / Atacama / Uyuni series onto distant basins.
+  const SCREENING_BAND_SITE_IDS = Object.freeze([
+    'argentina-hombre-muerto',
+    'chile-salar-de-maricunga',
+    'us-clayton-valley',
+    'china-zabuye',
+    'argentina-puerto-madryn',
+    'israel-ashkelon',
+    'djibouti-doraleh',
+  ]);
+
   return {
     fromPvgis,
     BY_SITE_ID: Object.freeze(BY_SITE_ID),
+    SCREENING_BAND_SITE_IDS,
     seriesFor,
     frozenSolarFor,
   };

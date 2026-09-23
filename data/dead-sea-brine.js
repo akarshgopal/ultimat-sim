@@ -4,6 +4,8 @@
 })(globalThis, {
   "meta": {
     "retrieved": "2026-09-06",
+    "id": "dead-sea-brine",
+    "kind": "brine",
     "site": {
       "latitude": 31.16,
       "longitude": 35.43,

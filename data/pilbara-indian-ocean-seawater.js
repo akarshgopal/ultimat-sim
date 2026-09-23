@@ -1,0 +1,50 @@
+(function exposeSeawaterAssay(root, data) {
+  if (typeof module === 'object' && module.exports) module.exports = data;
+  else root.PilbaraIndianOceanSeawater = data;
+})(globalThis, {
+  "meta": {
+    "retrieved": "2026-09-13",
+    "id": "pilbara-indian-ocean-seawater",
+    "site": {
+      "context": "NW Australian / Pilbara Indian Ocean surface salinity ~35.5 g/kg; Millero S=35 majors scaled 35.5/35. Not an intake/discharge permit sample.",
+      "latitude": -20.3,
+      "longitude": 118.6
+    },
+    "quality": "Majors cited from Millero/Pilson S=35 scaled 35.5/35 for tropical Indian Ocean surface salinity near the Pilbara coast (WOA climatology family). Not an intake/discharge permit.",
+    "notes": "Ion mass concentrations are g/kg seawater. Base S=35 g/kg Millero majors scaled by 35.5/35. HCO3 omitted. Density screening only. Not a NaCl proxy."
+  },
+  "density_kg_per_L": 1.025,
+  "salinity_g_per_kg": 35.5,
+  "ions_g_per_kg": {
+    "Cl-": 19.629471428571428,
+    "Na+": 10.935014285714285,
+    "SO4-2": 2.7507428571428574,
+    "Mg+2": 1.302342857142857,
+    "Ca+2": 0.41778428571428566,
+    "K+": 0.4047,
+    "Br-": 0.06826142857142857
+  },
+  "mol_per_kg": {
+    "Cl-": 0.5537227483376989,
+    "Na+": 0.4756469839133349,
+    "SO4-2": 0.028635674132238782,
+    "Mg+2": 0.05358333088429776,
+    "Ca+2": 0.010424279797252498,
+    "K+": 0.010350833667959988,
+    "Br-": 0.0008542930087533612
+  },
+  "evidence": [
+    {
+      "label": "Millero et al. 2008, Deep-Sea Research I: reference composition of seawater at S=35 (DOI)",
+      "url": "https://doi.org/10.1016/j.dsr.2007.10.001"
+    },
+    {
+      "label": "NOAA NCEI World Ocean Atlas 2023 Volume 2: Salinity (DOI)",
+      "url": "https://doi.org/10.25923/70qt-9574"
+    },
+    {
+      "label": "NOAA NCEI World Ocean Atlas portal",
+      "url": "https://www.ncei.noaa.gov/products/world-ocean-atlas"
+    }
+  ]
+});

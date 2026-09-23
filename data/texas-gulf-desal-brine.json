@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "retrieved": "2026-09-21",
+    "id": "texas-gulf-desal-brine",
+    "kind": "brine",
+    "site": {
+      "latitude": 27.813,
+      "longitude": -97.396,
+      "context": "Corpus Christi Bay SWRO design-basis reject (PCCA industrial seawater desalination average Outfall 001 at 50% recovery); not a measured process-brine sample, not Texas Gulf seawater feed, not a concession"
+    },
+    "quality": "Majors cited from PCCA Design Basis Table 2 average Outfall 001 effluent (Na, Ca, Mg, K, Cl, SO4) based on Corpus Christi Bay sample data × 50% recovery. HCO3 230 mg/L omitted (not in SUBSTANCES). Ba/Sr/B/SiO2/NO3/F omitted (trace vs majors). Not a measured Harbor Island reject sample.",
+    "notes": "Ion masses converted from tabulated mg/L to g/kg with density 1.051 kg/L (screening from ~66 g/L TDS band — not a CTD). mol_per_kg = g_per_kg / molarMassG from engine/model SUBSTANCES. Literature numbers are preferred over forcing charge balance. salinity_g_per_kg is the summed cited majors, not the 66,000 mg/L TDS headline. Design-basis desal-reject is not a mineral concession and is not Great Salt Lake or Salton Sea chemistry."
+  },
+  "density_kg_per_L": 1.051,
+  "salinity_g_per_kg": 62.36917221693625,
+  "ions_g_per_kg": {
+    "Cl-": 34.91912464319695,
+    "SO4-2": 4.567078972407232,
+    "Na+": 17.602283539486205,
+    "Ca+2": 2.588011417697431,
+    "Mg+2": 2.131303520456708,
+    "K+": 0.5613701236917221
+  },
+  "mol_per_kg": {
+    "Cl-": 0.9850246725866558,
+    "SO4-2": 0.047544024280733205,
+    "Na+": 0.7656572599527297,
+    "Ca+2": 0.06457436542984757,
+    "Mg+2": 0.08768992061126138,
+    "K+": 0.014357916423264493
+  },
+  "evidence": [
+    {
+      "label": "Port of Corpus Christi Authority: Design Basis and Narrative for PCCA Industrial Seawater Desalination, Table 2 average Outfall 001 effluent",
+      "url": "https://portofcc.com/wp-content/uploads/Design-Basis-and-Narrative-for%E2%80%93PCCA%E2%80%93Industrial-Seawater-Desalination.pdf"
+    },
+    {
+      "label": "Freese and Nichols 2016, Variable Salinity Desalination Demonstration Project TM-2 (Corpus Christi Bay source-water samples cited by the PCCA design basis)",
+      "url": "https://portofcc.com/wp-content/uploads/Design-Basis-and-Narrative-for%E2%80%93PCCA%E2%80%93Industrial-Seawater-Desalination.pdf"
+    }
+  ]
+}

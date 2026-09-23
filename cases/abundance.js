@@ -1,0 +1,146 @@
+(function exposeAbundanceCase(root, factory) {
+  const api = factory(
+    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
+    typeof require === 'function' ? {
+      'dead-sea-brine': require('../data/dead-sea-brine.js'),
+      'persian-gulf-sabkha-brine': require('../data/persian-gulf-sabkha-brine.js'),
+      'atacama-lithium-brine': require('../data/atacama-lithium-brine.js'),
+      'lake-mackay-wa-brine': require('../data/lake-mackay-wa-brine.js'),
+      'great-salt-lake-brine': require('../data/great-salt-lake-brine.js'),
+      'salton-sea-brine': require('../data/salton-sea-brine.js'),
+      'uyuni-lithium-brine': require('../data/uyuni-lithium-brine.js'),
+      'qaidam-brine': require('../data/qaidam-brine.js'),
+      'danakil-brine': require('../data/danakil-brine.js'),
+      'searles-lake-brine': require('../data/searles-lake-brine.js'),
+      'red-sea-sabkha-brine': require('../data/red-sea-sabkha-brine.js'),
+      'kutch-subsoil-brine': require('../data/kutch-subsoil-brine.js'),
+      'texas-gulf-desal-brine': require('../data/texas-gulf-desal-brine.js'),
+      'mediterranean-swro-brine': require('../data/mediterranean-swro-brine.js'),
+      'hombre-muerto-lithium-brine': require('../data/hombre-muerto-lithium-brine.js'),
+      'maricunga-lithium-brine': require('../data/maricunga-lithium-brine.js'),
+      'clayton-valley-brine': require('../data/clayton-valley-brine.js'),
+      'zabuye-lithium-brine': require('../data/zabuye-lithium-brine.js'),
+    } : {
+      'dead-sea-brine': root.DeadSeaBrine,
+      'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
+      'atacama-lithium-brine': root.AtacamaLithiumBrine,
+      'lake-mackay-wa-brine': root.LakeMackayWaBrine,
+      'great-salt-lake-brine': root.GreatSaltLakeBrine,
+      'salton-sea-brine': root.SaltonSeaBrine,
+      'uyuni-lithium-brine': root.UyuniLithiumBrine,
+      'qaidam-brine': root.QaidamBrine,
+      'danakil-brine': root.DanakilBrine,
+      'searles-lake-brine': root.SearlesLakeBrine,
+      'red-sea-sabkha-brine': root.RedSeaSabkhaBrine,
+      'kutch-subsoil-brine': root.KutchSubsoilBrine,
+      'texas-gulf-desal-brine': root.TexasGulfDesalBrine,
+      'mediterranean-swro-brine': root.MediterraneanSwroBrine,
+      'hombre-muerto-lithium-brine': root.HombreMuertoLithiumBrine,
+      'maricunga-lithium-brine': root.MaricungaLithiumBrine,
+      'clayton-valley-brine': root.ClaytonValleyBrine,
+      'zabuye-lithium-brine': root.ZabuyeLithiumBrine,
+    },
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+  );
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.AbundanceCase = api;
+})(globalThis, (model, assays, tea) => {
+const { SUBSTANCES, streamMassKg } = model;
+const MASS_KG_PER_DAY = 100000;
+const DEFAULT_ASSAY_ID = 'dead-sea-brine';
+
+function brineFromAssay(assayData, massKg) {
+  const gPerKg = assayData.ions_g_per_kg;
+  const molPerKg = assayData.mol_per_kg;
+  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
+  const mol = {
+    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
+  };
+  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
+  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
+}
+
+function resolveAssayId(options) {
+  if (typeof options === 'string') return options;
+  if (options && typeof options === 'object' && options.assayId) return options.assayId;
+  return DEFAULT_ASSAY_ID;
+}
+
+function createAbundanceCase(options = {}) {
+  const assayId = resolveAssayId(options);
+  const region = options && typeof options === 'object' ? options.region : undefined;
+  const demandRegionId = tea.resolveDemandRegion(region);
+  const assay = assays[assayId];
+  if (!assay) throw new Error(`Unknown abundance assay ${assayId}`);
+  const brine = brineFromAssay(assay, MASS_KG_PER_DAY);
+  const bromideRecovery = 0.9;
+  const bromineMol = (brine.mol['Br-'] || 0) * bromideRecovery / 2;
+  const bromineKg = bromineMol * SUBSTANCES.Br2.molarMassG / 1000;
+  const causticMol = bromineMol * 2;
+  const causticKg = causticMol * SUBSTANCES.NaOH.molarMassG / 1000;
+  const ammoniaMol = causticMol * 0.5 / 1.5;
+  const ammoniaKg = ammoniaMol * SUBSTANCES.NH3.molarMassG / 1000;
+  const nitrogenKg = ammoniaMol * 0.5 * SUBSTANCES.N2.molarMassG / 1000;
+  const airN2Mol = nitrogenKg * 1000 / SUBSTANCES.N2.molarMassG / 0.98;
+  const air = { kind: 'material', mol: { N2: airN2Mol, O2: airN2Mol * 0.268 }, phase: 'gas', T_C: 25, P_bar: 1 };
+  const material = (substance, mol, phase = 'solid') => ({ kind: 'material', mol: { [substance]: mol }, phase, T_C: 25, P_bar: 1 });
+  const powerKWh = streamMassKg(brine) * 0.05 + causticKg * 2.5 + bromineKg * 0.2 + nitrogenKg * 0.25 + ammoniaKg * 0.6 + 10;
+  const outputs = ['lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'raffinate'];
+
+  const sale = id => (id === 'raffinate'
+    ? { disposition: 'reinjection' }
+    : tea.bindSale(id, { region }));
+  return {
+    meta: { assayId, demandRegionId, tea: tea.abundanceEvidence(region) },
+    teaEvidence: tea.abundanceEvidence(region),
+    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    graph: {
+      nodes: [
+        { id: 'brine', unit: 'material-source', sourcePreset: 'brine', params: { stream: brine }, economics: tea.bindCost('brine', { region }) },
+        { id: 'salt-feed', unit: 'material-source', sourcePreset: 'salt', params: { stream: material('NaCl', causticMol) }, economics: tea.bindCost('salt-feed', { region }) },
+        { id: 'water', unit: 'material-source', sourcePreset: 'water', params: { stream: material('H2O', causticMol, 'liquid') }, economics: tea.bindCost('water', { region }) },
+        { id: 'air', unit: 'material-source', sourcePreset: 'air', params: { stream: air }, economics: { unitCost: 0 } },
+        { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: powerKWh } }, economics: tea.bindCost('power', { region }) },
+        { id: 'power-bus', unit: 'electrical-bus' },
+        { id: 'minerals', unit: 'brine-minerals', capacity: streamMassKg(brine), params: { electricityKWhPerKgBrine: 0.05, lithiumRecovery: 0.9, bromideRecovery, magnesiumRecovery: 0.5, potashRecovery: 0.7, gypsumRecovery: 0.7, saltRecovery: 0.5 }, economics: tea.bindCapex('minerals', { variableOM: 0.01, region }) },
+        { id: 'chlor-alkali', unit: 'chlor-alkali', capacity: causticKg, params: { electricityKWhPerKg: 2.5 }, economics: tea.bindCapex('chlor-alkali', { variableOM: 0.05, region }) },
+        { id: 'bromine-recovery', unit: 'bromine-recovery', capacity: bromineKg, params: { electricityKWhPerKg: 0.2 }, economics: tea.bindCapex('bromine-recovery', { variableOM: 0.03, region }) },
+        { id: 'asu', unit: 'asu', capacity: nitrogenKg, params: { nitrogenRecovery: 0.98, oxygenRecovery: 0.95, electricityKWhPerKgN2: 0.25 }, economics: tea.bindCapex('asu', { variableOM: 0.02, region }) },
+        { id: 'ammonia', unit: 'ammonia', capacity: ammoniaKg, params: { electricityKWhPerKg: 0.6 }, economics: tea.bindCapex('ammonia', { variableOM: 0.05, region }) },
+        ...outputs.map(id => ({ id, unit: 'material-sink', economics: sale(id) })),
+        { id: 'caustic', unit: 'material-sink', economics: tea.bindSale('caustic', { region }) },
+        { id: 'bromine', unit: 'material-sink', economics: tea.bindSale('bromine', { region }) },
+        { id: 'recovered-salt', unit: 'material-sink', economics: tea.bindSale('salt', { region }) },
+        { id: 'ammonia-product', unit: 'material-sink', economics: tea.bindSale('ammonia', { region }) },
+        { id: 'oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen', { region }) },
+        { id: 'offgas', unit: 'material-sink', economics: { disposition: 'vent' } },
+      ],
+      edges: [
+        { from: { node: 'brine', port: 'out' }, to: { node: 'minerals', port: 'brine' } },
+        { from: { node: 'salt-feed', port: 'out' }, to: { node: 'chlor-alkali', port: 'salt' } },
+        { from: { node: 'water', port: 'out' }, to: { node: 'chlor-alkali', port: 'water' } },
+        { from: { node: 'air', port: 'out' }, to: { node: 'asu', port: 'air' } },
+        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        ...['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia'].map(id => ({ from: { node: 'power-bus', port: 'out' }, to: { node: id, port: 'electricity' } })),
+        ...outputs.map(port => ({ from: { node: 'minerals', port }, to: { node: port, port: 'in' } })),
+        { from: { node: 'minerals', port: 'bromide' }, to: { node: 'bromine-recovery', port: 'bromide' } },
+        { from: { node: 'chlor-alkali', port: 'chlorine' }, to: { node: 'bromine-recovery', port: 'chlorine' } },
+        { from: { node: 'chlor-alkali', port: 'caustic' }, to: { node: 'caustic', port: 'in' } },
+        { from: { node: 'chlor-alkali', port: 'hydrogen' }, to: { node: 'ammonia', port: 'hydrogen' } },
+        { from: { node: 'bromine-recovery', port: 'bromine' }, to: { node: 'bromine', port: 'in' } },
+        { from: { node: 'bromine-recovery', port: 'salt' }, to: { node: 'recovered-salt', port: 'in' } },
+        { from: { node: 'asu', port: 'nitrogen' }, to: { node: 'ammonia', port: 'nitrogen' } },
+        { from: { node: 'asu', port: 'oxygen' }, to: { node: 'oxygen', port: 'in' } },
+        { from: { node: 'asu', port: 'offgas' }, to: { node: 'offgas', port: 'in' } },
+        { from: { node: 'ammonia', port: 'ammonia' }, to: { node: 'ammonia-product', port: 'in' } },
+      ],
+    },
+    operation: {
+      setpoints: { minerals: streamMassKg(brine), 'chlor-alkali': causticKg, 'bromine-recovery': bromineKg, asu: nitrogenKg, ammonia: ammoniaKg },
+      priorities: { 'power-bus': ['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia'] },
+    },
+  };
+}
+
+return { createAbundanceCase, TEA: tea };
+});

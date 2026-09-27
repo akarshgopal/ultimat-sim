@@ -1,3 +1,4 @@
+// CLI/orphan-only. Do not add cases/dac.js to index.html.
 (function exposeDacCase(root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;

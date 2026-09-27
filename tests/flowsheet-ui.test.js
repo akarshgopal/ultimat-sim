@@ -295,14 +295,16 @@ test('size product menus list methanol and ammonia', () => {
   assert.match(html, /id="sizeProduct"/);
   assert.match(html, /value="methanol"/);
   assert.match(html, /value="ammonia"/);
-  assert.match(html, /id="processSizeProduct"/);
-  assert.match(html, /id="processSizeForCashflow"/);
+  assert.doesNotMatch(html, /id="processSizeProduct"/);
+  assert.doesNotMatch(html, /id="processSizeForCashflow"/);
+  assert.doesNotMatch(html, /id="processDemoMenu"/);
+  assert.doesNotMatch(html, /id="processSizeMenu"/);
 });
 
 test('Zabuye brine hub loads the cited assay, frozen ERA5, and capital-inclusive cash', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /id="loadZabuyeHub"/);
-  assert.match(html, /data-demo="zabuye-hub"/);
+  assert.match(html, /data-demo-id="zabuye-hub"/);
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
   assert.equal(typeof app.loadZabuyeHub, 'function');

@@ -89,13 +89,18 @@
           <div class="demo-scenarios" id="overviewDemoMenu" role="group" aria-label="Demo scenarios">
             <span class="eyebrow">Scenarios</span>
             <div class="overview-demos">
-              <button type="button" id="loadMethaneRecycle" data-demo-id="methane-recycle">Methane recycle</button>
-              <button type="button" id="loadCoastalMethane" data-demo-id="coastal-methane">Coastal methane</button>
-              <button type="button" id="loadMethanolPlant" data-demo-id="coastal-methanol">Coastal methanol</button>
               <button type="button" id="loadAbundanceHub" data-demo-id="abundance-hub">Brine + ammonia</button>
               <button type="button" id="loadZabuyeHub" data-demo-id="zabuye-hub">Zabuye brine hub</button>
-              <button type="button" id="loadDemoNetwork" data-demo-id="demo-network">Fuels + minerals</button>
             </div>
+            <details class="more-section fuels-demos">
+              <summary>Fuels demos (screening cash−)</summary>
+              <div class="overview-demos overview-demos-secondary">
+                <button type="button" id="loadMethaneRecycle" data-demo-id="methane-recycle">Methane recycle</button>
+                <button type="button" id="loadCoastalMethane" data-demo-id="coastal-methane">Coastal methane</button>
+                <button type="button" id="loadMethanolPlant" data-demo-id="coastal-methanol">Coastal methanol</button>
+                <button type="button" id="loadDemoNetwork" data-demo-id="demo-network">Fuels + minerals</button>
+              </div>
+            </details>
           </div>
         </section>
       </div>
@@ -184,46 +189,9 @@
               <p id="flowSummary">0 blocks · 0 connections</p>
             </div>
             <div class="stage-actions">
-              <details class="demo-menu" id="processDemoMenu">
-                <summary>Load demo</summary>
-                <div class="demo-menu-actions">
-                  <button type="button" data-demo="methane-recycle">Methane + water recycle</button>
-                  <button type="button" data-demo="coastal-methane">Coastal methane</button>
-                  <button type="button" data-demo="coastal-methanol">Coastal methanol</button>
-                  <button type="button" data-demo="abundance-hub">Ammonia + brine hub</button>
-                  <button type="button" data-demo="zabuye-hub">Zabuye brine hub</button>
-                  <button type="button" data-demo="demo-network">Fuels + minerals network</button>
-                </div>
-              </details>
               <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
-              <details class="save-menu" id="processSizeMenu">
-                <summary>Size</summary>
-                <div class="snapshot-controls">
-                  <button type="button" id="processSizeForCashflow">Co-product cashflow</button>
-                  <label>Product
-                    <select id="processSizeProduct" aria-label="Process size-to-target product">
-                      <option value="CH4">CH₄</option>
-                      <option value="H2">H₂</option>
-                      <option value="methanol">Methanol</option>
-                      <option value="ammonia">Ammonia</option>
-                      <option value="lithium">Lithium</option>
-                      <option value="salt">Salt</option>
-                    </select>
-                  </label>
-                  <label>kg/day <input id="processSizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
-                  <button type="button" id="processSizeToTarget">Size to target</button>
-                </div>
-                <p class="status-meta" id="processSizeStatus">Physics first, then cashflow.</p>
-              </details>
               <button type="button" id="autoArrange">Arrange</button>
               <button type="button" id="focusCanvas" aria-pressed="false">Focus canvas</button>
-              <details class="save-menu" id="baselineMenu">
-                <summary>Baseline</summary>
-                <div class="snapshot-controls">
-                  <button type="button" id="captureBaseline">Capture baseline</button>
-                  <button type="button" id="clearBaseline">Clear baseline</button>
-                </div>
-              </details>
               <details class="save-menu">
                 <summary>Saved factories</summary>
                 <div class="snapshot-controls">
@@ -234,16 +202,6 @@
               </details>
             </div>
           </div>
-
-          <section class="comparison-panel" id="comparisonPanel" hidden aria-live="polite">
-            <div class="comparison-heading">
-              <div><span class="eyebrow">Decision support</span><h3>Scenario comparison</h3></div>
-              <span class="status-meta" id="comparisonStatus"></span>
-            </div>
-            <dl class="comparison-metrics" id="comparisonMetrics"></dl>
-            <h4>Synergy ledger · current vs baseline</h4>
-            <div class="synergy-ledger" id="synergyLedger"></div>
-          </section>
 
           <div class="canvas-frame">
             <div class="canvas-zoom" aria-label="Canvas zoom controls">
@@ -263,6 +221,22 @@
             </div>
           </div>
           <div class="warning-strip" id="warnings" hidden></div>
+          <details class="more-section" id="advancedComparison">
+            <summary>Advanced</summary>
+            <div class="snapshot-controls">
+              <button type="button" id="captureBaseline">Capture baseline</button>
+              <button type="button" id="clearBaseline">Clear baseline</button>
+            </div>
+            <section class="comparison-panel" id="comparisonPanel" hidden aria-live="polite">
+              <div class="comparison-heading">
+                <div><span class="eyebrow">Decision support</span><h3>Scenario comparison</h3></div>
+                <span class="status-meta" id="comparisonStatus"></span>
+              </div>
+              <dl class="comparison-metrics" id="comparisonMetrics"></dl>
+              <h4>Synergy ledger · current vs baseline</h4>
+              <div class="synergy-ledger" id="synergyLedger"></div>
+            </section>
+          </details>
           <button type="button" class="exit-focus" id="exitFocus" hidden>Exit focus</button>
         </section>
 
@@ -351,7 +325,6 @@
   <script src="engine/economics.js"></script>
   <script src="engine/footprint.js"></script>
   <script src="engine/size.js"></script>
-  <script src="engine/sensitivity.js"></script>
   <script src="engine/network.js"></script>
   <script src="engine/uncertainty.js"></script>
   <script src="engine/map-site.js"></script>
@@ -399,7 +372,6 @@
   <script src="cases/methanol.js"></script>
   <script src="cases/abundance.js"></script>
   <script src="cases/network.js"></script>
-  <script src="engine/site-search.js"></script>
   <script src="vendor/LercDecode.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
   <script src="js/flowsheet-app.js"></script>

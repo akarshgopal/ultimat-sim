@@ -27,7 +27,6 @@
   const AUTOSAVE_KEY = 'molecular-foundry.autosave.v1';
   const SAVES_KEY = 'molecular-foundry.saves.v1';
   const NETWORK_KEY = 'molecular-foundry.network.v1';
-  const LEGACY_NETWORK_KEY = 'molecular-foundry.empire.v1';
   const TAB_KEY = 'molecular-foundry.tab.v1';
   const FOUNDATION_TABS = ['overview', 'location', 'process', 'economics'];
   const TAB_IDS = {
@@ -68,11 +67,11 @@
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
   };
   const PALETTE_CATEGORIES = {
-    Water: ['swro', 'med', 'msf'],
+    Water: ['swro'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
     Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia'],
-    Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery', 'aluminium-smelter', 'hydrogen-dri', 'titanium-kroll'],
-    Power: ['solar-pv', 'nuclear-electricity', 'battery', 'solar-thermal', 'thermal-storage'],
+    Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
+    Power: ['solar-pv', 'battery'],
   };
   const MapSite = typeof FlowsheetMapSite !== 'undefined' ? FlowsheetMapSite : null;
 
@@ -499,15 +498,6 @@
   document.getElementById('loadMethaneRecycle').addEventListener('click', () => { setActiveDemo('methane-recycle', 'Methane recycle'); loadMethaneRecycle(); });
   document.getElementById('loadCoastalMethane').addEventListener('click', () => { setActiveDemo('coastal-methane', 'Coastal methane'); loadCoastalMethane(0); });
   document.getElementById('loadMethanolPlant')?.addEventListener('click', () => { setActiveDemo('coastal-methanol', 'Coastal methanol'); loadMethanolPlant(0); });
-  document.getElementById('processDemoMenu')?.addEventListener('click', event => {
-    const demo = event.target.closest?.('[data-demo]')?.dataset.demo;
-    if (demo === 'methane-recycle') { setActiveDemo(demo, 'Methane recycle'); loadMethaneRecycle(); }
-    else if (demo === 'coastal-methane') { setActiveDemo(demo, 'Coastal methane'); loadCoastalMethane(0); }
-    else if (demo === 'coastal-methanol') { setActiveDemo(demo, 'Coastal methanol'); loadMethanolPlant(0); }
-    else if (demo === 'abundance-hub') { setActiveDemo(demo, 'Brine + ammonia'); loadAbundanceHub(); }
-    else if (demo === 'zabuye-hub') { setActiveDemo(demo, 'Zabuye brine hub'); loadZabuyeHub(); }
-    else if (demo === 'demo-network') { setActiveDemo(demo, 'Fuels + minerals'); loadDemoNetwork(); }
-  });
   for (const name of FOUNDATION_TABS) {
     document.getElementById(TAB_IDS[name].tab)?.addEventListener('click', () => activateTab(name));
   }
@@ -525,23 +515,7 @@
       /* sizeToProduct writes the status line */
     }
   });
-  document.getElementById('processSizeToTarget')?.addEventListener('click', () => {
-    const product = document.getElementById('processSizeProduct')?.value || 'CH4';
-    const rate = Number(document.getElementById('processSizeTargetRate')?.value);
-    try {
-      sizeToProduct(product, rate);
-    } catch {
-      /* sizeToProduct writes the status line */
-    }
-  });
   document.getElementById('sizeForCashflow')?.addEventListener('click', () => {
-    try {
-      sizeForPositiveCashflow();
-    } catch {
-      /* sizeForPositiveCashflow writes the status line */
-    }
-  });
-  document.getElementById('processSizeForCashflow')?.addEventListener('click', () => {
     try {
       sizeForPositiveCashflow();
     } catch {
@@ -865,10 +839,8 @@
 
   function writeSizeStatus(error) {
     const text = error?.message || String(error || '');
-    for (const id of ['sizeToTargetStatus', 'processSizeStatus']) {
-      const status = document.getElementById(id);
-      if (status && error) status.textContent = text;
-    }
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status && error) status.textContent = text;
   }
 
   function sizeToProduct(product, rate, opts = {}) {
@@ -3103,10 +3075,8 @@
       return null;
     })();
     if (sizeText) {
-      for (const id of ['sizeToTargetStatus', 'processSizeStatus']) {
-        const sizeStatus = document.getElementById(id);
-        if (sizeStatus) sizeStatus.textContent = sizeText;
-      }
+      const sizeStatus = document.getElementById('sizeToTargetStatus');
+      if (sizeStatus) sizeStatus.textContent = sizeText;
     } else {
       const overview = document.getElementById('sizeToTargetStatus');
       if (overview) overview.textContent = 'Single-product physics tool.';
@@ -3602,17 +3572,9 @@
   };
   populateSitePresets();
   refreshSaveOptions();
-  const savedNetwork = readJson(NETWORK_KEY) || readJson(LEGACY_NETWORK_KEY);
+  const savedNetwork = readJson(NETWORK_KEY);
   if (savedNetwork?.plants) network = { plants: savedNetwork.plants, corridors: savedNetwork.corridors || [] };
-  if (network.plants.length) {
-    refreshNetwork();
-    if (storage && !readJson(NETWORK_KEY) && readJson(LEGACY_NETWORK_KEY)) {
-      try {
-        storage.setItem(NETWORK_KEY, JSON.stringify({ plants: network.plants, corridors: network.corridors }));
-        storage.removeItem(LEGACY_NETWORK_KEY);
-      } catch { /* ignore */ }
-    }
-  }
+  if (network.plants.length) refreshNetwork();
   if (restoreSnapshot(readJson(AUTOSAVE_KEY))) solveAndRender();
   else render();
   activateTab(readSavedTab());

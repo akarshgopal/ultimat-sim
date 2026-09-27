@@ -1486,7 +1486,8 @@ label output + .quality-chip {
 .flowsheet-page.canvas-focus .flowsheet-sidebar { display: none; }
 .flowsheet-page.canvas-focus .flowsheet-stage { padding: 12px; }
 .flowsheet-page.canvas-focus .stage-heading { display: none; }
-.flowsheet-page.canvas-focus .comparison-panel { display: none; }
+.flowsheet-page.canvas-focus .comparison-panel,
+.flowsheet-page.canvas-focus #advancedComparison { display: none; }
 
 @media (max-width: 960px) {
   .overview-metrics,
@@ -1692,6 +1693,36 @@ label output + .quality-chip {
 .overview-demos button.is-selected:focus-visible {
   color: #120e06;
   border-color: var(--accent-hover);
+}
+.overview-demos-secondary {
+  margin-top: 4px;
+}
+.overview-demos-secondary button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 550;
+  color: var(--text-muted);
+}
+#advancedComparison {
+  margin: 8px 0 0;
+}
+#advancedComparison .snapshot-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+#advancedComparison .snapshot-controls button {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.72rem;
+  font-weight: 550;
+  cursor: pointer;
 }
 .palette-search { display: block; margin: 0 0 10px; }
 .palette-search input {

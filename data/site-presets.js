@@ -570,7 +570,7 @@
     latitude: -25.42,
     longitude: -66.92,
     kind: 'brine-hub',
-    notes: 'Salar del Hombre Muerto nucleus (Argentine Puna). Location preset only — Murphy & Haji 2022 Table 1 well brine is screening chemistry, not an Arcadium/Livent/Posco mineral concession sample (not a mineral concession). Screening offtake inherits Atacama/Chile TEA (YAGNI, not an Argentina offtake table). Not Mejillones / Atacama / Uyuni chemistry. PVGIS: latitude screening band until a frozen ERA5 series is fetched — not a Dead Sea or Uyuni solar clone.',
+    notes: 'Salar del Hombre Muerto nucleus (Argentine Puna). Location preset only — Murphy & Haji 2022 Table 1 well brine is screening chemistry, not an Arcadium/Livent/Posco mineral concession sample (not a mineral concession). Screening offtake inherits Atacama/Chile TEA (YAGNI, not an Argentina offtake table). Not Mejillones / Atacama / Uyuni chemistry. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea or Uyuni solar clone.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Murphy & Haji 2022, Frontiers in Chemical Engineering Table 1: Salar del Hombre Muerto well brine majors (DOI)', url: 'https://doi.org/10.3389/fceng.2022.1008680' }),
       Object.freeze({ label: 'Wikipedia: Salar del Hombre Muerto (context, not a concession)', url: 'https://en.wikipedia.org/wiki/Salar_del_Hombre_Muerto' }),
@@ -592,7 +592,7 @@
     latitude: -26.92,
     longitude: -69.05,
     kind: 'brine-hub',
-    notes: 'Salar de Maricunga (Atacama Region, Chile). Location preset only — Minera Salar Blanco Stage One DFS 2022 Table 1-1 basin averages (718 samples) are screening chemistry, not an MSB/Codelco concession sample. Not Salar de Atacama nucleus chemistry and not Mejillones seawater. PVGIS: latitude screening band until a frozen ERA5 series is fetched — not an Atacama or Dead Sea solar clone.',
+    notes: 'Salar de Maricunga (Atacama Region, Chile). Location preset only — Minera Salar Blanco Stage One DFS 2022 Table 1-1 basin averages (718 samples) are screening chemistry, not an MSB/Codelco concession sample. Not Salar de Atacama nucleus chemistry and not Mejillones seawater. Frozen PVGIS-ERA5 on select (per-site series) — not an Atacama or Dead Sea solar clone.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Minera Salar Blanco Stage One DFS 2022 Table 1-1: Maricunga brine averages (718 samples)', url: 'https://minedocs.com/23/Maricunga_DFS_01072022.pdf' }),
       Object.freeze({ label: 'Gajardo & Carrasco 2021, Earth-Science Reviews: Andean salar brine grades context (DOI)', url: 'https://doi.org/10.1016/j.earscirev.2021.103615' }),
@@ -615,7 +615,7 @@
     latitude: 37.75,
     longitude: -117.57,
     kind: 'brine-hub',
-    notes: 'Clayton Valley playa aquifer near Silver Peak (Esmeralda County, Nevada). Location preset only — Pure Energy CV-3 average majors are screening chemistry, not an Albemarle Silver Peak concession sample. SO4 not reported in the CV-3 table and is omitted (not invented). Not Salton Sea / Searles / Texas Gulf chemistry. PVGIS: latitude screening band until a frozen ERA5 series is fetched — not a Dead Sea or Salton solar clone.',
+    notes: 'Clayton Valley playa aquifer near Silver Peak (Esmeralda County, Nevada). Location preset only — Pure Energy CV-3 average majors are screening chemistry, not an Albemarle Silver Peak concession sample. SO4 not reported in the CV-3 table and is omitted (not invented). Not Salton Sea / Searles / Texas Gulf chemistry. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea or Salton solar clone.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Pure Energy Minerals: CV-3 Clayton Valley South brine chemistry average (public well table)', url: 'https://www.einpresswire.com/article/344697924/pure-energy-minerals-reports-positive-initial-lithium-brine-analyses-from-cv-3-well-at-clayton-valley-south' }),
       Object.freeze({ label: 'USGS OFR 2013-1006: A preliminary deposit model for lithium brines (Clayton Valley context)', url: 'https://pubs.usgs.gov/of/2013/1006/OF13-1006.pdf' }),
@@ -638,7 +638,7 @@
     latitude: 31.35,
     longitude: 84.05,
     kind: 'brine-hub',
-    notes: 'Lake Zabuye / Zhabuye carbonate-type salt lake (Tibetan Plateau). Location preset only — Murphy & Haji 2022 Table 1 majors are screening chemistry, not a Tibet Mineral/Zabuye concession sample. Screening offtake inherits the default TEA table (no Asia demand region). Not Qaidam/Kunteyi intercrystalline chemistry. PVGIS: latitude screening band until a frozen ERA5 series is fetched — not a Qaidam or Dead Sea solar clone.',
+    notes: 'Lake Zabuye / Zhabuye carbonate-type salt lake (Tibetan Plateau). Location preset only — Murphy & Haji 2022 Table 1 majors are screening chemistry, not a Tibet Mineral/Zabuye concession sample. Screening offtake inherits the default TEA table (no Asia demand region). Not Qaidam/Kunteyi intercrystalline chemistry. Frozen PVGIS-ERA5 on select (per-site series) — not a Qaidam or Dead Sea solar clone.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Murphy & Haji 2022, Frontiers in Chemical Engineering Table 1: Lake Zabuye brine majors (DOI)', url: 'https://doi.org/10.3389/fceng.2022.1008680' }),
       Object.freeze({ label: 'Wikipedia: Zabuye Lake (context, not a concession)', url: 'https://en.wikipedia.org/wiki/Zabuye_Lake' }),
@@ -661,7 +661,7 @@
     latitude: -42.77,
     longitude: -65.04,
     kind: 'industrial-coast',
-    notes: 'Puerto Madryn industrial port on the Patagonian Atlantic. Location preset only — not an Aluar lease, desal permit, or grid right. Patagonian Atlantic seawater assay is Millero-scaled shelf screening, not a Madryn intake sample. Geography-matched Salar del Hombre Muerto process-brine assay is Argentine Puna regional screening, not a Madryn salt-works or mineral concession sample. Screening offtake inherits Atacama/Chile TEA. PVGIS: latitude screening band until a frozen ERA5 series is fetched — not a Dead Sea or Uyuni solar clone.',
+    notes: 'Puerto Madryn industrial port on the Patagonian Atlantic. Location preset only — not an Aluar lease, desal permit, or grid right. Patagonian Atlantic seawater assay is Millero-scaled shelf screening, not a Madryn intake sample. Geography-matched Salar del Hombre Muerto process-brine assay is Argentine Puna regional screening, not a Madryn salt-works or mineral concession sample. Screening offtake inherits Atacama/Chile TEA. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea or Uyuni solar clone.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Wikipedia: Puerto Madryn', url: 'https://en.wikipedia.org/wiki/Puerto_Madryn' }),
       Object.freeze({ label: 'OpenStreetMap: Puerto Madryn', url: 'https://www.openstreetmap.org/#map=12/-42.77/-65.04' }),
@@ -685,7 +685,7 @@
     latitude: 31.63,
     longitude: 34.56,
     kind: 'industrial-coast',
-    notes: 'Ashkelon Mediterranean industrial / SWRO coast. Location preset only — not an IDE Ashkelon desal concession, IEC connection, or offtake. Levantine Mediterranean seawater assay is Millero-scaled eastern-Med screening (S≈39), not a western Alboran/Almería proxy and not an Ashkelon intake sample. Geography-matched Dead Sea open-water process-brine assay is Levant inland screening, not an Ashkelon SWRO-reject sample and not a mineral concession. Screening offtake inherits Red Sea / Levant TEA. PVGIS: latitude screening band until a frozen ERA5 series is fetched — not a Dead Sea solar clone onto the coast.',
+    notes: 'Ashkelon Mediterranean industrial / SWRO coast. Location preset only — not an IDE Ashkelon desal concession, IEC connection, or offtake. Levantine Mediterranean seawater assay is Millero-scaled eastern-Med screening (S≈39), not a western Alboran/Almería proxy and not an Ashkelon intake sample. Geography-matched Dead Sea open-water process-brine assay is Levant inland screening, not an Ashkelon SWRO-reject sample and not a mineral concession. Screening offtake inherits Red Sea / Levant TEA. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea solar clone onto the coast.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Wikipedia: Ashkelon', url: 'https://en.wikipedia.org/wiki/Ashkelon' }),
       Object.freeze({ label: 'OpenStreetMap: Ashkelon', url: 'https://www.openstreetmap.org/#map=12/31.63/34.56' }),
@@ -709,7 +709,7 @@
     latitude: 11.59,
     longitude: 43.09,
     kind: 'industrial-coast',
-    notes: 'Doraleh Multipurpose Port on the Djibouti Red Sea / Gulf of Aden approach. Location preset only — not a port lease, desal permit, or grid right. Red Sea seawater assay is basin typical, not a Doraleh intake sample. Geography-matched Dallol/Danakil salt-pan process-brine assay is Afar inland screening, not a Doraleh reject sample and not an Allana/ICL concession. Screening offtake inherits Red Sea / Levant TEA. PVGIS: latitude screening band until a frozen ERA5 series is fetched — not a Dead Sea or Danakil solar clone.',
+    notes: 'Doraleh Multipurpose Port on the Djibouti Red Sea / Gulf of Aden approach. Location preset only — not a port lease, desal permit, or grid right. Red Sea seawater assay is basin typical, not a Doraleh intake sample. Geography-matched Dallol/Danakil salt-pan process-brine assay is Afar inland screening, not a Doraleh reject sample and not an Allana/ICL concession. Screening offtake inherits Red Sea / Levant TEA. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea or Danakil solar clone.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Wikipedia: Port of Doraleh', url: 'https://en.wikipedia.org/wiki/Port_of_Doraleh' }),
       Object.freeze({ label: 'OpenStreetMap: Doraleh, Djibouti', url: 'https://www.openstreetmap.org/#map=12/11.59/43.09' }),
@@ -724,5 +724,56 @@
       brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Danakil salt-pan process-brine assay is not a mineral concession; not Doraleh seawater' }),
     }),
   }),
+
+  Object.freeze({
+    id: 'us-huntington-beach',
+    assayId: 'southern-california-bight-seawater',
+    brineAssayId: 'salton-sea-brine',
+    name: 'Huntington Beach / Long Beach, California, USA',
+    region: 'US West / California',
+    latitude: 33.655,
+    longitude: -118.005,
+    kind: 'industrial-coast',
+    notes: 'Huntington Beach–Long Beach Southern California Bight industrial / desal corridor. Location preset only — not an AES/Poseidon desal concession, SCE interconnection, or offtake. Southern California Bight seawater assay is Millero-scaled open-coast screening (S≈33.5), not a Huntington intake sample. Geography-matched Salton Sea geothermal process-brine assay is Imperial Valley inland screening, not a Huntington SWRO-reject sample and not a mineral concession. Screening offtake inherits default / US TEA overlays where present. Frozen PVGIS-ERA5 on select (per-site series) — not a Salton Sea or Dead Sea solar clone onto the coast.',
+    evidence: Object.freeze([
+      Object.freeze({ label: 'Wikipedia: Huntington Beach, California', url: 'https://en.wikipedia.org/wiki/Huntington_Beach,_California' }),
+      Object.freeze({ label: 'OpenStreetMap: Huntington Beach / Long Beach coast', url: 'https://www.openstreetmap.org/#map=11/33.655/-118.005' }),
+      Object.freeze({ label: 'CA State Water Board desal brine guidance: Huntington Beach long-term mean salinity ~33.53 ppt', url: 'https://www.waterboards.ca.gov/water_issues/programs/ocean/desalination/docs/dpr051812.pdf' }),
+      Object.freeze({ label: 'Stringfellow & Dobson 2021 Energies Table 2: Salton Sea process-brine majors (DOI)', url: 'https://doi.org/10.3390/en14206805' }),
+      Object.freeze({ label: 'Millero et al. 2008 DSR I: seawater reference composition at S=35 (DOI)', url: 'https://doi.org/10.1016/j.dsr.2007.10.001' }),
+    ]),
+    rightsHints: Object.freeze({
+      gridImport: Object.freeze({ kind: 'grid', status: 'unverified', authorize: false, note: 'SCE coastal load is not an interconnection agreement' }),
+      freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'No freshwater right verified for this screening plant' }),
+      seawaterIntake: Object.freeze({ kind: 'intake', status: 'assumed', authorize: true, note: 'Assumed Pacific seawater access for screening; no Huntington/Long Beach intake permit on file' }),
+      seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'No Pacific outfall permit verified' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Salton Sea process-brine assay is not a mineral concession; not Huntington seawater' }),
+    }),
+  }),
+  Object.freeze({
+    id: 'mexico-guerrero-negro',
+    assayId: 'baja-pacific-seawater',
+    brineAssayId: 'guerrero-negro-brine',
+    name: 'Guerrero Negro ESSA saltworks, Baja California Sur, Mexico',
+    region: 'Mexico / Baja',
+    latitude: 27.97,
+    longitude: -114.05,
+    kind: 'industrial-coast',
+    notes: 'Exportadora de Sal (ESSA) Guerrero Negro solar saltworks on the Baja Pacific / Ojo de Liebre approach. Location preset only — not an ESSA lease, desal permit, or CFE connection. Baja Pacific seawater assay is Millero open-coast screening (S=35), not the modestly hypersaline Ojo de Liebre lagoon feed and not an ESSA intake sample. Dillon et al. 2013 Table 1 Pond 9 evaporative process-brine assay is ESSA saltern screening chemistry, not a crystallizer Pond 11/12 sample and not a mineral concession. Frozen PVGIS-ERA5 on select (per-site series) — not a Salton or Dead Sea solar clone.',
+    evidence: Object.freeze([
+      Object.freeze({ label: 'Wikipedia: Guerrero Negro', url: 'https://en.wikipedia.org/wiki/Guerrero_Negro' }),
+      Object.freeze({ label: 'OpenStreetMap: Guerrero Negro / ESSA saltworks', url: 'https://www.openstreetmap.org/#map=11/27.97/-114.05' }),
+      Object.freeze({ label: 'Dillon et al. 2013 Front. Microbiol. Table 1: ESSA Pond 9 majors (DOI)', url: 'https://doi.org/10.3389/fmicb.2013.00399' }),
+      Object.freeze({ label: 'Millero et al. 2008 DSR I: seawater reference composition at S=35 (DOI)', url: 'https://doi.org/10.1016/j.dsr.2007.10.001' }),
+    ]),
+    rightsHints: Object.freeze({
+      gridImport: Object.freeze({ kind: 'grid', status: 'unverified', authorize: false, note: 'Baja coastal load is not an interconnection agreement' }),
+      freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'No freshwater right verified on this arid coast' }),
+      seawaterIntake: Object.freeze({ kind: 'intake', status: 'assumed', authorize: true, note: 'Assumed Pacific seawater access for screening; no Guerrero Negro / ESSA intake permit on file' }),
+      seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'No Pacific / lagoon outfall permit verified' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature ESSA Pond 9 process-brine assay is not a mineral concession; not Baja Pacific seawater' }),
+    }),
+  }),
+
 
 ]));

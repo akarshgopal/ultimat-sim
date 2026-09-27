@@ -21,6 +21,15 @@
     'bolivia-uyuni': require('./pvgis-uyuni.json'),
     'china-qaidam': require('./pvgis-qaidam.json'),
     'ethiopia-danakil': require('./pvgis-danakil.json'),
+    'argentina-hombre-muerto': require('./pvgis-hombre-muerto.json'),
+    'chile-salar-de-maricunga': require('./pvgis-maricunga.json'),
+    'us-clayton-valley': require('./pvgis-clayton-valley.json'),
+    'china-zabuye': require('./pvgis-zabuye.json'),
+    'argentina-puerto-madryn': require('./pvgis-puerto-madryn.json'),
+    'israel-ashkelon': require('./pvgis-ashkelon.json'),
+    'djibouti-doraleh': require('./pvgis-doraleh.json'),
+    'us-huntington-beach': require('./pvgis-huntington-beach.json'),
+    'mexico-guerrero-negro': require('./pvgis-guerrero-negro.json'),
     'chile-salar-de-atacama': require('./pvgis-salar-de-atacama.json'),
     'chile-mejillones': require('./pvgis-mejillones.json'),
     'mejillones-pvgis-2026-09-14': require('./pvgis-mejillones.json'),
@@ -49,6 +58,15 @@
     'bolivia-uyuni': root.PvgisUyuni,
     'china-qaidam': root.PvgisQaidam,
     'ethiopia-danakil': root.PvgisDanakil,
+    'argentina-hombre-muerto': root.PvgisHombreMuerto,
+    'chile-salar-de-maricunga': root.PvgisMaricunga,
+    'us-clayton-valley': root.PvgisClaytonValley,
+    'china-zabuye': root.PvgisZabuye,
+    'argentina-puerto-madryn': root.PvgisPuertoMadryn,
+    'israel-ashkelon': root.PvgisAshkelon,
+    'djibouti-doraleh': root.PvgisDoraleh,
+    'us-huntington-beach': root.PvgisHuntingtonBeach,
+    'mexico-guerrero-negro': root.PvgisGuerreroNegro,
     'chile-salar-de-atacama': root.PvgisSalarDeAtacama,
     'chile-mejillones': root.PvgisMejillones,
     'mejillones-pvgis-2026-09-14': root.PvgisMejillones,
@@ -108,18 +126,10 @@
     };
   }
 
-  // Catalog growth 2026-09: no frozen ERA5 yet (JRC TLS unavailable from CI box).
-  // These presets use latitude screening-band solar in site notes — do NOT clone
-  // Dead Sea / Atacama / Uyuni series onto distant basins.
-  const SCREENING_BAND_SITE_IDS = Object.freeze([
-    'argentina-hombre-muerto',
-    'chile-salar-de-maricunga',
-    'us-clayton-valley',
-    'china-zabuye',
-    'argentina-puerto-madryn',
-    'israel-ashkelon',
-    'djibouti-doraleh',
-  ]);
+  // Catalog polish 2026-09-27: prior screening-band 58ca0d7 sites now have per-site
+  // PVGIS-ERA5 freezes. Keep the export for callers; empty means none fall back.
+  // Still do NOT clone Dead Sea / Atacama / Uyuni series onto distant basins.
+  const SCREENING_BAND_SITE_IDS = Object.freeze([]);
 
   return {
     fromPvgis,

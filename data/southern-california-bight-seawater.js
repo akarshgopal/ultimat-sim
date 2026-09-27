@@ -1,0 +1,50 @@
+(function exposeSouthernCaliforniaBightSeawater(root, data) {
+  if (typeof module === 'object' && module.exports) module.exports = data;
+  else root.SouthernCaliforniaBightSeawater = data;
+})(globalThis, {
+  "meta": {
+    "retrieved": "2026-09-27",
+    "id": "southern-california-bight-seawater",
+    "site": {
+      "latitude": 33.655,
+      "longitude": -118.005,
+      "context": "Southern California Bight / Huntington Beach–Long Beach open-coast surface salinity ~33.5 g/kg; Millero S=35 majors scaled 33.5/35. Not an intake/discharge permit sample."
+    },
+    "quality": "Majors cited from Millero/Pilson S=35 scaled 33.5/35 for Southern California Bight long-term coastal average salinity (~33.53 ppt Huntington Beach NPDES/OCSD family; CA State Water Board desal brine discharge guidance). Not an intake/discharge permit.",
+    "notes": "Ion mass concentrations are g/kg seawater. Base S=35 g/kg Millero majors scaled by 33.5/35. HCO3 omitted. Density screening only. Not a NaCl proxy. Not a Huntington/Long Beach desal intake sample."
+  },
+  "density_kg_per_L": 1.024,
+  "salinity_g_per_kg": 33.5,
+  "ions_g_per_kg": {
+    "Cl-": 18.523585714285716,
+    "Na+": 10.318957142857144,
+    "SO4-2": 2.595771428571429,
+    "Mg+2": 1.2289714285714286,
+    "Ca+2": 0.39424714285714285,
+    "K+": 0.3819,
+    "Br-": 0.06441571428571428
+  },
+  "mol_per_kg": {
+    "Cl-": 0.5225271005440257,
+    "Na+": 0.44884997073511895,
+    "SO4-2": 0.027022396716338007,
+    "Mg+2": 0.0505645516795486,
+    "Ca+2": 0.009836996428393203,
+    "K+": 0.009767688109201679,
+    "Br-": 0.0008061638251616226
+  },
+  "evidence": [
+    {
+      "label": "Millero et al. 2008, Deep-Sea Research I: reference composition of seawater at S=35 (DOI)",
+      "url": "https://doi.org/10.1016/j.dsr.2007.10.001"
+    },
+    {
+      "label": "CA State Water Board / SCCWRP desal brine discharge guidance: Huntington Beach long-term mean salinity ~33.53 ppt (NPDES/OCSD family)",
+      "url": "https://www.waterboards.ca.gov/water_issues/programs/ocean/desalination/docs/dpr051812.pdf"
+    },
+    {
+      "label": "NOAA NCEI World Ocean Atlas 2023 Volume 2: Salinity (DOI)",
+      "url": "https://doi.org/10.25923/70qt-9574"
+    }
+  ]
+});

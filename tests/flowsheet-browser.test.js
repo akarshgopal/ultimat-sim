@@ -45,7 +45,10 @@ test('root chrome exposes four tabs and keeps Network copy without Empire', () =
   assert.ok(html.indexOf('data/tea-screening.js') < html.indexOf('cases/abundance.js'));
   assert.ok(html.indexOf('data/tea-screening.js') < html.indexOf('cases/sabatier.js'));
   assert.ok(html.indexOf('vendor/LercDecode.js') < html.indexOf('js/flowsheet-app.js'));
-  assert.match(html, /engine\/site-search\.js/);
-  assert.ok(html.indexOf('cases/network.js') < html.indexOf('engine/site-search.js'));
-  assert.ok(html.indexOf('engine/site-search.js') < html.indexOf('js/flowsheet-app.js'));
+  assert.doesNotMatch(html, /engine\/site-search\.js/);
+  assert.doesNotMatch(html, /engine\/sensitivity\.js/);
+  assert.match(html, /engine\/material-power-breakeven\.js/);
+  assert.ok(html.indexOf('engine/economics.js') < html.indexOf('engine/material-power-breakeven.js'));
+  assert.ok(html.indexOf('engine/material-power-breakeven.js') < html.indexOf('js/flowsheet-app.js'));
+  assert.ok(html.indexOf('cases/network.js') < html.indexOf('js/flowsheet-app.js'));
 });

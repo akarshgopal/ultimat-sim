@@ -1,9 +1,11 @@
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
+const breakeven = require('../engine/material-power-breakeven.js');
 const script = path.join(__dirname, '..', 'scripts', 'material-power-breakeven.mjs');
 
 function loadScript() {
@@ -63,6 +65,40 @@ function twoProductSolved() {
     streams: [],
   };
 }
+
+test('extracted helpers screen a two-product plant without site-search', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'engine/material-power-breakeven.js'), 'utf8');
+  assert.doesNotMatch(source, /require\([^)]*site-search/);
+  assert.match(source, /require\('\.\/economics'\)/);
+  assert.ok(breakeven.MATERIALS.some(item => item.id === 'lithium' && item.sinks.includes('lithium')));
+  assert.ok(breakeven.MATERIALS.some(item => item.id === 'salt' && item.sinks.includes('recovered-salt')));
+
+  const definition = twoProductPlant();
+  const solved = twoProductSolved();
+  const shared = breakeven.breakEvenForMaterial(definition, solved, 'lithium', 'shared');
+  assert.equal(shared.status, 'flip');
+  assert.equal(shared.material, 'lithium');
+  assert.equal(shared.mode, 'shared');
+  assert.ok(Number.isFinite(shared.breakEven));
+  assert.ok(shared.breakEven > 0.4 && shared.breakEven < 1);
+  const sharedCopy = breakeven.formatBreakEven(shared);
+  assert.match(sharedCopy, /screening/i);
+  assert.match(sharedCopy, /not a PPA/i);
+  assert.match(sharedCopy, /\$0\.\d+\/kWh/);
+  assert.match(sharedCopy, /no re-size/i);
+
+  const solo = breakeven.breakEvenForMaterial(definition, solved, 'lithium', 'solo');
+  assert.equal(solo.status, 'no-flip-always-negative');
+  assert.equal(solo.breakEven, null);
+  assert.match(solo.reason, /^Solo-sale/);
+  assert.match(breakeven.formatBreakEven(solo), /Solo-sale/);
+  assert.match(breakeven.formatBreakEven(solo), /screening/i);
+  assert.match(breakeven.formatBreakEven(solo), /not a PPA/i);
+
+  assert.equal(definition.graph.nodes.find(node => node.id === 'power').economics.installedCapex, 1000000);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'bromine').economics.unitPrice, 5);
+  assert.throws(() => breakeven.normalizeMode('both'), /solo or shared/);
+});
 
 test('--help documents solo and shared purchased-power modes', () => {
   const ran = spawnSync(process.execPath, [script, '--help'], { encoding: 'utf8' });

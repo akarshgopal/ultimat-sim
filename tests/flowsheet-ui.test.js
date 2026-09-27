@@ -42,7 +42,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -265,6 +265,8 @@ test('Overview hero shows screening notice and cited solar yield without screeni
   const land = context.__elements.get('overviewLand').innerHTML;
   assert.match(honesty, /not bankable/i);
   assert.match(honesty, /screening/i);
+  assert.equal(context.__elements.get('overviewOfftake').hidden, true);
+  assert.equal(context.__elements.get('economicsOfftake').textContent, '');
   assert.doesNotMatch(cash, /quality-chip quality-screening/);
   assert.doesNotMatch(cash, /~|±|\+\/-/);
   assert.match(cash, /\$/);
@@ -295,14 +297,16 @@ test('size product menus list methanol and ammonia', () => {
   assert.match(html, /id="sizeProduct"/);
   assert.match(html, /value="methanol"/);
   assert.match(html, /value="ammonia"/);
-  assert.match(html, /id="processSizeProduct"/);
-  assert.match(html, /id="processSizeForCashflow"/);
+  assert.doesNotMatch(html, /id="processSizeProduct"/);
+  assert.doesNotMatch(html, /id="processSizeForCashflow"/);
+  assert.doesNotMatch(html, /id="processDemoMenu"/);
+  assert.doesNotMatch(html, /id="processSizeMenu"/);
 });
 
 test('Zabuye brine hub loads the cited assay, frozen ERA5, and capital-inclusive cash', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /id="loadZabuyeHub"/);
-  assert.match(html, /data-demo="zabuye-hub"/);
+  assert.match(html, /data-demo-id="zabuye-hub"/);
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
   assert.equal(typeof app.loadZabuyeHub, 'function');
@@ -319,9 +323,53 @@ test('Zabuye brine hub loads the cited assay, frozen ERA5, and capital-inclusive
   assert.equal(sized.mode, 'positive-cashflow');
   assert.ok(app.economics.annualNetCash > 0);
   assert.match(context.__elements.get('overviewSiteName').textContent, /Zabuye/);
+  assert.match(context.__elements.get('overviewOfftake').textContent, /China\/Asia/);
+  assert.match(context.__elements.get('overviewOfftake').textContent, /not a plant contract/i);
+  assert.match(context.__elements.get('overviewOfftake').textContent, /ME-Levant/i);
+  assert.equal(context.__elements.get('overviewOfftake').hidden, false);
+  assert.match(context.__elements.get('economicsOfftake').textContent, /screening China\/Asia offtake table/i);
+  assert.equal(context.__elements.get('economicsOfftake').hidden, false);
   assert.match(context.__elements.get('overviewCashflow').innerHTML, /\$/);
   assert.match(context.__elements.get('overviewLand').innerHTML, /ha|m²/);
   assert.match(context.__elements.get('overviewYield').innerHTML, /PVGIS|re\.jrc/);
+});
+
+test('Economics screens purchased-power break-even on the frozen plant without site-search', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /id="screenPowerBreakeven"/);
+  assert.match(html, /id="powerBreakevenMode"/);
+  assert.match(html, /value="solo"/);
+  assert.match(html, /value="shared"/);
+  assert.match(html, /id="powerBreakevenMaterial"/);
+  assert.match(html, /engine\/material-power-breakeven\.js/);
+  assert.ok(html.indexOf('engine/economics.js') < html.indexOf('engine/material-power-breakeven.js'));
+  assert.ok(html.indexOf('engine/material-power-breakeven.js') < html.indexOf('js/flowsheet-app.js'));
+  assert.doesNotMatch(html, /engine\/site-search\.js/);
+  assert.doesNotMatch(html, /engine\/sensitivity\.js/);
+
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  assert.equal(typeof app.screenPowerBreakEven, 'function');
+  assert.equal(typeof context.MaterialPowerBreakeven.breakEvenForMaterial, 'function');
+  const select = context.__elements.get('powerBreakevenMaterial');
+  assert.match(select.innerHTML, /value="lithium"/);
+  assert.match(select.innerHTML, /value="potash"/);
+  assert.match(select.innerHTML, /value="bromine"/);
+
+  app.loadMethaneRecycle();
+  const screened = app.screenPowerBreakEven();
+  assert.ok(screened);
+  assert.ok(['flip', 'no-flip-always-negative', 'no-flip-always-positive'].includes(screened.status));
+  const text = context.__elements.get('powerBreakevenResult').textContent;
+  assert.match(text, /screening/i);
+  assert.match(text, /not a PPA/i);
+  assert.equal(context.__elements.get('powerBreakevenResult').hidden, false);
+
+  context.__elements.get('powerBreakevenMode').value = 'shared';
+  const shared = app.screenPowerBreakEven();
+  assert.equal(shared.mode, 'shared');
+  assert.match(context.__elements.get('powerBreakevenResult').textContent, /shared/i);
+  assert.match(context.__elements.get('powerBreakevenResult').textContent, /screening/i);
 });
 
 test('positive-cashflow status reports heat covered when present', () => {
@@ -348,4 +396,73 @@ test('coastal methane sizeToProduct H2 produces electrolyzer activity and never 
   assert.doesNotMatch(metrics, /Limited by<\/dt><dd>Nothing/);
   const electricity = app.graph.nodes.find(node => node.id === 'electricity');
   assert.ok(electricity.rate > 0);
+});
+
+test('apply location uses frozen or screening solar when live PVGIS fetch fails', async () => {
+  const context = loadApp();
+  context.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  context.PvgisSites = require('../data/pvgis-sites');
+  const app = context.__FLOWSHEET_APP__;
+  const statusText = () => context.document.getElementById('siteFetchStatus').textContent;
+  const setCoords = (lat, lon) => {
+    context.__elements.get('siteLatitude').value = String(lat);
+    context.__elements.get('siteLongitude').value = String(lon);
+    context.__elements.get('siteSolarKWp').value = '10';
+    context.__elements.get('siteBatteryKWh').value = '0';
+  };
+
+  setCoords(36.834, -2.463);
+  await app.applyCoordinates();
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError/);
+  assert.match(statusText(), /Live PVGIS blocked \(CORS\/network\)/);
+  assert.match(statusText(), /frozen PVGIS-SARAH3 for Almería \(retrieved 2026-09-05\)/);
+  assert.ok(app.site.solar.typicalMonths);
+  assert.ok(app.site.resources.electricity.stream.kWh > 0);
+
+  setCoords(22.737, 69.71);
+  await app.applyCoordinates();
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError/);
+  assert.match(statusText(), /frozen PVGIS-ERA5 for Mundra/);
+  assert.match(statusText(), /retrieved 2026-09-21/);
+  assert.equal(app.site.solar, null);
+  assert.equal(app.site.meteo.quality, 'cited');
+  assert.equal(app.site.meteo.retrieved, '2026-09-21');
+  assert.match(app.site.meteo.source, /PVGIS-ERA5/);
+  assert.equal(app.site.meteo.monthlyPVKWhPerKWp.length, 13);
+  assert.ok(app.site.dailyPVKWhPerKWp > 0);
+  assert.ok(Math.abs(app.site.resources.electricity.stream.kWh - app.site.dailyPVKWhPerKWp * 10) < 1e-6);
+
+  context.fetch = async () => ({ ok: false, status: 503 });
+  setCoords(59.9, 10.8);
+  await app.applyCoordinates();
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError|PVGIS 503/);
+  assert.match(statusText(), /screening-band ~\d+\.\d kWh\/kWp·day/);
+  assert.match(statusText(), /not a cited hourly series/);
+  assert.match(statusText(), /same-origin proxy/);
+  assert.equal(app.site.meteo.quality, 'screening');
+  assert.equal(app.site.meteo.source, 'pvScreeningBand');
+  assert.equal(app.site.solar.annualTypical.length, 24);
+  const band = context.FlowsheetMapSite.pvScreeningBand(59.9, 10.8);
+  const sum = app.site.solar.annualTypical.reduce((total, value) => total + value, 0);
+  assert.ok(Math.abs(sum - band.typicalKWhPerKWpDay) < 1e-9);
+});
+
+test('loading a demo or clearing the factory drops a sticky cashflow banner', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  const banner = context.__elements.get('cashflowResult');
+  app.loadAbundanceHub();
+  app.sizeForPositiveCashflow({ scales: [1], rates: [0] });
+  assert.equal(banner.hidden, false);
+  assert.match(banner.innerHTML, /Net cash/);
+  app.loadCoastalMethane(0);
+  assert.equal(banner.hidden, true);
+  assert.equal(banner.innerHTML, '');
+  app.loadAbundanceHub();
+  app.sizeForPositiveCashflow({ scales: [1], rates: [0] });
+  assert.equal(banner.hidden, false);
+  app.clearFactory();
+  assert.equal(banner.hidden, true);
+  assert.equal(banner.innerHTML, '');
+  assert.equal(app.graph.nodes.length, 0);
 });

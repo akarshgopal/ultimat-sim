@@ -151,6 +151,14 @@ test('Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, the
   const solved = solveOperation(definition);
   assert.equal(definition.meta.assayId, 'zabuye-lithium-brine');
   assert.equal(definition.site.id, 'china-zabuye');
+  assert.equal(definition.site.region, 'China / Tibet');
+  assert.equal(definition.meta.demandRegionId, 'asia-china');
+  const zabuyeLithium = definition.graph.nodes.find(node => node.id === 'lithium');
+  assert.equal(zabuyeLithium.economics.demandRegionId, 'asia-china');
+  assert.equal(zabuyeLithium.economics.annualDemandLimit, 2e7);
+  assert.equal(zabuyeLithium.economics.inherit, undefined);
+  assert.match(definition.site.notes, /China\/Asia/);
+  assert.doesNotMatch(definition.site.notes, /default TEA/);
   assert.equal(definition.site.name, 'Lake Zabuye (Zhabuye), Tibet, China');
   assert.equal(definition.site.latitude, 31.35);
   assert.equal(definition.site.longitude, 84.05);

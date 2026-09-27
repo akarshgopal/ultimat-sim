@@ -36,6 +36,6 @@
 ## Tests / commit
 
 - `node --test`: **188 pass / 0 fail**
-- Commit SHA: PLACEHOLDER
+- Commit SHA: `6f251bb` (`6f251bb68e273451d1e967cb043726fefc964049`)
 - Branch: `feat/catalog-polish` (base `origin/main` @ 58ca0d7)
 - Do **not** push `origin/main`

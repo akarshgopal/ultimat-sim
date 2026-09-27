@@ -473,7 +473,7 @@
     latitude: 38.15,
     longitude: 90.87,
     kind: 'brine-hub',
-    notes: 'Kunteyi/Dayantan intercrystalline brine (northern Qaidam Basin, Qinghai). Location preset only — Ren et al. 2023 Table 1 sample 5 is screening chemistry, not a Qinghai Salt Lake or Qinghai Lithium concession sample. East Taijinar Li-rich table brine is a different Qaidam lake, not this assay. Screening offtake inherits the default TEA table (no Asia demand region). Live PVGIS on select.',
+    notes: 'Kunteyi/Dayantan intercrystalline brine (northern Qaidam Basin, Qinghai). Location preset only — Ren et al. 2023 Table 1 sample 5 is screening chemistry, not a Qinghai Salt Lake or Qinghai Lithium concession sample. East Taijinar Li-rich table brine is a different Qaidam lake, not this assay. Screening offtake uses the China/Asia USGS table (not a plant contract and not a silent ME-Levant inherit). Live PVGIS on select.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Ren et al. 2023, Frontiers in Environmental Science Table 1 sample 5: Kunteyi intercrystalline brine majors (DOI)', url: 'https://doi.org/10.3389/fenvs.2023.1106181' }),
       Object.freeze({ label: 'Wikipedia: Qaidam Basin (context, not a concession)', url: 'https://en.wikipedia.org/wiki/Qaidam_Basin' }),
@@ -638,7 +638,7 @@
     latitude: 31.35,
     longitude: 84.05,
     kind: 'brine-hub',
-    notes: 'Lake Zabuye / Zhabuye carbonate-type salt lake (Tibetan Plateau). Location preset only — Murphy & Haji 2022 Table 1 majors are screening chemistry, not a Tibet Mineral/Zabuye concession sample. Screening offtake inherits the default TEA table (no Asia demand region). Not Qaidam/Kunteyi intercrystalline chemistry. PVGIS: frozen PVGIS-ERA5 PVcalc (2026-09-27, E_y 2070.67 kWh/kWp at 31.35, 84.05; data/pvgis-zabuye.json) — not a screening-band yield and not a Qaidam or Dead Sea solar clone.',
+    notes: 'Lake Zabuye / Zhabuye carbonate-type salt lake (Tibetan Plateau). Location preset only — Murphy & Haji 2022 Table 1 majors are screening chemistry, not a Tibet Mineral/Zabuye concession sample. Screening offtake uses the China/Asia USGS table (not a plant contract and not a silent ME-Levant inherit). Not Qaidam/Kunteyi intercrystalline chemistry. PVGIS: frozen PVGIS-ERA5 PVcalc (2026-09-27, E_y 2070.67 kWh/kWp at 31.35, 84.05; data/pvgis-zabuye.json) — not a screening-band yield and not a Qaidam or Dead Sea solar clone.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Murphy & Haji 2022, Frontiers in Chemical Engineering Table 1: Lake Zabuye brine majors (DOI)', url: 'https://doi.org/10.3389/fceng.2022.1008680' }),
       Object.freeze({ label: 'Wikipedia: Zabuye Lake (context, not a concession)', url: 'https://en.wikipedia.org/wiki/Zabuye_Lake' }),

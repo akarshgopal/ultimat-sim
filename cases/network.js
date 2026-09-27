@@ -143,6 +143,7 @@ function siteZabuyeAbundance() {
   definition.site = {
     id: 'china-zabuye',
     name: 'Lake Zabuye (Zhabuye), Tibet, China',
+    region: 'China / Tibet',
     latitude: 31.35,
     longitude: 84.05,
     solarKWp,
@@ -219,7 +220,7 @@ function siteZabuyeAbundance() {
       { label: 'Murphy & Haji 2022 Table 1: Lake Zabuye carbonate brine majors', url: ZABUYE_ASSAY_URL },
       { label: 'USGS salt statistics (purchased-salt context)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
     ],
-    notes: 'Representative-day Zabuye brine hub. Solar is sized to the process load at frozen PVGIS-ERA5 E_y 2070.67 kWh/kWp (2070.67 / 365). Brine composition is the Murphy & Haji 2022 Table 1 carbonate assay (data/zabuye-lithium-brine.json); a literature assay is not a mineral concession. Brine concession is an explicit screening assumption so sizeForPositiveCashflow can run the capital-inclusive gate. Screening offtake uses the default TEA table (no Asia demand region). Screening, not bankable. Freshwater and purchased salt are explicit assumptions. Grid and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
+    notes: 'Representative-day Zabuye brine hub. Solar is sized to the process load at frozen PVGIS-ERA5 E_y 2070.67 kWh/kWp (2070.67 / 365). Brine composition is the Murphy & Haji 2022 Table 1 carbonate assay (data/zabuye-lithium-brine.json); a literature assay is not a mineral concession. Brine concession is an explicit screening assumption so sizeForPositiveCashflow can run the capital-inclusive gate. Screening offtake uses the China/Asia USGS table (not a plant contract and not a silent ME-Levant inherit). Screening, not bankable. Freshwater and purchased salt are explicit assumptions. Grid and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
   };
   return definition;
 }

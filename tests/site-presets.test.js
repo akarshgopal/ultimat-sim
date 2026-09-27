@@ -182,7 +182,11 @@ test('catalog basins wire Uyuni, Qaidam, Danakil, and Searles as inland brine hu
   assert.equal(qaidam.assayId, undefined);
   assert.ok(qaidam.evidence.some(item => /doi\.org\/10\.3389\/fenvs\.2023\.1106181/.test(item.url)));
   assert.match(qaidam.notes, /not a .*concession/i);
-  assert.match(qaidam.notes, /default TEA/i);
+  assert.match(qaidam.notes, /China\/Asia/);
+  assert.match(qaidam.notes, /not a plant contract/i);
+  assert.match(qaidam.notes, /not a silent ME-Levant inherit/i);
+  assert.doesNotMatch(qaidam.notes, /default TEA/i);
+  assert.doesNotMatch(qaidam.notes, /no Asia demand region/i);
 
   const danakil = byId.get('ethiopia-danakil');
   assert.equal(danakil.kind, 'brine-hub');
@@ -243,6 +247,9 @@ test('catalog growth wires Hombre Muerto, Maricunga, Clayton Valley, Zabuye hubs
   const zabuye = byId.get('china-zabuye');
   assert.equal(zabuye.kind, 'brine-hub');
   assert.equal(zabuye.region, 'China / Tibet');
+  assert.match(zabuye.notes, /China\/Asia/);
+  assert.match(zabuye.notes, /not a silent ME-Levant inherit/i);
+  assert.doesNotMatch(zabuye.notes, /default TEA/i);
   assert.equal(zabuye.brineAssayId, 'zabuye-lithium-brine');
   assert.match(zabuye.notes, /Not Qaidam/i);
   assert.match(zabuye.notes, /frozen PVGIS-ERA5/i);

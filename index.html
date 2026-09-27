@@ -37,6 +37,7 @@
             <span class="eyebrow" id="overviewDemoChip" hidden></span>
             <h2 id="overviewSiteName">Choose a site</h2>
             <p class="overview-honesty" id="overviewHonesty">Load a demo or build on Process.</p>
+            <p class="overview-honesty offtake-chip" id="overviewOfftake" hidden></p>
           </div>
           <div class="overview-hero-metrics" id="overviewCashflow" aria-label="Cashflow summary">
             <div class="hero-metric"><span>Net cash / year</span><strong>—</strong></div>
@@ -272,8 +273,36 @@
           </div>
           <p class="status-meta" id="economicsStatus">Complete the graph to calculate viability.</p>
           <p class="economics-banner" id="economicsBanner" hidden></p>
+          <p class="economics-banner" id="economicsOfftake" hidden></p>
           <label class="economics-ack" id="economicsAckLabel"><input id="economicsAck" type="checkbox"> I understand these are screening figures, not bankable</label>
           <dl class="strip-metrics" id="economicsMetrics"></dl>
+          <section class="power-breakeven" aria-label="Purchased-power break-even">
+            <h4>Screen power break-even</h4>
+            <p class="status-meta">Screening $/kWh where this frozen plant’s annual net cash (R − OPEX − annualized CAPEX) crosses zero if PV CAPEX is replaced by purchased power. Solo keeps one material’s sale price; shared keeps co-products. Not a PPA. Does not re-size the plant.</p>
+            <div class="power-breakeven-controls">
+              <label>Mode
+                <select id="powerBreakevenMode">
+                  <option value="solo">solo</option>
+                  <option value="shared">shared</option>
+                </select>
+              </label>
+              <label>Material
+                <select id="powerBreakevenMaterial">
+                  <option value="lithium">lithium</option>
+                  <option value="bromine">bromine</option>
+                  <option value="potash">potash</option>
+                  <option value="salt">salt</option>
+                  <option value="gypsum">gypsum</option>
+                  <option value="magnesium">magnesium</option>
+                  <option value="caustic">caustic</option>
+                  <option value="ammonia">ammonia</option>
+                  <option value="oxygen">oxygen</option>
+                </select>
+              </label>
+              <button type="button" id="screenPowerBreakeven">Screen power break-even</button>
+            </div>
+            <p class="status-meta power-breakeven-result" id="powerBreakevenResult" hidden></p>
+          </section>
         </section>
 
         <section class="tool-panel network-panel is-empty" id="networkPanel">
@@ -324,6 +353,7 @@
   <script src="engine/heat.js"></script>
   <script src="engine/solve.js"></script>
   <script src="engine/economics.js"></script>
+  <script src="engine/material-power-breakeven.js"></script>
   <script src="engine/footprint.js"></script>
   <script src="engine/size.js"></script>
   <script src="engine/network.js"></script>

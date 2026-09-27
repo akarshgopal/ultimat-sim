@@ -1529,6 +1529,45 @@ label output + .quality-chip {
   color: var(--warning);
   font-size: 0.78rem;
 }
+.offtake-chip {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(199, 154, 72, 0.45);
+  border-radius: var(--radius);
+  background: rgba(199, 154, 72, 0.12);
+  color: var(--warning);
+}
+.offtake-chip[hidden] { display: none !important; }
+.power-breakeven {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.power-breakeven h4 {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.power-breakeven-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  margin: 8px 0;
+}
+.power-breakeven-controls label {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin: 0;
+}
+.power-breakeven-controls select {
+  display: block;
+  margin-top: 2px;
+  min-width: 8rem;
+}
+.power-breakeven-result { margin-top: 4px; }
 .economics-ack {
   display: flex;
   align-items: flex-start;

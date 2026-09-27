@@ -69,6 +69,7 @@ const DEMAND_REGION_LABELS = {
   india: 'India screening offtake. Mineral ceilings use USGS MCS India production/trade proxies. Fuels/chemicals without a cited India series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
   texas: 'Texas / US Gulf screening offtake. US West / California (Imperial Valley geothermal) inherits this US table. Mineral ceilings use USGS MCS US production/trade proxies (Arkansas Br, US salt/gypsum; US Li withheld). Fuels/chemicals without a cited US series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
   'southern-africa': 'Southern Africa screening offtake. Mineral ceilings use USGS MCS non-producer / Namibia-removed Li proxies, not Dead Sea tables. Fuels/chemicals without a cited regional series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  'asia-china': 'China / Asia screening offtake (Tibet / Zabuye and Qinghai / Qaidam). Mineral ceilings use USGS MCS China production proxies, not Dead Sea tables. Fuels/chemicals without a cited China series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract and not a silent ME-Levant inherit.',
   default: 'Default screening offtake for unmapped site.region. Copies Dead Sea / Middle East tables with inherit:me-levant on every row. Not a plant offtake contract.',
 };
 const DEMAND_REGION = DEMAND_REGION_LABELS[DEFAULT_DEMAND_REGION_ID];
@@ -81,7 +82,7 @@ const REGION_STRING_TO_ID = {
   'Arabian Sea': 'me-levant',
   'Atacama/Chile': 'chile-atacama',
   'Bolivia / Uyuni': 'chile-atacama',
-  'China / Qaidam': 'default',
+  'China / Qaidam': 'asia-china',
   Australia: 'australia',
   India: 'india',
   'Texas/US Gulf': 'texas',
@@ -90,7 +91,7 @@ const REGION_STRING_TO_ID = {
   'US West / Nevada': 'texas',
   'Argentina / Puna': 'chile-atacama',
   'Argentina / Patagonia': 'chile-atacama',
-  'China / Tibet': 'default',
+  'China / Tibet': 'asia-china',
   'Mexico / Baja': 'default',
   'North Africa': 'default',
   'Southern Africa': 'southern-africa',
@@ -423,6 +424,7 @@ const EUROPE_INHERIT_NOTE = 'Inherited me-levant screening offtake for Europe fu
 const INDIA_INHERIT_NOTE = 'Inherited me-levant screening offtake for India fuels/chemicals without a cited India mineral series. Not a plant contract.';
 const TEXAS_INHERIT_NOTE = 'Inherited me-levant screening offtake for Texas / US Gulf fuels/chemicals without a cited US mineral series. Not a plant contract.';
 const SOUTHERN_AFRICA_INHERIT_NOTE = 'Inherited me-levant screening offtake for Southern Africa fuels/chemicals without a cited regional mineral series. Not a plant contract.';
+const ASIA_CHINA_INHERIT_NOTE = 'Inherited me-levant screening offtake for China/Asia fuels/chemicals without a cited China mineral series. Not a plant contract.';
 
 const demandChile = inheritDemand(demand, CHILE_INHERIT_NOTE, {
   lithium: row(
@@ -632,6 +634,39 @@ const demandSouthernAfrica = inheritDemand(demand, SOUTHERN_AFRICA_INHERIT_NOTE,
   ),
 });
 
+const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
+  lithium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS China Li production order',
+    'Conservative 20,000 t/y LCE-proxy ceiling, below USGS MCS 2026 China mine production 2025e ~62,000 t lithium content (2024 ~41,400 t). China is a major producer (mineral and brine). National supply-side — not a Zabuye or Qaidam offtake contract and not a LiCl quote.',
+    [{ label: 'USGS MCS 2026 lithium — China mine production 2025e ~62,000 t Li content (2024 ~41,400 t); not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    4e7, 'kg/year', 'screening', 'USGS MCS China bromine production',
+    'Conservative 40,000 t/y regional ceiling, below USGS MCS 2026 China bromine 2025e ~90,000 t (2024 ~100,000 t). China is a listed producer. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — China production 2025e ~90,000 t (2024 ~100,000 t); not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    3e9, 'kg/year', 'screening', 'USGS MCS China potash production',
+    'Conservative 3 Mt/y regional ceiling, below USGS MCS 2026 China potash 2025e ~6.3 Mt K₂O. National production (Qinghai is a major district) is not a Qaidam plant offtake contract.',
+    [{ label: 'USGS MCS 2026 potash — China production 2025e ~6.3 Mt K₂O; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    1e10, 'kg/year', 'screening', 'USGS MCS China salt production',
+    'Conservative 10 Mt/y regional industrial ceiling, below USGS MCS 2026 China salt 2025e ~56 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — China production 2025e ~56 Mt; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS China gypsum production',
+    'Conservative 2 Mt/y regional construction ceiling, below USGS MCS 2026 China gypsum 2025e ~12 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — China production 2025e ~12 Mt; not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS China magnesite; brine compound',
+    'Conservative 100 kt/y brine-Mg-compound ceiling, not Mg-metal and not magnesite offtake. USGS MCS 2026 China magnesite 2025e ~12.7 Mt gross. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — China magnesite 2025e ~12.7 Mt gross; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
 const demandByRegion = {
   'me-levant': demand,
   gulf: demandGulf,
@@ -641,6 +676,7 @@ const demandByRegion = {
   india: demandIndia,
   texas: demandTexas,
   'southern-africa': demandSouthernAfrica,
+  'asia-china': demandAsiaChina,
   default: demandDefault,
 };
 const DEMAND_REGIONS = demandByRegion;
@@ -693,6 +729,11 @@ const powerByRegion = {
   'southern-africa': row(
     0.09, '$/kWh', 'screening', 'IEA Electricity family + Eskom/NERSA order',
     'Southern Africa industrial power screening overlay ~$90/MWh (above the global $30–50/MWh mid). IEA Electricity family does not publish a South Africa energy-intensive point on the EU/US/India chart; Eskom/NERSA standard-tariff order sits above that mid (not Megaflex or an NPA quote). Not a plant PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+  'asia-china': row(
+    0.06, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'China industrial power screening overlay ~$60/MWh, below the Europe ~$100/MWh overlay and near or below the India ~$70/MWh marker. IEA Electricity 2026 groups India/China energy-intensive prices about 50% below the EU. Not a State Grid, Qinghai, or Tibet tariff and not a PPA.',
     IEA_ELEC_EVIDENCE
   ),
 };
@@ -750,6 +791,11 @@ const capexMultiplierByRegion = {
   'southern-africa': row(
     0.95, '×', 'screening', 'labor/construction location proxy',
     'Southern Africa screening CAPEX intensity vs US Gulf-ish baseline 1.0. T&T Cape Town/Johannesburg building costs sit below US/Europe and above India. Labor cheaper; imported kit. Screening, not a Namport/Walvis plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  'asia-china': row(
+    0.8, '×', 'screening', 'labor/construction location proxy',
+    'China screening CAPEX intensity vs US Gulf-ish baseline 1.0. Coastal and industrial labor sit below the US (T&T / ICP direction). Tibet and Qaidam remoteness offset part of that discount, so the damped process-plant factor is 0.80 — between India 0.75 and Levant 0.85. Not a Zabuye or Qinghai Salt Lake plant quote.',
     CAPEX_LOC_EVIDENCE
   ),
   // default omitted → 1

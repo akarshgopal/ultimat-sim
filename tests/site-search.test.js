@@ -395,7 +395,13 @@ test('site-search plants bind regional TEA when site.region is set', () => {
 
   const qaidamPlant = buildAbundancePlant(searchSite('china-qaidam'));
   assert.equal(qaidamPlant.meta.assayId, 'qaidam-brine');
-  assert.equal(qaidamPlant.meta.demandRegionId, 'default');
+  assert.equal(qaidamPlant.meta.demandRegionId, 'asia-china');
+  assert.equal(qaidamPlant.graph.nodes.find(node => node.id === 'lithium').economics.annualDemandLimit, 2e7);
+  assert.equal(qaidamPlant.graph.nodes.find(node => node.id === 'lithium').economics.inherit, undefined);
+  const zabuyePlant = buildAbundancePlant(searchSite('china-zabuye'));
+  assert.equal(zabuyePlant.meta.demandRegionId, 'asia-china');
+  assert.notEqual(zabuyePlant.meta.demandRegionId, 'default');
+  assert.notEqual(zabuyePlant.meta.demandRegionId, 'me-levant');
 
   const danakilPlant = buildAbundancePlant(searchSite('ethiopia-danakil'));
   assert.equal(danakilPlant.meta.assayId, 'danakil-brine');

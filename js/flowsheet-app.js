@@ -490,6 +490,7 @@
     renderEconomics();
     renderNetwork();
   });
+  document.getElementById('screenPowerBreakeven')?.addEventListener('click', screenPowerBreakEven);
   document.getElementById('captureBaseline').addEventListener('click', captureBaseline);
   document.getElementById('clearBaseline').addEventListener('click', clearBaseline);
   document.getElementById('projectLifeYears').addEventListener('input', handleProjectEconomics);
@@ -2749,7 +2750,32 @@
     }
   }
 
-  function render() { renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); renderOverview(); }
+  const ASIA_OFFTAKE_NOTE = 'Screening China/Asia offtake table — not a plant contract and not a silent ME-Levant inherit.';
+
+  function offtakeHonestyText() {
+    const tea = globalThis.TeaScreening;
+    const siteRegionId = site?.region && tea?.resolveDemandRegion ? tea.resolveDemandRegion(site.region) : null;
+    const bound = graph.nodes.find(node => node.economics?.demandRegionId)?.economics.demandRegionId || null;
+    const asiaSite = siteRegionId === 'asia-china';
+    const asiaBound = bound === 'asia-china';
+    if (!asiaSite && !asiaBound) return '';
+    if (asiaSite && bound && bound !== 'asia-china') {
+      return 'This site uses the screening China/Asia offtake table, not a silent ME-Levant inherit. The loaded plant is still bound to another table. Not a plant contract.';
+    }
+    return ASIA_OFFTAKE_NOTE;
+  }
+
+  function renderOfftakeHonesty() {
+    const text = offtakeHonestyText();
+    for (const id of ['overviewOfftake', 'economicsOfftake']) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.hidden = !text;
+      el.textContent = text;
+    }
+  }
+
+  function render() { renderOfftakeHonesty(); renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); renderOverview(); }
 
   function overviewSaleRows() {
     const productQuality = classifyQuality({ kind: 'product-cost' });
@@ -3535,6 +3561,44 @@
     return reasons;
   }
 
+  function populatePowerBreakevenMaterials() {
+    const select = document.getElementById('powerBreakevenMaterial');
+    const materials = globalThis.MaterialPowerBreakeven?.MATERIALS;
+    if (!select || !materials?.length) return;
+    const current = select.value || 'lithium';
+    select.innerHTML = materials.map(item => `<option value="${item.id}">${item.id}</option>`).join('');
+    if ('value' in select) select.value = materials.some(item => item.id === current) ? current : materials[0].id;
+  }
+
+  function screenPowerBreakEven() {
+    const out = document.getElementById('powerBreakevenResult');
+    const show = text => {
+      if (!out) return null;
+      out.hidden = false;
+      out.textContent = text;
+      return text;
+    };
+    const engine = globalThis.MaterialPowerBreakeven;
+    if (!engine?.breakEvenForMaterial || !engine.formatBreakEven) {
+      show('Power break-even engine is not loaded.');
+      return null;
+    }
+    if (!result || !graph.nodes.length) {
+      show('Complete the graph before screening purchased-power break-even. Screening only — not a PPA.');
+      return null;
+    }
+    const mode = document.getElementById('powerBreakevenMode')?.value || 'solo';
+    const materialId = document.getElementById('powerBreakevenMaterial')?.value || 'lithium';
+    try {
+      const screened = engine.breakEvenForMaterial(currentCaseDefinition(), result, materialId, mode);
+      show(engine.formatBreakEven(screened));
+      return screened;
+    } catch (error) {
+      show(error?.message || String(error));
+      return null;
+    }
+  }
+
   function renderEconomics() {
     const metrics = document.getElementById('economicsMetrics');
     const status = document.getElementById('economicsStatus');
@@ -3722,7 +3786,9 @@
     get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },
     get sizing() { return lastSizing; }, get activeTab() { return activeTab; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
+    screenPowerBreakEven,
   };
+  populatePowerBreakevenMaterials();
   populateSitePresets();
   refreshSaveOptions();
   const savedNetwork = readJson(NETWORK_KEY);

@@ -48,6 +48,7 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 - `cases/`: runnable reference plants (`coastal.js`, `methanol.js`, `abundance.js`, `sabatier.js`, `network.js`).
 - `tests/*flowsheet*.test.js`: engine, economics, and browser-global/UI regression checks. `tests/map-site.test.js` covers the map-picker geometry and layer cites.
 - `scripts/`: local server, static build, GitHub Pages deploy. `scripts/fuel-breakeven.mjs` prints screening CH₄/methanol price and CAPEX-factor break-even JSON.
+- `scripts/material-power-breakeven.mjs`: purchased-power break-even ($/kWh) on abundance heroes. `--mode solo` (default) keeps only that material's TEA sale price; `--mode shared` keeps every co-product price so the plant bill is shared. Both strip PV CAPEX and bisect `annualNetCash` (R − OPEX − annualized CAPEX). Screening, not a PPA.
 
 The root page loads only the Foundry engine, cases, and UI scripts. `style.css` retains base styles used by Foundry. `flowsheet.html` redirects old links to the root page. The archived TEA page, JavaScript, and tests have been removed; their committed history remains in Git.
 

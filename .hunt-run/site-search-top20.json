@@ -1,0 +1,2152 @@
+{
+  "ranking": [
+    {
+      "siteId": "bolivia-uyuni",
+      "siteName": "Salar de Uyuni, Potosí, Bolivia",
+      "template": "abundance",
+      "assayId": "uyuni-lithium-brine",
+      "slate": {
+        "LiCl": 157.88772088439552,
+        "MgCl2": 1171.917840557667,
+        "KCl": 678.8281831925692,
+        "CaSO4": 204.87873630027994,
+        "NaCl": 3460.336338633938
+      },
+      "annualNetCash": 2066724.4304104699,
+      "tonnes": 5673.84881956885,
+      "totalPositiveSaleTonnes": 5673.84881956885,
+      "positiveSaleCount": 5,
+      "activeSaleCount": 5,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3460.336338633938,
+          "annualRevenue": 207620.18031803626,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 1171.917840557667,
+          "annualRevenue": 93753.42724461335,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 678.8281831925692,
+          "annualRevenue": 237589.8641173992,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 204.87873630027994,
+          "annualRevenue": 4097.574726005599,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 157.88772088439552,
+          "annualRevenue": 2210428.0923815374,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.2898,
+      "softRank": 0.2898,
+      "idle": false
+    },
+    {
+      "siteId": "china-zabuye",
+      "siteName": "Lake Zabuye (Zhabuye), Tibet, China",
+      "template": "abundance",
+      "assayId": "zabuye-lithium-brine",
+      "slate": {
+        "LiCl": 162.19125772100142,
+        "KCl": 1664.4600844751137,
+        "NaCl": 3146.894896110876
+      },
+      "annualNetCash": 2368235.74721959,
+      "tonnes": 4973.546238306991,
+      "totalPositiveSaleTonnes": 4973.546238306991,
+      "positiveSaleCount": 3,
+      "activeSaleCount": 3,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3146.894896110876,
+          "annualRevenue": 188813.69376665255,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 1664.4600844751137,
+          "annualRevenue": 582561.0295662897,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 162.19125772100142,
+          "annualRevenue": 2270677.60809402,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "Latitude screening band yield (pvScreeningBand), not a local PVGIS series and not a Dead Sea clone.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.2987,
+      "softRank": 0.2987,
+      "idle": false
+    },
+    {
+      "siteId": "dead-sea-pvgis-2026-09-06",
+      "siteName": "Dead Sea industrial shore",
+      "template": "abundance",
+      "assayId": "dead-sea-brine",
+      "slate": {
+        "LiCl": 2.912646463895602,
+        "MgCl2": 2516.3419872454233,
+        "KCl": 302.03861045109375,
+        "CaSO4": 14.48397210077035,
+        "NaCl": 1558.171864090451,
+        "NaOH": 69.06270136663996,
+        "Br2": 137.96999999999997,
+        "NH3": 9.802182804365232,
+        "O2": 2.392384107965273
+      },
+      "annualNetCash": 136215.54641828447,
+      "tonnes": 4613.1763486306045,
+      "totalPositiveSaleTonnes": 4613.1763486306045,
+      "positiveSaleCount": 10,
+      "activeSaleCount": 10,
+      "products": [
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 2516.3419872454233,
+          "annualRevenue": 201307.35897963386,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "salt",
+          "tonnesPerYear": 1457.2640881476948,
+          "annualRevenue": 87435.84528886167,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 302.03861045109375,
+          "annualRevenue": 105713.51365788281,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "bromine",
+          "tonnesPerYear": 137.96999999999997,
+          "annualRevenue": 427706.99999999994,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "recovered-salt",
+          "tonnesPerYear": 100.90777594275629,
+          "annualRevenue": 6054.466556565377,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "caustic",
+          "tonnesPerYear": 69.06270136663996,
+          "annualRevenue": 31078.21561498798,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 14.48397210077035,
+          "annualRevenue": 289.679442015407,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "ammonia-product",
+          "tonnesPerYear": 9.802182804365232,
+          "annualRevenue": 4410.982261964355,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 2.912646463895602,
+          "annualRevenue": 40777.05049453843,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "oxygen",
+          "tonnesPerYear": 2.392384107965273,
+          "annualRevenue": 119.61920539826366,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "full",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "unverified site right: gridImport",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.3749,
+      "softRank": 0.3749,
+      "idle": false
+    },
+    {
+      "siteId": "us-searles-lake",
+      "siteName": "Searles Lake, Trona, California, USA",
+      "template": "abundance",
+      "assayId": "searles-lake-brine",
+      "slate": {
+        "LiCl": 6.898499999999999,
+        "KCl": 1231.51,
+        "NaCl": 3218.6504524631396,
+        "O2": 0.4821559842196596
+      },
+      "annualNetCash": 26972.27848858398,
+      "tonnes": 4457.541108447359,
+      "totalPositiveSaleTonnes": 4457.541108447359,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3218.6504524631396,
+          "annualRevenue": 193119.02714778838,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 1231.51,
+          "annualRevenue": 431028.5,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 6.898499999999999,
+          "annualRevenue": 96578.99999999999,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "oxygen",
+          "tonnesPerYear": 0.4821559842196596,
+          "annualRevenue": 24.107799210982982,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "full",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "water limited by site budget",
+        "chlor-alkali limited by water, electricity",
+        "bromine-recovery limited by chlorine, electricity",
+        "ammonia limited by hydrogen, electricity",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.5625,
+      "softRank": 0.5625,
+      "idle": false
+    },
+    {
+      "siteId": "chile-salar-de-maricunga",
+      "siteName": "Salar de Maricunga, Atacama Region, Chile",
+      "template": "abundance",
+      "assayId": "maricunga-lithium-brine",
+      "slate": {
+        "LiCl": 187.60679501336458,
+        "MgCl2": 436.48763590310637,
+        "KCl": 330.53741482430183,
+        "CaSO4": 21.454383674266083,
+        "NaCl": 3367.4687699443066
+      },
+      "annualNetCash": 2302331.2215954047,
+      "tonnes": 4343.554999359346,
+      "totalPositiveSaleTonnes": 4343.554999359346,
+      "positiveSaleCount": 5,
+      "activeSaleCount": 5,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3367.4687699443066,
+          "annualRevenue": 202048.12619665838,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 436.48763590310637,
+          "annualRevenue": 34919.01087224851,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 330.53741482430183,
+          "annualRevenue": 115688.09518850564,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 187.60679501336458,
+          "annualRevenue": 2626495.130187104,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 21.454383674266083,
+          "annualRevenue": 429.08767348532166,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "Latitude screening band yield (pvScreeningBand), not a local PVGIS series and not a Dead Sea clone.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.4738,
+      "softRank": 0.4738,
+      "idle": false
+    },
+    {
+      "siteId": "argentina-hombre-muerto",
+      "siteName": "Salar del Hombre Muerto, Catamarca/Salta, Argentina",
+      "template": "abundance",
+      "assayId": "hombre-muerto-lithium-brine",
+      "slate": {
+        "LiCl": 82.89105346430766,
+        "MgCl2": 46.290754702027854,
+        "KCl": 239.5864175973774,
+        "CaSO4": 35.853778852549006,
+        "NaCl": 3498.3620126848605
+      },
+      "annualNetCash": 782877.3178177865,
+      "tonnes": 3902.9840173011225,
+      "totalPositiveSaleTonnes": 3902.9840173011225,
+      "positiveSaleCount": 5,
+      "activeSaleCount": 5,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3498.3620126848605,
+          "annualRevenue": 209901.7207610916,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 239.5864175973774,
+          "annualRevenue": 83855.24615908207,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 82.89105346430766,
+          "annualRevenue": 1160474.748500307,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 46.290754702027854,
+          "annualRevenue": 3703.260376162228,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 35.853778852549006,
+          "annualRevenue": 717.0755770509801,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "Latitude screening band yield (pvScreeningBand), not a local PVGIS series and not a Dead Sea clone.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.313,
+      "softRank": 0.313,
+      "idle": false
+    },
+    {
+      "siteId": "argentina-puerto-madryn",
+      "siteName": "Puerto Madryn, Chubut, Argentina",
+      "template": "abundance",
+      "assayId": "hombre-muerto-lithium-brine",
+      "slate": {
+        "LiCl": 82.89105346430766,
+        "MgCl2": 46.290754702027854,
+        "KCl": 239.5864175973774,
+        "CaSO4": 35.853778852549006,
+        "NaCl": 3498.3620126848605
+      },
+      "annualNetCash": 724846.1322907608,
+      "tonnes": 3902.9840173011225,
+      "totalPositiveSaleTonnes": 3902.9840173011225,
+      "positiveSaleCount": 5,
+      "activeSaleCount": 5,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3498.3620126848605,
+          "annualRevenue": 209901.7207610916,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 239.5864175973774,
+          "annualRevenue": 83855.24615908207,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 82.89105346430766,
+          "annualRevenue": 1160474.748500307,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 46.290754702027854,
+          "annualRevenue": 3703.260376162228,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 35.853778852549006,
+          "annualRevenue": 717.0755770509801,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "Latitude screening band yield (pvScreeningBand), not a local PVGIS series and not a Dead Sea clone.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.4075,
+      "softRank": 0.4075,
+      "idle": false
+    },
+    {
+      "siteId": "chile-mejillones",
+      "siteName": "Mejillones, Antofagasta, Chile",
+      "template": "abundance",
+      "assayId": "atacama-lithium-brine",
+      "slate": {
+        "LiCl": 342.5714269188867,
+        "MgCl2": 697.4340319416361,
+        "KCl": 950.5542421749606,
+        "NaCl": 1873.8724102974145
+      },
+      "annualNetCash": 4619094.914089338,
+      "tonnes": 3864.432111332898,
+      "totalPositiveSaleTonnes": 3864.432111332898,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 1873.8724102974145,
+          "annualRevenue": 112432.34461784486,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 950.5542421749606,
+          "annualRevenue": 332693.9847612362,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 697.4340319416361,
+          "annualRevenue": 55794.72255533089,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 342.5714269188867,
+          "annualRevenue": 4795999.976864413,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.7059,
+      "softRank": 0.7059,
+      "idle": false
+    },
+    {
+      "siteId": "chile-salar-de-atacama",
+      "siteName": "Salar de Atacama, Antofagasta, Chile",
+      "template": "abundance",
+      "assayId": "atacama-lithium-brine",
+      "slate": {
+        "LiCl": 342.5714269188867,
+        "MgCl2": 697.4340319416361,
+        "KCl": 950.5542421749606,
+        "NaCl": 1873.8724102974145
+      },
+      "annualNetCash": 4598079.436717829,
+      "tonnes": 3864.432111332898,
+      "totalPositiveSaleTonnes": 3864.432111332898,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 1873.8724102974145,
+          "annualRevenue": 112432.34461784486,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 950.5542421749606,
+          "annualRevenue": 332693.9847612362,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 697.4340319416361,
+          "annualRevenue": 55794.72255533089,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 342.5714269188867,
+          "annualRevenue": 4795999.976864413,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.4329,
+      "softRank": 0.4329,
+      "idle": false
+    },
+    {
+      "siteId": "us-salton-sea",
+      "siteName": "Salton Sea geothermal field, Imperial Valley, California, USA",
+      "template": "abundance",
+      "assayId": "salton-sea-brine",
+      "slate": {
+        "LiCl": 40.53109368203171,
+        "MgCl2": 7.7920817218679295,
+        "KCl": 704.7729963541892,
+        "CaSO4": 2.1219019127628562,
+        "NaCl": 2283.6330664546167,
+        "O2": 0.05183498900591425
+      },
+      "annualNetCash": 272957.11896975373,
+      "tonnes": 3038.902975114474,
+      "totalPositiveSaleTonnes": 3038.902975114474,
+      "positiveSaleCount": 6,
+      "activeSaleCount": 6,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2283.6330664546167,
+          "annualRevenue": 137017.983987277,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 704.7729963541892,
+          "annualRevenue": 246670.5487239662,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 40.53109368203171,
+          "annualRevenue": 567435.3115484439,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 7.7920817218679295,
+          "annualRevenue": 623.3665377494343,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 2.1219019127628562,
+          "annualRevenue": 42.438038255257126,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "oxygen",
+          "tonnesPerYear": 0.05183498900591425,
+          "annualRevenue": 2.591749450295713,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": true,
+      "feasible": true,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "full",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "water limited by site budget",
+        "chlor-alkali limited by water, electricity",
+        "bromine-recovery limited by chlorine, electricity",
+        "ammonia limited by hydrogen, electricity",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.3709,
+      "softRank": 0.3709,
+      "idle": false
+    }
+  ],
+  "nearMisses": [
+    {
+      "siteId": "china-qaidam",
+      "siteName": "Kunteyi playa, Qaidam Basin, Qinghai, China",
+      "template": "abundance",
+      "assayId": "qaidam-brine",
+      "slate": {
+        "MgCl2": 336.9263791603293,
+        "KCl": 181.28705598201557,
+        "CaSO4": 25.609842037534992,
+        "NaCl": 4397.440338693368,
+        "O2": 0.007927923917496162
+      },
+      "annualNetCash": -319531.36441486736,
+      "tonnes": 4941.271543797166,
+      "totalPositiveSaleTonnes": 4941.271543797166,
+      "positiveSaleCount": 5,
+      "activeSaleCount": 5,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 4397.440338693368,
+          "annualRevenue": 263846.4203216021,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 336.9263791603293,
+          "annualRevenue": 26954.110332826345,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 181.28705598201557,
+          "annualRevenue": 63450.46959370544,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 25.609842037534992,
+          "annualRevenue": 512.1968407506998,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "oxygen",
+          "tonnesPerYear": 0.007927923917496162,
+          "annualRevenue": 0.3963961958748081,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "full",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "water limited by site budget",
+        "chlor-alkali limited by water, electricity",
+        "bromine-recovery limited by chlorine, electricity",
+        "ammonia limited by hydrogen, electricity",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.4817,
+      "softRank": 0.4817,
+      "idle": false
+    },
+    {
+      "siteId": "israel-ashkelon",
+      "siteName": "Ashkelon, Israel",
+      "template": "abundance",
+      "assayId": "dead-sea-brine",
+      "slate": {
+        "LiCl": 2.912646463895602,
+        "MgCl2": 2516.3419872454233,
+        "KCl": 302.03861045109375,
+        "CaSO4": 14.48397210077035,
+        "NaCl": 1507.717976119073
+      },
+      "annualNetCash": -223832.6096639878,
+      "tonnes": 4343.4951923802555,
+      "totalPositiveSaleTonnes": 4343.4951923802555,
+      "positiveSaleCount": 5,
+      "activeSaleCount": 5,
+      "products": [
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 2516.3419872454233,
+          "annualRevenue": 201307.35897963386,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "salt",
+          "tonnesPerYear": 1507.717976119073,
+          "annualRevenue": 90463.07856714439,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 302.03861045109375,
+          "annualRevenue": 105713.51365788281,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 14.48397210077035,
+          "annualRevenue": 289.679442015407,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 2.912646463895602,
+          "annualRevenue": 40777.05049453843,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "Latitude screening band yield (pvScreeningBand), not a local PVGIS series and not a Dead Sea clone.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.3979,
+      "softRank": 0.3979,
+      "idle": false
+    },
+    {
+      "siteId": "djibouti-doraleh",
+      "siteName": "Doraleh, Djibouti",
+      "template": "abundance",
+      "assayId": "danakil-brine",
+      "slate": {
+        "MgCl2": 1184.539395700473,
+        "KCl": 431.62291751559525,
+        "NaCl": 2134.9286541846072
+      },
+      "annualNetCash": -282769.8250195136,
+      "tonnes": 3751.0909674006753,
+      "totalPositiveSaleTonnes": 3751.0909674006753,
+      "positiveSaleCount": 3,
+      "activeSaleCount": 3,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2134.9286541846072,
+          "annualRevenue": 128095.71925107643,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 1184.539395700473,
+          "annualRevenue": 94763.15165603785,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 431.62291751559525,
+          "annualRevenue": 151068.02113045834,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "Latitude screening band yield (pvScreeningBand), not a local PVGIS series and not a Dead Sea clone.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.4658,
+      "softRank": 0.4658,
+      "idle": false
+    },
+    {
+      "siteId": "ethiopia-danakil",
+      "siteName": "Dallol salt pan, Danakil Depression, Ethiopia",
+      "template": "abundance",
+      "assayId": "danakil-brine",
+      "slate": {
+        "MgCl2": 1184.539395700473,
+        "KCl": 431.62291751559525,
+        "NaCl": 2134.9286541846072
+      },
+      "annualNetCash": -290656.9970758667,
+      "tonnes": 3751.0909674006753,
+      "totalPositiveSaleTonnes": 3751.0909674006753,
+      "positiveSaleCount": 3,
+      "activeSaleCount": 3,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2134.9286541846072,
+          "annualRevenue": 128095.71925107643,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 1184.539395700473,
+          "annualRevenue": 94763.15165603785,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 431.62291751559525,
+          "annualRevenue": 151068.02113045834,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.4523,
+      "softRank": 0.4523,
+      "idle": false
+    },
+    {
+      "siteId": "au-port-hedland",
+      "siteName": "Port Hedland, Pilbara, Australia",
+      "template": "abundance",
+      "assayId": "lake-mackay-wa-brine",
+      "slate": {
+        "MgCl2": 157.20974748880963,
+        "KCl": 129.6850985919046,
+        "NaCl": 3275.8371360864467
+      },
+      "annualNetCash": -449741.52616078523,
+      "tonnes": 3562.731982167161,
+      "totalPositiveSaleTonnes": 3562.731982167161,
+      "positiveSaleCount": 3,
+      "activeSaleCount": 3,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3275.8371360864467,
+          "annualRevenue": 196550.2281651868,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 157.20974748880963,
+          "annualRevenue": 12576.77979910477,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 129.6850985919046,
+          "annualRevenue": 45389.7845071666,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.5122,
+      "softRank": 0.5122,
+      "idle": false
+    },
+    {
+      "siteId": "au-lake-mackay",
+      "siteName": "Lake Mackay, Western Australia",
+      "template": "abundance",
+      "assayId": "lake-mackay-wa-brine",
+      "slate": {
+        "MgCl2": 157.20974748880963,
+        "KCl": 129.6850985919046,
+        "NaCl": 3275.8371360864467
+      },
+      "annualNetCash": -487200.5935879131,
+      "tonnes": 3562.731982167161,
+      "totalPositiveSaleTonnes": 3562.731982167161,
+      "positiveSaleCount": 3,
+      "activeSaleCount": 3,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3275.8371360864467,
+          "annualRevenue": 196550.2281651868,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 157.20974748880963,
+          "annualRevenue": 12576.77979910477,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 129.6850985919046,
+          "annualRevenue": 45389.7845071666,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.4572,
+      "softRank": 0.4572,
+      "idle": false
+    },
+    {
+      "siteId": "au-kwinana",
+      "siteName": "Kwinana, Western Australia",
+      "template": "abundance",
+      "assayId": "lake-mackay-wa-brine",
+      "slate": {
+        "MgCl2": 157.20974748880963,
+        "KCl": 129.6850985919046,
+        "NaCl": 3275.8371360864467
+      },
+      "annualNetCash": -510110.2762258481,
+      "tonnes": 3562.731982167161,
+      "totalPositiveSaleTonnes": 3562.731982167161,
+      "positiveSaleCount": 3,
+      "activeSaleCount": 3,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 3275.8371360864467,
+          "annualRevenue": 196550.2281651868,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 157.20974748880963,
+          "annualRevenue": 12576.77979910477,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 129.6850985919046,
+          "annualRevenue": 45389.7845071666,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.6678,
+      "softRank": 0.6678,
+      "idle": false
+    },
+    {
+      "siteId": "qatar-ras-laffan",
+      "siteName": "Ras Laffan, Qatar",
+      "template": "abundance",
+      "assayId": "persian-gulf-sabkha-brine",
+      "slate": {
+        "MgCl2": 467.88233825344577,
+        "KCl": 139.57106757135222,
+        "CaSO4": 52.47422392341592,
+        "NaCl": 2799.1750712532717
+      },
+      "annualNetCash": -407738.3972862434,
+      "tonnes": 3459.1027010014855,
+      "totalPositiveSaleTonnes": 3459.1027010014855,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2799.1750712532717,
+          "annualRevenue": 167950.5042751963,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 467.88233825344577,
+          "annualRevenue": 37430.58706027566,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 139.57106757135222,
+          "annualRevenue": 48849.87364997327,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 52.47422392341592,
+          "annualRevenue": 1049.4844784683185,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.6195,
+      "softRank": 0.6195,
+      "idle": false
+    },
+    {
+      "siteId": "uae-taweelah",
+      "siteName": "Taweelah, Abu Dhabi, UAE",
+      "template": "abundance",
+      "assayId": "persian-gulf-sabkha-brine",
+      "slate": {
+        "MgCl2": 467.88233825344577,
+        "KCl": 139.57106757135222,
+        "CaSO4": 52.47422392341592,
+        "NaCl": 2799.1750712532717
+      },
+      "annualNetCash": -407917.664569005,
+      "tonnes": 3459.1027010014855,
+      "totalPositiveSaleTonnes": 3459.1027010014855,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2799.1750712532717,
+          "annualRevenue": 167950.5042751963,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 467.88233825344577,
+          "annualRevenue": 37430.58706027566,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 139.57106757135222,
+          "annualRevenue": 48849.87364997327,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 52.47422392341592,
+          "annualRevenue": 1049.4844784683185,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.6192,
+      "softRank": 0.6192,
+      "idle": false
+    },
+    {
+      "siteId": "saudi-ras-al-khair",
+      "siteName": "Ras Al-Khair, Eastern Province, Saudi Arabia",
+      "template": "abundance",
+      "assayId": "persian-gulf-sabkha-brine",
+      "slate": {
+        "MgCl2": 467.88233825344577,
+        "KCl": 139.57106757135222,
+        "CaSO4": 52.47422392341592,
+        "NaCl": 2799.1750712532717
+      },
+      "annualNetCash": -408238.5851512182,
+      "tonnes": 3459.1027010014855,
+      "totalPositiveSaleTonnes": 3459.1027010014855,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2799.1750712532717,
+          "annualRevenue": 167950.5042751963,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 467.88233825344577,
+          "annualRevenue": 37430.58706027566,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 139.57106757135222,
+          "annualRevenue": 48849.87364997327,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 52.47422392341592,
+          "annualRevenue": 1049.4844784683185,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.6186,
+      "softRank": 0.6186,
+      "idle": false
+    },
+    {
+      "siteId": "saudi-oxagon",
+      "siteName": "NEOM Oxagon, Red Sea, Saudi Arabia",
+      "template": "abundance",
+      "assayId": "red-sea-sabkha-brine",
+      "slate": {
+        "MgCl2": 528.7675508557542,
+        "KCl": 156.87826271802416,
+        "CaSO4": 124.8434336319748,
+        "NaCl": 2418.9657161946607
+      },
+      "annualNetCash": -403696.76551416336,
+      "tonnes": 3229.454963400414,
+      "totalPositiveSaleTonnes": 3229.454963400414,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2418.9657161946607,
+          "annualRevenue": 145137.94297167964,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 528.7675508557542,
+          "annualRevenue": 42301.40406846033,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 156.87826271802416,
+          "annualRevenue": 54907.391951308455,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 124.8434336319748,
+          "annualRevenue": 2496.8686726394963,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.3979,
+      "softRank": 0.3979,
+      "idle": false
+    },
+    {
+      "siteId": "saudi-yanbu",
+      "siteName": "Yanbu, Red Sea, Saudi Arabia",
+      "template": "abundance",
+      "assayId": "red-sea-sabkha-brine",
+      "slate": {
+        "MgCl2": 528.7675508557542,
+        "KCl": 156.87826271802416,
+        "CaSO4": 124.8434336319748,
+        "NaCl": 2418.9657161946607
+      },
+      "annualNetCash": -404459.38609099784,
+      "tonnes": 3229.454963400414,
+      "totalPositiveSaleTonnes": 3229.454963400414,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2418.9657161946607,
+          "annualRevenue": 145137.94297167964,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 528.7675508557542,
+          "annualRevenue": 42301.40406846033,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 156.87826271802416,
+          "annualRevenue": 54907.391951308455,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 124.8434336319748,
+          "annualRevenue": 2496.8686726394963,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.6296,
+      "softRank": 0.6296,
+      "idle": false
+    },
+    {
+      "siteId": "egypt-ain-sokhna",
+      "siteName": "Ain Sokhna, Gulf of Suez, Egypt",
+      "template": "abundance",
+      "assayId": "red-sea-sabkha-brine",
+      "slate": {
+        "MgCl2": 528.7675508557542,
+        "KCl": 156.87826271802416,
+        "CaSO4": 124.8434336319748,
+        "NaCl": 2418.9657161946607
+      },
+      "annualNetCash": -405723.7308708101,
+      "tonnes": 3229.454963400414,
+      "totalPositiveSaleTonnes": 3229.454963400414,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 2418.9657161946607,
+          "annualRevenue": 145137.94297167964,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 528.7675508557542,
+          "annualRevenue": 42301.40406846033,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 156.87826271802416,
+          "annualRevenue": 54907.391951308455,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 124.8434336319748,
+          "annualRevenue": 2496.8686726394963,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.294,
+      "softRank": 0.294,
+      "idle": false
+    },
+    {
+      "siteId": "us-great-salt-lake",
+      "siteName": "Great Salt Lake, Utah, USA",
+      "template": "abundance",
+      "assayId": "great-salt-lake-brine",
+      "slate": {
+        "LiCl": 3.283346922936861,
+        "MgCl2": 259.95268463279155,
+        "KCl": 88.57437256630314,
+        "NaCl": 1729.131105479216
+      },
+      "annualNetCash": -480812.6761230027,
+      "tonnes": 2080.9415096012476,
+      "totalPositiveSaleTonnes": 2080.9415096012476,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 1729.131105479216,
+          "annualRevenue": 103747.86632875296,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 259.95268463279155,
+          "annualRevenue": 20796.214770623326,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 88.57437256630314,
+          "annualRevenue": 31001.030398206094,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 3.283346922936861,
+          "annualRevenue": 45966.85692111606,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.6666,
+      "softRank": 0.6666,
+      "idle": false
+    },
+    {
+      "siteId": "india-mundra",
+      "siteName": "Mundra, Gujarat, India",
+      "template": "abundance",
+      "assayId": "kutch-subsoil-brine",
+      "slate": {
+        "MgCl2": 300.8952324624563,
+        "KCl": 91.23160374329225,
+        "CaSO4": 162.15465129180632,
+        "NaCl": 1519.1049370575945
+      },
+      "annualNetCash": -495998.9787244416,
+      "tonnes": 2073.3864245551495,
+      "totalPositiveSaleTonnes": 2073.3864245551495,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 1519.1049370575945,
+          "annualRevenue": 91146.29622345566,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 300.8952324624563,
+          "annualRevenue": 24071.618596996508,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 162.15465129180632,
+          "annualRevenue": 3243.0930258361263,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 91.23160374329225,
+          "annualRevenue": 31931.06131015229,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.6906,
+      "softRank": 0.6906,
+      "idle": false
+    },
+    {
+      "siteId": "us-clayton-valley",
+      "siteName": "Clayton Valley / Silver Peak, Nevada, USA",
+      "template": "abundance",
+      "assayId": "clayton-valley-brine",
+      "slate": {
+        "LiCl": 32.51256598072766,
+        "MgCl2": 31.639611476833757,
+        "KCl": 121.42890372376706,
+        "NaCl": 1554.1238040732835
+      },
+      "annualNetCash": -100397.10583227454,
+      "tonnes": 1739.704885254612,
+      "totalPositiveSaleTonnes": 1739.704885254612,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 1554.1238040732835,
+          "annualRevenue": 93247.428244397,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 121.42890372376706,
+          "annualRevenue": 42500.11630331847,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 32.51256598072766,
+          "annualRevenue": 455175.92373018723,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 31.639611476833757,
+          "annualRevenue": 2531.1689181467004,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "Latitude screening band yield (pvScreeningBand), not a local PVGIS series and not a Dead Sea clone.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterIntake",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.7443,
+      "softRank": 0.7443,
+      "idle": false
+    },
+    {
+      "siteId": "spain-almeria",
+      "siteName": "Almería coast · Spain",
+      "template": "abundance",
+      "assayId": "mediterranean-swro-brine",
+      "slate": {
+        "LiCl": 0.24747976490616228,
+        "MgCl2": 154.02936467769848,
+        "KCl": 52.36728677864498,
+        "CaSO4": 68.01483770310134,
+        "NaCl": 914.1941861695283
+      },
+      "annualNetCash": -627011.5344257178,
+      "tonnes": 1188.8531550938792,
+      "totalPositiveSaleTonnes": 1188.8531550938792,
+      "positiveSaleCount": 5,
+      "activeSaleCount": 5,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 914.1941861695283,
+          "annualRevenue": 54851.651170171695,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 154.02936467769848,
+          "annualRevenue": 12322.349174215879,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 68.01483770310134,
+          "annualRevenue": 1360.2967540620268,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 52.36728677864498,
+          "annualRevenue": 18328.55037252574,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "lithium",
+          "tonnesPerYear": 0.24747976490616228,
+          "annualRevenue": 3464.716708686272,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "unverified site right: saltPurchase",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.666,
+      "softRank": 0.666,
+      "idle": false
+    },
+    {
+      "siteId": "texas-corpus-christi",
+      "siteName": "Corpus Christi, Texas, USA",
+      "template": "abundance",
+      "assayId": "texas-gulf-desal-brine",
+      "slate": {
+        "MgCl2": 152.3604697752613,
+        "KCl": 27.347653565904256,
+        "CaSO4": 165.37361104590315,
+        "NaCl": 816.5932096377912
+      },
+      "annualNetCash": -630195.7665753774,
+      "tonnes": 1161.67494402486,
+      "totalPositiveSaleTonnes": 1161.67494402486,
+      "positiveSaleCount": 4,
+      "activeSaleCount": 4,
+      "products": [
+        {
+          "id": "salt",
+          "tonnesPerYear": 816.5932096377912,
+          "annualRevenue": 48995.592578267475,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "gypsum",
+          "tonnesPerYear": 165.37361104590315,
+          "annualRevenue": 3307.472220918063,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "magnesium",
+          "tonnesPerYear": 152.3604697752613,
+          "annualRevenue": 12188.837582020904,
+          "positive": true,
+          "active": true
+        },
+        {
+          "id": "potash",
+          "tonnesPerYear": 27.347653565904256,
+          "annualRevenue": 9571.67874806649,
+          "positive": true,
+          "active": true
+        }
+      ],
+      "met": false,
+      "feasible": false,
+      "status": "ok",
+      "selected": {
+        "family": "abundance",
+        "slateMode": "minerals-only",
+        "scale": 1
+      },
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+        "No cash-positive slate under the searched coarse-then-refine grid; not an invented fuel winner.",
+        "unverified site right: gridImport",
+        "unverified site right: freshwater",
+        "unverified site right: seawaterDischarge",
+        "No cash-positive co-product slate under searched modes/scales",
+        "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+      ],
+      "layerScore": 0.4643,
+      "softRank": 0.4643,
+      "idle": false
+    }
+  ],
+  "feasibleCount": 10,
+  "tried": 28,
+  "skipped": [
+    {
+      "siteId": "oman-duqm",
+      "siteName": "Duqm, Oman",
+      "template": "abundance",
+      "assayId": null,
+      "slate": {},
+      "annualNetCash": null,
+      "tonnes": 0,
+      "totalPositiveSaleTonnes": 0,
+      "positiveSaleCount": 0,
+      "activeSaleCount": 0,
+      "products": [],
+      "met": false,
+      "feasible": false,
+      "idle": false,
+      "status": "skipped",
+      "reason": "no-brine-assay",
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Permanent skip: no cited Arabian Sea / Oman sabkha or Duqm desal-reject mean in catalog. Ahmed et al. 2001 Oman RO brine is a range, not a pin-able assay. Persian Gulf sabkha is Gulf, not Arabian Sea. Do not invent ion chemistry.",
+        "Screening assumes intake/concession for evaluation only; not a bankable permit."
+      ],
+      "layerScore": 0.3875,
+      "softRank": 0.3875
+    },
+    {
+      "siteId": "morocco-agadir",
+      "siteName": "Agadir, Morocco",
+      "template": "abundance",
+      "assayId": null,
+      "slate": {},
+      "annualNetCash": null,
+      "tonnes": 0,
+      "totalPositiveSaleTonnes": 0,
+      "positiveSaleCount": 0,
+      "activeSaleCount": 0,
+      "products": [],
+      "met": false,
+      "feasible": false,
+      "idle": false,
+      "status": "skipped",
+      "reason": "no-brine-assay",
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Permanent skip: Chtouka-Aït Baha desal exists but no frozen reject ion table in catalog. Spanish Atlantic SWRO reject is not Agadir. No Morocco process-brine assay. Do not invent ion chemistry.",
+        "Screening assumes intake/concession for evaluation only; not a bankable permit."
+      ],
+      "layerScore": 0.2877,
+      "softRank": 0.2877
+    },
+    {
+      "siteId": "morocco-dakhla",
+      "siteName": "Dakhla, Atlantic Sahara",
+      "template": "abundance",
+      "assayId": null,
+      "slate": {},
+      "annualNetCash": null,
+      "tonnes": 0,
+      "totalPositiveSaleTonnes": 0,
+      "positiveSaleCount": 0,
+      "activeSaleCount": 0,
+      "products": [],
+      "met": false,
+      "feasible": false,
+      "idle": false,
+      "status": "skipped",
+      "reason": "no-brine-assay",
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Permanent skip: Dakhla desal exists but no frozen reject ion table in catalog. Spanish Atlantic SWRO reject is not Dakhla. No Sahara Atlantic process-brine assay. Do not invent ion chemistry.",
+        "Screening assumes intake/concession for evaluation only; not a bankable permit."
+      ],
+      "layerScore": 0.3188,
+      "softRank": 0.3188
+    },
+    {
+      "siteId": "namibia-walvis-bay",
+      "siteName": "Walvis Bay, Namibia",
+      "template": "abundance",
+      "assayId": null,
+      "slate": {},
+      "annualNetCash": null,
+      "tonnes": 0,
+      "totalPositiveSaleTonnes": 0,
+      "positiveSaleCount": 0,
+      "activeSaleCount": 0,
+      "products": [],
+      "met": false,
+      "feasible": false,
+      "idle": false,
+      "status": "skipped",
+      "reason": "no-brine-assay",
+      "rightsScenario": "screening-assumes-intake-concession",
+      "notes": [
+        "Permanent skip: Walvis Bay Salt Holdings is solar-evaporated seawater; no frozen multi-ion process-brine table. Namib gypsous-spring / Oranjemund pan chemistry is not a Walvis salt-field assay. Do not invent ion chemistry.",
+        "Screening assumes intake/concession for evaluation only; not a bankable permit."
+      ],
+      "layerScore": 0.3187,
+      "softRank": 0.3187
+    }
+  ],
+  "skippedCount": 4,
+  "sitesTried": 32,
+  "path": "materials",
+  "templates": [
+    "abundance"
+  ],
+  "rightsScenario": "screening-assumes-intake-concession",
+  "notes": [
+    "Materials maximizer path: abundance only; fuels do not enter this ranking.",
+    "Screening assumes intake/concession for evaluation only; not a bankable permit.",
+    "Map-layer sun/water/land score is a soft rank only; map layers are not optimizer objectives."
+  ],
+  "cli": {
+    "fast": true,
+    "topN": 50,
+    "path": "materials",
+    "templates": [
+      "abundance"
+    ],
+    "sites": [
+      "dead-sea-pvgis-2026-09-06",
+      "uae-taweelah",
+      "qatar-ras-laffan",
+      "saudi-ras-al-khair",
+      "saudi-oxagon",
+      "egypt-ain-sokhna",
+      "saudi-yanbu",
+      "oman-duqm",
+      "au-port-hedland",
+      "au-kwinana",
+      "au-lake-mackay",
+      "india-mundra",
+      "texas-corpus-christi",
+      "us-great-salt-lake",
+      "us-salton-sea",
+      "us-searles-lake",
+      "morocco-agadir",
+      "morocco-dakhla",
+      "chile-mejillones",
+      "chile-salar-de-atacama",
+      "bolivia-uyuni",
+      "china-qaidam",
+      "ethiopia-danakil",
+      "namibia-walvis-bay",
+      "spain-almeria",
+      "argentina-hombre-muerto",
+      "chile-salar-de-maricunga",
+      "us-clayton-valley",
+      "china-zabuye",
+      "argentina-puerto-madryn",
+      "israel-ashkelon",
+      "djibouti-doraleh"
+    ],
+    "rightsScenario": "screening-assumes-intake-concession"
+  }
+}

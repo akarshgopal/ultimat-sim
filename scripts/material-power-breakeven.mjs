@@ -6,18 +6,22 @@
  *   1. Hero site = max M tonnes among cash+ abundance sites (else max tonnes overall).
  *   2. Build abundance plant (same wiring as engine/site-search.js), size once,
  *      freeze capacities.
- *   3. Solo-sale: only M sinks keep TEA unitPrice; other sale sinks → unitPrice=0.
+ *   3. Sale attribution:
+ *        solo (default): only M sinks keep TEA unitPrice; other sale sinks → 0.
+ *        shared: keep every co-product sale price (do not zero other sinks).
+ *      The plant bill (OPEX + annualized CAPEX) stays on the slate either way.
  *   4. Purchased-power: electricity-source / power / electricity nodes get
  *      economics.unitCost = p ($/kWh) and PV installedCapex / capexRate / fixedOM
  *      cleared so PV CAPEX is not double-counted with grid purchase.
  *   5. Bisect p where annualNetCash (R − OPEX − annualized CAPEX) crosses 0.
  *
  * Screening TEA bindSale prices by site region; not bankable quotes.
- * Usage: node scripts/material-power-breakeven.mjs [--fast] [--cache path]
+ * Usage: node scripts/material-power-breakeven.mjs [--mode solo|shared] [--fast] [--cache path]
  */
 import { createRequire } from 'node:module';
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const {
@@ -39,6 +43,7 @@ const BISECT_ITERS = 56;
 const P_MAX_DEFAULT = 2;
 const P_MAX_EXTEND = 50;
 const CASH_EPS = 1e-3;
+const MODES = Object.freeze(['solo', 'shared']);
 
 /** Material label → sink node ids that sell that material. */
 const MATERIALS = Object.freeze([
@@ -57,17 +62,79 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function normalizeMode(mode) {
+  const value = String(mode == null || mode === '' ? 'solo' : mode).trim().toLowerCase();
+  if (!MODES.includes(value)) {
+    throw new Error(`Unknown mode ${mode}; expected solo or shared`);
+  }
+  return value;
+}
+
 function parseArgs(argv) {
-  const opts = { fast: false, cache: '.hunt-run/site-search-top20.json' };
+  const opts = {
+    fast: false,
+    cache: '.hunt-run/site-search-top20.json',
+    mode: 'solo',
+    out: null,
+  };
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--fast') opts.fast = true;
     else if (arg === '--cache') opts.cache = argv[++i];
     else if (arg.startsWith('--cache=')) opts.cache = arg.slice('--cache='.length);
     else if (arg === '--no-cache') opts.cache = null;
+    else if (arg === '--mode') opts.mode = argv[++i];
+    else if (arg.startsWith('--mode=')) opts.mode = arg.slice('--mode='.length);
+    else if (arg === '--out') opts.out = argv[++i];
+    else if (arg.startsWith('--out=')) opts.out = arg.slice('--out='.length);
     else if (arg === '--help' || arg === '-h') opts.help = true;
+    else {
+      opts.help = true;
+      opts.unknown = arg;
+    }
+  }
+  if (opts.mode == null || opts.mode === '') {
+    opts.help = true;
+    opts.badMode = opts.mode == null ? '' : opts.mode;
+  } else {
+    const mode = String(opts.mode).trim().toLowerCase();
+    if (!MODES.includes(mode)) {
+      opts.help = true;
+      opts.badMode = String(opts.mode);
+    } else {
+      opts.mode = mode;
+    }
   }
   return opts;
+}
+
+function usage() {
+  return `Usage: node scripts/material-power-breakeven.mjs [options]
+
+  --mode solo|shared   Sale attribution (default solo). Also --mode=shared.
+                       solo: only the probed material keeps its TEA unitPrice;
+                             other sale sinks are zeroed (applySoloSale).
+                             A material that only pencils with co-products
+                             reports no-flip (annualNetCash ≤ 0 at $0/kWh).
+                       shared: keep ALL co-product sale prices. Do not zero
+                             other sinks. The plant bill (OPEX + annualized
+                             CAPEX, including purchased power) stays shared
+                             across the full slate.
+  --fast               Size with FAST scales/rates (CI-ish).
+  --cache path         Abundance hunt JSON
+                       (default .hunt-run/site-search-top20.json).
+  --no-cache           Run searchAbundanceSites instead of reading a cache.
+  --out path           Also write the JSON report (mode is in the file).
+  --help, -h           Show this help.
+
+Metric: annualNetCash = R − OPEX − annualized CAPEX.
+Hero: max material tonnes among cash+ abundance sites (else max tonnes).
+Cash+ is the hunt's multi-product slate. Shared mode still uses that hero,
+then scores cash with full co-product revenue.
+Purchased power: electricity-source/power/electricity unitCost = p $/kWh;
+PV installedCapex/capexRate/fixedOM cleared (no PV+grid double-count).
+Bisect p where annualNetCash crosses 0.
+Screening TEA bindSale prices — not a PPA, quote, or offtake contract.`;
 }
 
 function isElectricitySourceNode(node) {
@@ -121,7 +188,6 @@ function tonnesOfMaterial(row, sinkIds) {
   for (const product of row.products || []) {
     if (want.has(product.id)) tonnes += Number(product.tonnesPerYear) || 0;
   }
-  // Fallback: slate keys sometimes use chemical ids
   return tonnes;
 }
 
@@ -185,13 +251,15 @@ function loadOrSearch(opts) {
   };
 }
 
-function cashAt(frozenDefinition, solved, sinkIds, p) {
+function cashAt(frozenDefinition, solved, sinkIds, p, mode = 'solo') {
   const definition = clone(frozenDefinition);
-  applySoloSale(definition, sinkIds);
+  const saleMode = normalizeMode(mode);
+  if (saleMode === 'solo') applySoloSale(definition, sinkIds);
   applyPurchasedPower(definition, p);
   const economics = evaluateEconomics(definition, solved);
   const score = scorePositiveCashflow(economics);
   return {
+    mode: saleMode,
     annualNetCash: score.annualNetCash,
     annualRevenue: economics.annualRevenue,
     annualOperatingCost: economics.annualOperatingCost,
@@ -201,46 +269,58 @@ function cashAt(frozenDefinition, solved, sinkIds, p) {
   };
 }
 
-function bisectBreakEven(frozenDefinition, solved, sinkIds, pMaxStart = P_MAX_DEFAULT) {
-  const at0 = cashAt(frozenDefinition, solved, sinkIds, 0);
-  let pMax = pMaxStart;
-  let atMax = cashAt(frozenDefinition, solved, sinkIds, pMax);
+function saleLabel(mode) {
+  return normalizeMode(mode) === 'shared' ? 'Shared co-product' : 'Solo-sale';
+}
 
-  // Extend upper bound while cash still positive at high p (cheap power relative to solo revenue).
+function bisectBreakEven(frozenDefinition, solved, sinkIds, pMaxStart = P_MAX_DEFAULT, mode = 'solo') {
+  const saleMode = normalizeMode(mode);
+  const label = saleLabel(saleMode);
+  const at0 = cashAt(frozenDefinition, solved, sinkIds, 0, saleMode);
+  let pMax = pMaxStart;
+  let atMax = cashAt(frozenDefinition, solved, sinkIds, pMax, saleMode);
+
+  // Extend upper bound while cash still positive at high p (cheap power relative to revenue).
   while (at0.annualNetCash > 0 && atMax.annualNetCash > 0 && pMax < P_MAX_EXTEND) {
     pMax = Math.min(P_MAX_EXTEND, pMax * 2);
-    atMax = cashAt(frozenDefinition, solved, sinkIds, pMax);
+    atMax = cashAt(frozenDefinition, solved, sinkIds, pMax, saleMode);
   }
 
   const context = {
+    mode: saleMode,
     cashAt0: at0.annualNetCash,
-    cashAt007: cashAt(frozenDefinition, solved, sinkIds, CHILE_ISH_POWER).annualNetCash,
-    cashAt050: cashAt(frozenDefinition, solved, sinkIds, NO_GRID_POWER).annualNetCash,
+    cashAt007: cashAt(frozenDefinition, solved, sinkIds, CHILE_ISH_POWER, saleMode).annualNetCash,
+    cashAt050: cashAt(frozenDefinition, solved, sinkIds, NO_GRID_POWER, saleMode).annualNetCash,
     at0,
     atMax,
     pMax,
   };
 
   if (!(at0.annualNetCash > 0) && !(atMax.annualNetCash > 0)) {
+    const dominated = saleMode === 'shared'
+      ? 'Shared co-product annualNetCash ≤ 0 even at p=0 (purchased power free); process CAPEX/OPEX dominates full-slate TEA revenue at the frozen hero scale (co-product prices kept; plant bill shared).'
+      : 'Solo-sale annualNetCash ≤ 0 even at p=0 (purchased power free); process CAPEX/OPEX alone dominates TEA revenue for this material at the frozen hero scale.';
     return {
       ...context,
       breakEven: null,
       status: 'no-flip-always-negative',
       reason: at0.annualNetCash <= 0
-        ? 'Solo-sale annualNetCash ≤ 0 even at p=0 (purchased power free); process CAPEX/OPEX alone dominates TEA revenue for this material at the frozen hero scale.'
+        ? dominated
         : 'Cash never crossed zero in band.',
     };
   }
   if (at0.annualNetCash > 0 && atMax.annualNetCash > 0) {
+    const covers = saleMode === 'shared'
+      ? `Shared co-product annualNetCash > 0 even at p=$${pMax}/kWh (band high). Full-slate revenue covers process CAPEX + power purchase in this band.`
+      : `Solo-sale annualNetCash > 0 even at p=$${pMax}/kWh (band high). Revenue covers process CAPEX + power purchase in this band.`;
     return {
       ...context,
       breakEven: null,
       status: 'no-flip-always-positive',
-      reason: `Solo-sale annualNetCash > 0 even at p=$${pMax}/kWh (band high). Revenue covers process CAPEX + power purchase in this band.`,
+      reason: covers,
     };
   }
   if (!(at0.annualNetCash > 0) && atMax.annualNetCash > 0) {
-    // Pathological: cash rises with power price — should not happen with unitCost.
     return {
       ...context,
       breakEven: null,
@@ -249,14 +329,13 @@ function bisectBreakEven(frozenDefinition, solved, sinkIds, pMaxStart = P_MAX_DE
     };
   }
 
-  // at0 > 0, atMax ≤ 0 → classic flip
   let lo = 0;
   let hi = pMax;
   let loCash = at0.annualNetCash;
   let hiCash = atMax.annualNetCash;
   for (let i = 0; i < BISECT_ITERS; i += 1) {
     const mid = (lo + hi) / 2;
-    const midCash = cashAt(frozenDefinition, solved, sinkIds, mid).annualNetCash;
+    const midCash = cashAt(frozenDefinition, solved, sinkIds, mid, saleMode).annualNetCash;
     if (Math.abs(midCash) <= CASH_EPS) {
       lo = hi = mid;
       loCash = hiCash = midCash;
@@ -291,31 +370,34 @@ function sizeHero(site, opts) {
   });
 }
 
-function main() {
-  const opts = parseArgs(process.argv);
-  if (opts.help) {
-    console.log('Usage: node scripts/material-power-breakeven.mjs [--fast] [--cache path|--no-cache]');
-    process.exit(0);
-  }
+function emptyRow(materialId, extra) {
+  return {
+    material: materialId,
+    heroSiteId: null,
+    process: 'abundance',
+    baselineAnnualNetCashAtP0: null,
+    breakEvenUsdPerKWh: null,
+    cashAt007: null,
+    cashAt050: null,
+    status: 'no-production',
+    ...extra,
+  };
+}
 
-  const hunt = loadOrSearch(opts);
-  const sitesById = new Map(defaultSearchSites().map(site => [site.id, site]));
+function buildReport(opts, hunt, sitesById) {
+  const mode = normalizeMode(opts.mode);
   const sizedCache = new Map();
-
   const rows = [];
+  const salePhrase = mode === 'shared'
+    ? 'shared co-product (all sale prices kept; plant bill shared)'
+    : 'solo-sale (other sale prices zeroed)';
+
   for (const material of MATERIALS) {
     const hero = pickHero(hunt.rows, material);
     if (!hero) {
-      rows.push({
-        material: material.id,
-        heroSiteId: null,
-        process: 'abundance',
-        baselineAnnualNetCashAtP0: null,
-        breakEvenUsdPerKWh: null,
-        cashAt007: null,
-        cashAt050: null,
-        notes: 'No site in hunt produced this material at >0 tonnes.',
-      });
+      rows.push(emptyRow(material.id, {
+        notes: 'No site in hunt produced this material at >0 tonnes. Explicit no-flip: no hero slate.',
+      }));
       continue;
     }
     const site = sitesById.get(hero.siteId);
@@ -328,6 +410,7 @@ function main() {
         breakEvenUsdPerKWh: null,
         cashAt007: null,
         cashAt050: null,
+        status: 'no-site',
         notes: `Hero site ${hero.siteId} not in defaultSearchSites().`,
         hero,
       });
@@ -340,11 +423,11 @@ function main() {
       sizedCache.set(hero.siteId, sized);
     }
 
-    const result = bisectBreakEven(sized.definition, sized.solved, material.sinks);
+    const result = bisectBreakEven(sized.definition, sized.solved, material.sinks, P_MAX_DEFAULT, mode);
     const notes = [
       `Hero: max ${material.id} tonnes among ${hero.fromCashPlusPool ? 'cash+' : 'all (no cash+ producer)'} sites → ${hero.tonnesPerYear.toFixed(2)} t/y.`,
       `PV multi-product baseline cash $${Number(hero.pvMultiCash).toFixed(0)}/y (cash${hero.pvCashPositive ? '+' : '−'}).`,
-      `Sized selected=${JSON.stringify(sized.selected)}; freeze capacities then solo-sale + purchased-power econ-only.`,
+      `Sized selected=${JSON.stringify(sized.selected)}; freeze capacities then ${salePhrase} + purchased-power econ-only.`,
       result.reason || result.status,
     ];
     rows.push({
@@ -366,31 +449,81 @@ function main() {
     });
   }
 
-  const report = {
+  const shared = mode === 'shared';
+  return {
     label: 'screening',
-    tipNote: 'Material purchased-power break-even; solo-sale; PV CAPEX stripped.',
+    mode,
+    tipNote: shared
+      ? 'Material purchased-power break-even; shared co-product sale (all TEA unitPrices kept; plant bill shared); PV CAPEX stripped.'
+      : 'Material purchased-power break-even; solo-sale; PV CAPEX stripped.',
     method: {
+      mode,
       flipMetric: 'annualNetCash = R − OPEX − annualized CAPEX (Foundry gate)',
       powerModel: 'Purchased: electricity-source/power/electricity unitCost=p $/kWh; clear installedCapex/capexRate/fixedOM (no PV+grid double-count). Process CAPEX/OPEX and TEA sale prices retained.',
-      soloSale: 'Only material sinks keep bindSale unitPrice; other sale sinks unitPrice=0.',
+      soloSale: shared
+        ? 'Shared co-product: all sale sinks keep bindSale unitPrice. applySoloSale is not applied. Plant bill (OPEX + annualized CAPEX, including purchased power) stays on the full slate.'
+        : 'Solo-sale: only material sinks keep bindSale unitPrice; other sale sinks unitPrice=0.',
       sizing: opts.fast
         ? `sizeForPositiveCashflow FAST scales=${JSON.stringify(FAST_SCALES)} rates=${JSON.stringify(FAST_RATES)}; freeze then econ-only sweep`
         : `sizeForPositiveCashflow SEARCH scales=${JSON.stringify(SEARCH_SCALES)} rates=${JSON.stringify(SEARCH_RATES)}; freeze then econ-only sweep`,
-      heroPick: 'Max material tonnes among cash+ abundance sites; else max tonnes overall.',
+      heroPick: 'Max material tonnes among cash+ abundance sites (hunt multi-product cash); else max tonnes overall. Shared mode uses that same hero, then scores cash with full co-product revenue.',
       contextPrices: { chileIsh: CHILE_ISH_POWER, noGrid: NO_GRID_POWER },
       huntSource: hunt.source,
       feasibleCount: hunt.feasibleCount,
     },
     caveats: [
-      'Solo-sale zeros co-product revenue: flip points are product-specific, not co-product contribution-margin aliases. A material that only pencils with co-products will show no-flip / always-negative.',
+      shared
+        ? 'Shared co-product keeps every sale price. Break-even $/kWh is where full-slate annualNetCash crosses 0. The plant bill is not allocated to one material.'
+        : 'Solo-sale zeros co-product revenue: flip points are product-specific, not co-product contribution-margin aliases. A material that only pencils with co-products will show no-flip / always-negative.',
       'Baseline abundance is PV-CAPEX powered; this sensitivity replaces PV TIC/fixedOM with a purchased $/kWh so power cost is not double-counted.',
       'Prices are cited tea-screening bindSale mid bands by site region — screening offtake, not contracts or vendor quotes.',
-      'Hero scale is the multi-product cash maximizer size, frozen before solo-sale; not re-optimized for the single product.',
+      shared
+        ? 'Hero scale is the multi-product cash maximizer size, frozen before the purchased-power sweep; not re-optimized. Shared mode keeps co-product prices on that frozen slate.'
+        : 'Hero scale is the multi-product cash maximizer size, frozen before solo-sale; not re-optimized for the single product.',
     ],
     rows,
   };
-
-  console.log(JSON.stringify(report, null, 2));
 }
 
-main();
+function main() {
+  const opts = parseArgs(process.argv);
+  if (opts.help) {
+    console.log(usage());
+    process.exit(opts.badMode || opts.unknown ? 1 : 0);
+  }
+
+  const hunt = loadOrSearch(opts);
+  const sitesById = new Map(defaultSearchSites().map(site => [site.id, site]));
+  const report = buildReport(opts, hunt, sitesById);
+  const json = JSON.stringify(report, null, 2);
+  if (opts.out) {
+    const outPath = resolve(process.cwd(), opts.out);
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, `${json}\n`);
+  }
+  console.log(json);
+}
+
+function invokedAsCli() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return import.meta.url === pathToFileURL(resolve(entry)).href;
+}
+
+export {
+  MATERIALS,
+  MODES,
+  parseArgs,
+  usage,
+  normalizeMode,
+  applySoloSale,
+  applyPurchasedPower,
+  isElectricitySourceNode,
+  tonnesOfMaterial,
+  pickHero,
+  cashAt,
+  bisectBreakEven,
+  buildReport,
+};
+
+if (invokedAsCli()) main();

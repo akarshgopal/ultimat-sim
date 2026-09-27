@@ -505,6 +505,7 @@
     else if (demo === 'coastal-methane') { setActiveDemo(demo, 'Coastal methane'); loadCoastalMethane(0); }
     else if (demo === 'coastal-methanol') { setActiveDemo(demo, 'Coastal methanol'); loadMethanolPlant(0); }
     else if (demo === 'abundance-hub') { setActiveDemo(demo, 'Brine + ammonia'); loadAbundanceHub(); }
+    else if (demo === 'zabuye-hub') { setActiveDemo(demo, 'Zabuye brine hub'); loadZabuyeHub(); }
     else if (demo === 'demo-network') { setActiveDemo(demo, 'Fuels + minerals'); loadDemoNetwork(); }
   });
   for (const name of FOUNDATION_TABS) {
@@ -548,6 +549,7 @@
     }
   });
   document.getElementById('loadAbundanceHub').addEventListener('click', () => { setActiveDemo('abundance-hub', 'Brine + ammonia'); loadAbundanceHub(); });
+  document.getElementById('loadZabuyeHub')?.addEventListener('click', () => { setActiveDemo('zabuye-hub', 'Zabuye brine hub'); loadZabuyeHub(); });
   document.getElementById('loadDemoNetwork').addEventListener('click', () => { setActiveDemo('demo-network', 'Fuels + minerals'); loadDemoNetwork(); });
   document.getElementById('addPlantToNetwork').addEventListener('click', () => {
     const name = window.prompt('Name this plant in the network:')?.trim();
@@ -1254,6 +1256,15 @@
     loadCase(AbundanceCase.createAbundanceCase(), 'minerals');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) status.textContent = 'Dead Sea hub loaded. Size for co-product cashflow expands the mineral/chemical slate while keeping plant net cash positive.';
+  }
+
+  function loadZabuyeHub() {
+    lastSizing = null;
+    if (!globalThis.NetworkCase?.siteZabuyeAbundance) {
+      throw new Error('Zabuye abundance case is not loaded');
+    }
+    loadCase(NetworkCase.siteZabuyeAbundance(), 'minerals');
+    return sizeForPositiveCashflow();
   }
 
   function plantSnapshot(name, definition) {
@@ -3581,7 +3592,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
     solve: solveAndRender, fitCanvas, get result() { return result; }, get baseline() { return baseline; },

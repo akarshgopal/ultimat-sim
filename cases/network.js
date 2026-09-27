@@ -13,6 +13,11 @@ const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.
 // Frozen PVGIS response: data/pvgis-dead-sea.json, retrieved 2026-09-06.
 const DAILY_PV = [1674.85 / 365, 3.68, 4.05, 4.56, 4.9, 4.94, 5.05, 5.06, 5.13, 5.13, 4.63, 4.14, 3.77];
 const DEAD_SEA_PV = DAILY_PV[0]; // 4.59 kWh/kWp·day = E_y 1674.85 / 365
+const ZABUYE_PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.35&lon=84.05&peakpower=1&loss=14&angle=30&aspect=0&raddatabase=PVGIS-ERA5&outputformat=json';
+// Frozen PVGIS-ERA5 response: data/pvgis-zabuye.json, retrieved 2026-09-27. E_d month order.
+const ZABUYE_DAILY_PV = [2118.82 / 365, 6.04, 6.38, 6.27, 6.21, 5.84, 5.6, 5.06, 5.14, 5.83, 5.97, 5.63, 5.75];
+const ZABUYE_PV = ZABUYE_DAILY_PV[0]; // kWh/kWp·day = E_y 2118.82 / 365
+const ZABUYE_ASSAY_URL = 'https://doi.org/10.3389/fceng.2022.1008680';
 
 function right(kind, status, note, evidence) {
   return {
@@ -120,6 +125,105 @@ function siteDeadSeaAbundance() {
   return definition;
 }
 
+function siteZabuyeAbundance() {
+  const definition = abundance.createAbundanceCase({
+    assayId: 'zabuye-lithium-brine',
+    region: 'China / Tibet',
+  });
+  const node = id => definition.graph.nodes.find(item => item.id === id);
+  const power = node('power').params.stream.kWh;
+  const solarKWp = power / ZABUYE_PV;
+  const clone = stream => JSON.parse(JSON.stringify(stream));
+  node('power').siteResource = 'electricity';
+  node('brine').siteResource = 'brine';
+  node('salt-feed').siteResource = 'salt';
+  node('water').siteResource = 'freshwater';
+  node('air').siteResource = 'air';
+  node('power').economics = tea.bindCapexPack('solar-pv', { capacity: solarKWp });
+  definition.site = {
+    id: 'china-zabuye',
+    name: 'Lake Zabuye (Zhabuye), Tibet, China',
+    latitude: 31.35,
+    longitude: 84.05,
+    solarKWp,
+    dailyPVKWhPerKWp: ZABUYE_PV,
+    resources: {
+      electricity: {
+        stream: clone(node('power').params.stream),
+        quality: 'cited',
+        evidence: 'PVGIS-ERA5 annual average from E_y 2118.82 kWh/kWp × array sized to the hub load',
+      },
+      brine: {
+        stream: clone(node('brine').params.stream),
+        quality: 'cited',
+        evidence: 'Lake Zabuye carbonate brine from Murphy & Haji 2022 Table 1 (frozen data/zabuye-lithium-brine.json; Li+ 970 mg/L). Daily mass is 1e5 kg; not a mineral concession',
+      },
+      salt: {
+        stream: clone(node('salt-feed').params.stream),
+        quality: 'user-assumption',
+        evidence: 'Purchased salt makeup assumed available; not a local quote',
+      },
+      freshwater: {
+        stream: clone(node('water').params.stream),
+        quality: 'user-assumption',
+        evidence: 'Process water is assumed, not a Zabuye freshwater right',
+      },
+      air: {
+        stream: clone(node('air').params.stream),
+        quality: 'literature-estimate',
+        evidence: 'Ambient air intake; no quality permit modeled',
+      },
+      grid: { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' },
+    },
+    meteo: {
+      dailyPVKWhPerKWp: ZABUYE_PV,
+      monthlyPVKWhPerKWp: ZABUYE_DAILY_PV.slice(),
+      quality: 'cited',
+      source: 'PVGIS-ERA5',
+      retrieved: '2026-09-27',
+      cite: {
+        label: 'PVGIS-ERA5, 2005–2023 monthly; annual E_y 2118.82 kWh/kWp; frozen 2026-09-27',
+        url: ZABUYE_PVGIS_URL,
+      },
+      notes: 'Frozen PVGIS-ERA5 monthly at 31.35, 84.05 (elevation ~4424 m). Not a plant-measured irradiance series and not a Dead Sea or Qaidam clone.',
+    },
+    assay: {
+      kind: 'brine',
+      assayId: 'zabuye-lithium-brine',
+      summary: 'Lake Zabuye carbonate-type brine (Murphy & Haji 2022 Table 1; Li+ 970 mg/L). Mg, Ca, HCO3, and Br omitted because the table lists them as zero or absent. Not a mineral concession assay',
+      quality: 'cited',
+      evidence: [
+        { label: 'Murphy & Haji 2022, Frontiers in Chemical Engineering Table 1: Lake Zabuye brine majors', url: ZABUYE_ASSAY_URL },
+        { label: 'Murphy & Haji 2022 full text (same Table 1)', url: 'https://www.frontiersin.org/journals/chemical-engineering/articles/10.3389/fceng.2022.1008680/full' },
+      ],
+    },
+    rights: {
+      gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports', [
+        { label: 'Zabuye Lake geography (context, not an interconnection)', url: 'https://en.wikipedia.org/wiki/Zabuye_Lake' },
+      ]),
+      freshwater: right('freshwater', 'assumed', 'Process water is assumed, not a Zabuye freshwater right', [
+        { label: 'Zabuye Lake water context', url: 'https://en.wikipedia.org/wiki/Zabuye_Lake' },
+      ]),
+      seawaterIntake: right('intake', 'unverified', 'Inland brine hub; no seawater intake'),
+      seawaterDischarge: right('discharge', 'unverified', 'Inland brine hub; no seawater outfall'),
+      brineConcession: right('concession', 'assumed', 'Screening assumption so the capital-inclusive cash gate can run. Murphy & Haji 2022 Table 1 is not a Tibet Mineral concession', [
+        { label: 'Murphy & Haji 2022 Table 1 (assay context, not a concession)', url: ZABUYE_ASSAY_URL },
+      ]),
+      saltPurchase: right('purchase', 'assumed', 'Purchased salt makeup assumed available; not a local quote', [
+        { label: 'USGS salt statistics (commodity context, not a contract)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
+      ]),
+    },
+    evidence: [
+      { label: 'Zabuye Lake geography', url: 'https://en.wikipedia.org/wiki/Zabuye_Lake' },
+      { label: 'Solar: PVGIS-ERA5, 2005–2023 monthly at 31.35, 84.05; annual E_y 2118.82 kWh/kWp', url: ZABUYE_PVGIS_URL },
+      { label: 'Murphy & Haji 2022 Table 1: Lake Zabuye carbonate brine majors', url: ZABUYE_ASSAY_URL },
+      { label: 'USGS salt statistics (purchased-salt context)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
+    ],
+    notes: 'Representative-day Zabuye brine hub. Solar is sized to the process load at frozen PVGIS-ERA5 E_y 2118.82 kWh/kWp (2118.82 / 365). Brine composition is the Murphy & Haji 2022 Table 1 carbonate assay (data/zabuye-lithium-brine.json); a literature assay is not a mineral concession. Brine concession is an explicit screening assumption so sizeForPositiveCashflow can run the capital-inclusive gate. Screening offtake uses the default TEA table (no Asia demand region). Screening, not bankable. Freshwater and purchased salt are explicit assumptions. Grid and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
+  };
+  return definition;
+}
+
 function createFuelsAndMineralsNetwork(month = 6) {
   return {
     plants: [
@@ -130,5 +234,13 @@ function createFuelsAndMineralsNetwork(month = 6) {
   };
 }
 
-return { DEAD_SEA_PV, DAILY_PV, siteDeadSeaAbundance, createFuelsAndMineralsNetwork };
+return {
+  DEAD_SEA_PV,
+  DAILY_PV,
+  ZABUYE_PV,
+  ZABUYE_DAILY_PV,
+  siteDeadSeaAbundance,
+  siteZabuyeAbundance,
+  createFuelsAndMineralsNetwork,
+};
 });

@@ -351,3 +351,72 @@ test('coastal methane sizeToProduct H2 produces electrolyzer activity and never 
   const electricity = app.graph.nodes.find(node => node.id === 'electricity');
   assert.ok(electricity.rate > 0);
 });
+
+test('apply location uses frozen or screening solar when live PVGIS fetch fails', async () => {
+  const context = loadApp();
+  context.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  context.PvgisSites = require('../data/pvgis-sites');
+  const app = context.__FLOWSHEET_APP__;
+  const statusText = () => context.document.getElementById('siteFetchStatus').textContent;
+  const setCoords = (lat, lon) => {
+    context.__elements.get('siteLatitude').value = String(lat);
+    context.__elements.get('siteLongitude').value = String(lon);
+    context.__elements.get('siteSolarKWp').value = '10';
+    context.__elements.get('siteBatteryKWh').value = '0';
+  };
+
+  setCoords(36.834, -2.463);
+  await app.applyCoordinates();
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError/);
+  assert.match(statusText(), /Live PVGIS blocked \(CORS\/network\)/);
+  assert.match(statusText(), /frozen PVGIS-SARAH3 for Almería \(retrieved 2026-09-05\)/);
+  assert.ok(app.site.solar.typicalMonths);
+  assert.ok(app.site.resources.electricity.stream.kWh > 0);
+
+  setCoords(22.737, 69.71);
+  await app.applyCoordinates();
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError/);
+  assert.match(statusText(), /frozen PVGIS-ERA5 for Mundra/);
+  assert.match(statusText(), /retrieved 2026-09-21/);
+  assert.equal(app.site.solar, null);
+  assert.equal(app.site.meteo.quality, 'cited');
+  assert.equal(app.site.meteo.retrieved, '2026-09-21');
+  assert.match(app.site.meteo.source, /PVGIS-ERA5/);
+  assert.equal(app.site.meteo.monthlyPVKWhPerKWp.length, 13);
+  assert.ok(app.site.dailyPVKWhPerKWp > 0);
+  assert.ok(Math.abs(app.site.resources.electricity.stream.kWh - app.site.dailyPVKWhPerKWp * 10) < 1e-6);
+
+  context.fetch = async () => ({ ok: false, status: 503 });
+  setCoords(59.9, 10.8);
+  await app.applyCoordinates();
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError|PVGIS 503/);
+  assert.match(statusText(), /screening-band ~\d+\.\d kWh\/kWp·day/);
+  assert.match(statusText(), /not a cited hourly series/);
+  assert.match(statusText(), /same-origin proxy/);
+  assert.equal(app.site.meteo.quality, 'screening');
+  assert.equal(app.site.meteo.source, 'pvScreeningBand');
+  assert.equal(app.site.solar.annualTypical.length, 24);
+  const band = context.FlowsheetMapSite.pvScreeningBand(59.9, 10.8);
+  const sum = app.site.solar.annualTypical.reduce((total, value) => total + value, 0);
+  assert.ok(Math.abs(sum - band.typicalKWhPerKWpDay) < 1e-9);
+});
+
+test('loading a demo or clearing the factory drops a sticky cashflow banner', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  const banner = context.__elements.get('cashflowResult');
+  app.loadAbundanceHub();
+  app.sizeForPositiveCashflow({ scales: [1], rates: [0] });
+  assert.equal(banner.hidden, false);
+  assert.match(banner.innerHTML, /Net cash/);
+  app.loadCoastalMethane(0);
+  assert.equal(banner.hidden, true);
+  assert.equal(banner.innerHTML, '');
+  app.loadAbundanceHub();
+  app.sizeForPositiveCashflow({ scales: [1], rates: [0] });
+  assert.equal(banner.hidden, false);
+  app.clearFactory();
+  assert.equal(banner.hidden, true);
+  assert.equal(banner.innerHTML, '');
+  assert.equal(app.graph.nodes.length, 0);
+});

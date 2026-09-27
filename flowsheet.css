@@ -1570,6 +1570,24 @@ label output + .quality-chip {
   display: none;
 }
 
+.more-section > summary::before,
+.palette-category > summary::before {
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin: 0 0.45em 0.12em 0;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-0.05em) rotate(-45deg);
+  vertical-align: middle;
+}
+
+.more-section[open] > summary::before,
+.palette-category[open] > summary::before {
+  transform: translateY(0.05em) rotate(45deg);
+}
+
 .more-section > summary:hover,
 .more-section > summary:focus-visible,
 .palette-category > summary:hover,
@@ -1793,6 +1811,24 @@ label output + .quality-chip {
 /* warm industrial polish */
 .overview-hero { gap: 18px; padding: 4px 0 2px; }
 .overview-hero-copy h2 { letter-spacing: -0.02em; color: var(--text-primary); }
+.overview-hero-copy h2 .text-button {
+  font: inherit;
+  font-size: 0.62em;
+  letter-spacing: 0;
+  color: var(--electric);
+  background: none;
+  border: 0;
+  padding: 0 0 0 0.35em;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  vertical-align: 0.15em;
+}
+.overview-hero-copy h2 .text-button:hover,
+.overview-hero-copy h2 .text-button:focus-visible {
+  color: var(--text-primary);
+  outline: none;
+}
 .overview-block h3 { color: var(--accent); }
 .strip-metrics div {
   border-radius: var(--radius);

@@ -638,7 +638,7 @@
     latitude: 31.35,
     longitude: 84.05,
     kind: 'brine-hub',
-    notes: 'Lake Zabuye / Zhabuye carbonate-type salt lake (Tibetan Plateau). Location preset only — Murphy & Haji 2022 Table 1 majors are screening chemistry, not a Tibet Mineral/Zabuye concession sample. Screening offtake inherits the default TEA table (no Asia demand region). Not Qaidam/Kunteyi intercrystalline chemistry. Frozen PVGIS-ERA5 on select (per-site series) — not a Qaidam or Dead Sea solar clone.',
+    notes: 'Lake Zabuye / Zhabuye carbonate-type salt lake (Tibetan Plateau). Location preset only — Murphy & Haji 2022 Table 1 majors are screening chemistry, not a Tibet Mineral/Zabuye concession sample. Screening offtake inherits the default TEA table (no Asia demand region). Not Qaidam/Kunteyi intercrystalline chemistry. PVGIS: frozen PVGIS-ERA5 PVcalc (2026-09-27, E_y 2070.67 kWh/kWp at 31.35, 84.05; data/pvgis-zabuye.json) — not a screening-band yield and not a Qaidam or Dead Sea solar clone.',
     evidence: Object.freeze([
       Object.freeze({ label: 'Murphy & Haji 2022, Frontiers in Chemical Engineering Table 1: Lake Zabuye brine majors (DOI)', url: 'https://doi.org/10.3389/fceng.2022.1008680' }),
       Object.freeze({ label: 'Wikipedia: Zabuye Lake (context, not a concession)', url: 'https://en.wikipedia.org/wiki/Zabuye_Lake' }),

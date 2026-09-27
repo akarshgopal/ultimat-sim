@@ -42,7 +42,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -297,6 +297,31 @@ test('size product menus list methanol and ammonia', () => {
   assert.match(html, /value="ammonia"/);
   assert.match(html, /id="processSizeProduct"/);
   assert.match(html, /id="processSizeForCashflow"/);
+});
+
+test('Zabuye brine hub loads the cited assay, frozen ERA5, and capital-inclusive cash', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /id="loadZabuyeHub"/);
+  assert.match(html, /data-demo="zabuye-hub"/);
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  assert.equal(typeof app.loadZabuyeHub, 'function');
+  const sized = app.loadZabuyeHub();
+  assert.equal(app.site.id, 'china-zabuye');
+  assert.equal(app.site.latitude, 31.35);
+  assert.equal(app.site.longitude, 84.05);
+  assert.equal(app.site.assay.assayId, 'zabuye-lithium-brine');
+  assert.equal(app.site.dailyPVKWhPerKWp, context.NetworkCase.ZABUYE_PV);
+  assert.notEqual(app.site.dailyPVKWhPerKWp, context.NetworkCase.DEAD_SEA_PV);
+  assert.equal(app.site.meteo.source, 'PVGIS-ERA5');
+  assert.equal(app.site.meteo.retrieved, '2026-09-27');
+  assert.match(app.site.meteo.cite.url, /lat=31\.35/);
+  assert.equal(sized.mode, 'positive-cashflow');
+  assert.ok(app.economics.annualNetCash > 0);
+  assert.match(context.__elements.get('overviewSiteName').textContent, /Zabuye/);
+  assert.match(context.__elements.get('overviewCashflow').innerHTML, /\$/);
+  assert.match(context.__elements.get('overviewLand').innerHTML, /ha|m²/);
+  assert.match(context.__elements.get('overviewYield').innerHTML, /PVGIS|re\.jrc/);
 });
 
 test('positive-cashflow status reports heat covered when present', () => {

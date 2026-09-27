@@ -7,11 +7,13 @@ const {
   evaluateNetwork,
   SEA_USD_PER_T_KM,
 } = require('../engine/network');
-const { estimateSolarLandHa } = require('../engine/footprint');
-const { createFuelsAndMineralsNetwork, siteDeadSeaAbundance, DAILY_PV, DEAD_SEA_PV } = require('../cases/network');
+const { estimateSolarLandHa, estimateFootprint } = require('../engine/footprint');
+const { createFuelsAndMineralsNetwork, siteDeadSeaAbundance, siteZabuyeAbundance, DAILY_PV, DEAD_SEA_PV, ZABUYE_PV, ZABUYE_DAILY_PV } = require('../cases/network');
 const { solveOperation } = require('../engine/solve');
+const { sizeForPositiveCashflow } = require('../engine/size');
 const { streamMassKg } = require('../engine/model');
-const pvgisDeadSea = require('../data/pvgis-dead-sea.json');
+const pvgisZabuye = require('../data/pvgis-zabuye.json');
+const pvgisSites = require('../data/pvgis-sites');
 
 function waterStream(mol = 1000) {
   return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol: { H2O: mol } };
@@ -142,6 +144,53 @@ test('Dead Sea brine hub closes balances on assumed solar and brine', () => {
   assert.ok(solved.nodes.ammonia.activity > 0);
   assert.ok(solved.nodes['bromine-recovery'].activity > 0);
   assert.ok(solved.balances.maxAbsResidual < 1e-8);
+});
+
+test('Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, then sizes cash-positive', () => {
+  const definition = siteZabuyeAbundance();
+  const solved = solveOperation(definition);
+  assert.equal(definition.meta.assayId, 'zabuye-lithium-brine');
+  assert.equal(definition.site.id, 'china-zabuye');
+  assert.equal(definition.site.name, 'Lake Zabuye (Zhabuye), Tibet, China');
+  assert.equal(definition.site.latitude, 31.35);
+  assert.equal(definition.site.longitude, 84.05);
+  assert.equal(definition.site.assay.assayId, 'zabuye-lithium-brine');
+  assert.equal(definition.site.assay.kind, 'brine');
+  assert.equal(definition.site.assay.quality, 'cited');
+  assert.ok(definition.site.assay.evidence.some(item => /10\.3389\/fceng\.2022\.1008680/.test(item.url)));
+  assert.equal(JSON.stringify(definition).includes('dead-sea-brine'), false);
+  assert.equal(definition.site.dailyPVKWhPerKWp, ZABUYE_PV);
+  assert.equal(definition.site.dailyPVKWhPerKWp, pvgisZabuye.outputs.totals.fixed.E_y / 365);
+  assert.notEqual(definition.site.dailyPVKWhPerKWp, DEAD_SEA_PV);
+  assert.deepEqual(definition.site.meteo.monthlyPVKWhPerKWp, ZABUYE_DAILY_PV);
+  assert.equal(definition.site.meteo.quality, 'cited');
+  assert.equal(definition.site.meteo.source, 'PVGIS-ERA5');
+  assert.equal(definition.site.meteo.retrieved, '2026-09-27');
+  assert.match(definition.site.meteo.cite.url, /lat=31\.35/);
+  assert.match(definition.site.meteo.cite.url, /PVGIS-ERA5/);
+  assert.doesNotMatch(definition.site.meteo.cite.url, /lat=31\.16/);
+  assert.equal(definition.site.resources.brine.stream.mol['Li+'] > 0, true);
+  assert.equal(definition.site.resources.brine.stream.mol['Mg+2'], undefined);
+  assert.ok(solved.balances.maxAbsResidual < 1e-8);
+  assert.equal(pvgisSites.BY_SITE_ID['china-zabuye'].E_y, 2070.67);
+  assert.equal(pvgisSites.BY_SITE_ID['china-zabuye'].retrieved, '2026-09-27');
+  assert.equal(pvgisSites.SCREENING_BAND_SITE_IDS.includes('china-zabuye'), false);
+  const seedFootprint = estimateFootprint({ site: definition.site, graph: definition.graph, solved });
+  assert.ok(seedFootprint.totalAreaM2 > 0);
+  assert.ok(seedFootprint.totalHa > 0);
+  const sized = sizeForPositiveCashflow({ caseOrBuilder: () => siteZabuyeAbundance() });
+  assert.ok(sized.economics.annualNetCash > 0);
+  assert.equal(sized.objective.annualNetCash, sized.economics.annualNetCash);
+  assert.equal(sized.definition.site.id, 'china-zabuye');
+  assert.equal(sized.definition.site.assay.assayId, 'zabuye-lithium-brine');
+  assert.notEqual(sized.definition.site.dailyPVKWhPerKWp, DEAD_SEA_PV);
+  const footprint = estimateFootprint({
+    site: sized.definition.site,
+    graph: sized.definition.graph,
+    solved: sized.solved,
+  });
+  assert.ok(footprint.totalAreaM2 > 0);
+  assert.ok(footprint.totalHa > 0);
 });
 
 test('fuels plus minerals network rolls up CH4, NH3, and money', () => {

@@ -245,6 +245,8 @@ test('catalog growth wires Hombre Muerto, Maricunga, Clayton Valley, Zabuye hubs
   assert.equal(zabuye.region, 'China / Tibet');
   assert.equal(zabuye.brineAssayId, 'zabuye-lithium-brine');
   assert.match(zabuye.notes, /Not Qaidam/i);
+  assert.match(zabuye.notes, /frozen PVGIS-ERA5/i);
+  assert.doesNotMatch(zabuye.notes, /screening band until/i);
   assert.ok(SiteAssays.getAssay('zabuye-lithium-brine'));
 
   const madryn = byId.get('argentina-puerto-madryn');

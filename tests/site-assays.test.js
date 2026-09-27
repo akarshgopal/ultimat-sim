@@ -18,6 +18,10 @@ const ASSAY_FILES = [
   'arabian-sea-seawater',
   'gulf-of-kutch-seawater',
   'benguela-atlantic-seawater',
+  'patagonian-atlantic-seawater',
+  'levantine-mediterranean-seawater',
+  'southern-california-bight-seawater',
+  'baja-pacific-seawater',
 ];
 
 for (const id of ASSAY_FILES) {
@@ -136,6 +140,7 @@ const BRINE_ASSAY_FILES = [
   'kutch-subsoil-brine',
   'texas-gulf-desal-brine',
   'mediterranean-swro-brine',
+  'guerrero-negro-brine',
 ];
 
 for (const id of BRINE_ASSAY_FILES) {
@@ -208,6 +213,11 @@ for (const id of BRINE_ASSAY_FILES) {
     }
     if (id === 'texas-gulf-desal-brine') {
       assert.ok(js.evidence.some((item) => /pcca\.com|Port of Corpus Christi|Outfall/i.test(JSON.stringify(js.evidence))));
+    }
+    if (id === 'guerrero-negro-brine') {
+      assert.equal(js.ions_g_per_kg['Li+'], undefined);
+      assert.ok(js.ions_g_per_kg['Mg+2'] > 0);
+      assert.ok(js.evidence.some((item) => /doi\.org\/10\.3389\/fmicb\.2013\.00399/.test(item.url)));
     }
         assert.ok(js.evidence.length > 0);
     assert.ok(js.evidence.every((item) => /^https:\/\//.test(item.url)));

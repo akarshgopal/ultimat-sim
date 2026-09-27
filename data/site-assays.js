@@ -32,6 +32,9 @@
       'zabuye-lithium-brine': require('./zabuye-lithium-brine.js'),
       'patagonian-atlantic-seawater': require('./patagonian-atlantic-seawater.js'),
       'levantine-mediterranean-seawater': require('./levantine-mediterranean-seawater.js'),
+      'southern-california-bight-seawater': require('./southern-california-bight-seawater.js'),
+      'baja-pacific-seawater': require('./baja-pacific-seawater.js'),
+      'guerrero-negro-brine': require('./guerrero-negro-brine.js'),
     } : {
       'almeria-seawater': root.AlmeriaSeawater,
       'persian-gulf-seawater': root.PersianGulfSeawater,
@@ -56,6 +59,16 @@
       'kutch-subsoil-brine': root.KutchSubsoilBrine,
       'texas-gulf-desal-brine': root.TexasGulfDesalBrine,
       'mediterranean-swro-brine': root.MediterraneanSwroBrine,
+      'dead-sea-brine': root.DeadSeaBrine,
+      'hombre-muerto-lithium-brine': root.HombreMuertoLithiumBrine,
+      'maricunga-lithium-brine': root.MaricungaLithiumBrine,
+      'clayton-valley-brine': root.ClaytonValleyBrine,
+      'zabuye-lithium-brine': root.ZabuyeLithiumBrine,
+      'patagonian-atlantic-seawater': root.PatagonianAtlanticSeawater,
+      'levantine-mediterranean-seawater': root.LevantineMediterraneanSeawater,
+      'southern-california-bight-seawater': root.SouthernCaliforniaBightSeawater,
+      'baja-pacific-seawater': root.BajaPacificSeawater,
+      'guerrero-negro-brine': root.GuerreroNegroBrine,
     }
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -84,6 +97,8 @@
     'argentina-puerto-madryn': 'patagonian-atlantic-seawater',
     'israel-ashkelon': 'levantine-mediterranean-seawater',
     'djibouti-doraleh': 'red-sea-seawater',
+    'us-huntington-beach': 'southern-california-bight-seawater',
+    'mexico-guerrero-negro': 'baja-pacific-seawater',
   });
 
   /** Preset id → process-brine assay file id. Literature brine is not a mineral concession. */
@@ -115,6 +130,8 @@
     'china-zabuye': 'zabuye-lithium-brine',
     'israel-ashkelon': 'dead-sea-brine',
     'djibouti-doraleh': 'danakil-brine',
+    'us-huntington-beach': 'salton-sea-brine',
+    'mexico-guerrero-negro': 'guerrero-negro-brine',
   });
 
   const BRINE_ASSAY_IDS = Object.freeze([
@@ -136,6 +153,7 @@
     'maricunga-lithium-brine',
     'clayton-valley-brine',
     'zabuye-lithium-brine',
+    'guerrero-negro-brine',
   ]);
 
   const SCREENING_INTAKE_M3_PER_DAY = 0.1;

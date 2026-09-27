@@ -191,6 +191,53 @@ test('catalog basins evaluate on the abundance template with FAST sizing', () =>
   assert.ok(uyuni.met || (uyuni.tonnes > 0 && !uyuni.idle), 'Uyuni should rank or be a non-idle near-miss');
 });
 
+
+test('catalog-polish 58ca0d7 hubs/coasts and deferred CA/Baja bind frozen PVGIS-ERA5 (not Dead Sea clones)', () => {
+  const { DEAD_SEA_PV } = require('../cases/network');
+  const pvgisSites = require('../data/pvgis-sites');
+  assert.deepEqual(pvgisSites.SCREENING_BAND_SITE_IDS, []);
+  const polish = [
+    ['argentina-hombre-muerto', 'data/pvgis-hombre-muerto.json', 1668.03, -25.42, -66.92],
+    ['chile-salar-de-maricunga', 'data/pvgis-maricunga.json', 1744.4, -26.92, -69.05],
+    ['us-clayton-valley', 'data/pvgis-clayton-valley.json', 1917.59, 37.75, -117.57],
+    ['china-zabuye', 'data/pvgis-zabuye.json', 2070.67, 31.35, 84.05],
+    ['argentina-puerto-madryn', 'data/pvgis-puerto-madryn.json', 977.78, -42.77, -65.04],
+    ['israel-ashkelon', 'data/pvgis-ashkelon.json', 1695.12, 31.63, 34.56],
+    ['djibouti-doraleh', 'data/pvgis-doraleh.json', 1623.66, 11.59, 43.09],
+    ['us-huntington-beach', 'data/pvgis-huntington-beach.json', 1762.0, 33.655, -118.005],
+    ['mexico-guerrero-negro', 'data/pvgis-guerrero-negro.json', 1881.94, 27.97, -114.05],
+  ];
+  for (const [id, file, eY, lat, lon] of polish) {
+    assert.ok(pvgisSites.BY_SITE_ID[id], id);
+    const site = searchSite(id);
+    assert.ok(site, id);
+    const pvgis = require(path.join(__dirname, '..', file));
+    assert.equal(pvgis.outputs.totals.fixed.E_y, eY, id);
+    assert.equal(pvgis.inputs.location.latitude, lat, id);
+    assert.equal(pvgis.inputs.location.longitude, lon, id);
+    assert.equal(pvgis.inputs.meteo_data.radiation_db, 'PVGIS-ERA5', id);
+    assert.equal(pvgis.meta.retrieved, '2026-09-27', id);
+    assert.match(pvgis.meta.notes, /per-site series/i, id);
+    const solar = frozenSolarFor(site, site.kind === 'brine-hub' ? 'abundance' : 'coastal');
+    assert.ok(solar, id);
+    assert.equal(solar.retrieved, '2026-09-27', id);
+    assert.match(solar.source, /PVGIS-ERA5/, id);
+    assert.equal(solar.dailyPVKWhPerKWp, eY / 365, id);
+    assert.notEqual(solar.dailyPVKWhPerKWp, DEAD_SEA_PV, id);
+  }
+  const huntington = searchSite('us-huntington-beach');
+  assert.equal(huntington.hasSeawaterAssay, true);
+  assert.equal(huntington.hasBrineAssay, true);
+  assert.equal(huntington.brineAssayId, 'salton-sea-brine');
+  assert.equal(templateEligible(huntington, 'coastal').ok, true);
+  assert.equal(templateEligible(huntington, 'abundance').ok, true);
+  const guerrero = searchSite('mexico-guerrero-negro');
+  assert.equal(guerrero.hasSeawaterAssay, true);
+  assert.equal(guerrero.hasBrineAssay, true);
+  assert.equal(guerrero.brineAssayId, 'guerrero-negro-brine');
+  assert.equal(templateEligible(guerrero, 'abundance').ok, true);
+});
+
 test('post-catalog inland basins bind frozen PVGIS-ERA5 (not Dead Sea / screening band)', () => {
   const { DEAD_SEA_PV } = require('../cases/network');
   const pvgisSites = require('../data/pvgis-sites');

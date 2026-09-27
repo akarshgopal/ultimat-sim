@@ -32,6 +32,8 @@ const REQUIRED_IDS = [
   'argentina-puerto-madryn',
   'israel-ashkelon',
   'djibouti-doraleh',
+  'us-huntington-beach',
+  'mexico-guerrero-negro',
 ];
 
 test('SITE_PRESETS export unique ids and finite lat/lon on globalThis and module.exports', () => {
@@ -267,4 +269,28 @@ test('catalog growth wires Hombre Muerto, Maricunga, Clayton Valley, Zabuye hubs
   assert.equal(doraleh.brineAssayId, 'danakil-brine');
   assert.equal(doraleh.region, 'Red Sea');
   assert.match(doraleh.notes, /not a port lease/i);
+
+  const huntington = byId.get('us-huntington-beach');
+  assert.equal(huntington.kind, 'industrial-coast');
+  assert.equal(huntington.assayId, 'southern-california-bight-seawater');
+  assert.equal(huntington.brineAssayId, 'salton-sea-brine');
+  assert.equal(huntington.region, 'US West / California');
+  assert.equal(huntington.rightsHints.seawaterIntake.status, 'assumed');
+  assert.match(huntington.notes, /not an AES|Poseidon|not a Huntington/i);
+  assert.match(huntington.notes, /Frozen PVGIS-ERA5/i);
+  assert.equal(SiteAssays.assayIdForPreset('us-huntington-beach'), 'southern-california-bight-seawater');
+  assert.equal(SiteAssays.brineAssayIdForPreset('us-huntington-beach'), 'salton-sea-brine');
+  assert.ok(SiteAssays.getAssay('southern-california-bight-seawater'));
+
+  const guerrero = byId.get('mexico-guerrero-negro');
+  assert.equal(guerrero.kind, 'industrial-coast');
+  assert.equal(guerrero.assayId, 'baja-pacific-seawater');
+  assert.equal(guerrero.brineAssayId, 'guerrero-negro-brine');
+  assert.equal(guerrero.region, 'Mexico / Baja');
+  assert.ok(guerrero.evidence.some(item => /doi\.org\/10\.3389\/fmicb\.2013\.00399/.test(item.url)));
+  assert.match(guerrero.notes, /not an ESSA/i);
+  assert.match(guerrero.notes, /Frozen PVGIS-ERA5/i);
+  assert.equal(SiteAssays.brineAssayIdForPreset('mexico-guerrero-negro'), 'guerrero-negro-brine');
+  assert.ok(SiteAssays.getAssay('guerrero-negro-brine'));
+  assert.match(hombre.notes, /Frozen PVGIS-ERA5/i);
 });

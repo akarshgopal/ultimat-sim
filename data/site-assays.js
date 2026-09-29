@@ -128,6 +128,7 @@
     'chile-salar-de-maricunga': 'maricunga-lithium-brine',
     'us-clayton-valley': 'clayton-valley-brine',
     'china-zabuye': 'zabuye-lithium-brine',
+    'levant-dead-sea': 'dead-sea-brine',
     'israel-ashkelon': 'dead-sea-brine',
     'djibouti-doraleh': 'danakil-brine',
     'us-huntington-beach': 'salton-sea-brine',

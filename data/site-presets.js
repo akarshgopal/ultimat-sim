@@ -677,6 +677,28 @@
     }),
   }),
   Object.freeze({
+    id: 'levant-dead-sea',
+    brineAssayId: 'dead-sea-brine',
+    name: 'Dead Sea industrial shore',
+    region: 'Levant',
+    latitude: 31.16,
+    longitude: 35.43,
+    kind: 'brine-hub',
+    notes: 'Dead Sea industrial shore (31.16, 35.43). Location preset only — the frozen open-water ion assay is screening chemistry, not an ICL/APC concession sample. Same coordinates and name as the brine and ammonia demo so the Location menu matches the Overview title. Not Ashkelon seawater. PVGIS: frozen PVGIS-SARAH3/ERA5 PVcalc (2026-09-06, E_y 1674.85 kWh/kWp; data/pvgis-dead-sea.json).',
+    evidence: Object.freeze([
+      Object.freeze({ label: 'Wikipedia: Dead Sea chemical composition (early-1980s surface)', url: 'https://en.wikipedia.org/wiki/Dead_Sea#Chemical_composition' }),
+      Object.freeze({ label: 'Alsabbagh et al. 2021: Li+ 18 mg/L Dead Sea water (DOI)', url: 'https://doi.org/10.1016/j.mineng.2021.107038' }),
+      Object.freeze({ label: 'OpenStreetMap: Dead Sea', url: 'https://www.openstreetmap.org/#map=10/31.16/35.43' }),
+    ]),
+    rightsHints: Object.freeze({
+      gridImport: Object.freeze({ kind: 'grid', status: 'unverified', authorize: false, note: 'No grid interconnection verified at this inland brine shore' }),
+      freshwater: Object.freeze({ kind: 'freshwater', status: 'unverified', authorize: false, note: 'No freshwater right verified in this arid basin' }),
+      seawaterIntake: Object.freeze({ kind: 'intake', status: 'unverified', authorize: false, note: 'Inland brine hub; no seawater intake' }),
+      seawaterDischarge: Object.freeze({ kind: 'discharge', status: 'unverified', authorize: false, note: 'Inland brine hub; no seawater outfall' }),
+      brineConcession: Object.freeze({ kind: 'concession', status: 'unverified', authorize: false, note: 'Literature Dead Sea open-water assay is regional screening, not a mineral concession' }),
+    }),
+  }),
+  Object.freeze({
     id: 'israel-ashkelon',
     assayId: 'levantine-mediterranean-seawater',
     brineAssayId: 'dead-sea-brine',

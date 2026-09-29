@@ -57,10 +57,17 @@ test('vendor ships Esri Lerc decode assets for GSA tiles', () => {
   );
 });
 
-test('factory starts blank and wiring blocks does not rewrite their setpoints', () => {
+test('factory starts on the Zabuye materials demo and wiring blocks does not rewrite their setpoints', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
 
+  assert.equal(app.site.id, 'china-zabuye');
+  assert.equal(app.site.latitude, 31.35);
+  assert.equal(app.site.longitude, 84.05);
+  assert.ok(app.economics.annualNetCash > 0);
+  assert.match(context.__elements.get('overviewDemoChip').textContent, /Zabuye/);
+  assert.equal(context.__elements.get('overviewDemoChip').hidden, false);
+  app.clearFactory();
   assert.deepEqual([...app.graph.nodes], []);
   const dac = app.addNode('dac');
   const sabatier = app.addNode('sabatier');
@@ -147,6 +154,7 @@ test('coastal methane loads a sited factory whose winter solar cuts methane', ()
 test('switching DAC route drops incompatible heat and reagent connections', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
+  app.clearFactory();
   const dac = app.addNode('dac-solid');
   app.completeBoundaries();
   assert.equal(app.result.nodes[dac.id].activity, 10);
@@ -215,6 +223,7 @@ test('fuels plus minerals network rolls up two sited plants', () => {
 test('Location presets populate by region and applying Almería sets coords, name, and honest rights', async () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
+  app.clearFactory();
   const picker = context.__elements.get('sitePreset');
   assert.match(picker.innerHTML, /optgroup label="Gulf"/);
   assert.match(picker.innerHTML, /uae-taweelah/);

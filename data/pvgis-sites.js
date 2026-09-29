@@ -38,6 +38,7 @@
     'spain-almeria': 'pvgis-almeria.json',
     'almeria-pvgis-2026-09-05': 'pvgis-almeria.json',
     'dead-sea-pvgis-2026-09-06': 'pvgis-dead-sea.json',
+    'levant-dead-sea': 'pvgis-dead-sea.json',
   });
   const raw = {};
   if (typeof require === 'function') {

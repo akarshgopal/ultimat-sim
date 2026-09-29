@@ -43,6 +43,9 @@ test('screening money uses fewer significant figures without a tilde', () => {
   assert.equal(formatUncertainMoney(52425, 'screening'), '$52,000');
   assert.equal(formatUncertainMoney(-12345, 'assumption'), '-$12,000');
   assert.equal(formatUncertainMoney(1560, 'cited'), '$1,560');
+  assert.equal(formatUncertainMoney(340e6, 'screening'), '$340M');
+  assert.equal(formatUncertainMoney(-1.2e9, 'assumption'), '-$1.2B');
+  assert.equal(formatUncertainMoney(340e6, 'screening', { compact: false }), '$340,000,000');
   assert.equal(formatUncertainMoney(52425, { kind: 'product-cost' }), '$52,000');
   assert.doesNotMatch(formatUncertainMoney(52425, 'screening'), /~|±|\+\/-/);
 });

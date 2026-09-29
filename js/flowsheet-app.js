@@ -60,6 +60,7 @@
   let siteMapEnabled = { osm: true, pvgis: true, water: false, land: false, footprint: true, network: false };
   let activeDemoId = null;
   let lastCashflowCompare = null;
+  let preSizingSeed = null;
   let siteMapFailed = false;
   let siteMapTilesFailed = false;
   let siteMapLayersReady = false;
@@ -491,6 +492,7 @@
     renderNetwork();
   });
   document.getElementById('screenPowerBreakeven')?.addEventListener('click', screenPowerBreakEven);
+  document.getElementById('powerBreakevenMode')?.addEventListener('change', populatePowerBreakevenMaterials);
   document.getElementById('captureBaseline').addEventListener('click', captureBaseline);
   document.getElementById('clearBaseline').addEventListener('click', clearBaseline);
   document.getElementById('projectLifeYears').addEventListener('input', handleProjectEconomics);
@@ -764,6 +766,7 @@
     pendingPort = null;
     site = null;
     lastSizing = null;
+    preSizingSeed = null;
     operationMeta = {};
     routeNote = '';
     setActiveDemo(null);
@@ -814,6 +817,7 @@
       graph: { nodes: graph.nodes, edges: graph.edges },
       operation: {
         setpoints,
+        ...(preSizingSeed ? { preSizingSeed: clone(preSizingSeed) } : {}),
         ...(priorities ? { priorities } : {}),
         ...(operationMeta.boundaryLimitedBy ? { boundaryLimitedBy: operationMeta.boundaryLimitedBy } : {}),
       },
@@ -909,9 +913,15 @@
 
   function formatCashflowMoney(value) {
     if (!Number.isFinite(value)) return '—';
+    if (Math.abs(value) >= 1e6) return formatUncertainMoney(value, 'screening');
     const abs = Math.abs(value);
     const digits = abs >= 1000 ? 0 : abs >= 10 ? 1 : 2;
     return `${value < 0 ? '-' : ''}$${abs.toLocaleString(undefined, { maximumFractionDigits: digits })}`;
+  }
+
+  function balancesNeedAttention(solved = result) {
+    const residual = Number(solved?.balances?.maxAbsResidual);
+    return Number.isFinite(residual) && residual >= 1e-8;
   }
 
   function clearCashflowBanner() {
@@ -934,7 +944,8 @@
     if (!lastCashflowCompare) { el.hidden = true; el.innerHTML = ''; return; }
     const { before, after, objective } = lastCashflowCompare;
     const delta = (after ?? 0) - (before ?? 0);
-    const met = objective?.met;
+    const openBalances = balancesNeedAttention();
+    const met = Boolean(objective?.met) && !openBalances;
     const products = objective?.activeSaleCount ?? objective?.positiveSaleCount ?? 0;
     const deltaLabel = `${delta >= 0 ? '+' : ''}${formatCashflowMoney(delta)}`;
     el.hidden = false;
@@ -942,7 +953,8 @@
       · ${products} positive-sale product${products === 1 ? '' : 's'}
       <br>Net cash ${formatCashflowMoney(before)} → ${formatCashflowMoney(after)}
       (<span class="${delta > 0 ? 'positive' : delta < 0 ? 'negative' : ''}">${deltaLabel}</span>)
-      ${met ? '' : '<br>Kept the best available net cash among searched slates.'}`;
+      ${met ? '' : '<br>Kept the best available net cash among searched slates.'}
+      ${openBalances ? '<br>Balances need attention, so this is not treated as a success.' : ''}`;
   }
 
   function sizeForPositiveCashflow(opts = {}) {
@@ -1548,9 +1560,15 @@
     try { storage.setItem(NETWORK_KEY, JSON.stringify({ plants: network.plants, corridors: network.corridors })); } catch { /* ignore */ }
   }
 
+  function adoptPreSizingSeed(definition) {
+    const seed = definition?.operation?.preSizingSeed;
+    preSizingSeed = seed && Number(seed.brineKg) > 0 && seed.streams ? clone(seed) : null;
+  }
+
   function loadCase(definition, selection) {
     clearCashflowBanner();
     routeNote = '';
+    adoptPreSizingSeed(definition);
     site = definition.site || null;
     operationMeta = {
       priorities: definition.operation?.priorities ? clone(definition.operation.priorities) : undefined,
@@ -1647,7 +1665,7 @@
   }
 
   function snapshot() {
-    return { version: 1, graph, setpoints, selectedNodeId, projectEconomics, canvasZoom, site };
+    return { version: 1, graph, setpoints, selectedNodeId, projectEconomics, canvasZoom, site, preSizingSeed };
   }
 
   function persistAutosave() {
@@ -1690,6 +1708,7 @@
     Object.assign(projectEconomics, saved.projectEconomics || {});
     canvasZoom = clampZoom(saved.canvasZoom ?? 1);
     site = saved.site || null;
+    preSizingSeed = saved.preSizingSeed && Number(saved.preSizingSeed.brineKg) > 0 ? clone(saved.preSizingSeed) : null;
     pendingPort = null;
     return true;
   }
@@ -3392,7 +3411,7 @@
         const selected = lastSizing.selected || {};
         const slate = selected.slateMode || selected.product || 'slate';
         const scale = selected.scale != null ? ` · scale ${selected.scale}×` : (selected.rate != null ? ` · ${selected.rate} kg/day` : '');
-        const metNote = obj.met ? '' : ' · objective not met';
+        const metNote = obj.met && !balancesNeedAttention() ? '' : ' · objective not met';
         const heatNote = lastSizing.heatCoveredKWh != null || lastSizing.heatResidualKWh != null
           ? ` · heat covered ${formatNumber(lastSizing.heatCoveredKWh || 0)} / residual ${formatNumber(lastSizing.heatResidualKWh || 0)} kWh`
           : '';
@@ -3723,13 +3742,31 @@
     return reasons;
   }
 
+  function soldPowerBreakevenMaterials() {
+    const materials = globalThis.MaterialPowerBreakeven?.MATERIALS || [];
+    const sold = new Set(
+      (currentEconomics?.sinks || [])
+        .filter(sink => sink && sink.disposition === 'sale' && Number(sink.deliveredAmount) > 0)
+        .map(sink => sink.id)
+    );
+    return materials.filter(item => (item.sinks || []).some(id => sold.has(id)));
+  }
+
   function populatePowerBreakevenMaterials() {
     const select = document.getElementById('powerBreakevenMaterial');
-    const materials = globalThis.MaterialPowerBreakeven?.MATERIALS;
-    if (!select || !materials?.length) return;
-    const current = select.value || 'lithium';
+    if (!select) return;
+    const shared = (document.getElementById('powerBreakevenMode')?.value || 'solo') === 'shared';
+    const materials = soldPowerBreakevenMaterials();
+    const current = select.value;
+    if (!materials.length) {
+      select.innerHTML = '<option value="">No products sold</option>';
+      select.value = '';
+      select.disabled = true;
+      return;
+    }
     select.innerHTML = materials.map(item => `<option value="${item.id}">${item.id}</option>`).join('');
-    if ('value' in select) select.value = materials.some(item => item.id === current) ? current : materials[0].id;
+    select.value = materials.some(item => item.id === current) ? current : materials[0].id;
+    select.disabled = shared;
   }
 
   function screenPowerBreakEven() {
@@ -3749,8 +3786,13 @@
       show('Complete the graph before screening purchased-power break-even. Screening only — not a PPA.');
       return null;
     }
+    populatePowerBreakevenMaterials();
     const mode = document.getElementById('powerBreakevenMode')?.value || 'solo';
-    const materialId = document.getElementById('powerBreakevenMaterial')?.value || 'lithium';
+    const materialId = document.getElementById('powerBreakevenMaterial')?.value || '';
+    if (!materialId) {
+      show('This plant is not selling a product this screen can price. Screening only — not a PPA.');
+      return null;
+    }
     try {
       const screened = engine.breakEvenForMaterial(currentCaseDefinition(), result, materialId, mode);
       show(engine.formatBreakEven(screened));
@@ -3769,6 +3811,7 @@
     document.getElementById('projectLifeYears').value = projectEconomics.projectLifeYears;
     document.getElementById('discountRate').value = projectEconomics.discountRate * 100;
     if (ack && ack.checked !== economicsAcknowledgment()) ack.checked = economicsAcknowledgment();
+    populatePowerBreakevenMaterials();
     if (!currentEconomics) {
       status.textContent = result ? `Economics unavailable: ${solveError}` : 'Complete the graph to calculate viability.';
       metrics.innerHTML = '';

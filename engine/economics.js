@@ -221,6 +221,14 @@ function approximateIRR(cashFlows) {
 // Maximizer field: positiveSaleCount = |{R_i>0}| when met, else 0 (max count s.t. cash>0).
 // Reporting field: activeSaleCount = |{sale sinks with R_i>0}| regardless of met.
 // product.active is R_i>0; product.positive follows CM_i (same sign as plant cash).
+// When maxAbsResidual is provided, met also requires a closed balance (< 1e-8).
+// Cash-only callers omit that field and stay gated on cash.
+function balanceAllowsObjective(economics = {}) {
+  if (!Object.prototype.hasOwnProperty.call(economics, 'maxAbsResidual')) return true;
+  const residual = Number(economics.maxAbsResidual);
+  return Number.isFinite(residual) && residual < 1e-8;
+}
+
 function scorePositiveCashflow(economics = {}) {
   const sinks = Array.isArray(economics.sinks) ? economics.sinks : [];
   const annualOperatingCost = number(economics.annualOperatingCost, 0);
@@ -247,12 +255,12 @@ function scorePositiveCashflow(economics = {}) {
     };
   });
   const active = products.filter(product => product.active);
-  const met = annualNetCash > 0 && active.length > 0;
+  const met = annualNetCash > 0 && active.length > 0 && balanceAllowsObjective(economics);
   const activeSaleCount = active.length;
   const positiveSaleCount = met ? active.length : 0;
   return {
     name: 'maximize-positive-sale-count',
-    formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF). positiveSaleCount is met-gated; activeSaleCount is |{R_i>0}| even when cash≤0. CM_i=R_i-(R_i/R)*(C+annualizedCapex); sign(CM_i)=sign(R-C-annualizedCapex) when R_i>0. NPV/IRR use year-0 CAPEX + operating cash (R−OPEX), not the annualized charge.',
+    formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0 and, when maxAbsResidual is set, maxAbsResidual<1e-8; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF). positiveSaleCount is met-gated; activeSaleCount is |{R_i>0}| even when cash≤0. CM_i=R_i-(R_i/R)*(C+annualizedCapex); sign(CM_i)=sign(R-C-annualizedCapex) when R_i>0. NPV/IRR use year-0 CAPEX + operating cash (R−OPEX), not the annualized charge.',
     positiveSaleCount,
     activeSaleCount,
     annualNetCash,

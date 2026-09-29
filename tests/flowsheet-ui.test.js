@@ -345,7 +345,7 @@ test('Zabuye brine hub loads the cited assay, frozen ERA5, and capital-inclusive
 
 test('Economics screens purchased-power break-even on the frozen plant without site-search', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(html, /id="screenPowerBreakeven"/);
+  assert.match(html, /class="primary-action" id="screenPowerBreakeven"/);
   assert.match(html, /id="powerBreakevenMode"/);
   assert.match(html, /value="solo"/);
   assert.match(html, /value="shared"/);
@@ -361,11 +361,18 @@ test('Economics screens purchased-power break-even on the frozen plant without s
   assert.equal(typeof app.screenPowerBreakEven, 'function');
   assert.equal(typeof context.MaterialPowerBreakeven.breakEvenForMaterial, 'function');
   const select = context.__elements.get('powerBreakevenMaterial');
-  assert.match(select.innerHTML, /value="lithium"/);
-  assert.match(select.innerHTML, /value="potash"/);
-  assert.match(select.innerHTML, /value="bromine"/);
+  assert.match(select.innerHTML, /No products sold/);
+  assert.equal(select.disabled, true);
 
-  app.loadMethaneRecycle();
+  app.loadAbundanceHub();
+  assert.match(select.innerHTML, /value="lithium"/);
+  assert.doesNotMatch(select.innerHTML, /value="methane"/);
+  const soldIds = [...select.innerHTML.matchAll(/value="([^"]*)"/g)].map(match => match[1]).filter(Boolean);
+  const catalogIds = context.MaterialPowerBreakeven.MATERIALS.map(item => item.id);
+  assert.ok(soldIds.length > 0);
+  assert.ok(soldIds.every(id => catalogIds.includes(id)));
+  assert.equal(select.disabled, false);
+
   const screened = app.screenPowerBreakEven();
   assert.ok(screened);
   assert.ok(['flip', 'no-flip-always-negative', 'no-flip-always-positive'].includes(screened.status));
@@ -377,8 +384,17 @@ test('Economics screens purchased-power break-even on the frozen plant without s
   context.__elements.get('powerBreakevenMode').value = 'shared';
   const shared = app.screenPowerBreakEven();
   assert.equal(shared.mode, 'shared');
-  assert.match(context.__elements.get('powerBreakevenResult').textContent, /shared/i);
-  assert.match(context.__elements.get('powerBreakevenResult').textContent, /screening/i);
+  assert.equal(select.disabled, true);
+  const sharedText = context.__elements.get('powerBreakevenResult').textContent;
+  assert.match(sharedText, /\(shared\)/);
+  assert.doesNotMatch(sharedText, /\(shared,/);
+  assert.match(sharedText, /screening/i);
+  assert.doesNotMatch(sharedText, /annualNetCash|hero scale|TEA/);
+
+  app.loadMethaneRecycle();
+  assert.match(select.innerHTML, /No products sold/);
+  assert.equal(app.screenPowerBreakEven(), null);
+  assert.match(context.__elements.get('powerBreakevenResult').textContent, /not selling a product/i);
 });
 
 test('positive-cashflow status reports heat covered when present', () => {

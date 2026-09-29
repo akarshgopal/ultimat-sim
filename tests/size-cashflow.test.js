@@ -5,7 +5,7 @@ const test = require('node:test');
 
 const { scorePositiveCashflow, evaluateEconomics } = require('../engine/economics');
 const { solveOperation } = require('../engine/solve');
-const { sizeForPositiveCashflow, sizeToProduct } = require('../engine/size');
+const { sizeForPositiveCashflow, sizeToProduct, ABSOLUTE_SCALE_CAP } = require('../engine/size');
 const { createAbundanceCase } = require('../cases/abundance');
 const { createCoastalCase } = require('../cases/coastal');
 const { createSabatierCase } = require('../cases/sabatier');
@@ -44,6 +44,28 @@ test('scorePositiveCashflow counts sale products only when plant net cash is pos
   assert.equal(negative.met, false);
   assert.equal(negative.positiveSaleCount, 0, 'maximizer count stays met-gated');
   assert.equal(negative.activeSaleCount, 2, 'reporting count is active R_i>0 sinks even when cash≤0');
+
+  const openBalance = scorePositiveCashflow({
+    annualOperatingCost: 100,
+    annualNetCash: 50,
+    maxAbsResidual: 1e-4,
+    sinks: [
+      { id: 'a', disposition: 'sale', annualRevenue: 90, deliveredAmount: 1 },
+      { id: 'b', disposition: 'sale', annualRevenue: 60, deliveredAmount: 1 },
+    ],
+  });
+  assert.equal(openBalance.met, false);
+  assert.equal(openBalance.positiveSaleCount, 0);
+  assert.equal(openBalance.activeSaleCount, 2);
+  const closedBalance = scorePositiveCashflow({
+    annualOperatingCost: 100,
+    annualNetCash: 50,
+    maxAbsResidual: 0,
+    sinks: [
+      { id: 'a', disposition: 'sale', annualRevenue: 90, deliveredAmount: 1 },
+    ],
+  });
+  assert.equal(closedBalance.met, true);
   assert.ok(negative.products.every(product => product.positive === false));
   assert.ok(negative.products.every(product => product.active === true));
 });
@@ -242,6 +264,36 @@ function windowedCashMineralsPlant() {
     operation: { setpoints: { minerals: 1 } },
   };
 }
+
+test('repeated sizeForPositiveCashflow stays on the pre-sizing seed and caps absolute scale', () => {
+  assert.equal(ABSOLUTE_SCALE_CAP, 10);
+  const mineralsKg = definition => definition.graph.nodes.find(node => node.id === 'minerals').capacity;
+  const once = sizeForPositiveCashflow({
+    definition: windowedCashMineralsPlant(),
+    scales: [2],
+    rates: [0],
+    refine: false,
+  });
+  const twice = sizeForPositiveCashflow({
+    definition: once.definition,
+    scales: [2],
+    rates: [0],
+    refine: false,
+  });
+  assert.equal(once.selected.scale, 2);
+  assert.equal(twice.selected.scale, 2);
+  assert.ok(Math.abs(mineralsKg(twice.definition) - mineralsKg(once.definition)) < 1e-6);
+  assert.ok(mineralsKg(twice.definition) < mineralsKg(once.definition) * 1.5);
+
+  const capped = sizeForPositiveCashflow({
+    definition: windowedCashMineralsPlant(),
+    scales: [20],
+    rates: [0],
+    refine: false,
+  });
+  assert.equal(capped.selected.scale, ABSOLUTE_SCALE_CAP);
+  assert.ok(Math.abs(mineralsKg(capped.definition) - mineralsKg(once.definition) * (ABSOLUTE_SCALE_CAP / 2)) < 1e-6);
+});
 
 test('sizeForPositiveCashflow refines a coarse scale grid that can miss cash+', () => {
   const coarse = [0.25, 4];

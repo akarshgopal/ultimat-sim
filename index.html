@@ -278,28 +278,20 @@
           <dl class="strip-metrics" id="economicsMetrics"></dl>
           <section class="power-breakeven" aria-label="Purchased-power break-even">
             <h4>Screen power break-even</h4>
-            <p class="status-meta">Screening $/kWh where this frozen plant’s annual net cash (R − OPEX − annualized CAPEX) crosses zero if PV CAPEX is replaced by purchased power. Solo keeps one material’s sale price; shared keeps co-products. Not a PPA. Does not re-size the plant.</p>
+            <p class="status-meta">Screening only. Finds the purchased electricity price ($/kWh) where this plant’s yearly net cash crosses zero if solar capital cost is replaced by bought power. One product uses that product’s sale price. All products together keeps every sale. Not a PPA. Does not re-size the plant.</p>
             <div class="power-breakeven-controls">
               <label>Mode
                 <select id="powerBreakevenMode">
-                  <option value="solo">solo</option>
-                  <option value="shared">shared</option>
+                  <option value="solo">One product</option>
+                  <option value="shared">All products together</option>
                 </select>
               </label>
               <label>Material
-                <select id="powerBreakevenMaterial">
-                  <option value="lithium">lithium</option>
-                  <option value="bromine">bromine</option>
-                  <option value="potash">potash</option>
-                  <option value="salt">salt</option>
-                  <option value="gypsum">gypsum</option>
-                  <option value="magnesium">magnesium</option>
-                  <option value="caustic">caustic</option>
-                  <option value="ammonia">ammonia</option>
-                  <option value="oxygen">oxygen</option>
+                <select id="powerBreakevenMaterial" disabled>
+                  <option value="">No products sold</option>
                 </select>
               </label>
-              <button type="button" id="screenPowerBreakeven">Screen power break-even</button>
+              <button type="button" class="primary-action" id="screenPowerBreakeven">Screen power break-even</button>
             </div>
             <p class="status-meta power-breakeven-result" id="powerBreakevenResult" hidden></p>
           </section>

@@ -220,6 +220,25 @@ function formatUncertainNumber(value, quality = 'assumption', options = {}) {
   return `${formatted}${unit}${bandSuffix(options.band)}`;
 }
 
+function compactMoneyText(rounded, digits) {
+  const abs = Math.abs(rounded);
+  const units = [
+    { value: 1e12, suffix: 'T' },
+    { value: 1e9, suffix: 'B' },
+    { value: 1e6, suffix: 'M' },
+  ];
+  const unit = units.find(item => abs >= item.value);
+  if (!unit) return '';
+  const scaled = rounded / unit.value;
+  const mag = scaled === 0 ? 0 : Math.floor(Math.log10(Math.abs(scaled)));
+  const fractionDigits = Math.max(0, Math.min(2, digits - 1 - mag));
+  const absText = Math.abs(scaled).toLocaleString('en-US', {
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: 0,
+  });
+  return scaled < 0 ? `-$${absText}${unit.suffix}` : `$${absText}${unit.suffix}`;
+}
+
 function formatUncertainMoney(value, quality = 'assumption', options = {}) {
   const number = Number(value);
   if (!Number.isFinite(number)) return '—';
@@ -227,13 +246,14 @@ function formatUncertainMoney(value, quality = 'assumption', options = {}) {
   const digits = options.digits ?? digitsFor(q);
   const rounded = significantFigures(number, digits);
   if (!Number.isFinite(rounded)) return '—';
+  const compact = options.compact === false ? '' : compactMoneyText(rounded, digits);
   const mag = rounded === 0 ? 0 : Math.floor(Math.log10(Math.abs(rounded)));
   const fractionDigits = Math.max(0, digits - 1 - mag);
   const absText = Math.abs(rounded).toLocaleString('en-US', {
     maximumFractionDigits: Math.min(4, fractionDigits),
     minimumFractionDigits: 0,
   });
-  const signed = rounded < 0 ? `-$${absText}` : `$${absText}`;
+  const signed = compact || (rounded < 0 ? `-$${absText}` : `$${absText}`);
   const unit = options.unit ? ` ${options.unit}` : (options.suffix || '');
   return `${signed}${unit}${bandSuffix(options.band)}`;
 }

@@ -361,8 +361,9 @@ test('Economics screens purchased-power break-even on the frozen plant without s
   assert.equal(typeof app.screenPowerBreakEven, 'function');
   assert.equal(typeof context.MaterialPowerBreakeven.breakEvenForMaterial, 'function');
   const select = context.__elements.get('powerBreakevenMaterial');
-  assert.match(select.innerHTML, /No products sold/);
-  assert.equal(select.disabled, true);
+  // First load is the Zabuye materials demo (goal 3), which sells products.
+  assert.match(select.innerHTML, /value="lithium"/);
+  assert.equal(select.disabled, false);
 
   app.loadAbundanceHub();
   assert.match(select.innerHTML, /value="lithium"/);

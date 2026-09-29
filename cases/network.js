@@ -228,8 +228,8 @@ function siteZabuyeAbundance() {
 function createFuelsAndMineralsNetwork(month = 6) {
   return {
     plants: [
-      { id: 'almeria-fuels', name: 'Almería solar methane', definition: coastal.createCoastalCase(month) },
       { id: 'dead-sea-minerals', name: 'Dead Sea brine and ammonia', definition: siteDeadSeaAbundance() },
+      { id: 'almeria-fuels', name: 'Almería solar methane', definition: coastal.createCoastalCase(month) },
     ],
     corridors: [],
   };

@@ -213,11 +213,52 @@ test('fuels plus minerals network rolls up two sited plants', () => {
   assert.match(context.__elements.get('networkProducts').innerHTML, /CH4/);
   assert.match(context.__elements.get('networkProducts').innerHTML, /lead/);
   assert.match(context.__elements.get('networkPlants').innerHTML, /Almería solar methane/);
+  assert.match(context.__elements.get('networkPlants').innerHTML, /Dead Sea brine and ammonia/);
   assert.match(context.__elements.get('networkPlants').innerHTML, /footprint/);
   assert.match(context.__elements.get('networkMetrics').innerHTML, /Land/);
   assert.match(context.__elements.get('networkStatus').textContent, /site footprint/);
   assert.doesNotMatch(context.__elements.get('networkStatus').textContent, /1\.6 ha\/MWp/);
-  assert.equal(app.site.id, 'almeria-pvgis-2026-09-05');
+  assert.equal(app.site.id, 'dead-sea-pvgis-2026-09-06');
+  assert.equal(app.site.name, 'Dead Sea industrial shore');
+  assert.equal(app.site.latitude, 31.16);
+  assert.equal(app.site.longitude, 35.43);
+  assert.equal(context.__elements.get('sitePreset').value, 'levant-dead-sea');
+  assert.match(context.__elements.get('overviewDemoChip').textContent, /Fuels \+ minerals/);
+  assert.equal(context.__elements.get('overviewDemoChip').hidden, false);
+  const slate = context.__elements.get('overviewSlate').innerHTML;
+  assert.match(slate, /Lithium/);
+  assert.match(slate, /Magnesium/);
+  assert.match(slate, /Salt/);
+  assert.match(slate, /Ammonia/);
+  assert.match(context.__elements.get('overviewLand').innerHTML, /ha|m²/);
+  assert.equal(context.__elements.get('siteFootprint').hidden, false);
+  assert.match(context.__elements.get('siteFootprintMetrics').innerHTML, /Solar land|ha|m²/);
+});
+
+test('Dead Sea brine hub lists sold ammonia and minerals and refreshes land', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadAbundanceHub();
+  assert.equal(app.site.id, 'dead-sea-pvgis-2026-09-06');
+  assert.equal(app.site.name, 'Dead Sea industrial shore');
+  assert.equal(app.site.latitude, 31.16);
+  assert.equal(app.site.longitude, 35.43);
+  assert.equal(context.__elements.get('sitePreset').value, 'levant-dead-sea');
+  assert.match(context.__elements.get('overviewSiteName').textContent, /Dead Sea/);
+  assert.match(context.__elements.get('overviewDemoChip').textContent, /Brine \+ ammonia/);
+  const slate = context.__elements.get('overviewSlate').innerHTML;
+  assert.match(slate, /Ammonia/);
+  assert.match(slate, /Lithium/);
+  assert.match(slate, /Magnesium/);
+  assert.match(slate, /Salt/);
+  assert.match(slate, /Potash/);
+  assert.match(slate, /Bromine/);
+  const ammonia = app.economics.sinks.find(sink => sink.id === 'ammonia-product');
+  assert.equal(ammonia.disposition, 'sale');
+  assert.ok(ammonia.deliveredAmount > 0);
+  assert.match(context.__elements.get('overviewLand').innerHTML, /ha|m²/);
+  assert.equal(context.__elements.get('siteFootprint').hidden, false);
+  assert.match(context.__elements.get('siteFootprintMetrics').innerHTML, /Solar land|ha|m²/);
 });
 
 test('Location presets populate by region and applying Almería sets coords, name, and honest rights', async () => {

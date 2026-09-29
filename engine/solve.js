@@ -62,6 +62,9 @@ function solveOperation(caseDefinition) {
   const warnings = nodes
     .filter(node => solved.nodeResults[node.id]?.limitedBy?.length)
     .map(node => `${node.id} limited by ${solved.nodeResults[node.id].limitedBy.join(', ')}`);
+  if (powerBudgetThrottled(nodes, solved.nodeResults)) {
+    warnings.push('Capacity reduced: limited by available electricity');
+  }
   for (const limit of caseDefinition.operation?.boundaryLimitedBy || []) {
     warnings.push(`plant limited by ${limit}`);
   }
@@ -99,6 +102,17 @@ function siteBudgets(site) {
   return new Map(Object.entries(site?.resources || {})
     .filter(([, resource]) => resource?.stream)
     .map(([id, resource]) => [id, streamAmount(resource.stream)]));
+}
+
+function powerBudgetThrottled(nodes, nodeResults) {
+  return nodes.some(node => {
+    const limits = nodeResults[node.id]?.limitedBy || [];
+    if (limits.includes('electricity')) return true;
+    const electricSource = node.siteResource === 'electricity'
+      || node.unit === 'electricity-source'
+      || node.unit === 'solar-pv';
+    return electricSource && limits.includes('site budget');
+  });
 }
 
 // Presence and access stay distinct: every source on a sited factory must name a
@@ -495,6 +509,7 @@ function solveHorizon(caseDefinition) {
   const powerKW = Math.max(0, Number(storage.powerKW) || batteryKWh);
   const eta = Number(storage.efficiency ?? 0.9);
   let soc = Math.max(0, Number(storage.initialKWh) || 0);
+  let powerCut = false;
   const remainingResource = {};
   for (const [id, resource] of Object.entries(caseDefinition.site.resources || {})) {
     remainingResource[id] = streamAmount(resource.stream);
@@ -574,10 +589,9 @@ function solveHorizon(caseDefinition) {
       const secRo = Number(swro?.params?.secKWhPerM3 ?? 3.5);
       const secCh4 = Number(sabatier.params?.electricityKWhPerKgCH4 ?? 1);
       const kWhPerKg = h2 * secH2 + co2 * secDac + h2 * 18.01528 / 2.01588 / 1000 / recovery * secRo + secCh4;
-      const methaneHour = Math.min(
-        hourCase.operation.setpoints[sabatier.id] || 0,
-        kWhPerKg > 0 ? power / kWhPerKg : 0
-      );
+      const unconstrained = hourCase.operation.setpoints[sabatier.id] || 0;
+      const methaneHour = Math.min(unconstrained, kWhPerKg > 0 ? power / kWhPerKg : 0);
+      if (methaneHour + 1e-6 < unconstrained) powerCut = true;
       hourCase.operation.setpoints[sabatier.id] = methaneHour;
       if (dac) hourCase.operation.setpoints[dac.id] = methaneHour * co2;
       if (electrolyzer) hourCase.operation.setpoints[electrolyzer.id] = methaneHour * h2;
@@ -599,6 +613,7 @@ function solveHorizon(caseDefinition) {
         electrolyzer.capacity,
         kWhPerKgH2 > 0 ? power / kWhPerKgH2 : 0
       );
+      if (h2Hour + 1e-6 < Math.min(catchUp, electrolyzer.capacity)) powerCut = true;
       hourCase.operation.setpoints[electrolyzer.id] = h2Hour;
       if (swro) {
         const swroCatch = h2Hour * swroM3PerKgH2;
@@ -610,6 +625,7 @@ function solveHorizon(caseDefinition) {
       if (dac) hourCase.operation.setpoints[dac.id] = 0;
     }
     const solved = solveOperation(hourCase);
+    if (powerBudgetThrottled(hourCase.graph.nodes, solved.nodes)) powerCut = true;
     accumulateSolved(totals, solved);
     for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'converter')) {
       remainingDemand[node.id] = Math.max(0, (remainingDemand[node.id] || 0) - (solved.nodes[node.id]?.activity || 0));
@@ -643,6 +659,11 @@ function solveHorizon(caseDefinition) {
     totals.balances.heatKWh = solved.balances.heatKWh;
   }
 
+  const unmetDemand = Object.values(remainingDemand).some(value => value > 1e-3);
+  const noSun = !hours.some(value => value * solarKWp > 0);
+  if ((powerCut || noSun) && unmetDemand && !totals.warnings.includes('Capacity reduced: limited by available electricity')) {
+    totals.warnings.push('Capacity reduced: limited by available electricity');
+  }
   totals.warnings = totals.warnings.concat(
     totals.horizon.hours.filter(entry => entry.pv === 0 && entry.methane === 0 && (entry.h2 || 0) === 0).length === 24
       ? []

@@ -1869,7 +1869,24 @@ function applyAbundanceScale(definition, baseline, scale, slateMode) {
   syncSiteResource(definition, brine);
   const power = electricityNode(definition);
   if (power) syncSiteResource(definition, power);
+  syncAbundanceSolar(definition, power);
   definition.operation.boundaryLimitedBy = [];
+}
+
+// Abundance scales rewrite the electricity stream. Land uses site.solarKWp, so
+// the array has to follow that stream or the footprint stays on the seed size.
+function syncAbundanceSolar(definition, power) {
+  if (!definition.site || !power?.params?.stream) return;
+  const yieldPerKWp = dailyPvKWhPerKWp(definition);
+  const kWh = Number(power.params.stream.kWh) || 0;
+  if (!(yieldPerKWp > 0)) return;
+  const nextKWp = kWh / yieldPerKWp;
+  scaleSolarEconomics(power, Number(definition.site.solarKWp) || 0, nextKWp);
+  definition.site.solarKWp = nextKWp;
+  if (definition.site.resources?.electricity) {
+    definition.site.resources.electricity.stream = { kind: 'electricity', kWh };
+    definition.site.resources.electricity.evidence = `PVGIS typical-day × ${nextKWp} kWp`;
+  }
 }
 
 function saleKgOf(product) {

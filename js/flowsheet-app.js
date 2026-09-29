@@ -765,16 +765,20 @@
     site = null;
     lastSizing = null;
     operationMeta = {};
+    routeNote = '';
+    setActiveDemo(null);
     clearCashflowBanner();
     solveAndRender();
   }
 
   function loadMethaneRecycle() {
+    setActiveDemo('methane-recycle', 'Methane recycle');
     lastSizing = null;
     loadCase(SabatierCase.createSabatierCase({ recycleWater: true }), 'sabatier');
   }
 
   function loadCoastalMethane(month = 0) {
+    setActiveDemo('coastal-methane', 'Coastal methane');
     lastSizing = null;
     loadCase(CoastalCase.createCoastalCase(month), 'sabatier');
     const status = document.getElementById('sizeToTargetStatus');
@@ -784,6 +788,7 @@
   }
 
   function loadMethanolPlant(month = 0) {
+    setActiveDemo('coastal-methanol', 'Coastal methanol');
     lastSizing = null;
     if (typeof MethanolCase === 'undefined' || !MethanolCase.createMethanolCase) {
       throw new Error('Methanol case is not loaded');
@@ -912,6 +917,15 @@
   function clearCashflowBanner() {
     lastCashflowCompare = null;
     renderCashflowResult();
+  }
+
+  function clearLocationStaleState() {
+    lastSizing = null;
+    lastCashflowCompare = null;
+    routeNote = '';
+    clearCashflowBanner();
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) status.textContent = '';
   }
 
   function renderCashflowResult() {
@@ -1054,21 +1068,80 @@
     select.innerHTML = options.join('');
   }
 
+  function presetNear(preset, latitude, longitude) {
+    return Math.abs(preset.latitude - latitude) < 0.01 && Math.abs(preset.longitude - longitude) < 0.01;
+  }
+
   function matchingPresetId() {
-    if (site?.id && sitePresets().some(preset => preset.id === site.id)) return site.id;
     const lat = Number(site?.latitude);
     const lon = Number(site?.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return '';
-    const match = sitePresets().find(preset => (
-      Math.abs(preset.latitude - lat) < 0.01 && Math.abs(preset.longitude - lon) < 0.01
-    ));
+    const presets = sitePresets();
+    const named = site?.id ? presets.find(preset => preset.id === site.id) : null;
+    if (named && Number.isFinite(lat) && Number.isFinite(lon) && presetNear(named, lat, lon)) return named.id;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return named ? '' : '';
+    const match = presets.find(preset => presetNear(preset, lat, lon));
     return match?.id || '';
   }
 
+  function brinePlaceLabel(text, assayId) {
+    const blob = `${assayId || ''} ${text || ''}`;
+    if (/zabuye|zhabuye/i.test(blob)) return 'Zabuye';
+    if (/dead[- ]sea/i.test(blob)) return 'Dead Sea';
+    if (/atacama/i.test(blob)) return 'Atacama';
+    if (/uyuni/i.test(blob)) return 'Uyuni';
+    if (/qaidam/i.test(blob)) return 'Qaidam';
+    if (/salton/i.test(blob)) return 'Salton Sea';
+    if (/great salt/i.test(blob)) return 'Great Salt Lake';
+    if (/danakil|dallol/i.test(blob)) return 'Danakil';
+    if (/searles/i.test(blob)) return 'Searles Lake';
+    return '';
+  }
+
+  function compositionsCompatible(requested, available) {
+    if (!requested?.mol || !available?.mol) return true;
+    const quantity = sourceAmount(requested);
+    const limit = sourceAmount(available);
+    if (!(quantity > 0) || !(limit > 0)) return true;
+    for (const species of new Set([...Object.keys(available.mol), ...Object.keys(requested.mol)])) {
+      const expected = (available.mol[species] || 0) * quantity / limit;
+      if (Math.abs((requested.mol[species] || 0) - expected) > Math.max(1, expected) * 1e-9) return false;
+    }
+    return true;
+  }
+
+  function brinePresetClash(preset) {
+    const brineNodes = graph.nodes.filter(node => node.siteResource === 'brine' || node.sourcePreset === 'brine');
+    if (!brineNodes.length) return '';
+    const currentAssay = site?.brineAssay?.assayId || (site?.assay?.kind === 'brine' ? site?.assay?.assayId : null);
+    const nextAssay = preset?.brineAssayId || '';
+    if (currentAssay && nextAssay && currentAssay === nextAssay) return '';
+    const nextStream = nextAssay && globalThis.SiteAssays?.getAssay && globalThis.SiteAssays?.brineFromAssay
+      ? SiteAssays.brineFromAssay(SiteAssays.getAssay(nextAssay), 1000)
+      : null;
+    const breaks = !nextStream || brineNodes.some(node => node.params?.stream && !compositionsCompatible(node.params.stream, nextStream));
+    if (!breaks) return '';
+    const currentPlace = brinePlaceLabel(site?.name || site?.assay?.summary, currentAssay);
+    const nextPlace = brinePlaceLabel(preset?.name, nextAssay) || String(preset?.name || 'that site').split(',')[0];
+    const currentPhrase = currentPlace ? `${currentPlace} brine` : 'the current brine';
+    return `This plant is sized for ${currentPhrase}. Switching to ${nextPlace} would break the feed. Load a ${nextPlace} demo or keep the current site.`;
+  }
+
   function applySitePreset() {
-    const id = document.getElementById('sitePreset')?.value;
+    const select = document.getElementById('sitePreset');
+    const id = select?.value;
     const preset = sitePresets().find(item => item.id === id);
     if (!preset) return;
+    const clash = brinePresetClash(preset);
+    if (clash) {
+      clearLocationStaleState();
+      routeNote = clash;
+      const status = document.getElementById('siteFetchStatus');
+      if (status) status.textContent = clash;
+      if (select) select.value = matchingPresetId();
+      render();
+      return;
+    }
+    clearLocationStaleState();
     const latEl = document.getElementById('siteLatitude');
     const lonEl = document.getElementById('siteLongitude');
     if (latEl) latEl.value = preset.latitude;
@@ -1116,7 +1189,7 @@
       };
     }
     render();
-    return applyCoordinates();
+    return applyCoordinates({ fromPreset: true });
   }
 
   function isHourlySolar(solar) {
@@ -1127,13 +1200,19 @@
     ));
   }
 
-  function bindLocation({ latitude, longitude, solarKWp, batteryKWh = 0, solar, name, notes, rights, evidence }) {
+  function bindLocation({ latitude, longitude, solarKWp, batteryKWh = 0, solar, name, notes, rights, evidence, keepIdentity = false }) {
     const hourlySolar = isHourlySolar(solar) ? solar : null;
     const explicitMonthly = Array.isArray(solar?.monthlyPVKWhPerKWp) ? solar.monthlyPVKWhPerKWp.slice() : null;
+    const nextName = keepIdentity
+      ? (name || site?.name || draftSiteLabel())
+      : draftSiteLabel();
+    const nextId = keepIdentity
+      ? (site?.id || `site-${latitude}-${longitude}`)
+      : `site-${latitude}-${longitude}`;
     site = {
       ...(site || {}),
-      id: site?.id || `site-${latitude}-${longitude}`,
-      name: name || site?.name || `${Number(latitude).toFixed(3)}, ${Number(longitude).toFixed(3)}`,
+      id: nextId,
+      name: nextName,
       latitude, longitude, solarKWp, month: site?.month || 0,
       solar: hourlySolar,
       storage: { batteryKWh, powerKW: batteryKWh, efficiency: 0.9, initialKWh: 0 },
@@ -1142,6 +1221,10 @@
       ...(evidence ? { evidence } : {}),
       ...(rights ? { rights } : {}),
     };
+    if (!keepIdentity) {
+      delete site.region;
+      delete site.kind;
+    }
     if (!site.resources.grid) {
       site.resources.grid = { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' };
     }
@@ -1300,7 +1383,8 @@
     return screeningSolar(latitude, longitude);
   }
 
-  async function applyCoordinates() {
+  async function applyCoordinates(options = {}) {
+    const fromPreset = options.fromPreset === true;
     const latitude = Number(document.getElementById('siteLatitude').value);
     const longitude = Number(document.getElementById('siteLongitude').value);
     const solarKWp = Number(document.getElementById('siteSolarKWp').value);
@@ -1310,10 +1394,19 @@
       status.textContent = 'Latitude and longitude must be a real location.';
       return;
     }
+    if (!fromPreset) {
+      clearLocationStaleState();
+      const select = document.getElementById('sitePreset');
+      const chosen = sitePresets().find(preset => preset.id === select?.value);
+      if (select && (!chosen || !presetNear(chosen, latitude, longitude))) select.value = '';
+    }
     status.textContent = 'Fetching PVGIS hourly series…';
+    const identity = fromPreset
+      ? { keepIdentity: true, name: site?.name }
+      : { keepIdentity: false };
     try {
       const solar = await fetchPvgisHourly(latitude, longitude);
-      bindLocation({ latitude, longitude, solarKWp, batteryKWh, solar, name: site?.name });
+      bindLocation({ latitude, longitude, solarKWp, batteryKWh, solar, ...identity });
       status.textContent = `Typical-day solar from ${solar.database || 'PVGIS'} ${solar.year || ''}`.trim();
     } catch {
       const resolved = await resolveSolarOnFetchFailure(latitude, longitude);
@@ -1322,13 +1415,19 @@
         render();
         return;
       }
+      const boundLatitude = resolved.latitude ?? latitude;
+      const boundLongitude = resolved.longitude ?? longitude;
+      const latEl = document.getElementById('siteLatitude');
+      const lonEl = document.getElementById('siteLongitude');
+      if (latEl) latEl.value = boundLatitude;
+      if (lonEl) lonEl.value = boundLongitude;
       bindLocation({
-        latitude: resolved.latitude ?? latitude,
-        longitude: resolved.longitude ?? longitude,
+        latitude: boundLatitude,
+        longitude: boundLongitude,
         solarKWp,
         batteryKWh,
         solar: resolved.solar,
-        name: resolved.name || site?.name,
+        ...identity,
       });
       status.textContent = resolved.status;
     }
@@ -1365,13 +1464,18 @@
   }
 
   function loadAbundanceHub() {
+    setActiveDemo('abundance-hub', 'Brine + ammonia');
     lastSizing = null;
-    loadCase(AbundanceCase.createAbundanceCase(), 'minerals');
+    const definition = globalThis.NetworkCase?.siteDeadSeaAbundance
+      ? NetworkCase.siteDeadSeaAbundance()
+      : AbundanceCase.createAbundanceCase();
+    loadCase(definition, 'minerals');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) status.textContent = 'Dead Sea hub loaded. Size for co-product cashflow expands the mineral/chemical slate while keeping plant net cash positive.';
   }
 
   function loadZabuyeHub() {
+    setActiveDemo('zabuye-hub', 'Zabuye brine hub');
     lastSizing = null;
     if (!globalThis.NetworkCase?.siteZabuyeAbundance) {
       throw new Error('Zabuye abundance case is not loaded');
@@ -1408,6 +1512,7 @@
   }
 
   function loadDemoNetwork() {
+    setActiveDemo('demo-network', 'Fuels + minerals');
     network = clone(NetworkCase.createFuelsAndMineralsNetwork(6));
     refreshNetwork();
     const first = network.plants[0];
@@ -1445,6 +1550,7 @@
 
   function loadCase(definition, selection) {
     clearCashflowBanner();
+    routeNote = '';
     site = definition.site || null;
     operationMeta = {
       priorities: definition.operation?.priorities ? clone(definition.operation.priorities) : undefined,
@@ -2084,7 +2190,11 @@
         result = solver({ graph, operation, site });
         currentEconomics = FlowsheetEconomics.evaluateEconomics({ graph, operation, economics: projectEconomics }, result);
         solveError = '';
-      } catch (error) { solveError = error.message; }
+      } catch (error) {
+        solveError = /site feed composition must be preserved/.test(error.message)
+          ? 'This plant is sized for a different feed. Switching assays would break the feed. Load a matching demo or keep the current site.'
+          : error.message;
+      }
     }
     persistAutosave();
     render();
@@ -2760,7 +2870,7 @@
     const asiaBound = bound === 'asia-china';
     if (!asiaSite && !asiaBound) return '';
     if (asiaSite && bound && bound !== 'asia-china') {
-      return 'This site uses the screening China/Asia offtake table, not a silent ME-Levant inherit. The loaded plant is still bound to another table. Not a plant contract.';
+      return 'This site screens prices on the China/Asia offtake table, not a silent ME-Levant inherit. The open plant still uses another region\'s prices. Not a plant contract.';
     }
     return ASIA_OFFTAKE_NOTE;
   }
@@ -2777,28 +2887,73 @@
 
   function render() { renderOfftakeHonesty(); renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); renderOverview(); }
 
+  const NETWORK_SALE_LABELS = {
+    NH3: 'Ammonia',
+    CH4: 'Methane',
+    Br2: 'Bromine',
+    H2: 'Hydrogen',
+    CH3OH: 'Methanol',
+    Li: 'Lithium',
+    NaCl: 'Salt',
+    'ammonia-product': 'Ammonia',
+    ammonia: 'Ammonia',
+    methane: 'Methane',
+    bromine: 'Bromine',
+    hydrogen: 'Hydrogen',
+    methanol: 'Methanol',
+    lithium: 'Lithium',
+    salt: 'Salt',
+    'recovered-salt': 'Salt',
+    potash: 'Potash',
+    magnesium: 'Magnesium',
+    caustic: 'Caustic',
+    gypsum: 'Gypsum',
+  };
+
+  function networkSaleRows(productQuality) {
+    const slate = networkResult?.slate;
+    if (!slate) return [];
+    return Object.entries(slate)
+      .filter(([, tonnes]) => Number(tonnes) > 0)
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 8)
+      .map(([substance, tonnes]) => [
+        NETWORK_SALE_LABELS[substance] || substance,
+        `${formatUncertainNumber(tonnes, productQuality)} t/year`,
+        { quality: productQuality },
+      ]);
+  }
+
   function overviewSaleRows() {
     const productQuality = classifyQuality({ kind: 'product-cost' });
+    if (network.plants.length > 1) {
+      const rolled = networkSaleRows(productQuality);
+      if (rolled.length) return rolled;
+    }
     const sales = (currentEconomics?.sinks || [])
       .filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0)
       .sort((left, right) => right.deliveredAmount - left.deliveredAmount)
       .slice(0, 4)
       .map(sink => [
-        sink.id,
+        NETWORK_SALE_LABELS[sink.id] || sink.id,
         `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`,
         { quality: productQuality },
       ]);
     if (sales.length) return sales;
-    const slate = networkResult?.slate;
-    if (!slate) return [];
-    return Object.entries(slate)
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 3)
-      .map(([substance, tonnes]) => [
-        substance,
-        `${formatUncertainNumber(tonnes, productQuality)} t/year`,
-        { quality: productQuality },
-      ]);
+    return networkSaleRows(productQuality);
+  }
+
+  function powerThrottleCallout() {
+    const warnings = result?.warnings || [];
+    const fromWarning = warnings.some(message => /Capacity reduced: limited by available electricity|site solar electricity/i.test(message));
+    const fromBoundary = (operationMeta.boundaryLimitedBy || []).some(item => /solar electricity|available electricity/i.test(String(item)));
+    const fromNodes = graph.nodes.some(node => {
+      const limits = result?.nodes?.[node.id]?.limitedBy || [];
+      if (limits.includes('electricity')) return true;
+      const electricSource = node.siteResource === 'electricity' || node.unit === 'electricity-source' || node.unit === 'solar-pv';
+      return electricSource && limits.includes('site budget');
+    });
+    return (fromWarning || fromBoundary || fromNodes) ? 'Capacity reduced: limited by available electricity' : '';
   }
 
   function overviewYieldMeta() {
@@ -2902,6 +3057,7 @@
 
     if (limiting) {
       const missing = missingConnections();
+      const powerNote = powerThrottleCallout();
       const bottleneckPairs = graph.nodes.flatMap(current => bottlenecksFor(current.id).map(limit => ({
         nodeId: current.id,
         label: `${current.label}: ${portName(limit)}`,
@@ -2912,6 +3068,10 @@
       } else if (solveError) {
         limiting.hidden = false;
         limiting.textContent = solveError;
+      } else if (powerNote) {
+        limiting.hidden = false;
+        limiting.textContent = powerNote;
+        limiting.onclick = () => activateTab('location');
       } else if (missing.length) {
         limiting.hidden = false;
         limiting.textContent = `Incomplete wiring · ${missing.slice(0, 2).join(' · ')}`;
@@ -3026,6 +3186,8 @@
     const issues = [];
     if (solveError) issues.push({ severity: 'error', text: solveError });
     if (routeNote) issues.push({ severity: 'warn', text: routeNote });
+    const powerNote = powerThrottleCallout();
+    if (powerNote) issues.push({ severity: 'warn', text: powerNote, action: 'location' });
     if (pendingPort) {
       issues.push({
         severity: 'info',
@@ -3195,8 +3357,8 @@
       const match = matchingPresetId();
       if (presetSelect.value !== match) presetSelect.value = match;
     }
-    document.getElementById('siteLatitude').value = site?.latitude ?? 36.834;
-    document.getElementById('siteLongitude').value = site?.longitude ?? -2.463;
+    document.getElementById('siteLatitude').value = site?.latitude ?? 31.35;
+    document.getElementById('siteLongitude').value = site?.longitude ?? 84.05;
     document.getElementById('siteSolarKWp').value = site?.solarKWp ?? 37.5;
     document.getElementById('siteBatteryKWh').value = site?.storage?.batteryKWh ?? 0;
     const monthLabel = document.getElementById('siteMonthLabel');
@@ -3795,6 +3957,9 @@
   if (savedNetwork?.plants) network = { plants: savedNetwork.plants, corridors: savedNetwork.corridors || [] };
   if (network.plants.length) refreshNetwork();
   if (restoreSnapshot(readJson(AUTOSAVE_KEY))) solveAndRender();
-  else render();
+  else if (globalThis.NetworkCase?.siteZabuyeAbundance) {
+    setActiveDemo('zabuye-hub', 'Zabuye brine hub');
+    loadCase(NetworkCase.siteZabuyeAbundance(), 'minerals');
+  } else render();
   activateTab(readSavedTab());
 })();

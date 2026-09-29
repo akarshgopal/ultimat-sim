@@ -1523,12 +1523,39 @@
     renderSiteMap();
   }
 
+  const MINERAL_SALE_IDS = new Set([
+    'lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'recovered-salt',
+    'caustic', 'bromine', 'bromide', 'ammonia', 'ammonia-product', 'oxygen',
+  ]);
+
+  function mineralSaleRevenue(plant) {
+    const sinks = plant?.economics?.sinks;
+    if (!Array.isArray(sinks)) return 0;
+    return sinks.reduce((sum, sink) => {
+      if (sink.disposition !== 'sale' || !(Number(sink.deliveredAmount) > 0)) return sum;
+      if (!MINERAL_SALE_IDS.has(sink.id)) return sum;
+      return sum + (Number(sink.annualRevenue) || 0);
+    }, 0);
+  }
+
+  function mineralLeadPlantId() {
+    const ranked = (networkResult?.plants || [])
+      .map(plant => ({ id: plant.id, revenue: mineralSaleRevenue(plant) }))
+      .filter(item => item.id && item.revenue > 0)
+      .sort((left, right) => right.revenue - left.revenue);
+    if (ranked.length) return ranked[0].id;
+    const named = network.plants.find(plant => /mineral|brine|dead-sea/i.test(`${plant.id} ${plant.name}`));
+    return named?.id || null;
+  }
+
   function loadDemoNetwork() {
     setActiveDemo('demo-network', 'Fuels + minerals');
     network = clone(NetworkCase.createFuelsAndMineralsNetwork(6));
     refreshNetwork();
-    const first = network.plants[0];
-    if (first) openNetworkPlant(first.id);
+    const id = mineralLeadPlantId()
+      || network.plants.find(plant => plant.id === 'dead-sea-minerals')?.id
+      || network.plants[0]?.id;
+    if (id) openNetworkPlant(id);
   }
 
   function openNetworkPlant(id) {
@@ -2921,12 +2948,20 @@
     hydrogen: 'Hydrogen',
     methanol: 'Methanol',
     lithium: 'Lithium',
+    LiCl: 'Lithium',
+    Li2CO3: 'Lithium',
     salt: 'Salt',
     'recovered-salt': 'Salt',
     potash: 'Potash',
+    KCl: 'Potash',
     magnesium: 'Magnesium',
+    MgCl2: 'Magnesium',
     caustic: 'Caustic',
+    NaOH: 'Caustic',
     gypsum: 'Gypsum',
+    CaSO4: 'Gypsum',
+    oxygen: 'Oxygen',
+    O2: 'Oxygen',
   };
 
   function networkSaleRows(productQuality) {
@@ -2935,7 +2970,6 @@
     return Object.entries(slate)
       .filter(([, tonnes]) => Number(tonnes) > 0)
       .sort((left, right) => right[1] - left[1])
-      .slice(0, 8)
       .map(([substance, tonnes]) => [
         NETWORK_SALE_LABELS[substance] || substance,
         `${formatUncertainNumber(tonnes, productQuality)} t/year`,
@@ -2943,22 +2977,22 @@
       ]);
   }
 
-  function overviewSaleRows() {
-    const productQuality = classifyQuality({ kind: 'product-cost' });
-    if (network.plants.length > 1) {
-      const rolled = networkSaleRows(productQuality);
-      if (rolled.length) return rolled;
-    }
-    const sales = (currentEconomics?.sinks || [])
-      .filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0)
-      .sort((left, right) => right.deliveredAmount - left.deliveredAmount)
-      .slice(0, 4)
+  function saleRowsFromSinks(sinks, productQuality) {
+    return (sinks || [])
+      .filter(sink => sink.disposition === 'sale' && Number(sink.deliveredAmount) > 0)
+      .sort((left, right) => (Number(right.annualRevenue) - Number(left.annualRevenue))
+        || (Number(right.deliveredAmount) - Number(left.deliveredAmount)))
       .map(sink => [
         NETWORK_SALE_LABELS[sink.id] || sink.id,
         `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`,
         { quality: productQuality },
       ]);
-    if (sales.length) return sales;
+  }
+
+  function overviewSaleRows() {
+    const productQuality = classifyQuality({ kind: 'product-cost' });
+    const openSales = saleRowsFromSinks(currentEconomics?.sinks, productQuality);
+    if (openSales.length) return openSales;
     return networkSaleRows(productQuality);
   }
 

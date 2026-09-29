@@ -202,7 +202,10 @@ test('Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, the
 });
 
 test('fuels plus minerals network rolls up CH4, NH3, and money', () => {
-  const result = evaluateNetwork(createFuelsAndMineralsNetwork(6));
+  const definition = createFuelsAndMineralsNetwork(6);
+  assert.equal(definition.plants[0].id, 'dead-sea-minerals');
+  assert.equal(definition.plants[1].id, 'almeria-fuels');
+  const result = evaluateNetwork(definition);
   assert.equal(result.plants.length, 2);
   assert.ok(result.slate.CH4 > 0);
   assert.ok(result.slate.NH3 > 0);

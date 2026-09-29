@@ -129,21 +129,21 @@ function bisectBreakEven(frozenDefinition, solved, sinkIds, pMaxStart = P_MAX_DE
 
   if (!(at0.annualNetCash > 0) && !(atMax.annualNetCash > 0)) {
     const dominated = saleMode === 'shared'
-      ? 'Shared co-product annualNetCash ≤ 0 even at p=0 (purchased power free); process CAPEX/OPEX dominates full-slate TEA revenue at the frozen hero scale (co-product prices kept; plant bill shared).'
-      : 'Solo-sale annualNetCash ≤ 0 even at p=0 (purchased power free); process CAPEX/OPEX alone dominates TEA revenue for this material at the frozen hero scale.';
+      ? 'Yearly net cash stays at or below zero even when purchased electricity is free. Operating costs and capital charges are larger than sales of all products together. The plant size is left as it is.'
+      : 'Yearly net cash stays at or below zero even when purchased electricity is free. Operating costs and capital charges are larger than this product’s sales alone. The plant size is left as it is.';
     return {
       ...context,
       breakEven: null,
       status: 'no-flip-always-negative',
       reason: at0.annualNetCash <= 0
         ? dominated
-        : 'Cash never crossed zero in band.',
+        : 'Net cash did not cross zero in the price range checked.',
     };
   }
   if (at0.annualNetCash > 0 && atMax.annualNetCash > 0) {
     const covers = saleMode === 'shared'
-      ? `Shared co-product annualNetCash > 0 even at p=$${pMax}/kWh (band high). Full-slate revenue covers process CAPEX + power purchase in this band.`
-      : `Solo-sale annualNetCash > 0 even at p=$${pMax}/kWh (band high). Revenue covers process CAPEX + power purchase in this band.`;
+      ? `Yearly net cash stays above zero even at $${pMax}/kWh, the top of the price range checked. Sales of all products together still cover operating costs, capital charges, and the electricity purchase.`
+      : `Yearly net cash stays above zero even at $${pMax}/kWh, the top of the price range checked. This product’s sales still cover operating costs, capital charges, and the electricity purchase.`;
     return {
       ...context,
       breakEven: null,
@@ -156,7 +156,7 @@ function bisectBreakEven(frozenDefinition, solved, sinkIds, pMaxStart = P_MAX_DE
       ...context,
       breakEven: null,
       status: 'non-monotonic',
-      reason: 'Cash increased with power price; purchased-power transform may be mis-wired.',
+      reason: 'Net cash went up as electricity got more expensive, so this screen cannot find a break-even price.',
     };
   }
 
@@ -210,7 +210,9 @@ function breakEvenForMaterial(definition, solved, materialId, mode = 'solo') {
 function formatBreakEven(result = {}, materialId) {
   const mode = result.mode === 'shared' ? 'shared' : 'solo';
   const material = materialId || result.material || 'material';
-  const head = `Screening purchased-power break-even (${mode}, ${material}) — not a PPA and not bankable. Frozen plant, no re-size.`;
+  const head = mode === 'shared'
+    ? 'Screening purchased-power break-even (shared) — not a PPA and not bankable. Frozen plant, no re-size.'
+    : `Screening purchased-power break-even (solo, ${material}) — not a PPA and not bankable. Frozen plant, no re-size.`;
   if (result.status === 'flip' && Number.isFinite(result.breakEven)) {
     const price = result.breakEven >= 1
       ? `$${result.breakEven.toFixed(2)}`
@@ -219,10 +221,10 @@ function formatBreakEven(result = {}, materialId) {
   }
   if (result.reason) return `${head} ${result.reason}`;
   if (result.status === 'no-flip-always-negative') {
-    return `${head} No flip: annual net cash stays negative even when purchased power is free.`;
+    return `${head} Yearly net cash stays negative even when purchased electricity is free.`;
   }
   if (result.status === 'no-flip-always-positive') {
-    return `${head} No flip: annual net cash stays positive across the screened $/kWh band.`;
+    return `${head} Yearly net cash stays positive across the electricity prices checked.`;
   }
   return `${head} ${result.status || 'No break-even.'}`;
 }

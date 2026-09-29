@@ -1599,6 +1599,9 @@ function sizeCoastalToMethane(target, month = 0, opts = {}) {
 const { evaluateEconomics, scorePositiveCashflow } = economics || {};
 const ABUNDANCE_SCALES = [0.25, 0.5, 1, 1.5, 2];
 const FUEL_RATES = [0, 2, 5, 10, 15, 20];
+// Absolute multiplier versus the immutable pre-sizing seed, not the plant
+// already on screen. Repeated Optimize must not compound 2× into 4×, 8×, …
+const ABSOLUTE_SCALE_CAP = 10;
 const FAST_SCALES = [1];
 const FAST_RATES = [0];
 const REFINE_MAX_EXTRA = 6;
@@ -1793,6 +1796,10 @@ function removeGraphNodes(definition, ids) {
   }
 }
 
+function isPreSizingSeed(seed) {
+  return Boolean(seed && Number(seed.brineKg) > 0 && seed.streams && typeof seed.streams === 'object');
+}
+
 function baselineAbundanceDuties(definition) {
   const minerals = converter(definition, 'brine-minerals');
   const brine = brineSource(definition, minerals);
@@ -1808,8 +1815,28 @@ function baselineAbundanceDuties(definition) {
   };
 }
 
+function baselineFromSeed(definition) {
+  const stamped = definition?.operation?.preSizingSeed;
+  if (isPreSizingSeed(stamped)) return JSON.parse(JSON.stringify(stamped));
+  return baselineAbundanceDuties(definition);
+}
+
+function absoluteScale(scale) {
+  const value = Number(scale);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.min(value, ABSOLUTE_SCALE_CAP);
+}
+
+function stampPreSizingSeed(definition, baseline) {
+  if (!definition || !isPreSizingSeed(baseline)) return;
+  definition.operation = definition.operation || { setpoints: {} };
+  if (isPreSizingSeed(definition.operation.preSizingSeed)) return;
+  definition.operation.preSizingSeed = JSON.parse(JSON.stringify(baseline));
+}
+
 function applyAbundanceScale(definition, baseline, scale, slateMode) {
-  const ratio = scale;
+  const ratio = absoluteScale(scale);
+  stampPreSizingSeed(definition, baseline);
   const minerals = converter(definition, 'brine-minerals');
   const brine = brineSource(definition, minerals);
   const brineKg = baseline.brineKg * ratio;
@@ -1912,7 +1939,11 @@ function scoreSizedCandidate(definition, solved, selected, warnings = []) {
     throw new Error('sizeForPositiveCashflow needs FlowsheetEconomics');
   }
   const economicsResult = evaluateEconomics(definition, solved);
-  const objective = scorePositiveCashflow(economicsResult);
+  const residual = Number(solved?.balances?.maxAbsResidual);
+  const objective = scorePositiveCashflow({
+    ...economicsResult,
+    maxAbsResidual: Number.isFinite(residual) ? residual : Infinity,
+  });
   return {
     mode: 'positive-cashflow',
     definition,
@@ -1953,15 +1984,16 @@ function evaluateAbundanceAt(seed, baseline, slateMode, scale) {
   if (definition.site?.rights?.brineConcession && !rightIsAuthorized(definition.site.rights.brineConcession)) {
     assertSizeMayAssume(definition, ['brine']);
   }
-  applyAbundanceScale(definition, baseline, scale, slateMode);
+  const appliedScale = absoluteScale(scale);
+  applyAbundanceScale(definition, baseline, appliedScale, slateMode);
   withholdUnauthorizedSupply(definition);
   const solved = solveOperation(definition);
-  return scoreSizedCandidate(definition, solved, { family: 'abundance', slateMode, scale }, []);
+  return scoreSizedCandidate(definition, solved, { family: 'abundance', slateMode, scale: appliedScale }, []);
 }
 
 function searchAbundanceCashflow(seed, opts) {
   const baselineDef = resolveDefinition(seed);
-  const baseline = baselineAbundanceDuties(baselineDef);
+  const baseline = baselineFromSeed(baselineDef);
   const modes = [];
   if (converter(baselineDef, 'brine-minerals')) modes.push('minerals-only');
   if (nodeBy(baselineDef, node => node.id === 'chlor-alkali') && nodeBy(baselineDef, node => node.id === 'bromine-recovery')) {
@@ -2043,7 +2075,8 @@ function searchFuelCashflow(seed, opts) {
 
 function evaluateJointAt(seed, baseline, scale, product, rate, opts) {
   const scaled = resolveDefinition(seed);
-  applyAbundanceScale(scaled, baseline, scale, 'full');
+  const appliedScale = absoluteScale(scale);
+  applyAbundanceScale(scaled, baseline, appliedScale, 'full');
   const sized = sizeToProduct({
     product,
     rate,
@@ -2056,7 +2089,7 @@ function evaluateJointAt(seed, baseline, scale, product, rate, opts) {
   const candidate = scoreSizedCandidate(
     sized.definition,
     sized.solved,
-    { family: 'joint', slateMode: 'full', scale, product, rate },
+    { family: 'joint', slateMode: 'full', scale: appliedScale, product, rate },
     sized.warnings || []
   );
   candidate.iterations = sized.iterations;
@@ -2073,7 +2106,7 @@ function searchJointCashflow(seed, opts) {
   if (!products.length) return null;
   const baselineDef = resolveDefinition(seed);
   if (!converter(baselineDef, 'brine-minerals')) return null;
-  const baseline = baselineAbundanceDuties(baselineDef);
+  const baseline = baselineFromSeed(baselineDef);
   const scales = listedGrid(opts, 'scales', ABUNDANCE_SCALES);
   const rates = listedGrid(opts, 'rates', FUEL_RATES);
   let best = null;
@@ -2176,6 +2209,13 @@ function sizeForPositiveCashflow(opts = {}) {
   best.candidatesTried = tried;
   best.familiesSearched = familiesSearched;
   best.selected = selectedForSlate(best);
+  if (hasAbundance && best.definition) {
+    try {
+      stampPreSizingSeed(best.definition, baselineFromSeed(probe));
+    } catch {
+      /* fuel-only winners without a brine baseline keep the definition as solved */
+    }
+  }
   if (!best.objective.met) {
     const note = 'No cash-positive co-product slate under searched modes/scales';
     if (!(best.warnings || []).includes(note)) best.warnings = [...(best.warnings || []), note];
@@ -2192,5 +2232,6 @@ return {
   FUEL_RATES,
   FAST_SCALES,
   FAST_RATES,
+  ABSOLUTE_SCALE_CAP,
 };
 });

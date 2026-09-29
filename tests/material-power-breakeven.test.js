@@ -86,14 +86,19 @@ test('extracted helpers screen a two-product plant without site-search', () => {
   assert.match(sharedCopy, /not a PPA/i);
   assert.match(sharedCopy, /\$0\.\d+\/kWh/);
   assert.match(sharedCopy, /no re-size/i);
+  assert.match(sharedCopy, /\(shared\)/);
+  assert.doesNotMatch(sharedCopy, /\(shared,/);
+  assert.doesNotMatch(sharedCopy, /annualNetCash|hero scale|TEA/);
 
   const solo = breakeven.breakEvenForMaterial(definition, solved, 'lithium', 'solo');
   assert.equal(solo.status, 'no-flip-always-negative');
   assert.equal(solo.breakEven, null);
-  assert.match(solo.reason, /^Solo-sale/);
-  assert.match(breakeven.formatBreakEven(solo), /Solo-sale/);
+  assert.match(solo.reason, /purchased electricity is free/i);
+  assert.match(breakeven.formatBreakEven(solo), /purchased electricity is free/i);
+  assert.match(breakeven.formatBreakEven(solo), /this product/i);
   assert.match(breakeven.formatBreakEven(solo), /screening/i);
   assert.match(breakeven.formatBreakEven(solo), /not a PPA/i);
+  assert.doesNotMatch(breakeven.formatBreakEven(solo), /annualNetCash|hero scale|TEA|Solo-sale/);
 
   assert.equal(definition.graph.nodes.find(node => node.id === 'power').economics.installedCapex, 1000000);
   assert.equal(definition.graph.nodes.find(node => node.id === 'bromine').economics.unitPrice, 5);
@@ -186,7 +191,7 @@ test('shared cash keeps co-product revenue and the same plant bill as solo', asy
   const soloFlip = bisectBreakEven(definition, solved, ['lithium'], 2, 'solo');
   assert.equal(soloFlip.status, 'no-flip-always-negative');
   assert.equal(soloFlip.breakEven, null);
-  assert.match(soloFlip.reason, /^Solo-sale/);
+  assert.match(soloFlip.reason, /purchased electricity is free/i);
   assert.ok(soloFlip.cashAt0 < 0);
 
   const sharedFlip = bisectBreakEven(definition, solved, ['lithium'], 2, 'shared');

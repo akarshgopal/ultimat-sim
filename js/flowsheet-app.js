@@ -43,7 +43,13 @@
   let result = null;
   let currentEconomics = null;
   let baseline = null;
+  const MIN_ZOOM = 0.08;
+  const MAX_ZOOM = 2;
+  const READABLE_ZOOM = 0.5;
   let canvasZoom = 1;
+  let zoomPinned = false;
+  let highlightPort = null;
+  let highlightRightKey = '';
   let site = null;
   let network = { plants: [], corridors: [] };
   let networkResult = null;
@@ -422,7 +428,8 @@
 
   function paletteCard(unit, definition) {
     const { glyph, tone, title, description } = definition.palette;
-    return `<button type="button" class="building-card" data-unit="${unit}"><span class="building-glyph${tone ? ` ${tone}` : ''}">${glyph}</span><span><strong>${title || definition.label}</strong><small>${description}</small></span><b>Add</b></button>`;
+    const name = title || definition.label;
+    return `<button type="button" class="building-card" data-unit="${unit}" data-title="${escapeHtml(name)}" data-description="${escapeHtml(description || '')}"><span class="building-glyph${tone ? ` ${tone}` : ''}">${glyph}</span><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(description || '')}</small></span><b>Add</b></button>`;
   }
 
 
@@ -457,25 +464,65 @@
       .join('');
   }
 
-  renderPalettes();
-  document.getElementById('paletteSearch')?.addEventListener('input', event => {
-    const q = String(event.target.value || '').trim().toLowerCase();
-    document.querySelectorAll('#buildingPalette .building-card, #utilityPalette .building-card').forEach(card => {
-      const hay = `${card.dataset.unit || ''} ${card.textContent || ''}`.toLowerCase();
-      card.hidden = !!q && !hay.includes(q);
+  function paletteHaystack(card) {
+    const title = card.getAttribute?.('data-title') || card.dataset?.title || '';
+    const description = card.getAttribute?.('data-description') || card.dataset?.description || '';
+    const unit = card.getAttribute?.('data-unit') || card.dataset?.unit || '';
+    return `${title} ${description} ${unit}`.toLowerCase();
+  }
+
+  function applyPaletteFilter(query) {
+    const q = String(query || '').trim().toLowerCase();
+    const cards = document.querySelectorAll('#buildingPalette .building-card, #utilityPalette .building-card');
+    let visible = 0;
+    cards.forEach(card => {
+      const match = !q || paletteHaystack(card).includes(q);
+      card.hidden = !match;
+      if (match) visible += 1;
     });
     document.querySelectorAll('#buildingPalette .palette-category').forEach(details => {
-      const visible = [...details.querySelectorAll('.building-card')].some(card => !card.hidden);
-      details.hidden = !!q && !visible;
-      if (q && visible) details.open = true;
+      const matched = [...details.querySelectorAll('.building-card')].filter(card => !card.hidden);
+      details.hidden = !!q && matched.length === 0;
+      if (q && matched.length) details.open = true;
     });
+    const utilityHeading = document.getElementById('utilityPaletteHeading');
+    const utilityVisible = [...document.querySelectorAll('#utilityPalette .building-card')].some(card => !card.hidden);
+    if (utilityHeading) utilityHeading.hidden = !!q && !utilityVisible;
+    const empty = document.getElementById('paletteEmpty');
+    if (empty) empty.hidden = !q || visible > 0;
+  }
+
+  function setPaletteDrawer(open) {
+    const sidebar = document.getElementById('controlsSidebar');
+    const toggle = document.getElementById('paletteDrawerToggle');
+    const backdrop = document.getElementById('paletteDrawerBackdrop');
+    if (sidebar) sidebar.classList.toggle('is-open', !!open);
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (backdrop) backdrop.hidden = !open;
+  }
+
+  renderPalettes();
+  document.getElementById('paletteSearch')?.addEventListener('input', event => {
+    applyPaletteFilter(event.target.value);
   });
+  document.getElementById('paletteDrawerToggle')?.addEventListener('click', () => {
+    const sidebar = document.getElementById('controlsSidebar');
+    const open = !sidebar?.classList.contains('is-open');
+    setPaletteDrawer(open);
+  });
+  document.getElementById('paletteDrawerBackdrop')?.addEventListener('click', () => setPaletteDrawer(false));
   document.getElementById('buildingPalette').addEventListener('click', addFromPalette);
   document.getElementById('utilityPalette').addEventListener('click', addFromPalette);
   document.getElementById('clearFactory').addEventListener('click', clearFactory);
   document.getElementById('autoArrange').addEventListener('click', autoArrange);
   document.getElementById('focusCanvas').addEventListener('click', toggleCanvasFocus);
   document.getElementById('exitFocus')?.addEventListener('click', () => setCanvasFocus(false));
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('resize', () => {
+      if (zoomPinned || activeTab !== 'process' || !graph.nodes.length) return;
+      fitCanvas();
+    });
+  }
   if (typeof document.addEventListener === 'function') {
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && canvasFocused) setCanvasFocus(false);
@@ -484,7 +531,7 @@
   document.getElementById('zoomOut').addEventListener('click', () => setCanvasZoom(canvasZoom - 0.1));
   document.getElementById('zoomIn').addEventListener('click', () => setCanvasZoom(canvasZoom + 0.1));
   document.getElementById('zoomReset').addEventListener('click', () => setCanvasZoom(1));
-  document.getElementById('zoomFit')?.addEventListener('click', fitCanvas);
+  document.getElementById('zoomFit')?.addEventListener('click', () => fitCanvas({ compact: true }));
   document.getElementById('canvasZoom').addEventListener('input', event => setCanvasZoom(Number(event.target.value) / 100));
   document.getElementById('economicsAck')?.addEventListener('change', event => {
     setEconomicsAcknowledgment(event.target.checked);
@@ -506,6 +553,15 @@
   }
   document.getElementById('foundryTabs')?.addEventListener('keydown', handleTabListKeydown);
   document.getElementById('warnings')?.addEventListener('click', event => {
+    const jump = event.target.closest?.('[data-issue-node]');
+    if (jump?.dataset.issueNode) {
+      const current = node(jump.dataset.issueNode);
+      selectedNodeId = jump.dataset.issueNode;
+      const diagnosis = current ? blockDiagnosis(current) : null;
+      if (diagnosis) followDiagnosis(diagnosis);
+      else activateTab('process');
+      return;
+    }
     const tab = event.target.closest?.('[data-issue-tab]')?.dataset.issueTab;
     if (tab) activateTab(tab);
   });
@@ -593,20 +649,35 @@
 
   let canvasPan = null;
   canvas.addEventListener('pointerdown', event => {
+    if (event.button !== 0 && event.button !== 1) return;
+    const onNode = event.target.closest?.('[data-node]');
+    const onPort = event.target.closest?.('[data-port]');
     const middle = event.button === 1;
     const shiftDrag = event.button === 0 && event.shiftKey;
-    if (!middle && !shiftDrag) return;
+    const background = event.button === 0 && !shiftDrag && !onNode && !onPort;
+    if (!middle && !shiftDrag && !background) return;
     event.preventDefault();
-    canvasPan = { x: event.clientX, y: event.clientY, left: canvas.scrollLeft, top: canvas.scrollTop };
+    canvasPan = { x: event.clientX, y: event.clientY, left: canvas.scrollLeft || 0, top: canvas.scrollTop || 0, moved: false };
+    canvas.classList.add('is-panning');
     canvas.setPointerCapture?.(event.pointerId);
   });
   canvas.addEventListener('pointermove', event => {
     if (!canvasPan) return;
-    canvas.scrollLeft = canvasPan.left - (event.clientX - canvasPan.x);
-    canvas.scrollTop = canvasPan.top - (event.clientY - canvasPan.y);
+    const dx = event.clientX - canvasPan.x;
+    const dy = event.clientY - canvasPan.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) canvasPan.moved = true;
+    canvas.scrollLeft = canvasPan.left - dx;
+    canvas.scrollTop = canvasPan.top - dy;
   });
-  canvas.addEventListener('pointerup', () => { canvasPan = null; });
-  canvas.addEventListener('pointercancel', () => { canvasPan = null; });
+  canvas.addEventListener('pointerup', () => {
+    if (canvasPan?.moved) suppressClick = true;
+    canvasPan = null;
+    canvas.classList.remove('is-panning');
+  });
+  canvas.addEventListener('pointercancel', () => {
+    canvasPan = null;
+    canvas.classList.remove('is-panning');
+  });
   canvas.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
@@ -618,7 +689,9 @@
 
   function addFromPalette(event) {
     const unit = event.target.closest('[data-unit]')?.dataset.unit;
-    if (unit) addNode(unit);
+    if (!unit) return;
+    addNode(unit);
+    if (window.matchMedia?.('(max-width: 720px)')?.matches) setPaletteDrawer(false);
   }
 
   function addNode(unit, options = {}) {
@@ -1897,28 +1970,57 @@
     };
   }
 
-  function clampZoom(value) { return Math.min(2, Math.max(0.25, Number(value) || 1)); }
+  function clampZoom(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, n));
+  }
 
   function setCanvasZoom(value) {
+    zoomPinned = true;
     canvasZoom = clampZoom(value);
     renderGraph();
     persistAutosave();
   }
 
-  function fitCanvas() {
+  function contentSize() {
+    const hasRecycle = graph.edges.some(edge => edge.recycle);
+    const maxX = Math.max(0, ...graph.nodes.map(current => current.position.x + NODE_WIDTH));
+    const maxY = Math.max(0, ...graph.nodes.map(current => current.position.y + nodeHeight(current)));
+    return {
+      width: Math.max(320, maxX + 48),
+      height: Math.max(220, maxY + (hasRecycle ? 120 : 48)),
+    };
+  }
+
+  function fitCanvas(options) {
+    const compact = !!(options && options.compact === true);
     if (!graph.nodes.length) {
-      setCanvasZoom(1);
+      zoomPinned = false;
+      canvasZoom = 1;
+      renderGraph();
       canvas.scrollTop = 0;
       canvas.scrollLeft = 0;
+      persistAutosave();
       return;
     }
-    const maxX = Math.max(...graph.nodes.map(current => current.position.x + NODE_WIDTH));
-    const maxY = Math.max(...graph.nodes.map(current => current.position.y + nodeHeight(current)));
-    const pad = 48;
-    const availW = Math.max(240, canvas.clientWidth - pad);
-    const availH = Math.max(180, canvas.clientHeight - pad);
-    const zoom = clampZoom(Math.min(availW / Math.max(maxX, 1), availH / Math.max(maxY, 1), 1));
-    canvasZoom = zoom;
+    const rawW = Number(canvas.clientWidth) || 0;
+    const rawH = Number(canvas.clientHeight) || 0;
+    if (rawW < 40) return;
+    const availW = Math.max(120, rawW - 8);
+    const availH = Math.max(120, (rawH || rawW) - 8);
+    let size = contentSize();
+    let widthZoom = availW / Math.max(size.width, 1);
+    if (compact && widthZoom < READABLE_ZOOM) {
+      autoArrange({ columnGap: 36, rowGap: 28 });
+      size = contentSize();
+      widthZoom = availW / Math.max(size.width, 1);
+    }
+    const heightZoom = availH / Math.max(size.height, 1);
+    let zoom = Math.min(widthZoom, 1);
+    if (heightZoom >= READABLE_ZOOM) zoom = Math.min(zoom, heightZoom);
+    zoomPinned = false;
+    canvasZoom = clampZoom(zoom);
     renderGraph();
     canvas.scrollTop = 0;
     canvas.scrollLeft = 0;
@@ -1936,7 +2038,9 @@
     document.getElementById('canvasZoomValue').textContent = `${Math.round(canvasZoom * 100)}%`;
   }
 
-  function autoArrange() {
+  function autoArrange(options) {
+    const columnGap = options && Number.isFinite(options.columnGap) ? options.columnGap : COLUMN_GAP;
+    const rowGap = options && Number.isFinite(options.rowGap) ? options.rowGap : 40;
     const depths = new Map(graph.nodes.map(current => [current.id, units[current.unit].kind === 'source' ? 0 : units[current.unit].kind === 'sink' ? 2 : 1]));
     const outgoing = new Map(graph.nodes.map(current => [current.id, []]));
     const indegree = new Map(graph.nodes.map(current => [current.id, 0]));
@@ -1959,19 +2063,19 @@
       if (!layers.has(depth)) layers.set(depth, []);
       layers.get(depth).push(current);
     }
-    const xStep = NODE_WIDTH + COLUMN_GAP;
+    const xStep = NODE_WIDTH + columnGap;
     const layerHeights = [...layers.values()].map(layer => layer.reduce(
-      (sum, current) => sum + nodeHeight(current), Math.max(0, layer.length - 1) * 40
+      (sum, current) => sum + nodeHeight(current), Math.max(0, layer.length - 1) * rowGap
     ));
     const tallestLayer = Math.max(0, ...layerHeights);
     for (const [depth, layer] of layers) {
       const layerHeight = layer.reduce(
-        (sum, current) => sum + nodeHeight(current), Math.max(0, layer.length - 1) * 40
+        (sum, current) => sum + nodeHeight(current), Math.max(0, layer.length - 1) * rowGap
       );
       let y = 40 + (tallestLayer - layerHeight) / 2;
       for (const current of layer) {
         current.position = { x: 40 + depth * xStep, y };
-        y += nodeHeight(current) + 40;
+        y += nodeHeight(current) + rowGap;
       }
     }
     persistAutosave();
@@ -2054,6 +2158,7 @@
   }
 
   function setCanvasFocus(on) {
+    const wasFocused = canvasFocused;
     canvasFocused = !!on;
     if (canvasFocused) activateTab('process');
     document.body.classList[canvasFocused ? 'add' : 'remove']('canvas-focus');
@@ -2064,6 +2169,10 @@
     }
     const exit = document.getElementById('exitFocus');
     if (exit) exit.hidden = !canvasFocused;
+    if (wasFocused && !canvasFocused && graph.nodes.length) {
+      const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
+      schedule(() => { try { fitCanvas({ compact: true }); } catch { /* ignore */ } });
+    }
   }
 
   function toggleCanvasFocus() {
@@ -2078,7 +2187,11 @@
       return;
     }
     const nodeId = event.target.closest('[data-node]')?.dataset.node;
-    if (nodeId) { selectedNodeId = nodeId; render(); }
+    if (nodeId) {
+      if (selectedNodeId !== nodeId) highlightPort = null;
+      selectedNodeId = nodeId;
+      render();
+    }
   }
 
   function choosePort(endpoint) {
@@ -2182,6 +2295,13 @@
   }
 
   function handleInspectorClick(event) {
+    const cause = event.target.closest?.('[data-diagnosis]');
+    if (cause) {
+      const current = node(selectedNodeId);
+      const diagnosis = current ? blockDiagnosis(current) : null;
+      if (diagnosis) followDiagnosis(diagnosis);
+      return;
+    }
     const disconnect = event.target.closest('[data-disconnect]');
     if (disconnect) {
       graph.edges.splice(Number(disconnect.dataset.disconnect), 1);
@@ -2246,15 +2366,210 @@
     render();
   }
 
-  function missingConnections() {
+  function missingConnectionRecords() {
     const missing = [];
     for (const current of graph.nodes) {
       if (['source', 'sink'].includes(units[current.unit].kind)) continue;
       for (const [port, declaration] of Object.entries(units[current.unit].ports)) {
-        if (declaration.required && edgeAt({ node: current.id, port, direction: declaration.direction }) < 0) missing.push(`${current.label}: ${portName(port)}`);
+        if (!declaration.required) continue;
+        if (edgeAt({ node: current.id, port, direction: declaration.direction }) < 0) {
+          missing.push({
+            nodeId: current.id,
+            label: current.label,
+            port,
+            text: `${current.label}: ${portName(port)}`,
+          });
+        }
       }
     }
     return missing;
+  }
+
+  function missingConnections() {
+    return missingConnectionRecords().map(item => item.text);
+  }
+
+  function unconnectedPorts(current) {
+    const missing = [];
+    for (const [port, declaration] of Object.entries(units[current.unit].ports)) {
+      if (!declaration.required) continue;
+      if (edgeAt({ node: current.id, port, direction: declaration.direction }) < 0) {
+        missing.push({
+          nodeId: current.id,
+          label: current.label,
+          port,
+          text: `${current.label}: ${portName(port)}`,
+        });
+      }
+    }
+    return missing;
+  }
+
+  function rightKeyForResource(resourceId) {
+    return {
+      grid: 'gridImport',
+      freshwater: 'freshwater',
+      seawater: 'seawaterIntake',
+      brine: 'brineConcession',
+      salt: 'saltPurchase',
+    }[resourceId] || '';
+  }
+
+  function rightShortName(rightKey) {
+    return {
+      gridImport: 'grid',
+      freshwater: 'freshwater',
+      seawaterIntake: 'intake',
+      seawaterDischarge: 'discharge',
+      brineConcession: 'brine',
+      saltPurchase: 'salt',
+    }[rightKey] || rightKey || 'site';
+  }
+
+  function streamQuantity(stream) {
+    if (!stream) return 0;
+    try { return Math.abs(sourceAmount(stream)); } catch { return 0; }
+  }
+
+  function blockIsIdle(current) {
+    const nodeResult = result?.nodes?.[current.id];
+    if (!nodeResult) return true;
+    if (nodeResult.activity !== undefined) return Math.abs(Number(nodeResult.activity) || 0) <= 1e-9;
+    return streamQuantity(nodeResult.supplied || nodeResult.received || nodeResult.available) <= 1e-9;
+  }
+
+  function sourceSupplyDiagnosis(current) {
+    if (!current || units[current.unit].kind !== 'source') return null;
+    const resourceId = current.siteResource;
+    const resource = resourceId ? site?.resources?.[resourceId] : null;
+    const rightKey = rightKeyForResource(resourceId);
+    const right = rightKey ? site?.rights?.[rightKey] : null;
+    if (site && !resourceId) {
+      return { code: 'missing-resource', text: 'No site resource', action: 'resource', nodeId: current.id };
+    }
+    const budget = resource?.stream ? streamQuantity(resource.stream) : null;
+    const unverified = right?.status === 'unverified' || resource?.quality === 'unverified';
+    if (unverified && (budget == null || budget <= 1e-9)) {
+      return {
+        code: 'unverified-right',
+        text: `Unverified ${rightShortName(rightKey)} right`,
+        action: 'rights',
+        rightKey,
+        nodeId: current.id,
+      };
+    }
+    if (budget != null && budget <= 1e-9) {
+      return { code: 'zero-resource', text: 'Zero resource budget', action: 'resource', nodeId: current.id };
+    }
+    if (Number(current.rate) <= 1e-9) {
+      return { code: 'zero-setpoint', text: 'Zero setpoint', action: 'setpoint', nodeId: current.id };
+    }
+    return null;
+  }
+
+  function feedingNode(current, port) {
+    let edge = graph.edges.find(item => item.to.node === current.id && item.to.port === port && !item.recycle);
+    const seen = new Set();
+    let from = edge ? node(edge.from.node) : null;
+    while (from && ['junction', 'splitter', 'mixer'].includes(units[from.unit].kind) && !seen.has(from.id)) {
+      seen.add(from.id);
+      edge = graph.edges.find(item => item.to.node === from.id && !item.recycle);
+      from = edge ? node(edge.from.node) : null;
+    }
+    return from;
+  }
+
+  function blockDiagnosis(current) {
+    if (!current) return null;
+    if (result?.nodes?.[current.id] && !blockIsIdle(current)) return null;
+    const supply = sourceSupplyDiagnosis(current);
+    if (supply && supply.code !== 'zero-setpoint') return supply;
+    const missing = unconnectedPorts(current);
+    if (missing.length) {
+      const extra = missing.length > 1 ? ` +${missing.length - 1}` : '';
+      return {
+        code: 'missing-connection',
+        text: `Missing ${portName(missing[0].port)}${extra}`,
+        action: 'port',
+        port: missing[0].port,
+        nodeId: current.id,
+      };
+    }
+    if (supply) return supply;
+    if (units[current.unit].kind === 'converter' && Number(setpoints[current.id]) <= 1e-9) {
+      return { code: 'zero-setpoint', text: 'Zero setpoint', action: 'setpoint', nodeId: current.id };
+    }
+    if (!result) {
+      if (solveError) return { code: 'solve-error', text: 'Solve blocked', detail: solveError, action: 'warnings', nodeId: current.id };
+      if (missingConnections().length) return { code: 'waiting', text: 'Waiting on another block', action: 'process', nodeId: current.id };
+      return { code: 'not-running', text: 'Not running', nodeId: current.id };
+    }
+    const nodeResult = result.nodes[current.id];
+    const limits = nodeResult?.limitedBy || [];
+    if (limits.length) {
+      const limit = limits[0];
+      if (/site budget/i.test(String(limit))) {
+        return supply || { code: 'limited', text: 'Limited by site budget', action: 'resource', nodeId: current.id };
+      }
+      const port = limitingPort(current, limit);
+      const upstream = feedingNode(current, port);
+      const upstreamSupply = upstream ? sourceSupplyDiagnosis(upstream) : null;
+      if (upstreamSupply) return upstreamSupply;
+      const declared = units[current.unit].ports[port];
+      return {
+        code: 'limited',
+        text: `Limited by ${portName(limit)}`,
+        action: declared ? 'port' : 'process',
+        port: declared ? port : undefined,
+        nodeId: current.id,
+      };
+    }
+    const inlets = Object.entries(units[current.unit].ports).filter(([, declaration]) => declaration.direction === 'in');
+    for (const [port] of inlets) {
+      const upstreamSupply = sourceSupplyDiagnosis(feedingNode(current, port));
+      if (upstreamSupply) return upstreamSupply;
+    }
+    return { code: 'idle', text: 'Idle', nodeId: current.id };
+  }
+
+  function followDiagnosis(diagnosis) {
+    if (!diagnosis) return;
+    if (diagnosis.action === 'rights') {
+      highlightRightKey = diagnosis.rightKey || '';
+      highlightPort = null;
+      activateTab('location');
+      const details = document.getElementById('siteRightsDetails');
+      if (details) details.open = true;
+      renderSiteTruth();
+      document.getElementById('siteRights')?.scrollIntoView?.({ block: 'nearest' });
+      return;
+    }
+    highlightRightKey = '';
+    if (diagnosis.nodeId) selectedNodeId = diagnosis.nodeId;
+    highlightPort = diagnosis.action === 'port' && diagnosis.port
+      ? { nodeId: selectedNodeId, port: diagnosis.port }
+      : null;
+    activateTab('process');
+    render();
+    if (diagnosis.action === 'setpoint') {
+      document.querySelector('#nodeControls [name="requestedRate"], #nodeControls [name="sourceRate"]')?.focus?.();
+    } else if (diagnosis.action === 'resource') {
+      document.querySelector('#nodeControls [name="siteResource"]')?.focus?.();
+    } else if (diagnosis.action === 'warnings') {
+      document.getElementById('warnings')?.scrollIntoView?.({ block: 'nearest' });
+    } else if (diagnosis.action === 'port') {
+      document.querySelector(`#streamList [data-port-row="${diagnosis.port}"]`)?.scrollIntoView?.({ block: 'nearest' });
+    }
+  }
+
+  function diagnosisButton(diagnosis) {
+    if (!diagnosis?.action) return '';
+    if (diagnosis.action === 'port') return `<button type="button" data-diagnosis="port">Show ${escapeHtml(portName(diagnosis.port))}</button>`;
+    if (diagnosis.action === 'rights') return '<button type="button" data-diagnosis="rights">Open Rights</button>';
+    if (diagnosis.action === 'setpoint') return '<button type="button" data-diagnosis="setpoint">Edit setpoint</button>';
+    if (diagnosis.action === 'resource') return '<button type="button" data-diagnosis="resource">Edit resource</button>';
+    if (diagnosis.action === 'warnings') return '<button type="button" data-diagnosis="warnings">Show issue</button>';
+    return '<button type="button" data-diagnosis="process">Show block</button>';
   }
 
   function edgeAt(endpoint) {
@@ -2678,26 +2993,38 @@
     const labels = document.getElementById('siteMapLegendLabels');
     const citeEl = document.getElementById('siteMapLegendCite');
     const source = MapSite.LAYER_SOURCES[active];
+    const shortSwatch = label => {
+      const text = String(label || '');
+      if (/arid/i.test(text)) return 'Arid';
+      if (/extremely/i.test(text)) return '>80%';
+      if (/high/i.test(text)) return '40–80%';
+      return text.length > 16 ? `${text.slice(0, 14)}…` : text;
+    };
     if (active === 'pvgis') {
-      if (title) title.textContent = 'GHI kWh/m²·year (Global Solar Atlas)';
+      if (title) title.textContent = 'GHI';
       const stops = MapSite.GSA_GHI_RAMP || [];
       if (ramp) {
         ramp.className = 'site-map-legend-ramp is-continuous';
         ramp.innerHTML = stops.map(([, color]) => `<span style="background:${color}"></span>`).join('');
       }
       if (labels) labels.innerHTML = '<span>700</span><span>1500</span><span>2200</span><span>3000</span>';
-      if (citeEl) citeEl.innerHTML = layerCiteHtml(source?.overlayCite ? { cite: source.overlayCite } : source);
+      if (citeEl) {
+        citeEl.innerHTML = `<span class="site-map-source-name">Annual GHI, kWh/m²·year — Global Solar Atlas</span>${layerCiteHtml(source?.overlayCite ? { cite: source.overlayCite } : source)}`;
+      }
     } else if (active === 'water') {
-      if (title) title.textContent = 'Baseline water stress';
+      if (title) title.textContent = 'Water stress';
       const items = source?.legend || [];
       if (ramp) {
         ramp.className = 'site-map-legend-ramp is-swatches';
-        ramp.innerHTML = items.map(item => `<span class="site-map-legend-swatch"><i style="background:${item.color}"></i>${item.label}</span>`).join('');
+        ramp.innerHTML = items.map(item => `<span class="site-map-legend-swatch"><i style="background:${item.color}"></i>${shortSwatch(item.label)}</span>`).join('');
       }
       if (labels) labels.innerHTML = '';
-      if (citeEl) citeEl.innerHTML = layerCiteHtml(source);
+      if (citeEl) {
+        const full = items.map(item => item.label).filter(Boolean).join(' · ');
+        citeEl.innerHTML = `<span class="site-map-source-name">Baseline water stress${full ? ` — ${full}` : ''}</span>${layerCiteHtml(source)}`;
+      }
     } else if (active === 'land') {
-      if (title) title.textContent = 'Ag land value USD/ha (official stats)';
+      if (title) title.textContent = 'Land value';
       const stops = MapSite.LAND_USD_HA_RAMP || source?.legend || [];
       if (ramp) {
         ramp.className = 'site-map-legend-ramp is-continuous';
@@ -2709,11 +3036,10 @@
       }
       if (citeEl) {
         const cites = source?.cites || [];
-        if (cites.length) {
-          citeEl.innerHTML = cites.map(c => (c.url ? `<a href="${c.url}" target="_blank" rel="noreferrer">${c.label}</a>` : c.label)).join(' · ');
-        } else {
-          citeEl.innerHTML = layerCiteHtml(source);
-        }
+        const links = cites.length
+          ? cites.map(c => (c.url ? `<a href="${c.url}" target="_blank" rel="noreferrer">${c.label}</a>` : c.label)).join(' · ')
+          : layerCiteHtml(source);
+        citeEl.innerHTML = `<span class="site-map-source-name">Agricultural land value, USD/ha</span>${links}`;
       }
     }
   }
@@ -3153,13 +3479,17 @@
     renderCanvasZoom();
     if (!graph.nodes.length) {
       canvas.classList.add('empty');
-      canvas.innerHTML = '<div class="empty-canvas"><span class="eyebrow">Blank factory</span><strong>Start here</strong><p>Load a scenario on Overview, or add blocks and connect ports. Shift-drag to pan · Fit to frame.</p></div>';
+      const hint = document.getElementById('canvasPanHint');
+      if (hint) hint.hidden = true;
+      canvas.innerHTML = '<div class="empty-canvas"><span class="eyebrow">Blank factory</span><strong>Start here</strong><p>Load a scenario on Overview, or add blocks and connect ports. Drag empty canvas to pan · Fit frames the plant.</p></div>';
       return;
     }
     canvas.classList.remove('empty');
-    const hasRecycle = graph.edges.some(edge => edge.recycle);
-    const width = Math.max(1400, ...graph.nodes.map(current => current.position.x + NODE_WIDTH + 40));
-    const height = Math.max(620, ...graph.nodes.map(current => current.position.y + nodeHeight(current) + (hasRecycle ? 120 : 40)));
+    const hint = document.getElementById('canvasPanHint');
+    if (hint) hint.hidden = false;
+    const sized = contentSize();
+    const width = sized.width;
+    const height = sized.height;
     const recycleY = height - 45;
     const edges = graph.edges.map((edge, edgeIndex) => {
       const start = portPoint(edge.from.node, edge.from.port, 'out');
@@ -3187,15 +3517,24 @@
     const height = nodeHeight(current);
     const nodeResult = result?.nodes[current.id];
     const bottlenecks = bottlenecksFor(current.id);
-    const value = nodeResult?.activity !== undefined ? `${formatNumber(nodeResult.activity)} ${catalog[current.unit].activityUnit}` : nodeResult ? formatStream(nodeResult.supplied || nodeResult.received || nodeResult.available) : 'Not running';
+    const diagnosis = blockDiagnosis(current);
+    const value = diagnosis
+      ? diagnosis.text
+      : nodeResult?.activity !== undefined
+        ? `${formatNumber(nodeResult.activity)} ${catalog[current.unit].activityUnit}`
+        : nodeResult
+          ? formatStream(nodeResult.supplied || nodeResult.received || nodeResult.available)
+          : 'Not running';
     const portMarkup = (list, direction) => list.map(([port, declaration], index) => {
       const cy = y + 66 + index * 24;
       const cx = direction === 'in' ? x : x + NODE_WIDTH;
       const selected = pendingPort?.node === current.id && pendingPort.port === port;
+      const cause = diagnosis?.action === 'port' && diagnosis.port === port && diagnosis.nodeId === current.id;
       const portLabel = `${direction === 'in' ? 'Connect' : 'Connect'} ${portName(port)} ${direction === 'in' ? 'in' : 'out'}`;
-      return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0" aria-label="${portLabel}" title="${portLabel}"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 13 : cx - 13}" y="${cy + 4}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port)}</text></g>`;
+      return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}${cause ? ' cause' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0" aria-label="${portLabel}" title="${portLabel}"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 13 : cx - 13}" y="${cy + 4}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port)}</text></g>`;
     }).join('');
-    return `<g class="flow-node${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}" data-node="${current.id}" tabindex="0">${bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : ''}<rect x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="10"/><text class="node-kind" x="${x + 16}" y="${y + 20}">${units[current.unit].kind}</text><text class="node-label" x="${x + 16}" y="${y + 42}">${current.label}</text><text class="node-value" x="${x + 16}" y="${y + height - 12}">${value}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
+    const reasonTitle = diagnosis ? escapeHtml(diagnosis.detail || diagnosis.text) : '';
+    return `<g class="flow-node${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}" data-node="${current.id}"${diagnosis ? ` data-reason="${escapeHtml(diagnosis.text)}"` : ''} tabindex="0">${reasonTitle ? `<title>${reasonTitle}</title>` : bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : ''}<rect x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="10"/><text class="node-kind" x="${x + 16}" y="${y + 20}">${units[current.unit].kind}</text><text class="node-label" x="${x + 16}" y="${y + 42}">${current.label}</text><text class="node-value${diagnosis ? ' node-reason' : ''}" x="${x + 16}" y="${y + height - 12}">${escapeHtml(value)}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
   }
 
   function bottlenecksFor(nodeId) { return result?.nodes[nodeId]?.limitedBy || []; }
@@ -3247,16 +3586,28 @@
         text: `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)}`,
       });
     }
-    missing.slice(0, 4).forEach(item => issues.push({ severity: 'warn', text: `Connect ${item}`, action: 'process' }));
+    const openPorts = [
+      ...missingConnectionRecords(),
+      ...graph.nodes.filter(current => ['source', 'sink'].includes(units[current.unit].kind)).flatMap(unconnectedPorts),
+    ];
+    openPorts.slice(0, 4).forEach(item => issues.push({
+      severity: 'warn',
+      text: `Connect ${item.text}`,
+      action: 'process',
+      nodeId: item.nodeId,
+      port: item.port,
+    }));
     bottlenecks.slice(0, 4).forEach(item => issues.push({ severity: 'warn', text: `Bottleneck · ${item}`, action: 'process' }));
     siteRightWarnings.forEach(item => issues.push({ severity: 'warn', text: item, action: 'location' }));
     warning.hidden = issues.length === 0;
     warning.innerHTML = issues.map(issue => {
-      const go = issue.action === 'process'
-        ? '<button type="button" data-issue-tab="process">Process</button>'
-        : issue.action === 'location'
-          ? '<button type="button" data-issue-tab="location">Location</button>'
-          : '';
+      const go = issue.nodeId
+        ? `<button type="button" data-issue-node="${issue.nodeId}" data-issue-port="${issue.port || ''}">Show</button>`
+        : issue.action === 'process'
+          ? '<button type="button" data-issue-tab="process">Process</button>'
+          : issue.action === 'location'
+            ? '<button type="button" data-issue-tab="location">Location</button>'
+            : '';
       return `<div class="warning-issue" data-severity="${issue.severity}"><span>${issue.text}</span>${go}</div>`;
     }).join('');
   }
@@ -3522,7 +3873,8 @@
           const title = right.note ? ` title="${right.note.replace(/"/g, '&quot;')}"` : '';
           const kind = right.kind || RIGHT_KINDS?.[key] || '';
           const kindMark = kind ? `<span class="rights-kind">${kind}</span>` : '';
-          return `<span class="rights-item"${title}>${key}${kindMark}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
+          const cause = highlightRightKey === key ? ' is-cause' : '';
+          return `<span class="rights-item${cause}" data-right="${key}"${title}>${key}${kindMark}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
         }).join('');
       }
       const rightsDetails = rightsEl.closest?.('details');
@@ -3600,9 +3952,12 @@
 
   function renderInspector() {
     const current = node(selectedNodeId);
+    inspector.classList.toggle('has-selection', !!current);
+    const diagnosisEl = document.getElementById('nodeDiagnosis');
     if (!current) {
       document.getElementById('inspectorTitle').textContent = 'Nothing selected';
       document.getElementById('inspectorKind').textContent = 'Select a block.';
+      if (diagnosisEl) { diagnosisEl.hidden = true; diagnosisEl.innerHTML = ''; }
       document.getElementById('nodeControls').innerHTML = '';
       document.getElementById('inspectorMetrics').innerHTML = '';
       document.getElementById('streamList').innerHTML = '<p class="status-meta">No ports yet.</p>';
@@ -3613,6 +3968,13 @@
     }
     document.getElementById('inspectorTitle').textContent = current.label;
     document.getElementById('inspectorKind').textContent = `${units[current.unit].kind} · ${current.unit}`;
+    const diagnosis = blockDiagnosis(current);
+    if (diagnosisEl) {
+      diagnosisEl.hidden = !diagnosis;
+      diagnosisEl.innerHTML = diagnosis
+        ? `<strong>${escapeHtml(diagnosis.detail || diagnosis.text)}</strong>${diagnosisButton(diagnosis)}`
+        : '';
+    }
     document.getElementById('nodeControls').innerHTML = controlsFor(current);
     const nodeResult = result?.nodes[current.id];
     const metrics = nodeResult?.activity !== undefined ? [
@@ -3901,7 +4263,8 @@
         : '';
       return `<div class="port-connection"><small>Connected to ${node(peerId).label}</small>${weight}<button type="button" data-disconnect="${index}">Disconnect</button></div>`;
     }).join('') || '<small>Not connected</small>';
-    return `<div class="port-row"><div><span>${declaration.direction === 'in' ? 'IN' : 'OUT'} · ${declaration.kind}</span><strong>${portName(port)}</strong>${connections}</div>${boundaryAllowed ? `<button type="button" data-boundary-port="${port}" data-direction="${declaration.direction}">${declaration.direction === 'in' ? 'Add source' : 'Add sink branch'}</button>` : ''}</div>`;
+    const cause = highlightPort && highlightPort.nodeId === current.id && highlightPort.port === port;
+    return `<div class="port-row${cause ? ' is-cause' : ''}" data-port-row="${port}"><div><span>${declaration.direction === 'in' ? 'IN' : 'OUT'} · ${declaration.kind}</span><strong>${portName(port)}</strong>${connections}</div>${boundaryAllowed ? `<button type="button" data-boundary-port="${port}" data-direction="${declaration.direction}">${declaration.direction === 'in' ? 'Add source' : 'Add sink branch'}</button>` : ''}</div>`;
   }
 
   function recipeGroup(title, streams) {
@@ -4021,7 +4384,15 @@
     completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
-    solve: solveAndRender, fitCanvas, get result() { return result; }, get baseline() { return baseline; },
+    solve: solveAndRender, fitCanvas, showCause(nodeId) {
+      const current = node(nodeId || selectedNodeId);
+      if (!current) return null;
+      selectedNodeId = current.id;
+      const diagnosis = blockDiagnosis(current);
+      if (diagnosis) followDiagnosis(diagnosis);
+      else render();
+      return diagnosis;
+    }, get result() { return result; }, get baseline() { return baseline; },
     get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },
     get sizing() { return lastSizing; }, get activeTab() { return activeTab; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },

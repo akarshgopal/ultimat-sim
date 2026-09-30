@@ -139,7 +139,9 @@ test('coastal methane loads a sited factory whose winter solar cuts methane', ()
   assert.match(context.__elements.get('siteAssay').innerHTML, /Millero|Alboran|36\.5/);
   assert.match(context.__elements.get('siteRights').innerHTML, /rights-unverified/);
   assert.match(context.__elements.get('siteRights').innerHTML, /rights-assumed/);
-  assert.match(context.__elements.get('siteRights').innerHTML, /gridImport/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /data-right="gridImport"/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /Grid import/);
+  assert.match(context.__elements.get('siteRights').innerHTML, /Seawater intake|Seawater discharge|Brine concession|Salt purchase/);
   assert.match(context.__elements.get('siteRights').innerHTML, /rights-kind/);
   assert.match(context.__elements.get('siteRights').innerHTML, /discharge/);
   assert.equal(app.site.month, 12);
@@ -434,9 +436,12 @@ test('Economics screens purchased-power break-even on the frozen plant without s
   assert.doesNotMatch(sharedText, /annualNetCash|hero scale|TEA/);
 
   app.loadMethaneRecycle();
-  assert.match(select.innerHTML, /No products sold/);
+  assert.match(select.innerHTML, /No product supported by the screening price table/);
+  assert.match(select.innerHTML, /Methane/);
+  assert.doesNotMatch(select.innerHTML, /No products sold/);
   assert.equal(app.screenPowerBreakEven(), null);
-  assert.match(context.__elements.get('powerBreakevenResult').textContent, /not selling a product/i);
+  assert.match(context.__elements.get('powerBreakevenResult').textContent, /No product supported by the screening price table/);
+  assert.match(context.__elements.get('powerBreakevenResult').textContent, /Methane/);
 });
 
 test('positive-cashflow status reports heat covered when present', () => {
@@ -467,10 +472,12 @@ test('coastal methane sizeToProduct H2 produces electrolyzer activity and never 
 
 test('apply location uses frozen or screening solar when live PVGIS fetch fails', async () => {
   const context = loadApp();
-  context.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  let fetches = 0;
+  context.fetch = async () => { fetches += 1; throw new TypeError('Failed to fetch'); };
   context.PvgisSites = require('../data/pvgis-sites');
   const app = context.__FLOWSHEET_APP__;
   const statusText = () => context.document.getElementById('siteFetchStatus').textContent;
+  const notesText = () => context.__elements.get('siteNotes').textContent;
   const setCoords = (lat, lon) => {
     context.__elements.get('siteLatitude').value = String(lat);
     context.__elements.get('siteLongitude').value = String(lon);
@@ -478,18 +485,25 @@ test('apply location uses frozen or screening solar when live PVGIS fetch fails'
     context.__elements.get('siteBatteryKWh').value = '0';
   };
 
+  assert.match(app.site.notes, /Zabuye/);
   setCoords(36.834, -2.463);
   await app.applyCoordinates();
-  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError/);
+  assert.equal(fetches, 1);
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError|Zabuye/);
   assert.match(statusText(), /Live PVGIS blocked \(CORS\/network\)/);
   assert.match(statusText(), /frozen PVGIS-SARAH3 for Almería \(retrieved 2026-09-05\)/);
+  assert.doesNotMatch(notesText(), /Zabuye/);
+  assert.doesNotMatch(String(app.site.meteo?.notes || ''), /Zabuye|84\.05/);
+  assert.equal(app.site.meteo.monthlyPVKWhPerKWp, undefined);
   assert.ok(app.site.solar.typicalMonths);
   assert.ok(app.site.resources.electricity.stream.kWh > 0);
 
   setCoords(22.737, 69.71);
   await app.applyCoordinates();
-  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError/);
+  assert.equal(fetches, 1);
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError|Zabuye|Almería/);
   assert.match(statusText(), /frozen PVGIS-ERA5 for Mundra/);
+  assert.doesNotMatch(notesText(), /Zabuye|Almería/);
   assert.match(statusText(), /retrieved 2026-09-21/);
   assert.equal(app.site.solar, null);
   assert.equal(app.site.meteo.quality, 'cited');
@@ -499,10 +513,12 @@ test('apply location uses frozen or screening solar when live PVGIS fetch fails'
   assert.ok(app.site.dailyPVKWhPerKWp > 0);
   assert.ok(Math.abs(app.site.resources.electricity.stream.kWh - app.site.dailyPVKWhPerKWp * 10) < 1e-6);
 
-  context.fetch = async () => ({ ok: false, status: 503 });
+  context.fetch = async () => { fetches += 1; return { ok: false, status: 503 }; };
   setCoords(59.9, 10.8);
   await app.applyCoordinates();
-  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError|PVGIS 503/);
+  assert.equal(fetches, 1);
+  assert.doesNotMatch(statusText(), /Failed to fetch|TypeError|PVGIS 503|Zabuye|Mundra|Almería/);
+  assert.match(statusText(), /fallback unavailable/i);
   assert.match(statusText(), /screening-band ~\d+\.\d kWh\/kWp·day/);
   assert.match(statusText(), /not a cited hourly series/);
   assert.match(statusText(), /same-origin proxy/);
@@ -512,6 +528,72 @@ test('apply location uses frozen or screening solar when live PVGIS fetch fails'
   const band = context.FlowsheetMapSite.pvScreeningBand(59.9, 10.8);
   const sum = app.site.solar.annualTypical.reduce((total, value) => total + value, 0);
   assert.ok(Math.abs(sum - band.typicalKWhPerKWpDay) < 1e-9);
+  assert.doesNotMatch(notesText(), /Zabuye|Mundra|Almería/);
+});
+
+test('github pages skips live PVGIS when the active site has a freeze', async () => {
+  const context = loadApp();
+  context.location = { hostname: 'akarshgopal.github.io' };
+  let fetches = 0;
+  context.fetch = async () => { fetches += 1; throw new TypeError('Failed to fetch'); };
+  context.PvgisSites = require('../data/pvgis-sites');
+  const app = context.__FLOWSHEET_APP__;
+  context.__elements.get('siteLatitude').value = '36.834';
+  context.__elements.get('siteLongitude').value = '-2.463';
+  context.__elements.get('siteSolarKWp').value = '10';
+  context.__elements.get('siteBatteryKWh').value = '0';
+  await app.applyCoordinates();
+  assert.equal(fetches, 0);
+  const status = context.document.getElementById('siteFetchStatus').textContent;
+  assert.match(status, /frozen PVGIS-SARAH3 for Almería/);
+  assert.doesNotMatch(status, /Zabuye/);
+  assert.doesNotMatch(context.__elements.get('siteNotes').textContent, /Zabuye/);
+  assert.equal(app.site.latitude, 36.834);
+  assert.equal(app.site.longitude, -2.463);
+});
+
+test('process and rights use human labels, and displayed kWp, assay, and CAPEX are rounded', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(0);
+  const canvas = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(canvas, />DAC</);
+  assert.match(canvas, />SWRO</);
+  assert.match(canvas, />Sabatier water</);
+  assert.doesNotMatch(canvas, />Dac</);
+  assert.doesNotMatch(canvas, />Swro</);
+  assert.doesNotMatch(canvas, />Sabatier Water</);
+  const rights = context.__elements.get('siteRights').innerHTML;
+  assert.match(rights, /Grid import/);
+  assert.match(rights, /Seawater intake/);
+  assert.match(rights, /Salt purchase/);
+  assert.match(rights, /data-right="brineConcession"/);
+  assert.match(rights, /Brine concession/);
+
+  app.site.solarKWp = 12.3456789;
+  app.site.assay = {
+    ...(app.site.assay || {}),
+    summary: '68.54392789373814 g/kg cited process-brine majors',
+    quality: 'cited',
+  };
+  const sabatier = app.graph.nodes.find(node => node.id === 'sabatier');
+  sabatier.economics.installedCapex = 12345.6789;
+  app.solve();
+  const kWp = context.__elements.get('siteSolarKWp');
+  assert.equal(kWp.value, '12.35');
+  assert.match(kWp.title, /12\.3456789 kWp/);
+  assert.equal(app.site.solarKWp, 12.3456789);
+  const assay = context.__elements.get('siteAssay').innerHTML;
+  assert.match(assay, />68\.54 g\/kg/);
+  assert.doesNotMatch(assay, />68\.54392789373814/);
+  assert.match(assay, /title="68\.54392789373814 g\/kg/);
+  context.__elements.get('flowsheetCanvas').innerHTML = '';
+  // Select the block through the public solve render by clicking is unavailable;
+  // inspector follows selectedNodeId, which loadCase set to sabatier.
+  const controls = context.__elements.get('nodeControls').innerHTML;
+  assert.match(controls, /value="12346"/);
+  assert.match(controls, /title="12345\.6789"/);
+  assert.equal(sabatier.economics.installedCapex, 12345.6789);
 });
 
 test('loading a demo or clearing the factory drops a sticky cashflow banner', () => {

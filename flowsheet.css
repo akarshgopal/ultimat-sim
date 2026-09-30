@@ -1727,6 +1727,8 @@ label output + .quality-chip {
   cursor: pointer;
 }
 .issue-card:hover, .issue-card:focus-visible { border-color: var(--warning); outline: none; box-shadow: var(--shadow-soft); }
+.issue-card.is-static { cursor: default; }
+.issue-card.is-static:hover, .issue-card.is-static:focus-visible { box-shadow: none; }
 .issue-card[hidden] { display: none !important; }
 .cashflow-result {
   margin-top: 12px;

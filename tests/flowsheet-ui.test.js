@@ -689,3 +689,79 @@ test('loading a demo or clearing the factory drops a sticky cashflow banner', ()
   assert.equal(banner.innerHTML, '');
   assert.equal(app.graph.nodes.length, 0);
 });
+
+test('idle blocks name the cause and can jump to the port or Rights', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.clearFactory();
+  const dac = app.addNode('dac');
+  const canvas = context.__elements.get('flowsheetCanvas');
+  assert.match(canvas.innerHTML, /Missing Feed gas/);
+  assert.doesNotMatch(canvas.innerHTML, /Not running/);
+  assert.match(context.__elements.get('nodeDiagnosis').innerHTML, /Open|Show Feed gas|data-diagnosis="port"/);
+  const diagnosis = app.showCause(dac.id);
+  assert.equal(diagnosis.code, 'missing-connection');
+  assert.equal(diagnosis.port, 'air');
+  assert.match(context.__elements.get('streamList').innerHTML, /is-cause/);
+  assert.match(context.__elements.get('streamList').innerHTML, /data-port-row="air"/);
+
+  app.completeBoundaries();
+  app.setpoints[dac.id] = 0;
+  app.solve();
+  assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /Zero setpoint/);
+  assert.equal(app.showCause(dac.id).code, 'zero-setpoint');
+
+  app.loadCoastalMethane(0);
+  const grid = app.addNode('grid-electricity');
+  assert.match(context.__elements.get('flowsheetCanvas').innerHTML, /Unverified grid right/);
+  const right = app.showCause(grid.id);
+  assert.equal(right.code, 'unverified-right');
+  assert.equal(right.action, 'rights');
+  assert.equal(app.activeTab, 'location');
+  const rights = context.__elements.get('siteRights').innerHTML;
+  assert.match(rights, /data-right="gridImport"/);
+  assert.match(rights, /is-cause/);
+});
+
+test('Fit scales the graph to the viewport instead of stopping at 25%', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadCoastalMethane(0);
+  const canvas = context.__elements.get('flowsheetCanvas');
+  canvas.clientWidth = 1100;
+  canvas.clientHeight = 720;
+  canvas.scrollLeft = 0;
+  canvas.scrollTop = 0;
+  app.fitCanvas();
+  assert.ok(app.canvasZoom > 0.45, `desktop fit zoom ${app.canvasZoom}`);
+  assert.ok(app.canvasZoom <= 1);
+
+  canvas.clientWidth = 375;
+  canvas.clientHeight = 640;
+  app.fitCanvas({ compact: true });
+  assert.ok(app.canvasZoom >= 0.08, `narrow fit zoom ${app.canvasZoom}`);
+  assert.ok(app.canvasZoom < 0.5, `narrow fit zoom ${app.canvasZoom}`);
+  const width = Number(canvas.innerHTML.match(/style="width:([0-9.]+)px/)[1]);
+  assert.ok(width <= 375, `svg width ${width}`);
+});
+
+test('process chrome collapses the palette, cites map sources, and searches block copy', () => {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'flowsheet.css'), 'utf8');
+  const app = fs.readFileSync(path.join(root, 'js/flowsheet-app.js'), 'utf8');
+  assert.match(html, /id="paletteDrawerToggle"/);
+  assert.match(html, /id="paletteEmpty"/);
+  assert.match(html, /id="siteMapSources"/);
+  assert.match(html, /min="8"/);
+  assert.match(html, /Drag empty canvas to pan/);
+  assert.doesNotMatch(css, /min-width:\s*980px/);
+  assert.match(css, /\.building-card\[hidden\]/);
+  assert.match(css, /\.controls-sidebar\.is-open/);
+  assert.match(css, /\.inspector-sidebar\.has-selection/);
+  assert.match(html, /No blocks match/);
+  assert.match(app, /MIN_ZOOM = 0\.08/);
+  assert.match(app, /data-title/);
+  assert.match(app, /applyPaletteFilter/);
+  assert.doesNotMatch(html, /empire/i);
+});

@@ -126,7 +126,10 @@
               <p class="site-map-legend-title" id="siteMapLegendTitle"></p>
               <div class="site-map-legend-ramp" id="siteMapLegendRamp" role="img" aria-label="Map colormap"></div>
               <p class="site-map-legend-labels" id="siteMapLegendLabels"></p>
-              <p class="site-map-legend-cite" id="siteMapLegendCite"></p>
+              <details class="site-map-sources" id="siteMapSources">
+                <summary>Sources</summary>
+                <p class="site-map-legend-cite" id="siteMapLegendCite"></p>
+              </details>
             </div>
           </div>
           <p class="status-meta" id="siteMapStatus">Click map to set site · Solar, water, and land fill the map (one colormap at a time).</p>
@@ -167,14 +170,16 @@
 
     <section class="tab-panel process-panel" id="panelProcess" role="tabpanel" aria-labelledby="tabProcess" hidden>
       <main class="flowsheet-workspace">
-        <aside class="flowsheet-sidebar controls-sidebar" aria-label="Build menu">
+        <button type="button" class="palette-drawer-backdrop" id="paletteDrawerBackdrop" hidden aria-label="Close blocks"></button>
+        <aside class="flowsheet-sidebar controls-sidebar" id="controlsSidebar" aria-label="Build menu">
           <div class="sidebar-heading">
             <span class="eyebrow">Build</span>
             <h2>Process blocks</h2>
           </div>
           <label class="palette-search"><input id="paletteSearch" type="search" placeholder="Search blocks" aria-label="Search process blocks"></label>
+          <p class="palette-empty" id="paletteEmpty" hidden>No blocks match.</p>
           <div class="building-palette" id="buildingPalette"></div>
-          <h3 class="palette-heading">Sources and destinations</h3>
+          <h3 class="palette-heading" id="utilityPaletteHeading">Sources and destinations</h3>
           <div class="building-palette" id="utilityPalette"></div>
           <button type="button" class="clear-factory" id="clearFactory">Clear canvas</button>
           <div class="model-note">
@@ -191,6 +196,7 @@
               <p id="flowSummary">0 blocks · 0 connections</p>
             </div>
             <div class="stage-actions">
+              <button type="button" class="palette-drawer-toggle" id="paletteDrawerToggle" aria-controls="controlsSidebar" aria-expanded="false">Blocks</button>
               <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
               <button type="button" id="autoArrange">Arrange</button>
               <button type="button" id="focusCanvas" aria-pressed="false">Focus canvas</button>
@@ -208,7 +214,7 @@
           <div class="canvas-frame">
             <div class="canvas-zoom" aria-label="Canvas zoom controls">
               <button type="button" id="zoomOut" aria-label="Zoom canvas out">−</button>
-              <input id="canvasZoom" type="range" min="25" max="200" step="5" value="100" aria-label="Canvas zoom">
+              <input id="canvasZoom" type="range" min="8" max="200" step="1" value="100" aria-label="Canvas zoom">
               <output id="canvasZoomValue" for="canvasZoom">100%</output>
               <button type="button" id="zoomIn" aria-label="Zoom canvas in">+</button>
               <button type="button" id="zoomFit" aria-label="Fit graph to canvas">Fit</button>
@@ -218,9 +224,10 @@
               <div class="empty-canvas">
                 <span class="eyebrow">Blank factory</span>
                 <strong>Start here</strong>
-                <p>Load a scenario on Overview, or add blocks here and connect ports. Shift-drag to pan · Fit to frame.</p>
+                <p>Load a scenario on Overview, or add blocks here and connect ports. Drag empty canvas to pan · Fit frames the plant.</p>
               </div>
             </div>
+            <p class="canvas-pan-hint" id="canvasPanHint" hidden>Drag empty canvas to pan · Fit frames the plant</p>
           </div>
           <div class="warning-strip" id="warnings" hidden></div>
           <details class="more-section" id="advancedComparison">
@@ -242,11 +249,12 @@
           <button type="button" class="exit-focus" id="exitFocus" hidden>Exit focus</button>
         </section>
 
-        <aside class="flowsheet-sidebar inspector-sidebar" aria-label="Selected node details">
+        <aside class="flowsheet-sidebar inspector-sidebar" id="inspectorSidebar" aria-label="Selected node details">
           <div class="sidebar-heading">
             <span class="eyebrow">Inspector</span>
             <h2 id="inspectorTitle">Nothing selected</h2>
             <p id="inspectorKind">Select a block.</p>
+            <p class="node-diagnosis" id="nodeDiagnosis" hidden></p>
           </div>
           <div id="nodeControls"></div>
           <dl class="inspector-metrics" id="inspectorMetrics"></dl>

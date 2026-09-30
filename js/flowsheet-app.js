@@ -47,6 +47,8 @@
   let site = null;
   let network = { plants: [], corridors: [] };
   let networkResult = null;
+  let networkEditor = null;
+  let networkNotice = '';
   let solveError = '';
   let routeNote = '';
   let dragging = null;
@@ -549,14 +551,30 @@
   document.getElementById('loadAbundanceHub').addEventListener('click', () => { setActiveDemo('abundance-hub', 'Brine + ammonia'); loadAbundanceHub(); });
   document.getElementById('loadZabuyeHub')?.addEventListener('click', () => { setActiveDemo('zabuye-hub', 'Zabuye brine hub'); loadZabuyeHub(); });
   document.getElementById('loadDemoNetwork').addEventListener('click', () => { setActiveDemo('demo-network', 'Fuels + minerals'); loadDemoNetwork(); });
-  document.getElementById('addPlantToNetwork').addEventListener('click', () => {
-    const name = window.prompt('Name this plant in the network:')?.trim();
-    if (name) addCurrentPlant(name);
+  document.getElementById('addPlantToNetwork').addEventListener('click', beginAddPlant);
+  document.getElementById('cancelAddPlant').addEventListener('click', cancelAddPlant);
+  document.getElementById('addPlantForm').addEventListener('submit', event => {
+    event.preventDefault();
+    submitAddPlant(document.getElementById('addPlantName')?.value);
+  });
+  document.getElementById('addPlantForm').addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    cancelAddPlant();
   });
   document.getElementById('clearNetwork').addEventListener('click', clearNetwork);
-  document.getElementById('networkPlants').addEventListener('click', event => {
-    const id = event.target.closest('[data-open-plant]')?.dataset.openPlant;
-    if (id) openNetworkPlant(id);
+  document.getElementById('networkPlants').addEventListener('click', handleNetworkPlantClick);
+  document.getElementById('networkPlants').addEventListener('submit', event => {
+    const form = event.target?.closest?.('[data-rename-form]') || event.target;
+    if (!form?.dataset?.renameForm) return;
+    event.preventDefault();
+    renameNetworkPlant(form.dataset.renameForm, form.querySelector('input')?.value);
+  });
+  document.getElementById('networkPlants').addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    if (networkEditor?.type !== 'rename' && networkEditor?.type !== 'remove') return;
+    event.preventDefault();
+    cancelPlantEdit();
   });
   document.getElementById('siteMonth').addEventListener('change', event => {
     if (!site) return;
@@ -1659,9 +1677,148 @@
     return true;
   }
 
+  function defaultPlantName() {
+    const base = String(site?.name || '').trim() || 'Current plant';
+    const names = new Set(network.plants.map(plant => plant.name));
+    if (!names.has(base)) return base;
+    let n = 2;
+    while (names.has(`${base} ${n}`)) n += 1;
+    return `${base} ${n}`;
+  }
+
+  function setNetworkNotice(message) {
+    networkNotice = message || '';
+  }
+
+  function focusPlantField(input) {
+    if (!input) return;
+    input.focus?.();
+    input.select?.();
+  }
+
+  function beginAddPlant() {
+    networkEditor = { type: 'add' };
+    setNetworkNotice('');
+    renderNetwork();
+    const input = document.getElementById('addPlantName');
+    if (!input) return;
+    input.value = defaultPlantName();
+    focusPlantField(input);
+  }
+
+  function cancelAddPlant() {
+    networkEditor = null;
+    const input = document.getElementById('addPlantName');
+    if (input) input.value = '';
+    setNetworkNotice('Add canceled.');
+    renderNetwork();
+    return false;
+  }
+
+  function submitAddPlant(name) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) {
+      setNetworkNotice('Enter a name to add this plant.');
+      renderNetwork();
+      focusPlantField(document.getElementById('addPlantName'));
+      return false;
+    }
+    networkEditor = null;
+    setNetworkNotice(`Added ${trimmed}.`);
+    addCurrentPlant(trimmed);
+    return true;
+  }
+
+  function beginRenamePlant(id) {
+    if (!network.plants.some(plant => plant.id === id)) return false;
+    networkEditor = { type: 'rename', id };
+    setNetworkNotice('');
+    renderNetwork();
+    focusPlantField(document.querySelector(`[data-rename-form="${id}"] input`));
+    return true;
+  }
+
+  function beginRemovePlant(id) {
+    if (!network.plants.some(plant => plant.id === id)) return false;
+    networkEditor = { type: 'remove', id };
+    setNetworkNotice('');
+    renderNetwork();
+    return true;
+  }
+
+  function cancelPlantEdit(message) {
+    const pending = networkEditor?.type;
+    if (pending === 'add') return cancelAddPlant();
+    if (pending !== 'rename' && pending !== 'remove') return false;
+    networkEditor = null;
+    setNetworkNotice(message || (pending === 'rename' ? 'Rename canceled.' : 'Remove canceled.'));
+    renderNetwork();
+    return false;
+  }
+
+  function renameNetworkPlant(id, name) {
+    const plant = network.plants.find(item => item.id === id);
+    if (!plant) return false;
+    const trimmed = String(name ?? '').trim();
+    if (!trimmed || trimmed === plant.name) {
+      networkEditor = null;
+      setNetworkNotice('Rename canceled.');
+      renderNetwork();
+      return false;
+    }
+    plant.name = trimmed;
+    networkEditor = null;
+    setNetworkNotice(`Renamed to ${trimmed}.`);
+    refreshNetwork();
+    return true;
+  }
+
+  function removeNetworkPlant(id) {
+    if (!network.plants.some(plant => plant.id === id)) return false;
+    network.plants = network.plants.filter(plant => plant.id !== id);
+    network.corridors = (network.corridors || []).filter(corridor => corridor.from?.plant !== id && corridor.to?.plant !== id);
+    networkEditor = null;
+    setNetworkNotice('Plant removed.');
+    if (!network.plants.length) {
+      networkResult = null;
+      persistNetwork();
+      renderNetwork();
+      renderSiteMap();
+      return true;
+    }
+    refreshNetwork();
+    return true;
+  }
+
+  function handleNetworkPlantClick(event) {
+    const openId = event.target.closest?.('[data-open-plant]')?.dataset.openPlant;
+    if (openId) {
+      openNetworkPlant(openId);
+      return;
+    }
+    const renameId = event.target.closest?.('[data-rename-plant]')?.dataset.renamePlant;
+    if (renameId) {
+      beginRenamePlant(renameId);
+      return;
+    }
+    const removeId = event.target.closest?.('[data-remove-plant]')?.dataset.removePlant;
+    if (removeId) {
+      beginRemovePlant(removeId);
+      return;
+    }
+    if (event.target.closest?.('[data-cancel-rename]') || event.target.closest?.('[data-cancel-remove]')) {
+      cancelPlantEdit();
+      return;
+    }
+    const confirmId = event.target.closest?.('[data-confirm-remove]')?.dataset.confirmRemove;
+    if (confirmId) removeNetworkPlant(confirmId);
+  }
+
   function clearNetwork() {
     network = { plants: [], corridors: [] };
     networkResult = null;
+    networkEditor = null;
+    setNetworkNotice('Network cleared.');
     persistNetwork();
     renderNetwork();
     renderSiteMap();
@@ -3719,7 +3876,57 @@
     }
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[char]));
+  }
+
+  function syncNetworkChrome() {
+    const form = document.getElementById('addPlantForm');
+    const addButton = document.getElementById('addPlantToNetwork');
+    const note = document.getElementById('networkActionNote');
+    if (note) note.textContent = networkNotice;
+    if (form) form.hidden = networkEditor?.type !== 'add';
+    if (addButton) addButton.hidden = networkEditor?.type === 'add';
+  }
+
+  function plantLead(plant, transferred) {
+    const sales = (plant.economics?.sinks || [])
+      .filter(sink => sink.disposition === 'sale' && Number(sink.deliveredAmount) > 0 && !transferred.has(`${plant.id}:${sink.id}`))
+      .sort((left, right) => (Number(right.annualRevenue) || 0) - (Number(left.annualRevenue) || 0)
+        || (Number(right.deliveredAmount) || 0) - (Number(left.deliveredAmount) || 0));
+    return sales[0] || null;
+  }
+
+  function plantLeadText(lead) {
+    if (!lead) return 'No sale products';
+    const label = NETWORK_SALE_LABELS[lead.id] || lead.id;
+    if (Number(lead.annualRevenue) > 0) return `${label} · ${formatMoney(lead.annualRevenue)}/year`;
+    return `${label} · ${formatNumber(lead.deliveredAmount / 1000)} t/year`;
+  }
+
+  function plantEditControls(plant) {
+    const id = escapeHtml(plant.id);
+    if (networkEditor?.type === 'rename' && networkEditor.id === plant.id) {
+      return `<form class="network-plant-edit" data-rename-form="${id}"><label>Name <input type="text" name="plantName" value="${escapeHtml(plant.name)}" maxlength="80" autocomplete="off"></label><button type="submit">Save</button><button type="button" data-cancel-rename>Cancel</button></form>`;
+    }
+    if (networkEditor?.type === 'remove' && networkEditor.id === plant.id) {
+      return `<div class="network-plant-edit" role="group" aria-label="Confirm remove"><span>Remove ${escapeHtml(plant.name)}?</span><button type="button" data-confirm-remove="${id}">Remove</button><button type="button" data-cancel-remove>Cancel</button></div>`;
+    }
+    return `<div class="network-plant-actions"><button type="button" data-open-plant="${id}">Open</button><button type="button" data-rename-plant="${id}">Rename</button><button type="button" data-remove-plant="${id}">Remove</button></div>`;
+  }
+
+  function plantCard(plant, transferred) {
+    const siteName = plant.definition?.site?.name || 'Unspecified site';
+    const lead = plantLead(plant, transferred);
+    const landText = plant.footprint ? `${formatHa(plant.footprint.totalHa)} footprint` : '';
+    const leadAttr = lead ? ` data-lead="${escapeHtml(lead.id)}"` : '';
+    return `<div class="network-plant" data-plant-id="${escapeHtml(plant.id)}"${leadAttr}><div class="network-plant-copy"><strong>${escapeHtml(plant.name)}</strong><small>${escapeHtml(siteName)}${landText ? ` · ${escapeHtml(landText)}` : ''}</small><small>${escapeHtml(plantLeadText(lead))}</small></div>${plantEditControls(plant)}</div>`;
+  }
+
   function renderNetwork() {
+    syncNetworkChrome();
     const panel = document.getElementById('networkPanel');
     const body = document.getElementById('networkBody');
     const title = document.getElementById('networkTitle');
@@ -3736,15 +3943,18 @@
     const details = body.closest?.('details');
     if (details) details.hidden = empty;
     if (empty) {
+      if (networkEditor && networkEditor.type !== 'add') networkEditor = null;
       status.textContent = 'Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.';
       plants.innerHTML = '';
       metrics.innerHTML = '';
       products.innerHTML = '';
       corridors.innerHTML = '';
+      syncNetworkChrome();
       return;
     }
     if (!networkResult) {
       status.textContent = 'Network solve failed.';
+      plants.innerHTML = network.plants.map(plant => plantCard(plant, new Set())).join('');
       return;
     }
     const freightQuality = classifyQuality({ kind: 'freight' });
@@ -3756,15 +3966,7 @@
       : 'freight not modeled (no corridors)';
     status.textContent = `${networkResult.plants.length} plants · ${formatHa(networkResult.landHa)} site footprint · ${freightLabel}`;
     const transferred = networkResult.transferred || new Set();
-    plants.innerHTML = networkResult.plants.map(plant => {
-      const siteName = plant.definition.site?.name || 'Unspecified site';
-      const lead = (networkResult.products || [])
-        .filter(item => item.plantId === plant.id && item.tonnesPerYear && !transferred.has(`${item.plantId}:${item.nodeId}`))
-        .sort((left, right) => right.tonnesPerYear - left.tonnesPerYear)[0];
-      const leadText = lead ? `${lead.substance} · ${formatNumber(lead.tonnesPerYear)} t/year` : 'No sale products';
-      const landText = plant.footprint ? `${formatHa(plant.footprint.totalHa)} footprint` : '';
-      return `<div class="network-plant"><div class="network-plant-copy"><strong>${plant.name}</strong><small>${siteName}${landText ? ` · ${landText}` : ''}</small><small>${leadText}</small></div><button type="button" data-open-plant="${plant.id}">Open</button></div>`;
-    }).join('');
+    plants.innerHTML = networkResult.plants.map(plant => plantCard(plant, transferred)).join('');
     const showBankable = corridorCount > 0 || economicsAcknowledgment();
     metrics.innerHTML = metricRows([
       ['CAPEX', formatUncertainMoney(networkResult.installedCapex, moneyQuality), { quality: moneyQuality }],
@@ -4231,6 +4433,8 @@
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
     completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
+    beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
+    renameNetworkPlant, removeNetworkPlant,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
     solve: solveAndRender, fitCanvas, get result() { return result; }, get baseline() { return baseline; },
     get economics() { return currentEconomics; }, get site() { return site; }, get network() { return networkResult; },

@@ -237,6 +237,80 @@ test('fuels plus minerals network rolls up two sited plants', () => {
   assert.match(context.__elements.get('siteFootprintMetrics').innerHTML, /Solar land|ha|m²/);
 });
 
+test('network plants edit in the page and tag the biggest earner', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'flowsheet-app.js'), 'utf8');
+  assert.match(html, /id="addPlantForm"/);
+  assert.match(html, /id="addPlantName"/);
+  assert.match(html, /id="cancelAddPlant"/);
+  assert.match(html, /id="clearNetwork"/);
+  assert.match(html, /id="projectLifeYears"/);
+  assert.match(html, />yr</);
+  assert.match(html, /id="discountRate"/);
+  assert.doesNotMatch(source, /Name this plant in the network/);
+  const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
+  assert.match(css, /@media \(max-width:\s*400px\)[\s\S]*\.brand \.status-meta \{\s*display:\s*none/);
+  assert.match(css, /\.network-plant-actions/);
+  assert.match(css, /minmax\(17\.5rem, 0\.9fr\)/);
+  assert.match(css, /\.project-assumptions \{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  context.window.prompt = () => { throw new Error('plant naming must stay in the page'); };
+  app.loadDemoNetwork();
+  const plantsHtml = context.__elements.get('networkPlants').innerHTML;
+  assert.match(plantsHtml, /data-open-plant=/);
+  assert.match(plantsHtml, /data-rename-plant=/);
+  assert.match(plantsHtml, /data-remove-plant=/);
+  assert.match(plantsHtml, /\/year/);
+  let taggedByRevenueNotMass = false;
+  for (const plant of app.network.plants) {
+    const sales = (plant.economics?.sinks || []).filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0);
+    const byRevenue = sales.slice().sort((left, right) => right.annualRevenue - left.annualRevenue || right.deliveredAmount - left.deliveredAmount);
+    const byMass = sales.slice().sort((left, right) => right.deliveredAmount - left.deliveredAmount);
+    assert.ok(byRevenue[0]);
+    assert.match(plantsHtml, new RegExp(`data-plant-id="${plant.id}" data-lead="${byRevenue[0].id}"`));
+    if (byRevenue[0].id !== byMass[0].id) taggedByRevenueNotMass = true;
+  }
+  assert.equal(taggedByRevenueNotMass, true);
+
+  const count = app.network.plants.length;
+  const id = app.network.plants[0].id;
+  const original = app.network.plants[0].name;
+  app.beginRemovePlant(id);
+  assert.equal(app.network.plants.length, count);
+  assert.match(context.__elements.get('networkPlants').innerHTML, new RegExp(`data-confirm-remove="${id}"`));
+  app.cancelPlantEdit();
+  assert.equal(app.network.plants.length, count);
+  assert.doesNotMatch(context.__elements.get('networkPlants').innerHTML, /data-confirm-remove=/);
+  assert.match(context.__elements.get('networkActionNote').textContent, /Remove canceled/);
+
+  assert.equal(app.renameNetworkPlant(id, `  ${original}  `), false);
+  assert.equal(app.network.plants.find(plant => plant.id === id).name, original);
+  assert.equal(app.renameNetworkPlant(id, 'Renamed plant'), true);
+  assert.equal(app.network.plants.find(plant => plant.id === id).name, 'Renamed plant');
+  assert.match(context.__elements.get('networkPlants').innerHTML, /Renamed plant/);
+
+  assert.equal(app.removeNetworkPlant(id), true);
+  assert.equal(app.network.plants.length, count - 1);
+  assert.doesNotMatch(context.__elements.get('networkPlants').innerHTML, /Renamed plant/);
+
+  const beforeAdd = app.network.plants.length;
+  app.beginAddPlant();
+  assert.equal(context.__elements.get('addPlantForm').hidden, false);
+  assert.equal(context.__elements.get('addPlantName').value, 'Dead Sea industrial shore');
+  app.cancelAddPlant();
+  assert.equal(app.network.plants.length, beforeAdd);
+  assert.equal(context.__elements.get('addPlantForm').hidden, true);
+  assert.match(context.__elements.get('networkActionNote').textContent, /Add canceled/);
+  assert.equal(app.submitAddPlant('   '), false);
+  assert.equal(app.network.plants.length, beforeAdd);
+  assert.match(context.__elements.get('networkActionNote').textContent, /Enter a name/);
+  assert.equal(app.submitAddPlant('  Extra plant  '), true);
+  assert.equal(app.network.plants.length, beforeAdd + 1);
+  assert.ok(app.network.plants.some(plant => plant.name === 'Extra plant'));
+});
+
 test('Dead Sea brine hub lists sold ammonia and minerals and refreshes land', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;

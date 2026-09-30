@@ -53,6 +53,7 @@
   let suppressClick = false;
   let canvasFocused = false;
   let lastSizing = null;
+  let livePvgisBlocked = false;
   let operationMeta = {};
   let siteMap = null;
   let siteMapMarker = null;
@@ -379,6 +380,19 @@
     'heat-sink': { label: 'Heat sink', palette: { section: 'utility', order: 10, glyph: '↓H', tone: 'carbon', description: 'Reject or recover process heat' } },
     'electricity-sink': { label: 'Electricity sink', palette: { section: 'utility', order: 11, glyph: '↓⚡', description: 'Export or curtail electricity' } },
   };
+  const NODE_DISPLAY_LABELS = {
+    dac: 'DAC',
+    swro: 'SWRO',
+    'sabatier-water': 'Sabatier water',
+  };
+  const RIGHT_DISPLAY_LABELS = {
+    gridImport: 'Grid import',
+    freshwater: 'Freshwater',
+    seawaterIntake: 'Seawater intake',
+    seawaterDischarge: 'Seawater discharge',
+    brineConcession: 'Brine concession',
+    saltPurchase: 'Salt purchase',
+  };
   const portNames = {
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
     capturedCo2: 'Captured CO₂', depletedAir: 'Depleted gas', spentMedia: 'Spent media', feed: 'Feed water', product: 'Fresh water',
@@ -506,6 +520,13 @@
   }
   document.getElementById('foundryTabs')?.addEventListener('keydown', handleTabListKeydown);
   document.getElementById('warnings')?.addEventListener('click', event => {
+    const nodeId = event.target.closest?.('[data-issue-node]')?.dataset.issueNode;
+    if (nodeId && graph.nodes.some(item => item.id === nodeId)) {
+      selectedNodeId = nodeId;
+      activateTab('process');
+      render();
+      return;
+    }
     const tab = event.target.closest?.('[data-issue-tab]')?.dataset.issueTab;
     if (tab) activateTab(tab);
   });
@@ -1212,27 +1233,105 @@
     ));
   }
 
+  function placesMatch(latA, lonA, latB, lonB, tolerance = 0.02) {
+    return Number.isFinite(Number(latA)) && Number.isFinite(Number(lonA))
+      && Number.isFinite(Number(latB)) && Number.isFinite(Number(lonB))
+      && Math.abs(Number(latA) - Number(latB)) <= tolerance
+      && Math.abs(Number(lonA) - Number(lonB)) <= tolerance;
+  }
+
+  function formatKWp(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return String(value ?? '');
+    return String(Number(n.toFixed(2)));
+  }
+
+  function formatDisplayNumber(value, digits) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '';
+    return String(Number(n.toFixed(digits)));
+  }
+
+  function displayInputNumber(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '0';
+    const abs = Math.abs(n);
+    const digits = abs >= 100 ? 0 : abs >= 1 ? 2 : 4;
+    return String(Number(n.toFixed(digits)));
+  }
+
+  function nodeDisplayLabel(saved) {
+    if (NODE_DISPLAY_LABELS[saved?.id]) return NODE_DISPLAY_LABELS[saved.id];
+    if (saved?.id && saved.id === saved.unit && catalog[saved.unit]?.label) return catalog[saved.unit].label;
+    return String(saved?.id || '').split('-').map(word => word ? word[0].toUpperCase() + word.slice(1) : '').join(' ');
+  }
+
+  function humanizeUiText(text) {
+    let out = String(text ?? '');
+    for (const [id, label] of Object.entries(RIGHT_DISPLAY_LABELS)) {
+      out = out.replaceAll(`unverified site right: ${id}`, `unverified site right: ${label}`);
+    }
+    return out;
+  }
+
+  function roundTaggedQuantities(text) {
+    return String(text ?? '')
+      .replace(/(\d+\.\d{4,})(?=\s*g\/kg\b)/gi, num => formatDisplayNumber(num, 2))
+      .replace(/(\d+\.\d{3,})(?=\s*kWp\b)/g, num => formatKWp(num));
+  }
+
+  function nearbyPresetId(latitude, longitude) {
+    const presets = sitePresets();
+    const named = site?.id ? presets.find(item => item.id === site.id) : null;
+    if (named && placesMatch(named.latitude, named.longitude, latitude, longitude, 0.25)) return named.id;
+    const near = presets.find(item => placesMatch(item.latitude, item.longitude, latitude, longitude, 0.25));
+    return near?.id || '';
+  }
+
+  function livePvgisHostBlocked() {
+    const host = String(globalThis.location?.hostname || '');
+    return host === 'github.io' || host.endsWith('.github.io');
+  }
+
+  function isPvgisCorsError(error) {
+    if (!error) return false;
+    if (error.name === 'TypeError') return true;
+    return /failed to fetch|networkerror|cors/i.test(String(error.message || error));
+  }
+
   function bindLocation({ latitude, longitude, solarKWp, batteryKWh = 0, solar, name, notes, rights, evidence, keepIdentity = false }) {
+    const previous = site;
+    const placeChanged = !placesMatch(previous?.latitude, previous?.longitude, latitude, longitude);
+    const inheritStory = keepIdentity || !placeChanged;
+    const previousMeteo = inheritStory ? previous?.meteo : null;
     const hourlySolar = isHourlySolar(solar) ? solar : null;
     const explicitMonthly = Array.isArray(solar?.monthlyPVKWhPerKWp) ? solar.monthlyPVKWhPerKWp.slice() : null;
     const nextName = keepIdentity
-      ? (name || site?.name || draftSiteLabel())
+      ? (name || previous?.name || draftSiteLabel())
       : draftSiteLabel();
     const nextId = keepIdentity
-      ? (site?.id || `site-${latitude}-${longitude}`)
+      ? (previous?.id || `site-${latitude}-${longitude}`)
       : `site-${latitude}-${longitude}`;
+    const kWpLabel = formatKWp(solarKWp);
+    const solarStory = solar?.notes
+      || (solar?.quality === 'screening'
+        ? `Screening-band solar at ${latitude}, ${longitude}. Frozen PVGIS fallback unavailable for this site.`
+        : `Solar for ${latitude}, ${longitude}.`);
     site = {
-      ...(site || {}),
+      ...(previous || {}),
       id: nextId,
       name: nextName,
-      latitude, longitude, solarKWp, month: site?.month || 0,
+      latitude, longitude, solarKWp, month: previous?.month || 0,
       solar: hourlySolar,
       storage: { batteryKWh, powerKW: batteryKWh, efficiency: 0.9, initialKWh: 0 },
-      resources: { ...(site?.resources || {}) },
-      notes: notes || site?.notes || 'PVGIS solar for this point. Rights and other supplies stay separate.',
-      ...(evidence ? { evidence } : {}),
+      resources: { ...(previous?.resources || {}) },
+      notes: notes || (inheritStory ? previous?.notes : '') || solarStory,
+      ...(evidence ? { evidence: evidence.map(item => ({ ...item })) } : {}),
       ...(rights ? { rights } : {}),
     };
+    if (!inheritStory && Array.isArray(site.evidence)) {
+      site.evidence = site.evidence.filter(item => !/PVGIS|kWh\/kWp/i.test(`${item?.label || ''} ${item?.url || ''}`));
+    }
     if (!keepIdentity) {
       delete site.region;
       delete site.kind;
@@ -1247,7 +1346,6 @@
         evidence: 'Unverified freshwater access; zero authorized supply',
       };
     }
-    const previousMeteo = site.meteo;
     const profile = FlowsheetSolver.hourlyProfile?.(site);
     const fallbackHours = hourlySolar?.typicalMonths?.[1]
       ? (hourlySolar.annualTypical || Object.values(hourlySolar.typicalMonths)[0])
@@ -1263,10 +1361,10 @@
       stream: { kind: 'electricity', kWh: daily * solarKWp },
       quality: screening ? 'screening' : 'literature-estimate',
       evidence: screening
-        ? `Screening-band ~${Number(daily).toFixed(1)} kWh/kWp·day × ${solarKWp} kWp — not a cited hourly series`
+        ? `Screening-band ~${Number(daily).toFixed(1)} kWh/kWp·day × ${kWpLabel} kWp — not a cited hourly series. Frozen PVGIS fallback unavailable for this site.`
         : frozenMonthly
-          ? `Frozen ${solar.source || 'PVGIS'} monthly × ${solarKWp} kWp`
-          : `PVGIS typical-day × ${solarKWp} kWp`,
+          ? `Frozen ${solar.source || 'PVGIS'} monthly × ${kWpLabel} kWp`
+          : `PVGIS typical-day × ${kWpLabel} kWp`,
     };
     site.dailyPVKWhPerKWp = daily;
     const monthlyPVKWhPerKWp = explicitMonthly
@@ -1318,7 +1416,6 @@
   function frozenSiteLabel(id) {
     const preset = sitePresets().find(item => item.id === id);
     if (preset?.name) return preset.name;
-    if (site?.id === id && site?.name) return site.name;
     return String(id || 'this site').replace(/-pvgis-\d{4}-\d{2}-\d{2}$/, '').replace(/-/g, ' ');
   }
 
@@ -1344,10 +1441,10 @@
         quality: 'screening',
         source: 'pvScreeningBand',
         database: 'pvScreeningBand',
-        notes: `Screening-band specific yield ~${daily.toFixed(1)} kWh/kWp·day. Not a cited PVGIS hourly series.`,
+        notes: `Screening-band specific yield ~${daily.toFixed(1)} kWh/kWp·day at ${latitude}, ${longitude}. Frozen PVGIS fallback unavailable for this site. Not a cited PVGIS hourly series.`,
         cite: band.cite,
       },
-      status: `Live PVGIS blocked (CORS/network). Using screening-band ~${daily.toFixed(1)} kWh/kWp·day — not a cited hourly series. Live seriescalc needs a same-origin proxy.`,
+      status: `Live PVGIS blocked (CORS/network). Frozen PVGIS fallback unavailable for this site. Using screening-band ~${daily.toFixed(1)} kWh/kWp·day — not a cited hourly series. Live seriescalc needs a same-origin proxy.`,
     };
   }
 
@@ -1355,13 +1452,14 @@
     return Math.abs(latitude - 36.834) < 0.2 && Math.abs(longitude + 2.463) < 0.2;
   }
 
-  async function resolveSolarOnFetchFailure(latitude, longitude) {
+  async function resolveSolarOnFetchFailure(latitude, longitude, siteId) {
     const hourly = globalThis.PvgisAlmeriaHourly;
     if (hourly && nearAlmeria(latitude, longitude)) {
       const retrieved = hourly.retrieved || '2026-09-05';
       return {
         solar: hourly,
-        name: site?.name || 'Almería coast · Spain',
+        name: 'Almería coast · Spain',
+        notes: `Frozen ${pvgisFamily(hourly.database)} typical-day for Almería (retrieved ${retrieved}) at ${latitude}, ${longitude}.`,
         latitude: 36.834,
         longitude: -2.463,
         status: `Live PVGIS blocked (CORS/network). Using frozen ${pvgisFamily(hourly.database)} for Almería (retrieved ${retrieved}).`,
@@ -1371,8 +1469,11 @@
     if (sitesApi?.hydrate) {
       try { await sitesApi.hydrate(); } catch { /* screening band still applies */ }
     }
-    const match = sitesApi?.matchSeries?.(latitude, longitude, { siteId: site?.id, maxDeg: 1 });
-    const frozen = match?.id ? sitesApi.frozenSolarFor?.({ id: match.id }) : null;
+    const activeId = siteId || nearbyPresetId(latitude, longitude) || '';
+    const match = sitesApi?.matchSeries?.(latitude, longitude, { siteId: activeId || undefined, maxDeg: 1 });
+    const frozen = match?.id && match.dist != null && match.dist <= 1
+      ? sitesApi.frozenSolarFor?.({ id: match.id })
+      : null;
     if (frozen && match.series) {
       const retrieved = frozen.retrieved || match.series.retrieved || '';
       const family = pvgisFamily(frozen.source || match.series.source);
@@ -1387,19 +1488,66 @@
           quality: 'cited',
           url: match.series.url || '',
           citeLabel: `${family} monthly, frozen ${retrieved}`.trim(),
-          notes: `Frozen ${frozen.source || match.series.source} monthly bound for screening; not a plant-measured irradiance series.`,
+          notes: `Frozen ${family} monthly for ${label} (retrieved ${retrieved}) at ${latitude}, ${longitude}. Not a plant-measured irradiance series.`,
         },
+        notes: `Frozen ${family} for ${label} (retrieved ${retrieved}) at ${latitude}, ${longitude}.`,
         status: `Live PVGIS blocked (CORS/network). Using frozen ${family} for ${label} (retrieved ${retrieved}).`,
       };
     }
     return screeningSolar(latitude, longitude);
   }
 
+  async function frozenSolarAvailable(latitude, longitude, siteId) {
+    if (globalThis.PvgisAlmeriaHourly && nearAlmeria(latitude, longitude)) return true;
+    const sitesApi = globalThis.PvgisSites;
+    if (sitesApi?.hydrate) {
+      try { await sitesApi.hydrate(); } catch { /* screening band still applies */ }
+    }
+    const match = sitesApi?.matchSeries?.(latitude, longitude, { siteId: siteId || undefined, maxDeg: 1 });
+    return !!(match?.id && match.dist != null && match.dist <= 1 && sitesApi.frozenSolarFor?.({ id: match.id }));
+  }
+
+  function readSolarKWp() {
+    const input = document.getElementById('siteSolarKWp');
+    const typed = Number(input?.value);
+    const full = Number(input?.dataset?.fullKwp);
+    if (Number.isFinite(full) && Number.isFinite(typed) && Math.abs(typed - Number(formatDisplayNumber(full, 2))) < 1e-9) {
+      return full;
+    }
+    return typed;
+  }
+
+  async function bindResolvedSolar(latitude, longitude, solarKWp, batteryKWh, identity, activeId, status) {
+    const resolved = await resolveSolarOnFetchFailure(latitude, longitude, activeId);
+    if (!resolved?.solar) {
+      status.textContent = 'Live PVGIS blocked (CORS/network). Frozen PVGIS fallback unavailable for this site. No screening yield for this point.';
+      render();
+      return;
+    }
+    const boundLatitude = resolved.latitude ?? latitude;
+    const boundLongitude = resolved.longitude ?? longitude;
+    const latEl = document.getElementById('siteLatitude');
+    const lonEl = document.getElementById('siteLongitude');
+    if (latEl) latEl.value = boundLatitude;
+    if (lonEl) lonEl.value = boundLongitude;
+    const moved = !placesMatch(site?.latitude, site?.longitude, boundLatitude, boundLongitude);
+    bindLocation({
+      latitude: boundLatitude,
+      longitude: boundLongitude,
+      solarKWp,
+      batteryKWh,
+      solar: resolved.solar,
+      notes: identity.keepIdentity || !moved ? undefined : (resolved.notes || resolved.solar.notes),
+      ...identity,
+    });
+    status.textContent = resolved.status;
+  }
+
   async function applyCoordinates(options = {}) {
     const fromPreset = options.fromPreset === true;
     const latitude = Number(document.getElementById('siteLatitude').value);
     const longitude = Number(document.getElementById('siteLongitude').value);
-    const solarKWp = Number(document.getElementById('siteSolarKWp').value);
+    const solarKWp = readSolarKWp();
     const batteryKWh = Math.max(0, Number(document.getElementById('siteBatteryKWh').value) || 0);
     const status = document.getElementById('siteFetchStatus');
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90) {
@@ -1412,36 +1560,32 @@
       const chosen = sitePresets().find(preset => preset.id === select?.value);
       if (select && (!chosen || !presetNear(chosen, latitude, longitude))) select.value = '';
     }
-    status.textContent = 'Fetching PVGIS hourly series…';
     const identity = fromPreset
       ? { keepIdentity: true, name: site?.name }
       : { keepIdentity: false };
+    const activeId = fromPreset ? (site?.id || nearbyPresetId(latitude, longitude)) : nearbyPresetId(latitude, longitude);
+    // seriescalc is cross-origin and fails CORS on GitHub Pages. Use the
+    // same-origin freeze when one exists for this point, and after the first
+    // CORS failure do not keep calling seriescalc.
+    const skipLive = livePvgisBlocked || (livePvgisHostBlocked() && await frozenSolarAvailable(latitude, longitude, activeId));
+    if (skipLive) {
+      status.textContent = 'Updating solar for these coordinates…';
+      await bindResolvedSolar(latitude, longitude, solarKWp, batteryKWh, identity, activeId, status);
+      return;
+    }
+    status.textContent = 'Fetching PVGIS hourly series…';
     try {
       const solar = await fetchPvgisHourly(latitude, longitude);
-      bindLocation({ latitude, longitude, solarKWp, batteryKWh, solar, ...identity });
-      status.textContent = `Typical-day solar from ${solar.database || 'PVGIS'} ${solar.year || ''}`.trim();
-    } catch {
-      const resolved = await resolveSolarOnFetchFailure(latitude, longitude);
-      if (!resolved?.solar) {
-        status.textContent = 'Live PVGIS blocked (CORS/network). No frozen series or screening yield for this point.';
-        render();
-        return;
-      }
-      const boundLatitude = resolved.latitude ?? latitude;
-      const boundLongitude = resolved.longitude ?? longitude;
-      const latEl = document.getElementById('siteLatitude');
-      const lonEl = document.getElementById('siteLongitude');
-      if (latEl) latEl.value = boundLatitude;
-      if (lonEl) lonEl.value = boundLongitude;
+      const moved = !placesMatch(site?.latitude, site?.longitude, latitude, longitude);
       bindLocation({
-        latitude: boundLatitude,
-        longitude: boundLongitude,
-        solarKWp,
-        batteryKWh,
-        solar: resolved.solar,
+        latitude, longitude, solarKWp, batteryKWh, solar,
+        notes: identity.keepIdentity || !moved ? undefined : `Typical-day solar from ${solar.database || 'PVGIS'} at ${latitude}, ${longitude}.`,
         ...identity,
       });
-      status.textContent = resolved.status;
+      status.textContent = `Typical-day solar from ${solar.database || 'PVGIS'} ${solar.year || ''}`.trim();
+    } catch (error) {
+      if (isPvgisCorsError(error)) livePvgisBlocked = true;
+      await bindResolvedSolar(latitude, longitude, solarKWp, batteryKWh, identity, activeId, status);
     }
   }
 
@@ -1614,7 +1758,7 @@
       const stream = saved.params?.stream;
       graph.nodes.push({
         ...saved,
-        label: saved.id.split('-').map(word => word[0].toUpperCase() + word.slice(1)).join(' '),
+        label: nodeDisplayLabel(saved),
         position: positionFor(kind, graph.nodes.filter(current => units[current.unit].kind === kind).length),
         ...(kind === 'converter' && catalog[saved.unit].presets ? { processPreset: 'custom' } : {}),
         ...(kind === 'source' ? {
@@ -1853,7 +1997,7 @@
   }
 
   function escapeHtml(value) {
-    return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
+    return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
   }
 
   function startDrag(event) {
@@ -2952,6 +3096,8 @@
     Li2CO3: 'Lithium',
     salt: 'Salt',
     'recovered-salt': 'Salt',
+    'sabatier-water': 'Sabatier water',
+    water: 'Water',
     potash: 'Potash',
     KCl: 'Potash',
     magnesium: 'Magnesium',
@@ -3007,6 +3153,20 @@
       return electricSource && limits.includes('site budget');
     });
     return (fromWarning || fromBoundary || fromNodes) ? 'Capacity reduced: limited by available electricity' : '';
+  }
+
+  function powerLimitNodeId() {
+    const limited = graph.nodes.filter(node => {
+      const limits = result?.nodes?.[node.id]?.limitedBy || [];
+      if (limits.includes('electricity')) return true;
+      const electricSource = node.siteResource === 'electricity' || node.unit === 'electricity-source' || node.unit === 'solar-pv';
+      return electricSource && limits.includes('site budget');
+    });
+    const converter = limited.find(node => units[node.unit]?.kind === 'converter');
+    if (converter) return converter.id;
+    if (limited[0]) return limited[0].id;
+    const source = graph.nodes.find(node => node.siteResource === 'electricity' || node.unit === 'solar-pv' || node.unit === 'electricity-source');
+    return source?.id || '';
   }
 
   function overviewYieldMeta() {
@@ -3116,6 +3276,8 @@
         label: `${current.label}: ${portName(limit)}`,
       })));
       limiting.onclick = null;
+      limiting.classList.remove('is-static');
+      limiting.dataset.limitMode = '';
       if (!graph.nodes.length) {
         limiting.hidden = true;
       } else if (solveError) {
@@ -3124,7 +3286,18 @@
       } else if (powerNote) {
         limiting.hidden = false;
         limiting.textContent = powerNote;
-        limiting.onclick = () => activateTab('location');
+        const nodeId = powerLimitNodeId();
+        limiting.dataset.limitMode = nodeId ? 'process' : 'status';
+        limiting.classList.toggle('is-static', !nodeId);
+        if (nodeId) {
+          limiting.onclick = () => {
+            selectedNodeId = nodeId;
+            activateTab('process');
+            render();
+          };
+        } else {
+          limiting.onclick = null;
+        }
       } else if (missing.length) {
         limiting.hidden = false;
         limiting.textContent = `Incomplete wiring · ${missing.slice(0, 2).join(' · ')}`;
@@ -3240,7 +3413,12 @@
     if (solveError) issues.push({ severity: 'error', text: solveError });
     if (routeNote) issues.push({ severity: 'warn', text: routeNote });
     const powerNote = powerThrottleCallout();
-    if (powerNote) issues.push({ severity: 'warn', text: powerNote, action: 'location' });
+    if (powerNote) {
+      const nodeId = powerLimitNodeId();
+      issues.push(nodeId
+        ? { severity: 'warn', text: powerNote, nodeId }
+        : { severity: 'warn', text: powerNote });
+    }
     if (pendingPort) {
       issues.push({
         severity: 'info',
@@ -3252,12 +3430,15 @@
     siteRightWarnings.forEach(item => issues.push({ severity: 'warn', text: item, action: 'location' }));
     warning.hidden = issues.length === 0;
     warning.innerHTML = issues.map(issue => {
-      const go = issue.action === 'process'
-        ? '<button type="button" data-issue-tab="process">Process</button>'
-        : issue.action === 'location'
-          ? '<button type="button" data-issue-tab="location">Location</button>'
-          : '';
-      return `<div class="warning-issue" data-severity="${issue.severity}"><span>${issue.text}</span>${go}</div>`;
+      const text = humanizeUiText(issue.text);
+      const go = issue.nodeId
+        ? `<button type="button" data-issue-node="${escapeHtml(issue.nodeId)}">Show block</button>`
+        : issue.action === 'process'
+          ? '<button type="button" data-issue-tab="process">Process</button>'
+          : issue.action === 'location'
+            ? '<button type="button" data-issue-tab="location">Location</button>'
+            : '';
+      return `<div class="warning-issue" data-severity="${issue.severity}"><span>${escapeHtml(text)}</span>${go}</div>`;
     }).join('');
   }
 
@@ -3412,7 +3593,11 @@
     }
     document.getElementById('siteLatitude').value = site?.latitude ?? 31.35;
     document.getElementById('siteLongitude').value = site?.longitude ?? 84.05;
-    document.getElementById('siteSolarKWp').value = site?.solarKWp ?? 37.5;
+    const kWpInput = document.getElementById('siteSolarKWp');
+    const kWpFull = site?.solarKWp ?? 37.5;
+    kWpInput.value = formatDisplayNumber(kWpFull, 2);
+    kWpInput.title = `${kWpFull} kWp`;
+    kWpInput.dataset.fullKwp = String(kWpFull);
     document.getElementById('siteBatteryKWh').value = site?.storage?.batteryKWh ?? 0;
     const monthLabel = document.getElementById('siteMonthLabel');
     const monthSelect = document.getElementById('siteMonth');
@@ -3505,7 +3690,10 @@
           quality: assay.quality,
           sourceNote: assay.summary,
         });
-        assayEl.innerHTML = `<strong>Assay</strong> ${assay.summary || assay.kind || ''} ${qualityChip(quality)}${citeMarkup(citeFrom(assay.evidence))}`;
+        const summary = assay.summary || assay.kind || '';
+        const shown = roundTaggedQuantities(summary);
+        const tip = shown === summary ? '' : ` title="${escapeHtml(summary)}"`;
+        assayEl.innerHTML = `<strong>Assay</strong> <span${tip}>${escapeHtml(shown)}</span> ${qualityChip(quality)}${citeMarkup(citeFrom(assay.evidence))}`;
       }
       const assayDetails = assayEl.closest?.('details');
       if (assayDetails) assayDetails.hidden = !assayEl.innerHTML;
@@ -3522,7 +3710,8 @@
           const title = right.note ? ` title="${right.note.replace(/"/g, '&quot;')}"` : '';
           const kind = right.kind || RIGHT_KINDS?.[key] || '';
           const kindMark = kind ? `<span class="rights-kind">${kind}</span>` : '';
-          return `<span class="rights-item"${title}>${key}${kindMark}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
+          const label = RIGHT_DISPLAY_LABELS[key] || key;
+          return `<span class="rights-item" data-right="${escapeHtml(key)}"${title}>${escapeHtml(label)}${kindMark}${rightsChip(right.status)}${citeMarkup(cites)}</span>`;
         }).join('');
       }
       const rightsDetails = rightsEl.closest?.('details');
@@ -3711,7 +3900,8 @@
       const rate = definition.controls && !definition.manualRateMax
         ? `<p class="status-meta">Available: ${formatNumber(current.rate)} ${unit}</p>`
         : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100 || 0.01}" value="${current.rate}">`;
-      const capNote = budget != null ? `<p class="status-meta">${site.resources[current.siteResource]?.evidence || 'Capped by the named site resource. A second block sharing this resource cannot duplicate it.'}</p>` : (site && !current.siteResource ? '<p class="status-meta">Unassigned sources are unverified. They do not become unlimited supply.</p>' : '');
+      const resourceEvidence = site.resources[current.siteResource]?.evidence;
+      const capNote = budget != null ? `<p class="status-meta"${resourceEvidence ? ` title="${escapeHtml(resourceEvidence)}"` : ''}>${escapeHtml(roundTaggedQuantities(resourceEvidence || 'Capped by the named site resource. A second block sharing this resource cannot duplicate it.'))}</p>` : (site && !current.siteResource ? '<p class="status-meta">Unassigned sources are unverified. They do not become unlimited supply.</p>' : '');
       return `<fieldset><legend>Source settings</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
@@ -3745,7 +3935,13 @@
   function economicsControlsFor(current) {
     const kind = units[current.unit].kind;
     const economics = current.economics || (current.economics = defaultEconomics(current));
-    const field = (key, label, step = '0.01') => `<label>${label}<input name="economics" data-economics="${key}" type="number" min="0" step="${step}" value="${economics[key] ?? 0}"></label>`;
+    const field = (key, label, step = '0.01') => {
+      const raw = economics[key] ?? 0;
+      const capexLike = /capex|fixedOM/i.test(key);
+      const shown = capexLike ? displayInputNumber(raw) : raw;
+      const title = capexLike ? ` title="${escapeHtml(raw)}"` : '';
+      return `<label>${label}<input name="economics" data-economics="${key}" type="number" min="0" step="${step}" value="${shown}"${title}></label>`;
+    };
     if (kind === 'source') return `<fieldset><legend>Economics</legend>${economics.unitCost != null ? field('unitCost', 'Delivered input cost') : `${field('installedCapex', 'Installed CAPEX', '100')}${field('fixedOM', 'Fixed O&M / year', '100')}${field('variableOM', 'Variable cost / output unit')}`}<p class="status-meta">Native unit is kg, kWh, or consumable unit. Zero values explore the physical limit.</p></fieldset>`;
     if (kind === 'converter') {
       const capexField = economics.capexRate != null && economics.installedCapex == null
@@ -3786,6 +3982,15 @@
     return materials.filter(item => (item.sinks || []).some(id => sold.has(id)));
   }
 
+  function unsupportedSoldLabels() {
+    const supported = new Set(
+      (globalThis.MaterialPowerBreakeven?.MATERIALS || []).flatMap(item => item.sinks || [])
+    );
+    return (currentEconomics?.sinks || [])
+      .filter(sink => sink && sink.disposition === 'sale' && Number(sink.deliveredAmount) > 0 && !supported.has(sink.id))
+      .map(sink => NETWORK_SALE_LABELS[sink.id] || NODE_DISPLAY_LABELS[sink.id] || sink.id);
+  }
+
   function populatePowerBreakevenMaterials() {
     const select = document.getElementById('powerBreakevenMaterial');
     if (!select) return;
@@ -3793,7 +3998,10 @@
     const materials = soldPowerBreakevenMaterials();
     const current = select.value;
     if (!materials.length) {
-      select.innerHTML = '<option value="">No products sold</option>';
+      const unsupported = unsupportedSoldLabels();
+      select.innerHTML = unsupported.length
+        ? `<option value="">No product supported by the screening price table (${escapeHtml(unsupported.join(', '))})</option>`
+        : '<option value="">No products sold</option>';
       select.value = '';
       select.disabled = true;
       return;
@@ -3824,7 +4032,10 @@
     const mode = document.getElementById('powerBreakevenMode')?.value || 'solo';
     const materialId = document.getElementById('powerBreakevenMaterial')?.value || '';
     if (!materialId) {
-      show('This plant is not selling a product this screen can price. Screening only — not a PPA.');
+      const unsupported = unsupportedSoldLabels();
+      show(unsupported.length
+        ? `No product supported by the screening price table (${unsupported.join(', ')}). Screening only — not a PPA.`
+        : 'This plant is not selling a product this screen can price. Screening only — not a PPA.');
       return null;
     }
     try {

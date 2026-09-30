@@ -124,14 +124,16 @@
     return best;
   }
 
-  // Prefer the selected preset id when its freeze is within maxDeg; otherwise the nearest freeze.
+  // Prefer the selected preset id only when its freeze is actually near the
+  // requested coordinates. A missing lat/lon is not a match — that used to
+  // keep the previous site's series under a new point.
   function matchSeries(latitude, longitude, opts = {}) {
     const maxDeg = Number.isFinite(Number(opts.maxDeg)) ? Number(opts.maxDeg) : 1;
     const siteId = opts.siteId;
     if (siteId && BY_SITE_ID[siteId]) {
       const series = BY_SITE_ID[siteId];
       const dist = coordDistance(series, latitude, longitude);
-      if (dist == null || dist <= maxDeg) return { id: siteId, series, dist: dist ?? 0 };
+      if (dist != null && dist <= maxDeg) return { id: siteId, series, dist };
     }
     return nearestSeries(latitude, longitude, maxDeg);
   }

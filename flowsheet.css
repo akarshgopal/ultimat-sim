@@ -2253,6 +2253,30 @@ button.primary-action:focus-visible {
 .flow-node.building-solar .node-solar-front { fill: #1a222c; }
 .flow-node.building-pond .node-pond-front { fill: #1a2832; }
 .flow-node.building-pond .node-pond-top { fill: #2b3c48; }
+.flow-node.building-intake .node-intake-front { fill: #1a2832; }
+.flow-node.building-intake .node-intake-top { fill: #2a3a46; }
+.flow-node.building-intake .node-intake-mouth {
+  fill: #0d1520;
+  stroke: #6ea0bd;
+  stroke-width: 1.5;
+}
+.flow-node.building-intake .node-intake-pipe {
+  fill: #3a4a58;
+  stroke: #8b9aaf;
+  stroke-width: 1.25;
+}
+.flow-node.building-stack .node-stack-building { fill: #1d2632; }
+.flow-node.building-stack .node-stack-building-top { fill: #2c3644; }
+.flow-node.building-stack .node-intake-stack {
+  fill: #3a4556;
+  stroke: #8b9aaf;
+  stroke-width: 1.25;
+}
+.flow-node.building-stack .node-intake-stack-rim {
+  fill: #4a5566;
+  stroke: #9aabbf;
+  stroke-width: 1.1;
+}
 .flow-node.building-cell .node-front { fill: #1d2a38; }
 .flow-node.building-tower .node-front { fill: #222b36; }
 .flow-node.building-bus .node-bus-front { fill: #1a2430; }
@@ -2269,7 +2293,9 @@ button.primary-action:focus-visible {
 .flow-node.bottleneck .node-top,
 .flow-node.bottleneck .node-side,
 .flow-node.bottleneck .node-tank-shell,
-.flow-node.bottleneck .node-tank-lid { stroke: var(--danger); stroke-width: 2.35; }
+.flow-node.bottleneck .node-tank-lid,
+.flow-node.bottleneck .node-intake-mouth,
+.flow-node.bottleneck .node-intake-stack { stroke: var(--danger); stroke-width: 2.35; }
 .flow-node.bottleneck .node-value { fill: var(--danger); }
 .flow-node.is-idle .node-front { stroke: var(--warning); }
 .flow-node.is-idle .node-kind-badge { fill: var(--warning); }
@@ -2828,6 +2854,12 @@ label output + .quality-chip {
 }
 
 .palette-category .building-card { margin-top: 4px; }
+.palette-intakes {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.palette-purchased { margin-top: 8px; }
 
 .flowsheet-page fieldset .more-section {
   margin: 8px 0 0;

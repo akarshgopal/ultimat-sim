@@ -1085,7 +1085,13 @@ test('process floor shows solved stream rates and skips gauges without data', ()
   assert.match(zabuye, /node-gauge-bar|node-face-bar/);
   assert.match(zabuye, /node-chip-util|data-face="util"/);
   assert.doesNotMatch(zabuye, /node-chip-power/);
-  assert.match(zabuye, /building-tank|building-silo|building-pond|building-cell|building-tower/);
+  assert.match(zabuye, /building-pond|building-intake|building-stack|building-silo|building-cell|building-tower|building-solar/);
+  assert.match(zabuye, /building-pond/); // brine lake
+  assert.match(zabuye, /building-stack/); // ambient air
+  // Brine/air glyphs should not say "tank"
+  assert.match(zabuye, />brine</);
+  assert.match(zabuye, />air</);
+  assert.match(zabuye, /Brine lake|Ambient air/);
   assert.match(zabuye, /flow-edge[^"]*is-flowing/);
   assert.match(zabuye, /node-run-light/);
   assert.match(zabuye, /t\/d/);
@@ -1226,4 +1232,75 @@ test('resource strip lights Zabuye power, cash, and land and hides an empty wate
   assert.match(strip.innerHTML, /data-hud="land"/);
   assert.doesNotMatch(strip.innerHTML, /data-hud="water"/);
   assert.doesNotMatch(strip.innerHTML, /—/);
+});
+
+
+test('practical intakes: profiles, labels, and palette replace magic Material source', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
+  assert.match(css, /\.building-intake/);
+  assert.match(css, /\.building-stack/);
+  assert.match(css, /\.node-intake-mouth|\.node-intake-stack/);
+
+  const brine = app.intakeKind({ unit: 'material-source', siteResource: 'brine', sourcePreset: 'brine' });
+  assert.equal(brine.profile, 'pond');
+  assert.equal(brine.label, 'Brine lake');
+  assert.equal(app.buildingProfile('material-source', 'source', { unit: 'material-source', sourcePreset: 'brine' }), 'pond');
+
+  const air = app.intakeKind({ unit: 'material-source', sourcePreset: 'air' });
+  assert.equal(air.profile, 'stack');
+  assert.equal(air.label, 'Ambient air');
+  assert.equal(app.buildingProfile('material-source', 'source', { unit: 'material-source', sourcePreset: 'air' }), 'stack');
+
+  const seawater = app.intakeKind({ unit: 'material-source', sourcePreset: 'seawater' });
+  assert.equal(seawater.profile, 'intake');
+  assert.equal(seawater.label, 'Seawater intake');
+
+  const flue = app.intakeKind({ unit: 'material-source', sourcePreset: 'flueGas' });
+  assert.equal(flue.profile, 'stack');
+  assert.equal(flue.label, 'Flue gas');
+  assert.ok(app.materialPresets.flueGas);
+  assert.ok(app.materialPresets.flueGas.mol.CO2 > app.materialPresets.air.mol.CO2);
+
+  const freshwater = app.intakeKind({ unit: 'material-source', siteResource: 'freshwater', sourcePreset: 'water' });
+  assert.equal(freshwater.label, 'Freshwater');
+  assert.equal(freshwater.profile, 'intake');
+
+  app.clearFactory();
+  const sea = app.addNode('material-source', { preset: 'seawater', label: 'Seawater intake' });
+  assert.equal(sea.label, 'Seawater intake');
+  assert.equal(sea.sourcePreset, 'seawater');
+  const flueNode = app.addNode('material-source', { preset: 'flueGas', label: 'Flue gas' });
+  assert.equal(flueNode.label, 'Flue gas');
+  const canvas = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(canvas, /building-intake/);
+  assert.match(canvas, /building-stack/);
+  assert.doesNotMatch(canvas, /building-tank/);
+
+  const utilities = context.__elements.get('utilityPalette').innerHTML;
+  assert.match(utilities, /Seawater intake/);
+  assert.match(utilities, /Brine lake/);
+  assert.match(utilities, /Ambient air/);
+  assert.match(utilities, /Flue gas/);
+  assert.match(utilities, /Freshwater/);
+  assert.match(utilities, /data-preset="seawater"/);
+  assert.match(utilities, /data-preset="flueGas"/);
+  assert.match(utilities, /Purchased feeds/);
+  // Magic Material source card must not sit equally loud in the primary utility list.
+  assert.doesNotMatch(utilities, /data-unit="material-source"(?![^>]*data-preset)[^>]*>[\s\S]*?<strong>Material source<\/strong>/);
+  assert.doesNotMatch(utilities, /Air, water, CO₂, H₂…/);
+
+  app.loadZabuyeHub();
+  const zabuye = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(zabuye, /building-pond/);
+  assert.match(zabuye, /building-stack/);
+  assert.match(zabuye, /Brine lake/);
+  assert.match(zabuye, /Ambient air/);
+  const brineNode = app.graph.nodes.find(n => n.id === 'brine' || n.siteResource === 'brine');
+  assert.ok(brineNode);
+  assert.equal(app.buildingProfile(brineNode.unit, 'source', brineNode), 'pond');
+  const airNode = app.graph.nodes.find(n => n.id === 'air' || n.sourcePreset === 'air');
+  assert.ok(airNode);
+  assert.equal(app.buildingProfile(airNode.unit, 'source', airNode), 'stack');
 });

@@ -392,7 +392,7 @@
       ],
       references: [{ label: 'DOE thermal storage', url: 'https://www.energy.gov/cmei/systems/solar-thermal-energy-storage-and-heat-transfer-media' }],
     },
-    'material-source': { label: 'Material source', palette: { section: 'utility', order: 4, glyph: 'M', tone: 'water', description: 'Air, water, CO₂, H₂…' } },
+    'material-source': { label: 'Material source', palette: { section: 'purchased', order: 4, glyph: 'M', tone: 'water', description: 'Generic purchased feed — prefer named intakes' } },
     'electricity-source': { label: 'Electricity source', palette: { section: 'utility', order: 5, glyph: '⚡', description: 'Set available kWh/day' } },
     'heat-source': { label: 'Heat source', palette: { section: 'utility', order: 7, glyph: 'H', tone: 'carbon', description: 'Set energy and temperature' } },
     'consumable-source': { label: 'Consumables', palette: { section: 'utility', order: 8, glyph: 'C', tone: 'methane', description: 'Sorbent or reagent makeup' } },
@@ -445,7 +445,112 @@
     ironOre: { label: 'Hematite concentrate', phase: 'solid', mol: { Fe2O3: 1000 } },
     titaniumTetrachloride: { label: 'Titanium tetrachloride', phase: 'liquid', mol: { TiCl4: 1000 } },
     magnesium: { label: 'Magnesium', phase: 'solid', mol: { Mg: 1000 } },
+    flueGas: {
+      label: 'Flue gas',
+      phase: 'gas',
+      // Screening combustion flue — CO₂-rich, not a plant-specific stack assay.
+      mol: { CO2: 150000, N2: 750000, O2: 50000, H2O: 50000 },
+    },
   };
+
+  // Practical intake identities for material-source (MECH2). Keep engine unit kind.
+  // Resolve order: siteResource id → sourcePreset → minimal stream inference.
+  const INTAKE_BY_KEY = {
+    brine: { key: 'brine', label: 'Brine lake', profile: 'pond', glyph: 'brine' },
+    seawater: { key: 'seawater', label: 'Seawater intake', profile: 'intake', glyph: 'intake' },
+    air: { key: 'air', label: 'Ambient air', profile: 'stack', glyph: 'air' },
+    flue: { key: 'flue', label: 'Flue gas', profile: 'stack', glyph: 'flue' },
+    flueGas: { key: 'flue', label: 'Flue gas', profile: 'stack', glyph: 'flue' },
+    'flue-gas': { key: 'flue', label: 'Flue gas', profile: 'stack', glyph: 'flue' },
+    water: { key: 'water', label: 'Freshwater', profile: 'intake', glyph: 'intake' },
+    freshwater: { key: 'water', label: 'Freshwater', profile: 'intake', glyph: 'intake' },
+    salt: { key: 'salt', label: 'Sodium chloride', profile: 'silo', glyph: 'silo' },
+    bromide: { key: 'bromide', label: 'Sodium bromide', profile: 'silo', glyph: 'silo' },
+    alumina: { key: 'alumina', label: 'Alumina', profile: 'silo', glyph: 'silo' },
+    carbon: { key: 'carbon', label: 'Carbon anode', profile: 'silo', glyph: 'silo' },
+    ironOre: { key: 'ironOre', label: 'Hematite concentrate', profile: 'silo', glyph: 'silo' },
+    magnesium: { key: 'magnesium', label: 'Magnesium', profile: 'silo', glyph: 'silo' },
+    co2: { key: 'co2', label: 'Carbon dioxide', profile: 'stack', glyph: 'CO₂' },
+    hydrogen: { key: 'hydrogen', label: 'Hydrogen', profile: 'stack', glyph: 'H₂' },
+    oxygen: { key: 'oxygen', label: 'Oxygen', profile: 'stack', glyph: 'O₂' },
+    nitrogen: { key: 'nitrogen', label: 'Nitrogen', profile: 'stack', glyph: 'N₂' },
+    chlorine: { key: 'chlorine', label: 'Chlorine', profile: 'stack', glyph: 'Cl₂' },
+    titaniumTetrachloride: { key: 'titaniumTetrachloride', label: 'Titanium tetrachloride', profile: 'tank', glyph: 'feed' },
+  };
+  const PRACTICAL_INTAKE_PALETTE = [
+    { preset: 'seawater', label: 'Seawater intake', glyph: 'SW', tone: 'water', description: 'Coastal seawater feed' },
+    { preset: 'brine', label: 'Brine lake', glyph: 'Br', tone: 'water', description: 'Saline lake / endorheic brine' },
+    { preset: 'air', label: 'Ambient air', glyph: 'Air', tone: 'carbon', description: 'Atmosphere intake for DAC / ASU' },
+    { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
+    { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
+  ];
+  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'ironOre', 'magnesium', 'titaniumTetrachloride'];
+  const PRACTICAL_INTAKE_LABELS = new Set([
+    ...Object.values(INTAKE_BY_KEY).map(item => item.label),
+    'Unassigned feed',
+  ]);
+
+  function normalizeIntakeKey(raw) {
+    if (raw == null || raw === '') return null;
+    const id = String(raw);
+    if (INTAKE_BY_KEY[id]) return id;
+    const lower = id.toLowerCase();
+    if (INTAKE_BY_KEY[lower]) return lower;
+    if (lower === 'fluegas' || lower === 'flue_gas') return 'flueGas';
+    return null;
+  }
+
+  /** Infer a practical intake key from stream chemistry (minimal, documented). */
+  function inferIntakeFromStream(stream) {
+    if (!stream?.mol || stream.kind !== 'material') return null;
+    const mol = stream.mol;
+    const total = Object.values(mol).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    if (!(total > 0)) return null;
+    const frac = (id) => (Number(mol[id]) || 0) / total;
+    const nacl = (Number(mol['Na+']) || 0) + (Number(mol.NaCl) || 0);
+    const cl = (Number(mol['Cl-']) || 0) + (Number(mol.NaCl) || 0);
+    // CO₂-rich gas with bulk N₂ → screening flue (ambient air is ~400 ppm CO₂).
+    if (stream.phase === 'gas' && frac('CO2') >= 0.05 && frac('N2') >= 0.4) return 'flueGas';
+    if (stream.phase === 'gas' && frac('N2') >= 0.7 && frac('O2') >= 0.12) return 'air';
+    if (stream.phase === 'gas' && frac('CO2') >= 0.9) return 'co2';
+    if (stream.phase === 'gas' && frac('H2') >= 0.9) return 'hydrogen';
+    if (stream.phase === 'liquid' && frac('H2O') >= 0.98 && cl < 50) return 'water';
+    // Concentrated brine: elevated Cl⁻ vs seawater (~0.55 mol/kg-ish in presets).
+    if (stream.phase === 'liquid' && cl >= 900 && nacl >= 500) return 'brine';
+    if (stream.phase === 'liquid' && cl >= 300 && nacl >= 200) return 'seawater';
+    if (stream.phase === 'solid' && (mol.NaCl || 0) > 0) return 'salt';
+    return null;
+  }
+
+  function intakeKind(current) {
+    if (!current || current.unit !== 'material-source') return null;
+    const fromSite = normalizeIntakeKey(current.siteResource);
+    if (fromSite) return INTAKE_BY_KEY[fromSite];
+    const fromPreset = normalizeIntakeKey(current.sourcePreset);
+    if (fromPreset) return INTAKE_BY_KEY[fromPreset];
+    const fromId = normalizeIntakeKey(current.id);
+    if (fromId && !String(current.id).includes('-')) return INTAKE_BY_KEY[fromId];
+    const inferred = inferIntakeFromStream(current.params?.stream);
+    if (inferred) return INTAKE_BY_KEY[inferred];
+    return { key: 'unknown', label: 'Unassigned feed', profile: 'intake', glyph: 'feed' };
+  }
+
+  function isGenericMaterialSourceLabel(label) {
+    return /^Material source(\s+\d+)?$/i.test(String(label || '').trim());
+  }
+
+  function isAutoIntakeLabel(label) {
+    const text = String(label || '').trim();
+    return isGenericMaterialSourceLabel(text) || PRACTICAL_INTAKE_LABELS.has(text);
+  }
+
+  function applyPracticalIntakeLabel(current, { force = false } = {}) {
+    if (!current || current.unit !== 'material-source') return;
+    const intake = intakeKind(current);
+    if (!intake?.label) return;
+    if (force || !current.label || isAutoIntakeLabel(current.label)) current.label = intake.label;
+  }
+
   const DAC_ROUTES = {
     dac: 'Generic screening DAC',
     'dac-solid': 'Solid-sorbent DAC',
@@ -459,10 +564,20 @@
   };
   const SITE_MONTHS = ['Annual average', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-  function paletteCard(unit, definition) {
+  function paletteCard(unit, definition, extras = {}) {
     const { glyph, tone, title, description } = definition.palette;
-    const name = title || definition.label;
-    return `<button type="button" class="building-card" data-unit="${unit}" data-title="${escapeHtml(name)}" data-description="${escapeHtml(description || '')}"><span class="building-glyph${tone ? ` ${tone}` : ''}">${glyph}</span><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(description || '')}</small></span><b>Add</b></button>`;
+    const name = extras.label || title || definition.label;
+    const desc = extras.description != null ? extras.description : (description || '');
+    const presetAttr = extras.preset ? ` data-preset="${escapeHtml(extras.preset)}"` : '';
+    const labelAttr = extras.label ? ` data-label="${escapeHtml(extras.label)}"` : '';
+    return `<button type="button" class="building-card" data-unit="${unit}"${presetAttr}${labelAttr} data-title="${escapeHtml(name)}" data-description="${escapeHtml(desc)}"><span class="building-glyph${tone ? ` ${tone}` : ''}">${extras.glyph || glyph}</span><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(desc)}</small></span><b>Add</b></button>`;
+  }
+
+  function intakePaletteCard(item) {
+    return paletteCard('material-source', {
+      label: item.label,
+      palette: { glyph: item.glyph, tone: item.tone, description: item.description },
+    }, { preset: item.preset, label: item.label, glyph: item.glyph, description: item.description });
   }
 
 
@@ -498,11 +613,29 @@
       .map(([name, units]) => paletteCategory(name, units, { open: PALETTE_DEFAULT_OPEN.has(name) }))
       .join('');
     document.getElementById('buildingPalette').innerHTML = `${grouped}${paletteCategory('More units', PALETTE_MORE_UNITS, { extraClass: 'palette-more' })}`;
-    document.getElementById('utilityPalette').innerHTML = Object.entries(catalog)
+    const intakes = PRACTICAL_INTAKE_PALETTE.map(intakePaletteCard).join('');
+    const utilities = Object.entries(catalog)
       .filter(([, definition]) => definition.palette?.section === 'utility')
       .sort(([, left], [, right]) => left.palette.order - right.palette.order)
       .map(([unit, definition]) => paletteCard(unit, definition))
       .join('');
+    const purchased = PURCHASED_FEED_PRESETS
+      .filter(id => materialPresets[id])
+      .map(id => {
+        const preset = materialPresets[id];
+        const intake = INTAKE_BY_KEY[id];
+        return intakePaletteCard({
+          preset: id,
+          label: intake?.label || preset.label,
+          glyph: (intake?.glyph || id.slice(0, 2)).toString().slice(0, 3),
+          tone: preset.phase === 'gas' ? 'carbon' : 'methane',
+          description: `Purchased ${preset.label.toLowerCase()} feed`,
+        });
+      })
+      .join('');
+    document.getElementById('utilityPalette').innerHTML =
+      `<div class="palette-intakes">${intakes}</div>${utilities}`
+      + `<details class="palette-category palette-purchased"><summary>Purchased feeds</summary>${purchased}</details>`;
   }
 
   function paletteHaystack(card) {
@@ -805,9 +938,13 @@
   inspector.addEventListener('click', handleInspectorClick);
 
   function addFromPalette(event) {
-    const unit = event.target.closest('[data-unit]')?.dataset.unit;
+    const card = event.target.closest('[data-unit]');
+    const unit = card?.dataset.unit;
     if (!unit) return;
-    addNode(unit);
+    const options = {};
+    if (card.dataset.preset) options.preset = card.dataset.preset;
+    if (card.dataset.label) options.label = card.dataset.label;
+    addNode(unit, options);
     if (window.matchMedia?.('(max-width: 720px)')?.matches) setPaletteDrawer(false);
   }
 
@@ -842,7 +979,9 @@
   function configureNewSource(current, options = {}) {
     if (current.unit === 'material-source') {
       current.sourcePreset = options.preset || 'air';
-      current.rate = current.sourcePreset === 'air' ? 25000 : 100;
+      current.rate = (current.sourcePreset === 'air' || current.sourcePreset === 'flueGas') ? 25000 : 100;
+      if (options.label) current.label = options.label;
+      else applyPracticalIntakeLabel(current, { force: true });
     } else if (current.unit === 'electricity-source' || current.unit === 'grid-electricity') current.rate = 1000;
     else if (current.unit === 'heat-source') { current.rate = 100; current.temperature = 100; }
     else if (current.unit === 'solar-pv' || current.unit === 'nuclear-electricity' || current.unit === 'solar-thermal') current.rate = 0;
@@ -1440,6 +1579,12 @@
 
   function nodeDisplayLabel(saved) {
     if (NODE_DISPLAY_LABELS[saved?.id]) return NODE_DISPLAY_LABELS[saved.id];
+    if (saved?.unit === 'material-source') {
+      const intake = intakeKind(saved);
+      if (intake?.label && intake.key !== 'unknown') return intake.label;
+      if (saved?.label && !isGenericMaterialSourceLabel(saved.label)) return saved.label;
+      return intake?.label || 'Unassigned feed';
+    }
     if (saved?.id && saved.id === saved.unit && catalog[saved.unit]?.label) return catalog[saved.unit].label;
     return String(saved?.id || '').split('-').map(word => word ? word[0].toUpperCase() + word.slice(1) : '').join(' ');
   }
@@ -2192,7 +2337,10 @@
       counts[current.unit] = Math.max(counts[current.unit] || 0, suffix);
     }
     selectedNodeId = ids.has(saved.selectedNodeId) ? saved.selectedNodeId : null;
-    for (const current of graph.nodes) current.economics ||= defaultEconomics(current);
+    for (const current of graph.nodes) {
+      current.economics ||= defaultEconomics(current);
+      applyPracticalIntakeLabel(current);
+    }
     Object.assign(projectEconomics, saved.projectEconomics || {});
     canvasZoom = clampZoom(saved.canvasZoom ?? 1);
     site = saved.site || null;
@@ -2659,6 +2807,7 @@
     }
     if (event.target.name === 'siteResource') {
       current.siteResource = event.target.value || undefined;
+      if (current.unit === 'material-source') applyPracticalIntakeLabel(current, { force: isAutoIntakeLabel(current.label) });
       updateSourceStream(current);
     }
     if (event.target.name === 'chemicalId') {
@@ -2677,7 +2826,11 @@
       if (['capacityKW', 'capexPerKW', 'fixedOMPerKWYear', 'variableCostPerMWh', 'lifeYears', 'pricePerMWh'].includes(event.target.dataset.param)) current.economics = defaultEconomics(current);
     }
     if (event.target.name === 'sourceRate') { current.rate = Number(event.target.value); updateSourceStream(current); }
-    if (event.target.name === 'sourcePreset') { current.sourcePreset = event.target.value; updateSourceStream(current); }
+    if (event.target.name === 'sourcePreset') {
+      current.sourcePreset = event.target.value;
+      applyPracticalIntakeLabel(current, { force: isAutoIntakeLabel(current.label) });
+      updateSourceStream(current);
+    }
     if (event.target.name === 'heatTemperature') { current.temperature = Number(event.target.value); updateSourceStream(current); }
     if (event.target.name === 'branchWeight') graph.edges[Number(event.target.dataset.edge)].weight = Number(event.target.value);
     if (event.target.name === 'edgeCapacity') {
@@ -4282,11 +4435,17 @@
     return { kind: 'power', text: formatCompactEnergy(kWh, false) };
   }
 
-  function buildingProfile(unit, kind) {
+  function buildingProfile(unit, kind, current) {
     if (kind === 'source') {
       if (unit === 'solar-pv' || unit === 'electricity-source') return 'solar';
       if (unit === 'solar-thermal' || unit === 'heat-source' || unit === 'combustion-heat') return 'furnace';
-      return 'tank';
+      if (unit === 'material-source') {
+        const intake = intakeKind(current);
+        return intake?.profile || 'intake';
+      }
+      if (unit === 'consumable-source') return 'silo';
+      // Prefer honest intake slab over unlabeled storage tank for stray sources.
+      return 'intake';
     }
     if (kind === 'sink') return 'silo';
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
@@ -4334,6 +4493,28 @@
       const right = `<path class="node-side node-pond-side" d="${side}"/>`;
       const pool = `<rect class="node-pond-pool" x="${x + 10}" y="${y + 18}" width="${width - 20}" height="${Math.max(24, height - 44)}" rx="2"/>`;
       return `${hit}${right}${slab}${lip}${pool}`;
+    }
+    if (profile === 'intake') {
+      // Low intake slab + pipe mouth — seawater / freshwater, not a storage tank.
+      const slab = `<path class="node-front node-intake-front" d="${front}"/>`;
+      const lip = `<path class="node-top node-intake-top" d="${top}"/>`;
+      const right = `<path class="node-side node-intake-side" d="${side}"/>`;
+      const mouthCx = x + width * 0.32;
+      const mouthCy = y + Math.max(42, height * 0.55);
+      const mouth = `<ellipse class="node-intake-mouth" cx="${mouthCx}" cy="${mouthCy}" rx="16" ry="12"/>`;
+      const pipe = `<rect class="node-intake-pipe" x="${mouthCx + 12}" y="${mouthCy - 6}" width="${Math.max(36, width * 0.38)}" height="12" rx="2"/>`;
+      return `${hit}${right}${slab}${lip}${mouth}${pipe}`;
+    }
+    if (profile === 'stack') {
+      // Duct / stack intake for ambient air or flue — tower-like, not a tank.
+      const face = `<path class="node-front node-stack-building" d="${front}"/>`;
+      const roof = `<path class="node-top node-stack-building-top" d="${top}"/>`;
+      const right = `<path class="node-side" d="${side}"/>`;
+      const sx = x + width * 0.58;
+      const stackH = 34;
+      const duct = `<rect class="node-intake-stack" x="${sx}" y="${y - stackH}" width="20" height="${stackH}"/>`
+        + `<ellipse class="node-intake-stack-rim" cx="${sx + 10}" cy="${y - stackH}" rx="11" ry="3.5"/>`;
+      return `${hit}${right}${face}${roof}${duct}`;
     }
     if (profile === 'tower' || profile === 'cell' || profile === 'furnace') {
       const face = `<path class="node-front" d="${front}"/>`;
@@ -4549,14 +4730,24 @@
     }).join('');
     const reasonTitle = diagnosis ? escapeHtml(diagnosis.detail || diagnosis.text) : '';
     const kind = units[current.unit].kind;
-    const profile = buildingProfile(current.unit, kind);
+    const intake = current.unit === 'material-source' ? intakeKind(current) : null;
+    const profile = buildingProfile(current.unit, kind, current);
     const status = faceStatusModel(current, nodeResult, diagnosis);
     const flags = `${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}${running ? ' is-running' : ''} building-${profile}`;
     const title = reasonTitle
       ? `<title>${reasonTitle}</title>`
       : bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : '';
     const reasonAttr = diagnosis ? ` data-reason="${escapeHtml(diagnosis.text)}"` : '';
-    const glyph = profile === 'tank' ? 'tank' : profile === 'silo' ? 'silo' : profile === 'solar' ? 'solar' : profile === 'furnace' ? 'heat' : profile === 'bus' ? 'bus' : kind;
+    const glyph = intake?.glyph
+      || (profile === 'tank' ? 'tank'
+        : profile === 'silo' ? 'silo'
+        : profile === 'solar' ? 'solar'
+        : profile === 'furnace' ? 'heat'
+        : profile === 'bus' ? 'bus'
+        : profile === 'intake' ? 'intake'
+        : profile === 'stack' ? 'stack'
+        : profile === 'pond' ? 'pond'
+        : kind);
     const body = renderBuildingBody(x, y, NODE_WIDTH, height, profile);
     const face = renderFaceStatus(x, y, height, status, diagnosis, running);
     const badgeWidth = Math.min(92, Math.max(40, String(glyph).length * 7.0 + 12));
@@ -5397,9 +5588,14 @@
       const rate = definition.controls && !definition.manualRateMax
         ? `<p class="status-meta">Available: ${formatNumber(current.rate)} ${unit}</p>`
         : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100 || 0.01}" value="${current.rate}">`;
-      const resourceEvidence = site.resources[current.siteResource]?.evidence;
+      const resourceEvidence = site?.resources?.[current.siteResource]?.evidence;
       const capNote = budget != null ? `<p class="status-meta"${resourceEvidence ? ` title="${escapeHtml(resourceEvidence)}"` : ''}>${escapeHtml(roundTaggedQuantities(resourceEvidence || 'Capped by the named site resource. A second block sharing this resource cannot duplicate it.'))}</p>` : (site && !current.siteResource ? '<p class="status-meta">Unassigned sources are unverified. They do not become unlimited supply.</p>' : '');
-      return `<fieldset><legend>Source settings</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
+      const sourceLegend = current.unit === 'material-source' && intakeKind(current)?.key !== 'unknown'
+        ? 'Intake settings'
+        : current.unit === 'material-source'
+          ? 'Intake settings'
+          : 'Source settings';
+      return `<fieldset><legend>${sourceLegend}</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }
@@ -6329,6 +6525,7 @@
     get sizing() { return lastSizing; }, get activeTab() { return activeTab; },
     projectEconomics, setCanvasZoom, get canvasZoom() { return canvasZoom; },
     screenPowerBreakEven,
+    intakeKind, buildingProfile, materialPresets,
   };
   populatePowerBreakevenMaterials();
   populateSitePresets();

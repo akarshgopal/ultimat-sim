@@ -451,6 +451,8 @@
 
   function setActiveDemo(id, label) {
     activeDemoId = id || null;
+    const cases = document.getElementById('overviewCases');
+    if (cases) cases.value = id || '';
     document.querySelectorAll('[data-demo-id]').forEach(btn => {
       btn.classList.toggle('is-selected', !!id && btn.dataset.demoId === id);
     });
@@ -561,9 +563,19 @@
   document.getElementById('projectLifeYears').addEventListener('input', handleProjectEconomics);
   document.getElementById('discountRate').addEventListener('input', handleProjectEconomics);
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
-  document.getElementById('loadMethaneRecycle').addEventListener('click', () => { setActiveDemo('methane-recycle', 'Methane recycle'); loadMethaneRecycle(); });
-  document.getElementById('loadCoastalMethane').addEventListener('click', () => { setActiveDemo('coastal-methane', 'Coastal methane'); loadCoastalMethane(0); });
-  document.getElementById('loadMethanolPlant')?.addEventListener('click', () => { setActiveDemo('coastal-methanol', 'Coastal methanol'); loadMethanolPlant(0); });
+  const OVERVIEW_CASES = {
+    'methane-recycle': () => loadMethaneRecycle(),
+    'coastal-methane': () => loadCoastalMethane(0),
+    'coastal-methanol': () => loadMethanolPlant(0),
+    'abundance-hub': () => loadAbundanceHub(),
+    'zabuye-hub': () => loadZabuyeHub(),
+    'demo-network': () => loadDemoNetwork(),
+  };
+  document.getElementById('overviewCases')?.addEventListener('change', event => {
+    const run = OVERVIEW_CASES[event.target.value];
+    if (!run) return;
+    try { run(); } catch { /* loaders and sizing write the status line */ }
+  });
   for (const name of FOUNDATION_TABS) {
     document.getElementById(TAB_IDS[name].tab)?.addEventListener('click', () => activateTab(name));
   }
@@ -601,9 +613,28 @@
       /* sizeForPositiveCashflow writes the status line */
     }
   });
-  document.getElementById('loadAbundanceHub').addEventListener('click', () => { setActiveDemo('abundance-hub', 'Brine + ammonia'); loadAbundanceHub(); });
-  document.getElementById('loadZabuyeHub')?.addEventListener('click', () => { setActiveDemo('zabuye-hub', 'Zabuye brine hub'); loadZabuyeHub(); });
-  document.getElementById('loadDemoNetwork').addEventListener('click', () => { setActiveDemo('demo-network', 'Fuels + minerals'); loadDemoNetwork(); });
+  document.getElementById('overviewDrivers')?.addEventListener('click', event => {
+    const target = event.target.closest?.('[data-driver-node], [data-driver-tab], [data-driver-rights]');
+    if (!target) return;
+    if (target.dataset.driverRights) {
+      highlightRightKey = target.dataset.driverRights;
+      highlightPort = null;
+      const details = document.getElementById('siteRightsDetails');
+      if (details) details.open = true;
+      activateTab('location');
+      renderSiteTruth();
+      return;
+    }
+    highlightRightKey = '';
+    highlightPort = null;
+    if (target.dataset.driverNode) {
+      selectedNodeId = target.dataset.driverNode;
+      activateTab('process');
+      render();
+      return;
+    }
+    if (target.dataset.driverTab) activateTab(target.dataset.driverTab);
+  });
   document.getElementById('addPlantToNetwork').addEventListener('click', beginAddPlant);
   document.getElementById('cancelAddPlant').addEventListener('click', cancelAddPlant);
   document.getElementById('addPlantForm').addEventListener('submit', event => {
@@ -1057,13 +1088,21 @@
     const met = Boolean(objective?.met) && !openBalances;
     const products = objective?.activeSaleCount ?? objective?.positiveSaleCount ?? 0;
     const deltaLabel = `${delta >= 0 ? '+' : ''}${formatCashflowMoney(delta)}`;
+    const deltaClass = delta > 0 ? 'positive' : delta < 0 ? 'negative' : '';
+    const afterClass = (after ?? 0) > 0 ? 'positive' : (after ?? 0) < 0 ? 'negative' : '';
+    const note = [
+      `${products} positive-sale product${products === 1 ? '' : 's'}`,
+      met ? 'Objective met' : 'Objective not met',
+      met ? '' : 'Kept the best available net cash among searched slates.',
+      openBalances ? 'Balances need attention, so this is not treated as a success.' : '',
+    ].filter(Boolean).join(' · ');
     el.hidden = false;
-    el.innerHTML = `<strong>${met ? 'Objective met' : 'Objective not met'}</strong>
-      · ${products} positive-sale product${products === 1 ? '' : 's'}
-      <br>Net cash ${formatCashflowMoney(before)} → ${formatCashflowMoney(after)}
-      (<span class="${delta > 0 ? 'positive' : delta < 0 ? 'negative' : ''}">${deltaLabel}</span>)
-      ${met ? '' : '<br>Kept the best available net cash among searched slates.'}
-      ${openBalances ? '<br>Balances need attention, so this is not treated as a success.' : ''}`;
+    el.innerHTML = `<div class="delta-board" role="group" aria-label="Net cash before and after optimize">
+      <div class="delta-cell"><span>Before</span><strong>${formatCashflowMoney(before)}</strong><small>Net cash / year</small></div>
+      <div class="delta-cell delta-delta"><span>Delta</span><strong class="${deltaClass}">${deltaLabel}</strong><small>${met ? 'Objective met' : 'Objective not met'}</small></div>
+      <div class="delta-cell"><span>After</span><strong class="${afterClass}">${formatCashflowMoney(after)}</strong><small>Net cash / year</small></div>
+    </div>
+    <p class="delta-note">${note}</p>`;
   }
 
   function sizeForPositiveCashflow(opts = {}) {
@@ -3590,36 +3629,49 @@
     O2: 'Oxygen',
   };
 
-  function networkSaleRows(productQuality) {
+  function overviewSaleRecords() {
+    const productQuality = classifyQuality({ kind: 'product-cost' });
+    const sinks = (currentEconomics?.sinks || [])
+      .filter(sink => sink.disposition === 'sale' && Number(sink.deliveredAmount) > 0)
+      .sort((left, right) => (Number(right.annualRevenue) - Number(left.annualRevenue))
+        || (Number(right.deliveredAmount) - Number(left.deliveredAmount)));
+    if (sinks.length) {
+      const revenue = Number(currentEconomics.annualRevenue) || 0;
+      const days = Number(currentEconomics.periodDays) > 0 ? Number(currentEconomics.periodDays) : 365;
+      return sinks.map(sink => ({
+        label: NETWORK_SALE_LABELS[sink.id] || sink.id,
+        kgPerDay: Number(sink.deliveredAmount) / days,
+        tonnesPerYear: Number(sink.deliveredAmount) / 1000,
+        revenue: Number(sink.annualRevenue) || 0,
+        share: revenue > 0 ? (Number(sink.annualRevenue) || 0) / revenue : null,
+        quality: productQuality,
+      }));
+    }
     const slate = networkResult?.slate;
     if (!slate) return [];
     return Object.entries(slate)
       .filter(([, tonnes]) => Number(tonnes) > 0)
       .sort((left, right) => right[1] - left[1])
-      .map(([substance, tonnes]) => [
-        NETWORK_SALE_LABELS[substance] || substance,
-        `${formatUncertainNumber(tonnes, productQuality)} t/year`,
-        { quality: productQuality },
-      ]);
+      .map(([substance, tonnes]) => ({
+        label: NETWORK_SALE_LABELS[substance] || substance,
+        kgPerDay: Number(tonnes) * 1000 / 365,
+        tonnesPerYear: Number(tonnes),
+        revenue: null,
+        share: null,
+        quality: productQuality,
+      }));
   }
 
-  function saleRowsFromSinks(sinks, productQuality) {
-    return (sinks || [])
-      .filter(sink => sink.disposition === 'sale' && Number(sink.deliveredAmount) > 0)
-      .sort((left, right) => (Number(right.annualRevenue) - Number(left.annualRevenue))
-        || (Number(right.deliveredAmount) - Number(left.deliveredAmount)))
-      .map(sink => [
-        NETWORK_SALE_LABELS[sink.id] || sink.id,
-        `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`,
-        { quality: productQuality },
-      ]);
-  }
-
-  function overviewSaleRows() {
-    const productQuality = classifyQuality({ kind: 'product-cost' });
-    const openSales = saleRowsFromSinks(currentEconomics?.sinks, productQuality);
-    if (openSales.length) return openSales;
-    return networkSaleRows(productQuality);
+  function renderSlateTable(records) {
+    if (!records.length) return '<p class="slate-empty">No products</p>';
+    const lead = records.find(row => Number(row.revenue) > 0) || null;
+    const body = records.map(row => {
+      const isLead = lead === row;
+      const share = row.share == null ? '—' : `${formatNumber(row.share * 100)}%`;
+      const money = row.revenue == null ? '—' : formatUncertainMoney(row.revenue, row.quality);
+      return `<tr class="${isLead ? 'is-lead' : ''}"><td>${escapeHtml(row.label)}${isLead ? ' <span class="slate-lead">lead</span>' : ''}</td><td>${formatNumber(row.kgPerDay)}</td><td>${formatNumber(row.tonnesPerYear)}</td><td>${money}</td><td>${share}</td></tr>`;
+    }).join('');
+    return `<table class="slate-table"><thead><tr><th>Product</th><th>kg/d</th><th>t/y</th><th>$/y</th><th>Share</th></tr></thead><tbody>${body}</tbody></table>`;
   }
 
   function powerThrottleCallout() {
@@ -3667,18 +3719,147 @@
     return { daily, quality, band, references };
   }
 
+  function metricStats(pairs) {
+    return pairs.map(([label, html]) => (
+      `<div class="metric-stat"><span>${escapeHtml(label)}</span><strong>${html}</strong></div>`
+    )).join('');
+  }
+
+  function driverRow(key, body, tone, attrs) {
+    const value = attrs
+      ? `<button type="button" class="tone-${tone}" ${attrs}>${body}</button>`
+      : `<span class="tone-${tone}">${body}</span>`;
+    return `<li class="driver-row"><span class="driver-key">${escapeHtml(key)}</span>${value}</li>`;
+  }
+
+  function renderOverviewDrivers() {
+    const list = document.getElementById('overviewDrivers');
+    if (!list) return;
+    if (!graph.nodes.length) {
+      list.innerHTML = driverRow('Plant', 'No plant loaded — pick a case or open Process.', 'idle', '');
+      return;
+    }
+    const rows = [];
+    const powerNote = powerThrottleCallout();
+    if (powerNote) {
+      const nodeId = powerLimitNodeId();
+      rows.push(driverRow('Power', escapeHtml(powerNote), 'warn', nodeId ? `data-driver-node="${escapeHtml(nodeId)}"` : ''));
+    } else {
+      rows.push(driverRow('Power', 'Not limited', 'ok', ''));
+    }
+    const missing = missingConnectionRecords();
+    if (missing.length) {
+      const shown = missing.slice(0, 3).map(item => item.text).join(' · ');
+      const extra = missing.length > 3 ? ` · +${missing.length - 3}` : '';
+      rows.push(driverRow('Wiring', escapeHtml(`${shown}${extra}`), 'warn', `data-driver-node="${escapeHtml(missing[0].nodeId)}"`));
+    } else {
+      rows.push(driverRow('Wiring', 'Complete', 'ok', ''));
+    }
+    const bottleneckPairs = graph.nodes.flatMap(current => bottlenecksFor(current.id).map(limit => ({
+      nodeId: current.id,
+      limit,
+      label: `${current.label}: ${portName(limit)}`,
+    })));
+    const otherBottlenecks = bottleneckPairs.filter(item => item.limit !== 'electricity' && item.limit !== 'site budget');
+    if (otherBottlenecks.length) {
+      const shown = otherBottlenecks.slice(0, 3).map(item => item.label).join(' · ');
+      rows.push(driverRow('Bottleneck', escapeHtml(shown), 'warn', `data-driver-node="${escapeHtml(otherBottlenecks[0].nodeId)}"`));
+    } else if (powerNote && bottleneckPairs.length) {
+      rows.push(driverRow('Bottleneck', 'See power', 'warn', ''));
+    } else {
+      rows.push(driverRow('Bottleneck', 'None', 'ok', ''));
+    }
+    if (solveError) {
+      rows.push(driverRow('Solve', escapeHtml(solveError), 'bad', ''));
+    } else if (!result?.balances) {
+      rows.push(driverRow('Balance', 'Not solved', 'warn', 'data-driver-tab="process"'));
+    } else if (result.balances.maxAbsResidual >= 1e-8) {
+      rows.push(driverRow('Balance', escapeHtml(`Residual ${formatNumber(result.balances.maxAbsResidual)}`), 'warn', 'data-driver-tab="process"'));
+    } else {
+      rows.push(driverRow('Balance', 'Closed', 'ok', ''));
+    }
+    if (site?.rights) {
+      const concession = site.rights.brineConcession;
+      const unverified = unverifiedRightsWarnings?.(site) || [];
+      const chip = concession ? rightsChip(concession.status) : '';
+      const extra = unverified.length ? ` · ${unverified.length} unverified` : '';
+      rows.push(driverRow('Rights', `${chip} Brine concession${escapeHtml(extra)}`, unverified.length ? 'warn' : 'ok', 'data-driver-rights="brineConcession"'));
+    } else {
+      rows.push(driverRow('Rights', 'No site rights', 'warn', ''));
+    }
+    list.innerHTML = rows.join('');
+  }
+
+  function renderOverviewResources(landQuality) {
+    const land = document.getElementById('overviewLand');
+    const yieldEl = document.getElementById('overviewYield');
+    const waterEl = document.getElementById('overviewWater');
+    if (land) {
+      if (site && typeof FlowsheetFootprint !== 'undefined') {
+        const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
+        const meta = metricMetaMarkup({ quality: landQuality });
+        land.innerHTML = footprint.totalAreaM2 > 0
+          ? `<div class="metric-stat"><span>Land</span><strong>${formatUncertainHa(footprint.totalHa, landQuality)}</strong>${meta}</div><div class="metric-stat"><span>Solar land</span><strong>${formatUncertainHa(footprint.solar.ha, landQuality)}</strong></div>`
+          : metricStats([['Land', '—'], ['Solar land', '—']]);
+      } else if (networkResult?.landHa) {
+        const meta = metricMetaMarkup({ quality: landQuality });
+        land.innerHTML = `<div class="metric-stat"><span>Land</span><strong>${formatUncertainHa(networkResult.landHa, landQuality)} network</strong>${meta}</div><div class="metric-stat"><span>Solar land</span><strong>—</strong></div>`;
+      } else {
+        land.innerHTML = metricStats([['Land', '—'], ['Solar land', '—']]);
+      }
+    }
+    if (yieldEl) {
+      const yieldMeta = overviewYieldMeta();
+      const kwp = Number(site?.solarKWp);
+      const kwpText = Number.isFinite(kwp) ? `${formatNumber(kwp)} kWp` : '—';
+      if (!yieldMeta || !Number.isFinite(yieldMeta.daily)) {
+        yieldEl.innerHTML = metricStats([['Yield', '—'], ['Array', kwpText]]);
+      } else {
+        const value = formatUncertainNumber(yieldMeta.daily, yieldMeta.quality, { unit: 'kWh/kWp·day' });
+        const meta = metricMetaMarkup({
+          quality: yieldMeta.quality,
+          band: yieldMeta.band,
+          references: yieldMeta.references,
+        });
+        yieldEl.innerHTML = `<div class="metric-stat"><span>Yield</span><strong>${value}</strong>${meta}</div><div class="metric-stat"><span>Array</span><strong>${kwpText}</strong></div>`;
+      }
+    }
+    if (waterEl) {
+      const resource = site?.resources?.freshwater;
+      const right = site?.rights?.freshwater;
+      if (!resource?.stream) {
+        waterEl.innerHTML = metricStats([['Water', '—'], ['Right', '—']]);
+      } else {
+        let kg = null;
+        try { kg = sourceAmount(resource.stream); } catch { kg = null; }
+        const amount = Number.isFinite(kg) ? `${formatNumber(kg)} kg/d` : '—';
+        const chip = right ? rightsChip(right.status) : '';
+        waterEl.innerHTML = metricStats([['Water', amount], ['Right', chip || '—']]);
+      }
+    }
+  }
+
+  function mirrorOverviewChips() {
+    for (const [fromId, toId] of [['solveStatus', 'overviewSolveChip'], ['balanceStatus', 'overviewBalanceChip']]) {
+      const from = document.getElementById(fromId);
+      const to = document.getElementById(toId);
+      if (!from || !to) continue;
+      to.textContent = from.textContent;
+      to.className = from.className || 'status-chip';
+    }
+  }
+
   function renderOverview() {
     const siteEl = document.getElementById('overviewSiteName');
     const honesty = document.getElementById('overviewHonesty');
     const cash = document.getElementById('overviewCashflow');
     const slate = document.getElementById('overviewSlate');
-    const land = document.getElementById('overviewLand');
-    const yieldEl = document.getElementById('overviewYield');
-    const limiting = document.getElementById('overviewLimiting');
     if (!siteEl || !cash) return;
 
     if (site?.name) {
       siteEl.textContent = site.name;
+    } else if (!graph.nodes.length) {
+      siteEl.textContent = 'No plant loaded';
     } else {
       const label = draftSiteLabel();
       const lat = document.getElementById('siteLatitude')?.value;
@@ -3694,111 +3875,34 @@
     const moneyQuality = classifyQuality({ kind: 'money' });
     const landQuality = classifyQuality({ kind: 'land' });
     if (honesty) {
-      if (!graph.nodes.length) honesty.textContent = 'Load a scenario or build on Process.';
-      else if (gate.length) honesty.textContent = `Not bankable — screening. ${gate.join('; ')}. Capital-inclusive screening cash is R − OPEX − annualized CAPEX.`;
+      if (!graph.nodes.length) honesty.textContent = 'No plant loaded — pick a case or open Process.';
+      else if (gate.length) honesty.textContent = `Screening — not bankable (${gate.join('; ')}). Gate is R − OPEX − ann. CAPEX.`;
       else if (currentEconomics && (moneyQuality === 'screening' || moneyQuality === 'assumption')) {
-        honesty.textContent = 'Screening — not bankable. Assumptions dominate capital-inclusive screening cash (R − OPEX − annualized CAPEX) and land.';
-      } else if (currentEconomics) honesty.textContent = 'Plant cashflow is capital-inclusive (R − OPEX − annualized CAPEX). NPV/IRR stay DCF.';
-      else honesty.textContent = 'Graph incomplete.';
+        honesty.textContent = 'Screening — not bankable. Capital-inclusive gate is R − OPEX − ann. CAPEX.';
+      } else if (currentEconomics) honesty.textContent = 'Capital-inclusive gate is R − OPEX − ann. CAPEX. NPV and IRR stay on Economics.';
+      else honesty.textContent = 'Graph incomplete — cash gate needs a solved plant.';
     }
 
     if (!currentEconomics) {
-      cash.innerHTML = '<div class="hero-metric"><span>Net cash / year</span><strong>—</strong></div><div class="hero-metric"><span>Revenue / year</span><strong>—</strong></div><div class="hero-metric"><span>CAPEX</span><strong>—</strong></div>';
+      cash.className = 'cash-gate';
+      cash.innerHTML = '<span class="cash-gate-label">Net cash / year</span><strong>—</strong><span class="cash-gate-verdict">No gate</span><small>R − OPEX − ann. CAPEX</small>';
     } else {
       const net = currentEconomics.annualNetCash;
-      const netClass = net > 0 ? 'positive' : net < 0 ? 'negative' : '';
-      cash.innerHTML = [
-        ['Net cash / year', formatUncertainMoney(net, moneyQuality), netClass, { quality: moneyQuality }],
-        ['Revenue / year', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), '', { quality: moneyQuality }],
-        ['CAPEX', formatUncertainMoney(currentEconomics.installedCapex, moneyQuality), '', { quality: moneyQuality }],
-      ].map(([term, value, cls, meta]) => (
-        `<div class="hero-metric"><span>${term}</span><strong class="${cls}">${value}</strong>${metricMetaMarkup(meta)}</div>`
-      )).join('');
+      const pass = net > 0;
+      const fail = net < 0;
+      const verdict = pass ? 'Above gate' : fail ? 'Below gate' : 'At gate';
+      const netClass = pass ? 'positive' : fail ? 'negative' : '';
+      cash.className = `cash-gate${pass ? ' is-pass' : fail ? ' is-fail' : ''}`;
+      cash.innerHTML = `<span class="cash-gate-label">Net cash / year</span><strong class="${netClass}">${formatUncertainMoney(net, moneyQuality)}</strong><span class="cash-gate-verdict">${verdict}</span><small>R − OPEX − ann. CAPEX</small>`;
     }
 
-    if (slate) {
-      const rows = overviewSaleRows();
-      slate.innerHTML = rows.length
-        ? rows.map(([term, value, meta]) => `<div><dt>${term}</dt><dd>${value}${metricMetaMarkup(meta)}</dd></div>`).join('')
-        : '<div><dt>Products</dt><dd>None yet</dd></div>';
-    }
-
-    if (land) {
-      if (site && typeof FlowsheetFootprint !== 'undefined') {
-        const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
-        land.innerHTML = footprint.totalAreaM2 > 0
-          ? `${formatUncertainHa(footprint.totalHa, landQuality)} · solar ${formatUncertainHa(footprint.solar.ha, landQuality)}${metricMetaMarkup({ quality: landQuality })}`
-          : '—';
-      } else if (networkResult?.landHa) {
-        land.innerHTML = `${formatUncertainHa(networkResult.landHa, landQuality)} network${metricMetaMarkup({ quality: landQuality })}`;
-      } else {
-        land.textContent = '—';
-      }
-    }
-
-    if (yieldEl) {
-      const yieldMeta = overviewYieldMeta();
-      if (!yieldMeta || !Number.isFinite(yieldMeta.daily)) yieldEl.textContent = '—';
-      else {
-        yieldEl.innerHTML = `${formatUncertainNumber(yieldMeta.daily, yieldMeta.quality, { unit: 'kWh/kWp·day' })}${metricMetaMarkup({
-          quality: yieldMeta.quality,
-          band: yieldMeta.band,
-          references: yieldMeta.references,
-        })}`;
-      }
-    }
-
-    if (limiting) {
-      const missing = missingConnections();
-      const powerNote = powerThrottleCallout();
-      const bottleneckPairs = graph.nodes.flatMap(current => bottlenecksFor(current.id).map(limit => ({
-        nodeId: current.id,
-        label: `${current.label}: ${portName(limit)}`,
-      })));
-      limiting.onclick = null;
-      limiting.classList.remove('is-static');
-      limiting.dataset.limitMode = '';
-      if (!graph.nodes.length) {
-        limiting.hidden = true;
-      } else if (solveError) {
-        limiting.hidden = false;
-        limiting.textContent = solveError;
-      } else if (powerNote) {
-        limiting.hidden = false;
-        limiting.textContent = powerNote;
-        const nodeId = powerLimitNodeId();
-        limiting.dataset.limitMode = nodeId ? 'process' : 'status';
-        limiting.classList.toggle('is-static', !nodeId);
-        if (nodeId) {
-          limiting.onclick = () => {
-            selectedNodeId = nodeId;
-            activateTab('process');
-            render();
-          };
-        } else {
-          limiting.onclick = null;
-        }
-      } else if (missing.length) {
-        limiting.hidden = false;
-        limiting.textContent = `Incomplete wiring · ${missing.slice(0, 2).join(' · ')}`;
-        limiting.onclick = () => activateTab('process');
-      } else if (bottleneckPairs.length) {
-        limiting.hidden = false;
-        const first = bottleneckPairs[0];
-        limiting.textContent = `Bottleneck · ${bottleneckPairs.slice(0, 2).map(item => item.label).join(' · ')} → open in Process`;
-        limiting.onclick = () => {
-          selectedNodeId = first.nodeId;
-          activateTab('process');
-          render();
-        };
-      } else if (result?.balances && result.balances.maxAbsResidual >= 1e-8) {
-        limiting.hidden = false;
-        limiting.textContent = 'Balances need attention';
-        limiting.onclick = () => activateTab('process');
-      } else {
-        limiting.hidden = true;
-      }
-    }
+    if (slate) slate.innerHTML = renderSlateTable(overviewSaleRecords());
+    renderOverviewResources(landQuality);
+    renderOverviewDrivers();
+    const offtake = document.getElementById('overviewOfftake');
+    const offtakeWrap = document.getElementById('overviewOfftakeWrap');
+    if (offtakeWrap && offtake) offtakeWrap.hidden = !!offtake.hidden || !offtake.textContent;
+    mirrorOverviewChips();
     renderCashflowResult();
   }
 

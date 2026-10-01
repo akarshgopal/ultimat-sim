@@ -183,27 +183,35 @@
           <div class="building-palette" id="utilityPalette"></div>
           <button type="button" class="clear-factory" id="clearFactory">Clear canvas</button>
           <div class="model-note">
-            <span class="eyebrow">Factory rules</span>
+            <span class="eyebrow">Wiring</span>
             <p>Click a port, then a compatible port. Wiring does not change setpoints.</p>
           </div>
         </aside>
 
         <section class="flowsheet-stage" aria-labelledby="diagramTitle">
           <div class="stage-heading">
-            <div>
-              <span class="eyebrow">Factory floor</span>
-              <h2 id="diagramTitle">Blank factory</h2>
+            <div class="stage-title">
+              <span class="eyebrow">Flowsheet</span>
+              <h2 id="diagramTitle">Empty flowsheet</h2>
               <p id="flowSummary">0 blocks · 0 connections</p>
             </div>
             <div class="stage-actions">
               <button type="button" class="palette-drawer-toggle" id="paletteDrawerToggle" aria-controls="controlsSidebar" aria-expanded="false">Blocks</button>
-              <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
               <button type="button" id="autoArrange">Arrange</button>
-              <button type="button" id="focusCanvas" aria-pressed="false">Focus canvas</button>
-              <details class="save-menu">
-                <summary>Saved factories</summary>
+              <div class="canvas-zoom" aria-label="Canvas zoom controls">
+                <button type="button" id="zoomOut" aria-label="Zoom canvas out">−</button>
+                <input id="canvasZoom" type="range" min="8" max="200" step="1" value="100" aria-label="Canvas zoom">
+                <output id="canvasZoomValue" for="canvasZoom">100%</output>
+                <button type="button" id="zoomIn" aria-label="Zoom canvas in">+</button>
+                <button type="button" id="zoomFit" aria-label="Fit graph to canvas">Fit</button>
+                <button type="button" id="zoomReset">Reset</button>
+              </div>
+              <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
+              <details class="save-menu canvas-menu">
+                <summary>Canvas</summary>
                 <div class="snapshot-controls">
-                  <select id="factorySaves" aria-label="Saved factories"><option value="">Autosave</option></select>
+                  <button type="button" id="focusCanvas" aria-pressed="false">Focus canvas</button>
+                  <select id="factorySaves" aria-label="Saved flowsheets"><option value="">Autosave</option></select>
                   <button type="button" id="saveFactory">Save as…</button>
                   <button type="button" id="deleteFactorySave">Delete save</button>
                 </div>
@@ -212,19 +220,11 @@
           </div>
 
           <div class="canvas-frame">
-            <div class="canvas-zoom" aria-label="Canvas zoom controls">
-              <button type="button" id="zoomOut" aria-label="Zoom canvas out">−</button>
-              <input id="canvasZoom" type="range" min="8" max="200" step="1" value="100" aria-label="Canvas zoom">
-              <output id="canvasZoomValue" for="canvasZoom">100%</output>
-              <button type="button" id="zoomIn" aria-label="Zoom canvas in">+</button>
-              <button type="button" id="zoomFit" aria-label="Fit graph to canvas">Fit</button>
-              <button type="button" id="zoomReset">Reset</button>
-            </div>
             <div class="flowsheet-canvas empty" id="flowsheetCanvas">
               <div class="empty-canvas">
-                <span class="eyebrow">Blank factory</span>
-                <strong>Start here</strong>
-                <p>Load a scenario on Overview, or add blocks here and connect ports. Drag empty canvas to pan · Fit frames the plant.</p>
+                <span class="eyebrow">Flowsheet</span>
+                <strong>Empty flowsheet</strong>
+                <p>Add a block or open a case on Overview. Drag empty canvas to pan · Fit frames the plant.</p>
               </div>
             </div>
             <p class="canvas-pan-hint" id="canvasPanHint" hidden>Drag empty canvas to pan · Fit frames the plant</p>
@@ -258,10 +258,10 @@
           </div>
           <div id="nodeControls"></div>
           <dl class="inspector-metrics" id="inspectorMetrics"></dl>
-          <section class="inspector-section"><h3>Ports and connections</h3><div id="streamList" class="stream-list"></div></section>
-          <section class="inspector-section"><h3>Current inflow and outflow</h3><div id="recipeList" class="recipe-list"></div></section>
-          <section class="inspector-section"><h3>Circular exchanges</h3><div id="exchangeList" class="recipe-list"></div></section>
-          <section class="inspector-section"><h3>Balance residuals</h3><dl class="balance-list" id="balanceList"></dl></section>
+          <section class="inspector-section"><h3>Ports</h3><div id="streamList" class="stream-list"></div></section>
+          <section class="inspector-section"><h3>Flows</h3><div id="recipeList" class="recipe-list"></div></section>
+          <section class="inspector-section"><h3>Exchanges</h3><div id="exchangeList" class="recipe-list"></div></section>
+          <section class="inspector-section"><h3>Residuals</h3><dl class="balance-list" id="balanceList"></dl></section>
         </aside>
       </main>
     </section>

@@ -3669,7 +3669,129 @@
     }
   }
 
-  function render() { renderOfftakeHonesty(); renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); renderOverview(); }
+  function hudValue(text) {
+    const value = String(text ?? '').trim();
+    if (!value || value.includes('—')) return '';
+    return value;
+  }
+
+  function formatDispatchPair(used, offered) {
+    const scale = Math.max(Math.abs(used), Math.abs(offered));
+    if (scale >= 1000) return `${formatNumber(used / 1000)} / ${formatNumber(offered / 1000)} MWh/d`;
+    return `${formatNumber(used)} / ${formatNumber(offered)} kWh/d`;
+  }
+
+  function powerStripSlot() {
+    const buses = graph.nodes.filter(node => node.unit === 'electrical-bus');
+    if (result?.nodes && result?.streams) {
+      let offered = 0;
+      let used = 0;
+      let live = false;
+      for (const bus of buses) {
+        const available = Number(result.nodes[bus.id]?.available?.kWh);
+        if (!(available > 0)) continue;
+        const drawn = result.streams
+          .filter(edge => edge.from?.node === bus.id && edge.stream?.kind === 'electricity')
+          .reduce((sum, edge) => sum + (Number(edge.stream.kWh) || 0), 0);
+        if (!Number.isFinite(drawn)) continue;
+        live = true;
+        offered += available;
+        used += drawn;
+      }
+      if (live) {
+        const value = hudValue(formatDispatchPair(used, offered));
+        if (!value) return null;
+        return {
+          id: 'power',
+          label: 'Power',
+          value,
+          title: `Bus dispatch ${formatNumber(used)} / ${formatNumber(offered)} kWh/d`,
+          fill: offered > 0 ? Math.max(0, Math.min(1, used / offered)) : null,
+        };
+      }
+    }
+    if (buses.length || !result) return null;
+    const budget = Number(site?.resources?.electricity?.stream?.kWh);
+    if (!(budget > 0)) return null;
+    const value = hudValue(formatCompactEnergy(budget, false));
+    if (!value) return null;
+    return {
+      id: 'power',
+      label: 'Power',
+      value,
+      title: `Site electricity budget ${formatNumber(budget)} kWh/d`,
+    };
+  }
+
+  function waterStripSlot() {
+    const stream = site?.resources?.freshwater?.stream;
+    if (!stream) return null;
+    let kg;
+    try { kg = sourceAmount(stream); } catch { return null; }
+    if (!(Number(kg) > 0)) return null;
+    const value = hudValue(formatCompactMass(kg));
+    if (!value) return null;
+    const status = site?.rights?.freshwater?.status;
+    const title = status
+      ? `Freshwater ${formatNumber(kg)} kg/d · ${status}`
+      : `Freshwater ${formatNumber(kg)} kg/d`;
+    return { id: 'water', label: 'Water', value, title };
+  }
+
+  function cashStripSlot() {
+    const net = Number(currentEconomics?.annualNetCash);
+    if (!Number.isFinite(net)) return null;
+    const value = hudValue(`${formatUncertainMoney(net, classifyQuality({ kind: 'money' }))}/y`);
+    if (!value) return null;
+    const tone = net > 0 ? 'is-positive' : net < 0 ? 'is-negative' : '';
+    return {
+      id: 'cash',
+      label: 'Cash',
+      value,
+      title: 'Annual net cash · R − OPEX − ann. CAPEX · screening',
+      tone,
+    };
+  }
+
+  function landStripSlot() {
+    if (!site || typeof FlowsheetFootprint?.estimateFootprint !== 'function') return null;
+    let footprint;
+    try {
+      footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
+    } catch {
+      return null;
+    }
+    if (!(Number(footprint?.totalAreaM2) > 0)) return null;
+    const landQuality = classifyQuality({ kind: 'land' });
+    const value = hudValue(formatUncertainHa(footprint.totalHa, landQuality));
+    if (!value) return null;
+    const solarHa = Number(footprint.solar?.ha);
+    const title = solarHa > 0
+      ? `Site footprint · solar ${formatUncertainHa(solarHa, landQuality)}`
+      : 'Site footprint';
+    return { id: 'land', label: 'Land', value, title };
+  }
+
+  function renderResourceStrip() {
+    const el = document.getElementById('hudStrip');
+    if (!el) return;
+    const slots = [powerStripSlot(), waterStripSlot(), cashStripSlot(), landStripSlot()].filter(Boolean);
+    if (!slots.length) {
+      el.hidden = true;
+      el.innerHTML = '';
+      return;
+    }
+    el.hidden = false;
+    el.innerHTML = slots.map(slot => {
+      const tone = slot.tone ? ` ${slot.tone}` : '';
+      const bar = Number.isFinite(slot.fill)
+        ? `<span class="hud-bar" aria-hidden="true"><span style="--hud-fill:${Math.max(0, Math.min(1, slot.fill)).toFixed(4)}"></span></span>`
+        : '';
+      return `<li class="hud-slot hud-${slot.id}${tone}" data-hud="${slot.id}" title="${escapeHtml(slot.title)}"><span class="hud-key">${escapeHtml(slot.label)}</span><span class="hud-value">${escapeHtml(slot.value)}</span>${bar}</li>`;
+    }).join('');
+  }
+
+  function render() { renderOfftakeHonesty(); renderGraph(); renderStatus(); renderSite(); renderInspector(); renderEconomics(); renderComparison(); renderNetwork(); renderOverview(); renderResourceStrip(); }
 
   const NETWORK_SALE_LABELS = {
     NH3: 'Ammonia',

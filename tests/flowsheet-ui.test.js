@@ -1177,3 +1177,53 @@ test('Location footprint is a campus diagram and Overview links to it', () => {
   assert.equal(context.__elements.get('siteMapFootprintEmpty').hidden, false);
   assert.match(context.__elements.get('siteMapFootprintEmpty').textContent, /Add blocks to size pads/);
 });
+
+test('resource strip lights Zabuye power, cash, and land and hides an empty water slot', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const overview = html.slice(html.indexOf('id="panelOverview"'), html.indexOf('id="panelLocation"'));
+  assert.match(html, /id="hudStrip"/);
+  assert.doesNotMatch(overview, /id="hudStrip"/);
+  assert.ok(html.indexOf('</header>') < html.indexOf('id="hudStrip"'));
+  assert.ok(html.indexOf('id="hudStrip"') < html.indexOf('id="foundryTabs"'));
+  assert.doesNotMatch(html, /empire/i);
+
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  const strip = context.__elements.get('hudStrip');
+  assert.equal(app.site.id, 'china-zabuye');
+  assert.equal(strip.hidden, false);
+  assert.match(strip.innerHTML, /data-hud="power"/);
+  assert.match(strip.innerHTML, /5 \/ 5\.01 MWh\/d/);
+  assert.match(strip.innerHTML, /Bus dispatch 5,000 \/ 5,010 kWh\/d/);
+  assert.match(strip.innerHTML, /data-hud="cash"/);
+  assert.match(strip.innerHTML, /\$2\.4M\/y/);
+  assert.match(strip.innerHTML, /is-positive/);
+  assert.match(strip.innerHTML, /data-hud="land"/);
+  assert.match(strip.innerHTML, /1\.2 ha/);
+  assert.doesNotMatch(strip.innerHTML, /data-hud="water"/);
+  assert.doesNotMatch(strip.innerHTML, /—/);
+
+  app.loadZabuyeHub();
+  assert.match(strip.innerHTML, /50 \/ 50\.1 MWh\/d/);
+  assert.match(strip.innerHTML, /\$24M\/y/);
+  assert.match(strip.innerHTML, /12 ha/);
+  assert.doesNotMatch(strip.innerHTML, /data-hud="water"/);
+
+  app.clearFactory();
+  assert.equal(strip.hidden, true);
+  assert.equal(strip.innerHTML, '');
+
+  app.loadAbundanceHub();
+  assert.equal(strip.hidden, false);
+  assert.match(strip.innerHTML, /data-hud="water"/);
+  assert.match(strip.innerHTML, /data-hud="power"/);
+  assert.match(strip.innerHTML, /kg\/d|t\/d/);
+  assert.doesNotMatch(strip.innerHTML, /—/);
+
+  app.loadCoastalMethane(0);
+  assert.match(strip.innerHTML, /data-hud="power"/);
+  assert.match(strip.innerHTML, /hud-cash is-negative/);
+  assert.match(strip.innerHTML, /data-hud="land"/);
+  assert.doesNotMatch(strip.innerHTML, /data-hud="water"/);
+  assert.doesNotMatch(strip.innerHTML, /—/);
+});

@@ -4550,8 +4550,19 @@
     return FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
   }
 
+  function campusWaterCue(footprint) {
+    const units = new Set((footprint?.processes || []).map(item => item?.unit).filter(Boolean));
+    if (units.has('brine-minerals')) return { kind: 'brine' };
+    if (units.has('swro') || units.has('desal') || units.has('med') || units.has('msf')) {
+      return { kind: site?.rights?.seawaterDischarge?.authorize ? 'discharge' : 'intake' };
+    }
+    if (site?.rights?.freshwater?.authorize || site?.resources?.freshwater?.authorize) return { kind: 'freshwater' };
+    return null;
+  }
+
   function footprintDiagramFor(footprint, size) {
-    if (!footprint || !(footprint.totalAreaM2 > 0) || !MapSite?.layoutFootprintCampus || !MapSite?.projectCampusDiagram) return null;
+    const project = MapSite?.projectCampusDiagramIso || MapSite?.projectCampusDiagram;
+    if (!footprint || !(footprint.totalAreaM2 > 0) || !MapSite?.layoutFootprintCampus || !project) return null;
     const latitude = Number(site?.latitude);
     const longitude = Number(site?.longitude);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
@@ -4563,41 +4574,113 @@
       totalHa: footprint.totalHa,
     });
     if (!blocks.length) return null;
-    return MapSite.projectCampusDiagram(blocks, { latitude, longitude }, size);
+    const waterCue = campusWaterCue(footprint);
+    return project(blocks, { latitude, longitude }, { ...size, waterCue });
   }
 
   function campusDiagramMarkup(diagram, { labels = true, interactive = false } = {}) {
     if (!diagram?.shapes?.length) return '';
-    const rank = { outline: 0, solar: 1, process: 2 };
-    const shapes = diagram.shapes.slice().sort((left, right) => (rank[left.kind] ?? 1) - (rank[right.kind] ?? 1));
-    const polygons = [];
+    const isIso = diagram.mode === 'iso';
+    const ptsAttr = points => points.map(point => point.join(',')).join(' ');
+    const layers = [];
     const texts = [];
+
+    if (isIso && Array.isArray(diagram.links)) {
+      for (const link of diagram.links) {
+        if (!link?.points?.length) continue;
+        const d = link.points.map((point, index) => `${index ? 'L' : 'M'}${point[0]} ${point[1]}`).join(' ');
+        const cls = link.kind === 'power' ? 'campus-utility' : 'campus-road';
+        layers.push(`<path class="${cls}" d="${d}" fill="none"></path>`);
+      }
+    }
+
+    if (isIso && Array.isArray(diagram.cues)) {
+      for (const cue of diagram.cues) {
+        if (cue?.pipe?.length >= 2) {
+          const d = cue.pipe.map((point, index) => `${index ? 'L' : 'M'}${point[0]} ${point[1]}`).join(' ');
+          layers.push(`<path class="campus-water-pipe" d="${d}" fill="none"></path>`);
+        }
+        if (cue?.points?.length) {
+          layers.push(`<polygon class="campus-water campus-water-${escapeHtml(cue.kind || 'intake')}" points="${ptsAttr(cue.points)}"></polygon>`);
+          if (labels && cue.label) {
+            const xs = cue.points.map(p => p[0]);
+            const ys = cue.points.map(p => p[1]);
+            const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+            const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+            texts.push(`<text class="footprint-cue-label" x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(cue.label)}</text>`);
+          }
+        }
+      }
+    }
+
+    const shapes = diagram.shapes.slice().sort((left, right) => {
+      if (isIso) {
+        // Outline under pads; then far→near by depth.
+        if (left.kind === 'outline' && right.kind !== 'outline') return -1;
+        if (right.kind === 'outline' && left.kind !== 'outline') return 1;
+        return (right.depth ?? 0) - (left.depth ?? 0);
+      }
+      const rank = { outline: 0, solar: 1, process: 2 };
+      return (rank[left.kind] ?? 1) - (rank[right.kind] ?? 1);
+    });
+
     for (const shape of shapes) {
-      const pts = shape.points.map(point => point.join(',')).join(' ');
       const isOutline = shape.kind === 'outline';
       const fill = footprintColor(shape.unit, { cssVar: false });
-      const opacity = isOutline ? 0.14 : shape.kind === 'solar' ? 0.62 : 0.84;
-      const stroke = isOutline ? '#d7e2ee' : '#0c1117';
-      const weight = isOutline ? 1.4 : 1.1;
-      const dash = isOutline ? ' stroke-dasharray="5 3"' : '';
       const haText = formatHa((Number(shape.areaM2) || 0) / 10000);
       const title = `${shape.label || shape.id || 'Pad'} · ${haText}`;
       const padAttr = interactive && !isOutline && shape.id
         ? ` data-footprint-pad="${escapeHtml(shape.id)}" tabindex="0"`
         : '';
-      polygons.push(
-        `<g${padAttr}><title>${escapeHtml(title)}</title><polygon points="${pts}" fill="${fill}" fill-opacity="${opacity}" stroke="${stroke}" stroke-width="${weight}"${dash}></polygon></g>`
-      );
+
+      if (isIso && shape.faces) {
+        const parts = [];
+        parts.push(`<title>${escapeHtml(title)}</title>`);
+        if (isOutline) {
+          parts.push(`<polygon class="pad-outline" points="${ptsAttr(shape.faces.top || shape.points)}" fill="${fill}" fill-opacity="0.1" stroke="#d7e2ee" stroke-width="1.2" stroke-dasharray="5 3"></polygon>`);
+        } else {
+          if (shape.faces.east) {
+            parts.push(`<polygon class="pad-east" points="${ptsAttr(shape.faces.east)}" fill="${fill}" fill-opacity="0.55" stroke="#0c1117" stroke-width="0.9"></polygon>`);
+          }
+          if (shape.faces.south) {
+            parts.push(`<polygon class="pad-south" points="${ptsAttr(shape.faces.south)}" fill="${fill}" fill-opacity="0.72" stroke="#0c1117" stroke-width="0.9"></polygon>`);
+          }
+          const topOpacity = shape.kind === 'solar' ? 0.78 : 0.92;
+          parts.push(`<polygon class="pad-top pad-${escapeHtml(shape.kind || 'process')}" points="${ptsAttr(shape.faces.top || shape.points)}" fill="${fill}" fill-opacity="${topOpacity}" stroke="#0c1117" stroke-width="1.05"></polygon>`);
+          for (const segment of shape.hatch || []) {
+            if (!segment?.[0] || !segment?.[1]) continue;
+            const cls = shape.kind === 'solar' ? 'pad-solar-hatch' : 'pad-shed-ridge';
+            parts.push(`<line class="${cls}" x1="${segment[0][0]}" y1="${segment[0][1]}" x2="${segment[1][0]}" y2="${segment[1][1]}"></line>`);
+          }
+        }
+        layers.push(`<g class="campus-pad"${padAttr}>${parts.join('')}</g>`);
+      } else {
+        const pts = ptsAttr(shape.points);
+        const opacity = isOutline ? 0.14 : shape.kind === 'solar' ? 0.62 : 0.84;
+        const stroke = isOutline ? '#d7e2ee' : '#0c1117';
+        const weight = isOutline ? 1.4 : 1.1;
+        const dash = isOutline ? ' stroke-dasharray="5 3"' : '';
+        layers.push(
+          `<g${padAttr}><title>${escapeHtml(title)}</title><polygon points="${pts}" fill="${fill}" fill-opacity="${opacity}" stroke="${stroke}" stroke-width="${weight}"${dash}></polygon></g>`
+        );
+      }
+
       if (!labels) continue;
       if (isOutline && shape.box.h >= 28) {
         texts.push(`<text class="footprint-ha" x="${shape.box.cx}" y="${(shape.box.minY + 13).toFixed(1)}" text-anchor="middle">${escapeHtml(haText)}</text>`);
       } else if (!isOutline && shape.box.w >= 34 && shape.box.h >= 14) {
         const raw = String(shape.label || '');
         const name = raw.length > 18 ? `${raw.slice(0, 16)}…` : raw;
-        if (name) texts.push(`<text class="footprint-pad-name" x="${shape.box.cx}" y="${shape.box.cy}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(name)}</text>`);
+        if (name) {
+          const y = isIso ? (shape.box.cy - (shape.kind === 'solar' ? 2 : 0)) : shape.box.cy;
+          texts.push(`<text class="footprint-pad-name" x="${shape.box.cx}" y="${y}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(name)}</text>`);
+        }
+        if (isIso && shape.kind === 'solar' && shape.box.h >= 22) {
+          texts.push(`<text class="footprint-ha" x="${shape.box.cx}" y="${(shape.box.cy + 11).toFixed(1)}" text-anchor="middle">${escapeHtml(haText)}</text>`);
+        }
       }
     }
-    return `${polygons.join('')}${texts.join('')}`;
+    return `${layers.join('')}${texts.join('')}`;
   }
 
   function footprintLegendMarkup(footprint) {
@@ -4709,6 +4792,7 @@
     const diagram = footprintDiagramFor(footprint, { width: 160, height: 96, pad: 4 });
     if (svg) {
       if (diagram?.viewBox) svg.setAttribute('viewBox', diagram.viewBox);
+      svg.classList.toggle('is-iso', diagram?.mode === 'iso');
       svg.innerHTML = diagram ? campusDiagramMarkup(diagram, { labels: false, interactive: false }) : '';
     }
   }
@@ -4745,6 +4829,7 @@
     if (svg) {
       svg.hidden = false;
       if (diagram?.viewBox) svg.setAttribute('viewBox', diagram.viewBox);
+      svg.classList.toggle('is-iso', diagram?.mode === 'iso');
       svg.innerHTML = diagram ? campusDiagramMarkup(diagram, { labels: true, interactive: true }) : '';
     }
     if (metrics) {

@@ -37,6 +37,9 @@
   };
   let activeTab = 'overview';
   const NODE_WIDTH = 220;
+  const NODE_RX = 3;
+  const PORT_STEP = 20;
+  const PORT_TOP = 58;
   const COLUMN_GAP = 120;
   let selectedNodeId = null;
   let pendingPort = null;
@@ -79,12 +82,17 @@
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
   };
   const PALETTE_CATEGORIES = {
-    Water: ['swro'],
-    Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia'],
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
+    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia'],
+    Water: ['swro'],
     Power: ['solar-pv', 'battery'],
+    Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
   };
+  const PALETTE_MORE_UNITS = [
+    'titanium-kroll', 'aluminium-smelter', 'hydrogen-dri', 'nuclear-electricity',
+    'solar-thermal', 'thermal-storage', 'med', 'msf',
+  ];
+  const PALETTE_DEFAULT_OPEN = new Set(['Minerals', 'Fuels']);
   const MapSite = typeof FlowsheetMapSite !== 'undefined' ? FlowsheetMapSite : null;
 
   const catalog = {
@@ -468,15 +476,21 @@
     }
   }
 
+  function paletteCategory(name, units, { open = false, extraClass = '' } = {}) {
+    const cards = units
+      .filter(unit => catalog[unit]?.palette?.section === 'building')
+      .map(unit => paletteCard(unit, catalog[unit]))
+      .join('');
+    if (!cards) return '';
+    const cls = extraClass ? `palette-category ${extraClass}` : 'palette-category';
+    return `<details class="${cls}"${open ? ' open' : ''}><summary>${escapeHtml(name)}</summary>${cards}</details>`;
+  }
+
   function renderPalettes() {
-    const grouped = Object.entries(PALETTE_CATEGORIES).map(([name, units]) => {
-      const cards = units
-        .filter(unit => catalog[unit]?.palette?.section === 'building')
-        .map(unit => paletteCard(unit, catalog[unit]))
-        .join('');
-      return cards ? `<details class="palette-category"><summary>${name}</summary>${cards}</details>` : '';
-    }).join('');
-    document.getElementById('buildingPalette').innerHTML = grouped;
+    const grouped = Object.entries(PALETTE_CATEGORIES)
+      .map(([name, units]) => paletteCategory(name, units, { open: PALETTE_DEFAULT_OPEN.has(name) }))
+      .join('');
+    document.getElementById('buildingPalette').innerHTML = `${grouped}${paletteCategory('More units', PALETTE_MORE_UNITS, { extraClass: 'palette-more' })}`;
     document.getElementById('utilityPalette').innerHTML = Object.entries(catalog)
       .filter(([, definition]) => definition.palette?.section === 'utility')
       .sort(([, left], [, right]) => left.palette.order - right.palette.order)
@@ -3926,7 +3940,7 @@
       canvas.classList.add('empty');
       const hint = document.getElementById('canvasPanHint');
       if (hint) hint.hidden = true;
-      canvas.innerHTML = '<div class="empty-canvas"><span class="eyebrow">Blank factory</span><strong>Start here</strong><p>Load a scenario on Overview, or add blocks and connect ports. Drag empty canvas to pan · Fit frames the plant.</p></div>';
+      canvas.innerHTML = '<div class="empty-canvas"><span class="eyebrow">Flowsheet</span><strong>Empty flowsheet</strong><p>Add a block or open a case on Overview. Drag empty canvas to pan · Fit frames the plant.</p></div>';
       return;
     }
     canvas.classList.remove('empty');
@@ -3951,7 +3965,7 @@
       const labelY = edge.recycle ? recycleY - 8 : (start.y + end.y) / 2 - 7;
       return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${constrained ? ' bottleneck' : ''}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}" x="${labelX}" y="${labelY}" text-anchor="middle">${stream ? `${edge.recycle ? '↻ ' : ''}${formatStream(stream)}` : ''}</text>`;
     }).join('');
-    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:${width * canvasZoom}px;height:${height * canvasZoom}px;max-width:none" aria-label="Editable factory flowsheet">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
+    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:${width * canvasZoom}px;height:${height * canvasZoom}px;max-width:none" aria-label="Flowsheet">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
   }
 
   function renderNode(current) {
@@ -3971,15 +3985,22 @@
           ? formatStream(nodeResult.supplied || nodeResult.received || nodeResult.available)
           : 'Not running';
     const portMarkup = (list, direction) => list.map(([port, declaration], index) => {
-      const cy = y + 66 + index * 24;
+      const cy = y + PORT_TOP + index * PORT_STEP;
       const cx = direction === 'in' ? x : x + NODE_WIDTH;
       const selected = pendingPort?.node === current.id && pendingPort.port === port;
       const cause = diagnosis?.action === 'port' && diagnosis.port === port && diagnosis.nodeId === current.id;
-      const portLabel = `${direction === 'in' ? 'Connect' : 'Connect'} ${portName(port)} ${direction === 'in' ? 'in' : 'out'}`;
-      return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}${cause ? ' cause' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0" aria-label="${portLabel}" title="${portLabel}"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 13 : cx - 13}" y="${cy + 4}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port)}</text></g>`;
+      const portLabel = `Connect ${portName(port)} ${direction === 'in' ? 'in' : 'out'}`;
+      return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}${cause ? ' cause' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0" aria-label="${portLabel}" title="${portLabel}"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 12 : cx - 12}" y="${cy + 3}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port)}</text></g>`;
     }).join('');
     const reasonTitle = diagnosis ? escapeHtml(diagnosis.detail || diagnosis.text) : '';
-    return `<g class="flow-node${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}" data-node="${current.id}"${diagnosis ? ` data-reason="${escapeHtml(diagnosis.text)}"` : ''} tabindex="0">${reasonTitle ? `<title>${reasonTitle}</title>` : bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : ''}<rect x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="10"/><text class="node-kind" x="${x + 16}" y="${y + 20}">${units[current.unit].kind}</text><text class="node-label" x="${x + 16}" y="${y + 42}">${current.label}</text><text class="node-value${diagnosis ? ' node-reason' : ''}" x="${x + 16}" y="${y + height - 12}">${escapeHtml(value)}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
+    const kind = units[current.unit].kind;
+    const badgeWidth = Math.min(NODE_WIDTH - 16, Math.max(52, String(kind).length * 7.2 + 14));
+    const flags = `${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}`;
+    const title = reasonTitle
+      ? `<title>${reasonTitle}</title>`
+      : bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : '';
+    const reasonAttr = diagnosis ? ` data-reason="${escapeHtml(diagnosis.text)}"` : '';
+    return `<g class="flow-node${flags}" data-node="${current.id}"${reasonAttr} tabindex="0">${title}<rect class="node-body" x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="${NODE_RX}"/><rect class="node-kind-badge" x="${x + 8}" y="${y + 6}" width="${badgeWidth}" height="13" rx="2"/><text class="node-kind" x="${x + 8 + badgeWidth / 2}" y="${y + 15.5}" text-anchor="middle">${kind}</text><text class="node-label" x="${x + 8}" y="${y + 34}">${current.label}</text><line class="node-status-rule" x1="${x + 8}" y1="${y + height - 16}" x2="${x + NODE_WIDTH - 8}" y2="${y + height - 16}"/><text class="node-value${diagnosis ? ' node-reason' : ''}" x="${x + 8}" y="${y + height - 5}">${escapeHtml(value)}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
   }
 
   function bottlenecksFor(nodeId) { return result?.nodes[nodeId]?.limitedBy || []; }
@@ -3991,13 +4012,14 @@
 
   function nodeHeight(current) {
     const ports = Object.values(units[current.unit].ports);
-    return Math.max(104, 82 + Math.max(ports.filter(port => port.direction === 'in').length, ports.filter(port => port.direction === 'out').length) * 24);
+    const rows = Math.max(ports.filter(port => port.direction === 'in').length, ports.filter(port => port.direction === 'out').length);
+    return Math.max(96, PORT_TOP + rows * PORT_STEP + 16);
   }
 
   function portPoint(nodeId, port, direction) {
     const current = node(nodeId);
     const ports = Object.entries(units[current.unit].ports).filter(([, declaration]) => declaration.direction === direction);
-    return { x: current.position.x + (direction === 'out' ? NODE_WIDTH : 0), y: current.position.y + 66 + ports.findIndex(([name]) => name === port) * 24 };
+    return { x: current.position.x + (direction === 'out' ? NODE_WIDTH : 0), y: current.position.y + PORT_TOP + ports.findIndex(([name]) => name === port) * PORT_STEP };
   }
 
   function renderStatus() {
@@ -4006,7 +4028,7 @@
     const solveStatus = document.getElementById('solveStatus');
     const balanceStatus = document.getElementById('balanceStatus');
     document.getElementById('flowSummary').textContent = `${graph.nodes.length} blocks · ${graph.edges.length} connections`;
-    document.getElementById('diagramTitle').textContent = site?.name || (graph.nodes.length ? 'Factory canvas' : 'Blank factory');
+    document.getElementById('diagramTitle').textContent = site?.name || (graph.nodes.length ? 'Flowsheet' : 'Empty flowsheet');
     if (!graph.nodes.length) {
       solveStatus.textContent = 'Empty factory';
       solveStatus.className = 'status-chip idle';

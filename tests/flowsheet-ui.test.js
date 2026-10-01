@@ -932,3 +932,57 @@ test('Overview is a full-width decision board with a slate table, cash gate, and
   assert.match(banner.innerHTML, /Net cash/);
   assert.match(banner.innerHTML, /class="delta-board"/);
 });
+
+test('process chrome reads as a flowsheet, with gallery units behind More units', () => {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(root, 'flowsheet.css'), 'utf8');
+  const source = fs.readFileSync(path.join(root, 'js/flowsheet-app.js'), 'utf8');
+  const process = html.slice(html.indexOf('id="panelProcess"'), html.indexOf('id="panelEconomics"'));
+  assert.doesNotMatch(process, /Blank factory|Start here|Factory floor|Saved factories/);
+  assert.match(process, /Empty flowsheet/);
+  assert.match(process, /Add a block or open a case on Overview/);
+  assert.match(process, />Canvas</);
+  assert.ok(process.indexOf('id="zoomFit"') < process.indexOf('>Canvas<'));
+  assert.ok(process.indexOf('id="autoArrange"') < process.indexOf('>Canvas<'));
+  assert.ok(process.indexOf('id="paletteDrawerToggle"') < process.indexOf('>Canvas<'));
+  assert.ok(process.indexOf('id="focusCanvas"') > process.indexOf('>Canvas<'));
+  assert.match(process, /id="advancedComparison"/);
+  assert.doesNotMatch(process, /id="advancedComparison"[^>]*\bopen\b/);
+  assert.match(process, /<summary>Advanced<\/summary>/);
+  assert.match(css, /\.node-kind-badge/);
+  assert.match(css, /\.palette-more/);
+  assert.match(source, /PALETTE_MORE_UNITS/);
+  assert.doesNotMatch(html, /empire/i);
+
+  const context = loadApp();
+  const palette = context.__elements.get('buildingPalette').innerHTML;
+  const minerals = palette.indexOf('>Minerals<');
+  const fuels = palette.indexOf('>Fuels<');
+  const water = palette.indexOf('>Water<');
+  const more = palette.indexOf('>More units<');
+  assert.ok(minerals >= 0 && minerals < fuels && fuels < water && water < more);
+  assert.match(palette.slice(Math.max(0, minerals - 40), minerals), /\bopen\b/);
+  assert.match(palette.slice(Math.max(0, fuels - 40), fuels), /\bopen\b/);
+  assert.doesNotMatch(palette.slice(Math.max(0, more - 80), more), /\bopen\b/);
+  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv']) {
+    assert.ok(palette.indexOf(`data-unit="${unit}"`) < more, unit);
+  }
+  for (const unit of ['titanium-kroll', 'aluminium-smelter', 'hydrogen-dri', 'nuclear-electricity', 'solar-thermal', 'thermal-storage', 'med', 'msf']) {
+    assert.ok(palette.indexOf(`data-unit="${unit}"`) > more, unit);
+  }
+
+  const canvas = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(canvas, /node-kind-badge/);
+  assert.match(canvas, /node-status-rule/);
+  assert.match(canvas, /rx="3"/);
+  assert.doesNotMatch(canvas, /rx="10"/);
+
+  context.__FLOWSHEET_APP__.clearFactory();
+  const empty = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(empty, /Empty flowsheet/);
+  assert.match(empty, /Add a block or open a case on Overview/);
+  assert.doesNotMatch(empty, /Blank factory|Start here/);
+  assert.equal(context.__elements.get('diagramTitle').textContent, 'Empty flowsheet');
+});
+});

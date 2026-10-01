@@ -46,6 +46,7 @@
   const PORT_TOP = 58;
   const COLUMN_GAP = 120;
   let selectedNodeId = null;
+  let selectedEdgeIndex = null;
   let pendingPort = null;
   let result = null;
   let currentEconomics = null;
@@ -418,6 +419,7 @@
   };
   const portNames = {
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
+    logistics: 'Logistics',
     capturedCo2: 'Captured CO₂', depletedAir: 'Depleted gas', spentMedia: 'Spent media', feed: 'Feed water', product: 'Fresh water',
     brine: 'Brine', water: 'Water', hydrogen: 'Hydrogen', oxygen: 'Oxygen', waterReject: 'Reject water',
     co2: 'CO₂', methane: 'Methane', methanol: 'Methanol', out: 'Output', in: 'Input',
@@ -951,6 +953,7 @@
     Object.keys(setpoints).forEach(key => delete setpoints[key]);
     Object.keys(counts).forEach(key => delete counts[key]);
     selectedNodeId = null;
+    selectedEdgeIndex = null;
     pendingPort = null;
     site = null;
     lastSizing = null;
@@ -2571,10 +2574,21 @@
       choosePort({ node: port.dataset.node, port: port.dataset.port, direction: port.dataset.direction });
       return;
     }
+    const edgeEl = event.target.closest('[data-edge-index]');
+    if (edgeEl) {
+      const index = Number(edgeEl.dataset.edgeIndex);
+      selectedEdgeIndex = index;
+      const edge = graph.edges[index];
+      selectedNodeId = edge?.from?.node || selectedNodeId;
+      highlightPort = edge ? { nodeId: edge.from.node, port: edge.from.port } : null;
+      render();
+      return;
+    }
     const nodeId = event.target.closest('[data-node]')?.dataset.node;
     if (nodeId) {
       if (selectedNodeId !== nodeId) highlightPort = null;
       selectedNodeId = nodeId;
+      selectedEdgeIndex = null;
       render();
     }
   }
@@ -2666,6 +2680,17 @@
     if (event.target.name === 'sourcePreset') { current.sourcePreset = event.target.value; updateSourceStream(current); }
     if (event.target.name === 'heatTemperature') { current.temperature = Number(event.target.value); updateSourceStream(current); }
     if (event.target.name === 'branchWeight') graph.edges[Number(event.target.dataset.edge)].weight = Number(event.target.value);
+    if (event.target.name === 'edgeCapacity') {
+      const edge = graph.edges[Number(event.target.dataset.edge)];
+      const raw = String(event.target.value ?? '').trim();
+      if (raw === '') delete edge.capacity;
+      else {
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0) solveError = 'Edge capacity must be ≥ 0 (blank = unlimited).';
+        else edge.capacity = value;
+      }
+      selectedEdgeIndex = Number(event.target.dataset.edge);
+    }
     if (event.target.name === 'economics') {
       const key = event.target.dataset.economics;
       current.economics[key] = key === 'disposition' ? event.target.value : Number(event.target.value);
@@ -2685,6 +2710,12 @@
       const current = node(selectedNodeId);
       const diagnosis = current ? blockDiagnosis(current) : null;
       if (diagnosis) followDiagnosis(diagnosis);
+      return;
+    }
+    const selectEdge = event.target.closest('[data-select-edge]');
+    if (selectEdge && !event.target.closest('input,button,select')) {
+      selectedEdgeIndex = Number(selectEdge.dataset.selectEdge);
+      render();
       return;
     }
     const disconnect = event.target.closest('[data-disconnect]');
@@ -4467,9 +4498,15 @@
       const end = portPoint(edge.to.node, edge.to.port, 'in');
       const sibling = graph.edges.slice(0, edgeIndex).filter(candidate => candidate.from.node === edge.from.node && candidate.from.port === edge.from.port).length;
       const mid = (start.x + end.x) / 2 + sibling * 12;
-      const stream = result?.streams.find(candidate => candidate.from.node === edge.from.node && candidate.from.port === edge.from.port)?.stream;
+      const stream = result?.streams.find(candidate => candidate.from.node === edge.from.node && candidate.from.port === edge.from.port && candidate.to.node === edge.to.node && candidate.to.port === edge.to.port)?.stream
+        || result?.streams.find(candidate => candidate.from.node === edge.from.node && candidate.from.port === edge.from.port)?.stream;
       const kind = units[node(edge.from.node).unit].ports[edge.from.port].kind;
-      const constrained = bottlenecksFor(edge.to.node).some(limit => limitingPort(node(edge.to.node), limit) === edge.to.port);
+      const logisticsClamped = (result?.edgeLimits || []).some(item => (
+        item.from.node === edge.from.node && item.from.port === edge.from.port
+        && item.to.node === edge.to.node && item.to.port === edge.to.port
+      ));
+      const constrained = logisticsClamped
+        || bottlenecksFor(edge.to.node).some(limit => limit === 'logistics' || limitingPort(node(edge.to.node), limit) === edge.to.port);
       const path = edge.recycle
         ? `M${start.x} ${start.y} C${start.x + 70} ${start.y},${start.x + 70} ${recycleY},${start.x} ${recycleY} L${end.x} ${recycleY} C${end.x - 70} ${recycleY},${end.x - 70} ${end.y},${end.x} ${end.y}`
         : `M${start.x} ${start.y} C${mid} ${start.y},${mid} ${end.y},${end.x} ${end.y}`;
@@ -4479,7 +4516,8 @@
       const flowing = streamIsFlowing(stream);
       const label = rate ? `${edge.recycle ? '↻ ' : ''}${rate}` : '—';
       const belt = kind === 'material' || kind === 'consumable' ? ' belt' : kind === 'electricity' ? ' cable' : kind === 'heat' ? ' pipe' : '';
-      return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${belt}${constrained ? ' bottleneck' : ''}${flowing ? ' is-flowing' : ' is-static'}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}${rate ? '' : ' is-muted'}" x="${labelX}" y="${labelY}" text-anchor="middle">${escapeHtml(label)}</text>`;
+      const selected = selectedEdgeIndex === edgeIndex ? ' is-selected' : '';
+      return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${belt}${constrained ? ' bottleneck' : ''}${flowing ? ' is-flowing' : ' is-static'}${selected}" data-edge-index="${edgeIndex}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}${rate ? '' : ' is-muted'}" data-edge-index="${edgeIndex}" x="${labelX}" y="${labelY}" text-anchor="middle">${escapeHtml(label)}</text>`;
     }).join('');
     canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:${width * canvasZoom}px;height:${height * canvasZoom}px;max-width:none" aria-label="Plant floor">${floorGridMarkup(width, height)}${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
   }
@@ -6136,7 +6174,21 @@
       const weight = units[current.unit].kind === 'splitter' && declaration.direction === 'out'
         ? `<label class="branch-weight">Share <input name="branchWeight" data-edge="${index}" type="range" min="0.1" max="10" step="0.1" value="${edge.weight ?? 1}"></label>`
         : '';
-      return `<div class="port-connection"><small>Connected to ${node(peerId).label}</small>${weight}<button type="button" data-disconnect="${index}">Disconnect</button></div>`;
+      const capValue = edge.capacity == null || edge.capacity === '' || !Number.isFinite(Number(edge.capacity))
+        ? ''
+        : String(edge.capacity);
+      const edgeLimit = result?.edgeLimits?.find(item => (
+        item.from.node === edge.from.node && item.from.port === edge.from.port
+        && item.to.node === edge.to.node && item.to.port === edge.to.port
+      ));
+      const kind = declaration.kind;
+      const capUnit = kind === 'material' || kind === 'consumable' ? 'kg (or amount) / step' : 'kWh / step';
+      const deliveredNote = edgeLimit
+        ? `<small class="status-meta">Logistics clamp: ${formatNumber(edgeLimit.delivered)} / ${formatNumber(edgeLimit.capacity)} delivered (requested ${formatNumber(edgeLimit.requested)})</small>`
+        : '';
+      const capacity = `<label class="edge-capacity">Logistics capacity <input name="edgeCapacity" data-edge="${index}" type="number" min="0" step="any" placeholder="Unlimited" value="${escapeHtml(capValue)}" title="Max flow in this solve step (${capUnit}). Blank = unlimited."></label>${deliveredNote}`;
+      const selected = selectedEdgeIndex === index ? ' is-selected-edge' : '';
+      return `<div class="port-connection${selected}" data-select-edge="${index}"><small>Connected to ${node(peerId).label}</small>${weight}${capacity}<button type="button" data-disconnect="${index}">Disconnect</button></div>`;
     }).join('') || '<small>Not connected</small>';
     const cause = highlightPort && highlightPort.nodeId === current.id && highlightPort.port === port;
     return `<div class="port-row${cause ? ' is-cause' : ''}" data-port-row="${port}"><div><span>${declaration.direction === 'in' ? 'IN' : 'OUT'} · ${declaration.kind}</span><strong>${portName(port)}</strong>${connections}</div>${boundaryAllowed ? `<button type="button" data-boundary-port="${port}" data-direction="${declaration.direction}">${declaration.direction === 'in' ? 'Add source' : 'Add sink branch'}</button>` : ''}</div>`;

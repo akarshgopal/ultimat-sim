@@ -30,10 +30,12 @@ function solveOperation(caseDefinition) {
   let recycleResidual = 0;
   let converged = false;
   let iterations = 0;
+  let edgeLimits = [];
   for (; iterations < 100; iterations += 1) {
-    const plan = buses.length ? evaluateGraph(caseDefinition, null, recycleStreams) : null;
-    const allocations = plan ? allocateElectricity(caseDefinition, plan) : null;
-    solved = evaluateGraph(caseDefinition, allocations, recycleStreams);
+    edgeLimits = [];
+    const plan = buses.length ? evaluateGraph(caseDefinition, null, recycleStreams, null) : null;
+    const allocations = plan ? allocateElectricity(caseDefinition, plan, edgeLimits) : null;
+    solved = evaluateGraph(caseDefinition, allocations, recycleStreams, edgeLimits);
     recycleResidual = Math.max(0, ...recycleEdges.map(edge => streamResidual(
       recycleStreams.get(edge), solved.edgeStreams.get(edge)
     )));
@@ -53,15 +55,23 @@ function solveOperation(caseDefinition) {
   }
   for (const node of nodes.filter(node => UNITS[node.unit].kind === 'source')) {
     const edge = edges.find(candidate => candidate.from.node === node.id);
-    solved.nodeResults[node.id].supplied = cloneStream(solved.edgeStreams.get(edge));
+    if (!edge) continue; // orphan sources (e.g. after route change) have no outlet
+    const stream = solved.edgeStreams.get(edge);
+    if (!stream) continue;
+    solved.nodeResults[node.id].supplied = cloneStream(stream);
   }
 
   const streams = edges.map(edge => ({ ...edge, stream: cloneStream(solved.edgeStreams.get(edge)) }));
   const balances = calculateBalances(nodes, edges, solved.edgeStreams, solved.nodeResults);
   const heatIntegration = collectHeatIntegration(caseDefinition, solved.nodeResults);
+  tagLogisticsLimits(nodes, edges, solved.nodeResults, edgeLimits);
   const warnings = nodes
     .filter(node => solved.nodeResults[node.id]?.limitedBy?.length)
     .map(node => `${node.id} limited by ${solved.nodeResults[node.id].limitedBy.join(', ')}`);
+  for (const limit of edgeLimits) {
+    const label = `${limit.from.node}→${limit.to.node} limited by logistics capacity`;
+    if (!warnings.includes(label)) warnings.push(label);
+  }
   if (powerBudgetThrottled(nodes, solved.nodeResults)) {
     warnings.push('Capacity reduced: limited by available electricity');
   }
@@ -76,6 +86,7 @@ function solveOperation(caseDefinition) {
     balances,
     heatIntegration,
     warnings,
+    edgeLimits: edgeLimits.map(limit => ({ ...limit })),
     convergence: {
       converged,
       iterations: recycleEdges.length ? iterations : (buses.length ? 2 : 1),
@@ -89,6 +100,80 @@ function streamAmount(stream) {
   if (stream.kind === 'consumable') return stream.amount;
   return stream.kWh;
 }
+
+
+function finiteEdgeCapacity(edge) {
+  if (!edge || edge.capacity == null || edge.capacity === '') return Infinity;
+  const capacity = Number(edge.capacity);
+  if (!Number.isFinite(capacity)) return Infinity;
+  if (capacity < 0) throw new Error(`Edge capacity must be ≥ 0 (${edge.from?.node} → ${edge.to?.node})`);
+  return capacity;
+}
+
+function applyEdgeCapacity(edge, stream, edgeLimits) {
+  if (!edge || !stream) return stream;
+  const capacity = finiteEdgeCapacity(edge);
+  if (!Number.isFinite(capacity)) return stream;
+  const requested = streamAmount(stream);
+  if (requested <= capacity + Math.max(1, capacity) * 1e-9) return stream;
+  const delivered = scaleStream(stream, requested === 0 ? 0 : capacity / requested);
+  if (edgeLimits) {
+    edgeLimits.push({
+      from: { node: edge.from.node, port: edge.from.port },
+      to: { node: edge.to.node, port: edge.to.port },
+      port: edge.to.port,
+      capacity,
+      requested,
+      delivered: streamAmount(delivered),
+    });
+  }
+  return delivered;
+}
+
+function tagLogisticsLimits(nodes, edges, nodeResults, edgeLimits) {
+  if (!edgeLimits?.length) return;
+  const clampedInlets = new Map();
+  for (const limit of edgeLimits) {
+    const key = `${limit.to.node}:${limit.to.port}`;
+    clampedInlets.set(key, limit);
+  }
+  for (const node of nodes) {
+    const result = nodeResults[node.id];
+    if (!result) continue;
+    const incoming = edges.filter(edge => edge.to.node === node.id);
+    let logisticsBinding = false;
+    for (const edge of incoming) {
+      const limit = clampedInlets.get(`${edge.to.node}:${edge.to.port}`);
+      if (!limit) continue;
+      const port = edge.to.port;
+      const limits = result.limitedBy || [];
+      if (limits.includes(port)) {
+        logisticsBinding = true;
+        break;
+      }
+      const requested = result.requestedInputs?.[port];
+      const consumed = result.consumed?.[port];
+      if (requested && consumed) {
+        const want = streamAmount(requested);
+        const got = streamAmount(consumed);
+        if (want > got + Math.max(1, got) * 1e-9 && got <= limit.delivered + Math.max(1, limit.delivered) * 1e-9) {
+          logisticsBinding = true;
+          break;
+        }
+      }
+      // Sources/junctions feeding a limited consumer: if activity is below planned
+      // solely because this inlet was clamped, unit.limitedBy already names the port.
+      if (limits.length && limits.some(name => name === port || (port === 'electricity' && name === 'electricity'))) {
+        logisticsBinding = true;
+        break;
+      }
+    }
+    if (logisticsBinding) {
+      result.limitedBy = [...new Set([...(result.limitedBy || []), 'logistics'])];
+    }
+  }
+}
+
 
 function unverifiedRightsWarnings(site) {
   const rights = site?.rights;
@@ -145,11 +230,14 @@ function validateSite({ site, graph }) {
   }
 }
 
-function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map()) {
+function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), edgeLimits = null) {
   const { nodes, edges } = caseDefinition.graph;
   const remaining = siteBudgets(caseDefinition.site);
   const edgeStreams = new Map([...recycleStreams].map(([edge, stream]) => [edge, cloneStream(stream)]));
   const nodeResults = {};
+  const setOutlet = (edge, stream) => {
+    edgeStreams.set(edge, applyEdgeCapacity(edge, stream, edgeLimits));
+  };
   for (const node of topologicalOrder(nodes, edges)) {
     const unit = UNITS[node.unit];
     const incoming = edges.filter(edge => edge.to.node === node.id);
@@ -157,24 +245,32 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map()) 
     if (unit.kind === 'source') {
       let stream = cloneStream(validateStream(node.params?.stream, unit.ports.out.kind));
       const limitedBy = [];
+      let siteAvailable = null;
       if (caseDefinition.site && remaining.has(node.siteResource)) {
         const requested = streamAmount(stream);
-        const available = remaining.get(node.siteResource);
-        if (requested > available + Math.max(1, available) * 1e-9) {
-          stream = scaleStream(stream, requested === 0 ? 0 : available / requested);
+        siteAvailable = remaining.get(node.siteResource);
+        if (requested > siteAvailable + Math.max(1, siteAvailable) * 1e-9) {
+          stream = scaleStream(stream, requested === 0 ? 0 : siteAvailable / requested);
           limitedBy.push('site budget');
         }
-        remaining.set(node.siteResource, Math.max(0, available - streamAmount(stream)));
+      }
+      if (outgoing[0]) stream = applyEdgeCapacity(outgoing[0], stream, edgeLimits);
+      if (siteAvailable != null) {
+        remaining.set(node.siteResource, Math.max(0, siteAvailable - streamAmount(stream)));
       }
       nodeResults[node.id] = { available: stream, limitedBy };
-      edgeStreams.set(outgoing[0], stream);
+      if (outgoing[0]) edgeStreams.set(outgoing[0], stream);
       continue;
     }
     if (unit.kind === 'junction') {
       const available = cloneStream(edgeStreams.get(incoming[0]));
       nodeResults[node.id] = { available };
       for (const edge of outgoing) {
-        edgeStreams.set(edge, allocations?.get(edge) || cloneStream(available));
+        // Plan pass (allocations == null): leave full bus power on each fan-out so
+        // converters report unconstrained wanted/usable. Cable caps bind inside
+        // allocateElectricity (and are re-applied below on the allocated pass).
+        if (!allocations) edgeStreams.set(edge, cloneStream(available));
+        else setOutlet(edge, allocations.get(edge) || cloneStream(available));
       }
       continue;
     }
@@ -184,13 +280,13 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map()) 
       const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
       if (totalWeight === 0) throw new Error(`${node.id} split weights cannot all be zero`);
       nodeResults[node.id] = { available };
-      outgoing.forEach((edge, index) => edgeStreams.set(edge, scaleStream(available, weights[index] / totalWeight)));
+      outgoing.forEach((edge, index) => setOutlet(edge, scaleStream(available, weights[index] / totalWeight)));
       continue;
     }
     if (unit.kind === 'mixer') {
       const available = mixMaterial(incoming.map(edge => edgeStreams.get(edge)));
       nodeResults[node.id] = { available };
-      edgeStreams.set(outgoing[0], available);
+      setOutlet(outgoing[0], available);
       continue;
     }
     const inlets = Object.fromEntries(
@@ -211,12 +307,12 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map()) 
     });
     nodeResults[node.id] = result;
     for (const edge of incoming) edgeStreams.set(edge, result.consumed[edge.to.port]);
-    for (const edge of outgoing) edgeStreams.set(edge, result.outlets[edge.from.port]);
+    for (const edge of outgoing) setOutlet(edge, result.outlets[edge.from.port]);
   }
   return { edgeStreams, nodeResults };
 }
 
-function allocateElectricity(caseDefinition, plan) {
+function allocateElectricity(caseDefinition, plan, edgeLimits = null) {
   const { nodes, edges } = caseDefinition.graph;
   const allocations = new Map();
   const priorities = caseDefinition.operation?.priorities || {};
@@ -238,7 +334,19 @@ function allocateElectricity(caseDefinition, plan) {
       const result = plan.nodeResults[edge.to.node];
       const wanted = result.requestedInputs[edge.to.port].kWh;
       const usable = result.consumed[edge.to.port].kWh;
-      const kWh = Math.min(wanted, usable, remaining);
+      const capacity = finiteEdgeCapacity(edge);
+      const withoutCap = Math.min(wanted, usable, remaining);
+      const kWh = Math.min(withoutCap, capacity);
+      if (edgeLimits && Number.isFinite(capacity) && kWh + Math.max(1, capacity) * 1e-9 < withoutCap) {
+        edgeLimits.push({
+          from: { node: edge.from.node, port: edge.from.port },
+          to: { node: edge.to.node, port: edge.to.port },
+          port: edge.to.port,
+          capacity,
+          requested: withoutCap,
+          delivered: kWh,
+        });
+      }
       allocations.set(edge, { kind: 'electricity', kWh });
       remaining -= kWh;
     }
@@ -269,6 +377,13 @@ function validateGraph(nodes, edges) {
     if (edge.recycle) {
       if (from.kind !== 'material') throw new Error('Only material recycle edges are supported');
       validateStream(edge.initialStream, 'material');
+    }
+    if (edge.capacity != null && edge.capacity !== '') {
+      const capacity = Number(edge.capacity);
+      if (Number.isNaN(capacity) || capacity < 0) {
+        throw new Error(`Edge capacity must be ≥ 0 (${edge.from.node} → ${edge.to.node})`);
+      }
+      // Infinity / non-finite positive values mean unlimited (same as blank).
     }
 
     const outputEndpoint = `out:${edge.from.node}:${edge.from.port}`;
@@ -469,6 +584,23 @@ function accumulateSolved(totals, solved) {
   for (const warning of solved.warnings || []) {
     if (!totals.warnings.includes(warning)) totals.warnings.push(warning);
   }
+  if (solved.edgeLimits?.length) {
+    totals.edgeLimits = totals.edgeLimits || [];
+    for (const limit of solved.edgeLimits) {
+      const key = `${limit.from.node}:${limit.from.port}->${limit.to.node}:${limit.to.port}:${limit.capacity}`;
+      const existing = totals.edgeLimits.find(item => (
+        item.from.node === limit.from.node && item.from.port === limit.from.port
+        && item.to.node === limit.to.node && item.to.port === limit.to.port
+        && item.capacity === limit.capacity
+      ));
+      if (existing) {
+        existing.requested += limit.requested;
+        existing.delivered += limit.delivered;
+      } else {
+        totals.edgeLimits.push({ ...limit, from: { ...limit.from }, to: { ...limit.to } });
+      }
+    }
+  }
   for (const [id, result] of Object.entries(solved.nodes)) {
     const current = totals.nodes[id];
     if (!current) {
@@ -523,6 +655,7 @@ function solveHorizon(caseDefinition) {
     nodes: {},
     streams: [],
     warnings: [],
+    edgeLimits: [],
     balances: { elements: {}, chargeMol: 0, electricityKWh: 0, heatKWh: 0, maxAbsResidual: 0 },
     convergence: { converged: true, iterations: 24, largestResidual: 0 },
     horizon: { hours: [], solarKWp, profile: hours, batteryKWh },

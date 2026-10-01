@@ -1155,6 +1155,305 @@ function projectCampusDiagram(blocks, origin, options = {}) {
   return { width, height, viewBox, shapes };
 }
 
+// Axonometric (2:1) plant-layout diagram from the same footprint rings.
+// Pads become extruded slabs (solar flat + hatch; process sheds); roads/utilities
+// connect centroids; optional waterCue draws an intake/brine canal stub.
+function projectCampusDiagramIso(blocks, origin, options = {}) {
+  const width = Math.max(40, finiteNumber(options.width, 320));
+  const height = Math.max(40, finiteNumber(options.height, 200));
+  const pad = Math.max(0, Math.min(width / 4, finiteNumber(options.pad, 16)));
+  const viewBox = `0 0 ${width} ${height}`;
+  const list = Array.isArray(blocks) ? blocks : [];
+  const coords = coordsFrom(origin || {});
+  let originLat = coords.latitude;
+  let originLon = coords.longitude;
+  if (!Number.isFinite(originLat) || !Number.isFinite(originLon)) {
+    const seed = list.find(block => block?.ring?.length);
+    if (!seed) return { width, height, viewBox, mode: 'iso', shapes: [], links: [], cues: [] };
+    originLat = finiteNumber(seed.ring[0][0]);
+    originLon = finiteNumber(seed.ring[0][1]);
+  }
+  if (!Number.isFinite(originLat) || !Number.isFinite(originLon)) {
+    return { width, height, viewBox, mode: 'iso', shapes: [], links: [], cues: [] };
+  }
+
+  const latRad = originLat * Math.PI / 180;
+  const metersPerDegLon = Math.max(METERS_PER_DEG_LAT * Math.cos(latRad), 1e-6);
+  const prepared = [];
+  let minE = Infinity;
+  let maxE = -Infinity;
+  let minN = Infinity;
+  let maxN = -Infinity;
+
+  for (const block of list) {
+    const meters = [];
+    for (const pair of block?.ring || []) {
+      const lat = finiteNumber(pair?.[0]);
+      const lon = finiteNumber(pair?.[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const east = (lon - originLon) * metersPerDegLon;
+      const north = (lat - originLat) * METERS_PER_DEG_LAT;
+      meters.push({ east, north });
+      if (east < minE) minE = east;
+      if (east > maxE) maxE = east;
+      if (north < minN) minN = north;
+      if (north > maxN) maxN = north;
+    }
+    if (meters.length >= 3) prepared.push({ block, meters });
+  }
+  if (!prepared.length) return { width, height, viewBox, mode: 'iso', shapes: [], links: [], cues: [] };
+
+  const spanE = Math.max(maxE - minE, 1e-6);
+  const spanN = Math.max(maxN - minN, 1e-6);
+  const span = Math.max(spanE, spanN);
+  const elevSolar = span * 0.028;
+  const elevProcess = span * 0.09;
+  const elevOutline = 0;
+
+  const isoRaw = (east, north, elev = 0) => ({
+    x: east - north,
+    y: (east + north) * 0.5 - elev,
+  });
+
+  const pads = [];
+  for (const { block, meters } of prepared) {
+    let bMinE = Infinity;
+    let bMaxE = -Infinity;
+    let bMinN = Infinity;
+    let bMaxN = -Infinity;
+    for (const point of meters) {
+      if (point.east < bMinE) bMinE = point.east;
+      if (point.east > bMaxE) bMaxE = point.east;
+      if (point.north < bMinN) bMinN = point.north;
+      if (point.north > bMaxN) bMaxN = point.north;
+    }
+    const kind = block.kind || '';
+    const elev = kind === 'solar' ? elevSolar : kind === 'process' ? elevProcess : elevOutline;
+    const corners = kind === 'outline'
+      ? meters.map(point => ({ east: point.east, north: point.north }))
+      : [
+          { east: bMinE, north: bMaxN },
+          { east: bMaxE, north: bMaxN },
+          { east: bMaxE, north: bMinN },
+          { east: bMinE, north: bMinN },
+        ];
+    pads.push({
+      block,
+      kind,
+      elev,
+      corners,
+      minE: bMinE,
+      maxE: bMaxE,
+      minN: bMinN,
+      maxN: bMaxN,
+      cx: (bMinE + bMaxE) / 2,
+      cy: (bMinN + bMaxN) / 2,
+      depth: (bMinE + bMaxE) / 2 + (bMinN + bMaxN) / 2,
+    });
+  }
+
+  // Collect raw iso points (including extruded bottoms) for fit.
+  const rawPts = [];
+  for (const padItem of pads) {
+    for (const corner of padItem.corners) {
+      rawPts.push(isoRaw(corner.east, corner.north, 0));
+      if (padItem.elev > 0) rawPts.push(isoRaw(corner.east, corner.north, padItem.elev));
+    }
+  }
+
+  // Water cue stub outside campus AABB (deterministic).
+  const waterKind = String(options.waterCue?.kind || '').toLowerCase();
+  let waterCueRaw = null;
+  if (waterKind === 'brine' || waterKind === 'intake' || waterKind === 'freshwater' || waterKind === 'discharge') {
+    const cueEast0 = maxE + span * 0.06;
+    const cueEast1 = maxE + span * 0.18;
+    const cueN0 = (minN + maxN) / 2 - span * 0.04;
+    const cueN1 = (minN + maxN) / 2 + span * 0.04;
+    waterCueRaw = {
+      kind: waterKind,
+      label: waterKind === 'brine' ? 'Brine feed'
+        : waterKind === 'freshwater' ? 'Freshwater'
+          : waterKind === 'discharge' ? 'Discharge' : 'Intake',
+      channel: [
+        isoRaw(cueEast0, cueN0, 0),
+        isoRaw(cueEast1, cueN0, 0),
+        isoRaw(cueEast1, cueN1, 0),
+        isoRaw(cueEast0, cueN1, 0),
+      ],
+      pipe: [
+        isoRaw((minE + maxE) / 2, (minN + maxN) / 2, 0),
+        isoRaw(cueEast0, (cueN0 + cueN1) / 2, 0),
+      ],
+    };
+    for (const point of waterCueRaw.channel) rawPts.push(point);
+    for (const point of waterCueRaw.pipe) rawPts.push(point);
+  }
+
+  // Road / utility links between solar and process pads.
+  const solarPad = pads.find(item => item.kind === 'solar');
+  const processPads = pads.filter(item => item.kind === 'process');
+  const linkRaws = [];
+  if (solarPad && processPads.length) {
+    for (const proc of processPads) {
+      linkRaws.push({
+        kind: 'road',
+        points: [isoRaw(solarPad.cx, solarPad.cy, 0), isoRaw(proc.cx, proc.cy, 0)],
+      });
+      // Power spur slightly offset in east-north space.
+      const ox = span * 0.012;
+      linkRaws.push({
+        kind: 'power',
+        points: [
+          isoRaw(solarPad.cx + ox, solarPad.cy - ox, elevSolar * 0.5),
+          isoRaw(proc.cx + ox, proc.cy - ox, elevProcess * 0.35),
+        ],
+      });
+    }
+  } else if (processPads.length > 1) {
+    const ordered = processPads.slice().sort((a, b) => a.depth - b.depth);
+    for (let i = 0; i < ordered.length - 1; i += 1) {
+      linkRaws.push({
+        kind: 'road',
+        points: [isoRaw(ordered[i].cx, ordered[i].cy, 0), isoRaw(ordered[i + 1].cx, ordered[i + 1].cy, 0)],
+      });
+    }
+  }
+  for (const link of linkRaws) {
+    for (const point of link.points) rawPts.push(point);
+  }
+
+  let rawMinX = Infinity;
+  let rawMaxX = -Infinity;
+  let rawMinY = Infinity;
+  let rawMaxY = -Infinity;
+  for (const point of rawPts) {
+    if (point.x < rawMinX) rawMinX = point.x;
+    if (point.x > rawMaxX) rawMaxX = point.x;
+    if (point.y < rawMinY) rawMinY = point.y;
+    if (point.y > rawMaxY) rawMaxY = point.y;
+  }
+  const rawSpanX = Math.max(rawMaxX - rawMinX, 1e-6);
+  const rawSpanY = Math.max(rawMaxY - rawMinY, 1e-6);
+  const innerW = Math.max(1, width - pad * 2);
+  const innerH = Math.max(1, height - pad * 2);
+  const scale = Math.min(innerW / rawSpanX, innerH / rawSpanY);
+  const ox = pad + (innerW - rawSpanX * scale) / 2;
+  const oy = pad + (innerH - rawSpanY * scale) / 2;
+  const round = value => Math.round(value * 10) / 10;
+  // Flip Y: larger world-y (north+east) should sit higher on screen (smaller SVG y).
+  const project = (raw) => [
+    round(ox + (raw.x - rawMinX) * scale),
+    round(oy + (rawMaxY - raw.y) * scale),
+  ];
+
+  const shapes = pads
+    .slice()
+    .sort((a, b) => b.depth - a.depth) // far (north/east) first; near pads paint on top
+    .map(padItem => {
+      const { block, kind, elev, corners, minE: bMinE, maxE: bMaxE, minN: bMinN, maxN: bMaxN } = padItem;
+      const topRaw = corners.map(corner => isoRaw(corner.east, corner.north, elev));
+      const top = topRaw.map(project);
+      let faces = { top };
+      let hatch = [];
+      if (kind !== 'outline' && elev > 0 && corners.length === 4) {
+        // corners: NW, NE, SE, SW
+        const [nw, ne, se, sw] = corners;
+        const south = [
+          project(isoRaw(sw.east, sw.north, elev)),
+          project(isoRaw(se.east, se.north, elev)),
+          project(isoRaw(se.east, se.north, 0)),
+          project(isoRaw(sw.east, sw.north, 0)),
+        ];
+        const east = [
+          project(isoRaw(se.east, se.north, elev)),
+          project(isoRaw(ne.east, ne.north, elev)),
+          project(isoRaw(ne.east, ne.north, 0)),
+          project(isoRaw(se.east, se.north, 0)),
+        ];
+        faces = { top, south, east };
+
+        if (kind === 'solar') {
+          const rows = Math.max(3, Math.min(10, Math.round((bMaxN - bMinN) / Math.max(span * 0.045, 1e-6))));
+          for (let i = 1; i < rows; i += 1) {
+            const t = i / rows;
+            const n = bMaxN + (bMinN - bMaxN) * t;
+            const inset = (bMaxE - bMinE) * 0.06;
+            hatch.push([
+              project(isoRaw(bMinE + inset, n, elev)),
+              project(isoRaw(bMaxE - inset, n, elev)),
+            ]);
+          }
+        } else if (kind === 'process') {
+          // Roof ridge hint along east-west midline.
+          const midN = (bMinN + bMaxN) / 2;
+          const ridgeElev = elev * 1.18;
+          hatch.push([
+            project(isoRaw(bMinE, midN, ridgeElev)),
+            project(isoRaw(bMaxE, midN, ridgeElev)),
+          ]);
+        }
+      }
+
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (const [x, y] of top) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      for (const face of Object.values(faces)) {
+        for (const [x, y] of face) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+
+      return {
+        id: block.id,
+        label: block.label || block.id || '',
+        unit: block.unit || '',
+        kind,
+        areaM2: Math.max(0, finiteNumber(block.areaM2, 0)),
+        points: top,
+        faces,
+        hatch,
+        depth: padItem.depth,
+        box: {
+          minX,
+          maxX,
+          minY,
+          maxY,
+          cx: round((minX + maxX) / 2),
+          cy: round((minY + maxY) / 2),
+          w: maxX - minX,
+          h: maxY - minY,
+        },
+      };
+    });
+
+  const links = linkRaws.map(link => ({
+    kind: link.kind,
+    points: link.points.map(project),
+  }));
+
+  const cues = [];
+  if (waterCueRaw) {
+    cues.push({
+      kind: waterCueRaw.kind,
+      label: waterCueRaw.label,
+      points: waterCueRaw.channel.map(project),
+      pipe: waterCueRaw.pipe.map(project),
+    });
+  }
+
+  return { width, height, viewBox, mode: 'iso', shapes, links, cues };
+}
+
 // True when a pad's equivalent side is wide enough to read a label at this zoom.
 function footprintLabelVisible({ areaM2, latitude, zoom, minPx = 42 } = {}) {
   const area = Math.max(0, finiteNumber(areaM2, 0));
@@ -1207,6 +1506,7 @@ return {
   padFootprintDimensions,
   layoutFootprintCampus,
   projectCampusDiagram,
+  projectCampusDiagramIso,
   footprintLabelVisible,
   waterAvailabilityScreening,
   pvScreeningBand,

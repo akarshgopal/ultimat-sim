@@ -16,6 +16,7 @@ const {
   circlePolygon,
   layoutFootprintCampus,
   projectCampusDiagram,
+  projectCampusDiagramIso,
   footprintLabelVisible,
   rectanglePolygon,
   waterAvailabilityScreening,
@@ -495,7 +496,65 @@ test('projectCampusDiagram is north-up and proportional', () => {
   assert.ok(solarShape.box.w * solarShape.box.h > padShape.box.w * padShape.box.h * 10);
 });
 
+
+test('projectCampusDiagramIso extrudes pads, links them, and stays deterministic', () => {
+  const origin = { latitude: 31.35, longitude: 84.05 };
+  const solar = { landAreaM2: 100000, quality: 'cited', evidence: [] };
+  const processes = [
+    { id: 'minerals', label: 'Minerals', unit: 'brine-minerals', areaM2: 900, quality: 'cited', evidence: [] },
+  ];
+  const campus = layoutFootprintCampus({
+    latitude: origin.latitude,
+    longitude: origin.longitude,
+    solar,
+    processes,
+    totalHa: 10.09,
+  });
+  const diagram = projectCampusDiagramIso(campus, origin, {
+    width: 320,
+    height: 200,
+    pad: 16,
+    waterCue: { kind: 'brine' },
+  });
+  const again = projectCampusDiagramIso(campus, origin, {
+    width: 320,
+    height: 200,
+    pad: 16,
+    waterCue: { kind: 'brine' },
+  });
+  assert.equal(diagram.mode, 'iso');
+  assert.equal(JSON.stringify(diagram.shapes), JSON.stringify(again.shapes));
+  assert.equal(JSON.stringify(diagram.links), JSON.stringify(again.links));
+  assert.equal(JSON.stringify(diagram.cues), JSON.stringify(again.cues));
+
+  const solarShape = diagram.shapes.find(shape => shape.kind === 'solar');
+  const padShape = diagram.shapes.find(shape => shape.id === 'minerals');
+  const outline = diagram.shapes.find(shape => shape.kind === 'outline');
+  assert.ok(solarShape?.faces?.top?.length >= 4);
+  assert.ok(solarShape.faces.south?.length === 4);
+  assert.ok(solarShape.faces.east?.length === 4);
+  assert.ok(solarShape.hatch.length >= 2, 'solar panel hatch');
+  assert.ok(padShape?.faces?.south?.length === 4);
+  assert.ok(padShape.hatch.length >= 1, 'shed ridge');
+  assert.ok(outline?.faces?.top?.length >= 8);
+  assert.ok(diagram.links.some(link => link.kind === 'road'));
+  assert.ok(diagram.links.some(link => link.kind === 'power'));
+  assert.equal(diagram.cues.length, 1);
+  assert.equal(diagram.cues[0].kind, 'brine');
+  assert.ok(diagram.cues[0].points.length >= 4);
+
+  for (const shape of diagram.shapes) {
+    for (const [x, y] of shape.points) {
+      assert.ok(x >= 0 && x <= 320, `x ${x}`);
+      assert.ok(y >= 0 && y <= 200, `y ${y}`);
+    }
+  }
+  assert.equal(projectCampusDiagramIso([], origin).shapes.length, 0);
+  assert.equal(projectCampusDiagramIso(null).shapes.length, 0);
+});
+
 test('footprint labels appear only when a pad is wide enough on the map', () => {
+
   assert.equal(footprintLabelVisible({ areaM2: 400, latitude: 31.16, zoom: 10 }), false);
   assert.equal(footprintLabelVisible({ areaM2: 500000, latitude: 31.16, zoom: 15 }), true);
   assert.equal(footprintLabelVisible({ areaM2: 0, latitude: 31.16, zoom: 16 }), false);

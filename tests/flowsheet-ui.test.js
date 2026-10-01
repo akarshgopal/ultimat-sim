@@ -10,7 +10,7 @@ function loadApp(localStorage) {
     const el = {
       listeners: {},
       addEventListener(type, listener) { this.listeners[type] = listener; },
-      classList: { add() {}, remove() {}, toggle() {} },
+      className: '',
       setAttribute(name, value) { this[name] = value; },
       _innerHTML: '',
       _textContent: '',
@@ -25,6 +25,25 @@ function loadApp(localStorage) {
       set textContent(value) {
         this._textContent = String(value ?? '');
         this._innerHTML = this._textContent;
+      },
+    };
+    el.classList = {
+      add(name) {
+        const parts = new Set(String(el.className || '').split(/\s+/).filter(Boolean));
+        parts.add(name);
+        el.className = [...parts].join(' ');
+      },
+      remove(name) {
+        const parts = new Set(String(el.className || '').split(/\s+/).filter(Boolean));
+        parts.delete(name);
+        el.className = [...parts].join(' ');
+      },
+      toggle(name, force) {
+        const parts = new Set(String(el.className || '').split(/\s+/).filter(Boolean));
+        const on = force === undefined ? !parts.has(name) : !!force;
+        if (on) parts.add(name); else parts.delete(name);
+        el.className = [...parts].join(' ');
+        return on;
       },
     };
     return el;
@@ -1129,11 +1148,15 @@ test('Location footprint is a campus diagram and Overview links to it', () => {
   const app = context.__FLOWSHEET_APP__;
   assert.equal(context.__elements.get('siteFootprint').hidden, false);
   assert.match(context.__elements.get('siteFootprintSvg').innerHTML, /polygon/);
+  assert.match(context.__elements.get('siteFootprintSvg').className, /is-iso/);
+  assert.match(context.__elements.get('siteFootprintSvg').innerHTML, /campus-pad|pad-top|pad-south/);
+  assert.match(context.__elements.get('siteFootprintSvg').innerHTML, /campus-road|campus-utility/);
   assert.match(context.__elements.get('siteFootprintSvg').innerHTML, /ha/);
   assert.match(context.__elements.get('siteFootprintTotal').textContent, /ha/);
   assert.match(context.__elements.get('siteFootprintPads').innerHTML, /data-footprint-pad/);
   assert.equal(context.__elements.get('overviewFootprint').hidden, false);
   assert.match(context.__elements.get('overviewFootprintSvg').innerHTML, /polygon/);
+  assert.match(context.__elements.get('overviewFootprintSvg').className, /is-iso/);
   assert.match(context.__elements.get('overviewFootprintHa').textContent, /ha|m²/);
   assert.match(context.__elements.get('siteMapHa').textContent, /ha|m²/);
   assert.equal(context.__elements.get('siteMapHa').hidden, false);

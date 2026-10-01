@@ -309,7 +309,16 @@
                 <p class="tea-gate-value" id="economicsGateValue">—</p>
                 <p class="tea-gate-note" id="economicsGateNote"></p>
               </section>
-              <div class="tea-waterfall" id="economicsWaterfall" aria-label="Revenue, operating cost, annualized CAPEX, and net cash"></div>
+              <div class="tea-charts">
+                <figure class="tea-chart">
+                  <figcaption>Gate waterfall</figcaption>
+                  <div class="tea-waterfall" id="economicsWaterfall" aria-label="Revenue, operating cost, annualized CAPEX, and net cash"></div>
+                </figure>
+                <figure class="tea-chart">
+                  <figcaption>Cash flow by year</figcaption>
+                  <div class="tea-cashflow" id="economicsCashflow" aria-label="Project cash flow by year. Year 0 is installed CAPEX."></div>
+                </figure>
+              </div>
               <div class="tea-groups">
                 <section class="tea-group" aria-label="Capital">
                   <h4>Capital</h4>
@@ -365,6 +374,7 @@
               <button type="button" class="primary-action" id="screenPowerBreakeven">Screen power break-even</button>
             </div>
             <p class="power-breakeven-result" id="powerBreakevenResult" hidden></p>
+            <div class="power-breakeven-chart" id="powerBreakevenChart" hidden></div>
           </section>
         </section>
 

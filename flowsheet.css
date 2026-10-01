@@ -148,6 +148,77 @@ button.primary-action:focus-visible {
   flex-wrap: wrap;
 }
 
+.hud-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 14px;
+  list-style: none;
+  background: #0e141c;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.hud-strip[hidden] { display: none !important; }
+.hud-slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 2px 8px 2px 6px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-surface) 88%, #000);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.hud-slot::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--border-light);
+  flex: 0 0 auto;
+}
+.hud-key {
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.hud-value { color: var(--text-primary); }
+.hud-power { border-color: color-mix(in srgb, var(--electric) 50%, var(--border)); }
+.hud-power::before { background: var(--electric); }
+.hud-water { border-color: color-mix(in srgb, var(--teal) 50%, var(--border)); }
+.hud-water::before { background: var(--teal); }
+.hud-cash.is-positive .hud-value { color: var(--success); }
+.hud-cash.is-negative .hud-value { color: var(--danger); }
+.hud-cash.is-negative::before { background: var(--danger); }
+.hud-cash.is-positive::before { background: var(--success); }
+.hud-land { border-color: color-mix(in srgb, var(--land) 55%, var(--border)); }
+.hud-land::before { background: var(--land); }
+.hud-bar {
+  width: 28px;
+  height: 5px;
+  border-radius: 1px;
+  background: #0a0e14;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.hud-bar > span {
+  display: block;
+  height: 100%;
+  width: calc(var(--hud-fill, 0) * 100%);
+  background: var(--electric);
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;
@@ -2417,6 +2488,7 @@ label output + .quality-chip {
   .flowsheet-page { overflow: auto; }
   .flowsheet-header { align-items: flex-start; }
   .flowsheet-status { max-width: 200px; }
+  .hud-strip { padding: 4px 10px; }
   .foundry-tabs { overflow-x: auto; }
   .overview-dashboard { padding: 12px 12px 20px; gap: 12px; }
   .cash-gate strong { font-size: 1.3rem; }

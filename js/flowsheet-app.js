@@ -38,6 +38,9 @@
   let activeTab = 'overview';
   const NODE_WIDTH = 220;
   const NODE_RX = 3;
+  const ISO_DX = 16;
+  const ISO_DY = 9;
+  const FLOOR_GRID = 24;
   const EMPTY_CANVAS_HTML = '<div class="empty-canvas"><span class="eyebrow">Plant floor</span><strong>No blocks</strong><p>Add a block or open a case on Overview. Drag empty canvas to pan · Fit frames the plant.</p></div>';
   const PORT_STEP = 20;
   const PORT_TOP = 58;
@@ -2370,8 +2373,8 @@
     const maxX = Math.max(0, ...graph.nodes.map(current => current.position.x + NODE_WIDTH));
     const maxY = Math.max(0, ...graph.nodes.map(current => current.position.y + nodeHeight(current)));
     return {
-      width: Math.max(320, maxX + 48),
-      height: Math.max(220, maxY + (hasRecycle ? 120 : 48)),
+      width: Math.max(320, maxX + 48 + ISO_DX),
+      height: Math.max(220, maxY + (hasRecycle ? 120 : 48) + ISO_DY),
     };
   }
 
@@ -4013,6 +4016,14 @@
     return null;
   }
 
+  function streamIsFlowing(stream) {
+    if (!stream) return false;
+    if (stream.kind === 'material') return FlowsheetModel.streamMassKg(stream) > 1e-9;
+    if (stream.kind === 'consumable') return Number(stream.amount) > 1e-9;
+    if (stream.kind === 'heat' || stream.kind === 'electricity') return Number(stream.kWh) > 1e-9;
+    return false;
+  }
+
   function utilizationRatio(current, nodeResult) {
     const capacity = Number(current.capacity);
     const activity = Number(nodeResult?.activity);
@@ -4118,7 +4129,161 @@
     return { kind: 'power', text: formatCompactEnergy(kWh, false) };
   }
 
+  function buildingProfile(unit, kind) {
+    if (kind === 'source') {
+      if (unit === 'solar-pv' || unit === 'electricity-source') return 'solar';
+      if (unit === 'solar-thermal' || unit === 'heat-source' || unit === 'combustion-heat') return 'furnace';
+      return 'tank';
+    }
+    if (kind === 'sink') return 'silo';
+    if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
+    if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf') return 'pond';
+    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery') return 'cell';
+    if (unit === 'asu' || unit === 'ammonia' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
+    if (kind === 'splitter' || kind === 'mixer') return 'pipe';
+    return 'shed';
+  }
+
+  function renderBuildingBody(x, y, width, height, profile) {
+    const dx = ISO_DX;
+    const dy = ISO_DY;
+    const x2 = x + width;
+    const y2 = y + height;
+    const top = `M${x} ${y} L${x2} ${y} L${x2 + dx} ${y - dy} L${x + dx} ${y - dy} Z`;
+    const side = `M${x2} ${y} L${x2 + dx} ${y - dy} L${x2 + dx} ${y2 - dy} L${x2} ${y2} Z`;
+    const front = `M${x} ${y} L${x2} ${y} L${x2} ${y2} L${x} ${y2} Z`;
+    const hit = `<rect class="node-hit" x="${x}" y="${y}" width="${width}" height="${height}" rx="${NODE_RX}"/>`;
+    if (profile === 'tank' || profile === 'silo') {
+      const cx = x + width / 2;
+      const rx = Math.min(width * 0.42, 78);
+      const ry = Math.max(10, dy + 4);
+      const bodyTop = y + 10;
+      const lid = `<ellipse class="node-roof node-tank-lid" cx="${cx}" cy="${bodyTop}" rx="${rx}" ry="${ry}"/>`;
+      const shell = `<path class="node-front node-tank-shell" d="M${cx - rx} ${bodyTop} L${cx - rx} ${y2 - 6} Q${cx} ${y2 + 4} ${cx + rx} ${y2 - 6} L${cx + rx} ${bodyTop} Q${cx} ${bodyTop + ry} ${cx - rx} ${bodyTop} Z"/>`;
+      const rim = `<ellipse class="node-top node-tank-rim" cx="${cx}" cy="${bodyTop}" rx="${rx}" ry="${ry}"/>`;
+      const band = `<rect class="node-band" x="${cx - rx + 4}" y="${(bodyTop + y2) / 2 - 4}" width="${rx * 2 - 8}" height="8" rx="1"/>`;
+      return `${hit}${shell}${band}${lid}${rim}`;
+    }
+    if (profile === 'solar') {
+      const panel = `<path class="node-top node-solar-top" d="${top}"/>`;
+      const face = `<path class="node-front node-solar-front" d="${front}"/>`;
+      const right = `<path class="node-side node-solar-side" d="${side}"/>`;
+      const lines = [0.22, 0.4, 0.58, 0.76].map((t) => {
+        const px = x + dx * t;
+        const py = y - dy * t;
+        return `<line class="node-solar-rib" x1="${px}" y1="${py}" x2="${x2 + dx * t}" y2="${py}"/>`;
+      }).join('');
+      return `${hit}${right}${face}${panel}${lines}`;
+    }
+    if (profile === 'pond') {
+      const slab = `<path class="node-front node-pond-front" d="${front}"/>`;
+      const lip = `<path class="node-top node-pond-top" d="${top}"/>`;
+      const right = `<path class="node-side node-pond-side" d="${side}"/>`;
+      const pool = `<rect class="node-pond-pool" x="${x + 10}" y="${y + 18}" width="${width - 20}" height="${Math.max(24, height - 44)}" rx="2"/>`;
+      return `${hit}${right}${slab}${lip}${pool}`;
+    }
+    if (profile === 'tower' || profile === 'cell' || profile === 'furnace') {
+      const face = `<path class="node-front" d="${front}"/>`;
+      const roof = `<path class="node-top" d="${top}"/>`;
+      const right = `<path class="node-side" d="${side}"/>`;
+      const stackX = x2 - 28;
+      const stack = profile === 'cell'
+        ? `<rect class="node-stack" x="${stackX}" y="${y - 22}" width="10" height="22"/><rect class="node-stack" x="${stackX + 14}" y="${y - 18}" width="8" height="18"/>`
+        : `<rect class="node-stack" x="${stackX}" y="${y - 26}" width="12" height="26"/>`;
+      return `${hit}${right}${face}${roof}${stack}`;
+    }
+    if (profile === 'bus' || profile === 'pipe') {
+      const face = `<path class="node-front node-bus-front" d="${front}"/>`;
+      const roof = `<path class="node-top node-bus-top" d="${top}"/>`;
+      const right = `<path class="node-side" d="${side}"/>`;
+      return `${hit}${right}${face}${roof}`;
+    }
+    const face = `<path class="node-front" d="${front}"/>`;
+    const roof = `<path class="node-top" d="${top}"/>`;
+    const right = `<path class="node-side" d="${side}"/>`;
+    return `${hit}${right}${face}${roof}`;
+  }
+
+  function faceStatusModel(current, nodeResult, diagnosis) {
+    const gauge = hubGauge(current, nodeResult);
+    if (gauge?.type === 'bar' && Number.isFinite(gauge.fraction)) {
+      return {
+        fraction: Math.max(0, Math.min(1, gauge.fraction)),
+        read: gauge.read,
+        title: gauge.title,
+        tone: gauge.tone === 'cf' ? 'cf' : 'util',
+        kind: 'gauge',
+      };
+    }
+    const util = utilizationRatio(current, nodeResult);
+    if (util != null) {
+      const shown = Math.max(0, Math.min(1, util));
+      return {
+        fraction: shown,
+        read: `${formatNumber(shown * 100)}%`,
+        title: `Utilization ${formatNumber(shown * 100)}%`,
+        tone: 'util',
+        kind: 'util',
+      };
+    }
+    if (!['source', 'sink', 'junction'].includes(units[current.unit].kind)) {
+      const kWh = electricityDrawKWh(nodeResult);
+      if (kWh > 0) {
+        return {
+          fraction: null,
+          read: formatCompactEnergy(kWh, false),
+          title: `Power draw ${formatCompactEnergy(kWh, false)}`,
+          tone: 'power',
+          kind: 'power',
+        };
+      }
+    }
+    if (gauge?.type === 'spark') return { spark: gauge, kind: 'spark' };
+    return null;
+  }
+
+  function renderFaceStatus(x, y, height, status, diagnosis, running) {
+    if (!status && !diagnosis && !running) return '';
+    const barY = y + 42;
+    const trackX = x + 10;
+    const trackW = NODE_WIDTH - 48;
+    const lightCx = x + NODE_WIDTH - 14;
+    const lightCy = y + 12;
+    const light = diagnosis
+      ? `<circle class="node-run-light is-starved" cx="${lightCx}" cy="${lightCy}" r="4.5"><title>Starved</title></circle>`
+      : running
+        ? `<circle class="node-run-light is-running" cx="${lightCx}" cy="${lightCy}" r="4.5"><title>Running</title></circle>`
+        : '';
+    if (!status) return light;
+    if (status.spark) {
+      const gauge = status.spark;
+      const width = 72;
+      const gx = x + NODE_WIDTH - 22 - width;
+      const gy = y + 8;
+      const peak = Math.max(...gauge.series, 0);
+      if (!(peak > 0)) return light;
+      const slot = width / gauge.series.length;
+      const bars = gauge.series.map((value, index) => {
+        const barHeight = Math.max(0, (value / peak) * 12);
+        if (!(barHeight > 0)) return '';
+        const barWidth = Math.max(0.8, slot - 0.7);
+        return `<rect class="node-spark-bar" x="${(gx + index * slot).toFixed(2)}" y="${(gy + 12 - barHeight).toFixed(2)}" width="${barWidth.toFixed(2)}" height="${barHeight.toFixed(2)}"/>`;
+      }).join('');
+      return `<g class="node-gauge node-gauge-spark node-face-spark"><title>${escapeHtml(gauge.title)}</title>${bars}</g>${light}`;
+    }
+    const label = escapeHtml(status.read || '');
+    const title = escapeHtml(status.title || status.read || '');
+    const tone = status.tone || 'util';
+    const chipClass = status.kind === 'util' ? ' node-chip node-chip-util' : status.kind === 'power' ? ' node-chip node-chip-power' : '';
+    if (status.fraction == null) {
+      return `<g class="node-face-status node-face-read node-gauge node-gauge-bar${chipClass}" data-face="${status.kind || 'read'}"><title>${title}</title><text class="node-gauge-read" x="${trackX}" y="${barY + 8}">${label}</text>${light}</g>`;
+    }
+    const fill = Math.max(0, (trackW - 2) * status.fraction);
+    return `<g class="node-face-status node-face-bar node-gauge node-gauge-bar node-gauge-${tone}${chipClass}" data-face="${status.kind || 'bar'}"><title>${title}</title><rect class="node-gauge-track node-face-track" x="${trackX}" y="${barY}" width="${trackW}" height="9" rx="1"/><rect class="node-gauge-fill node-face-fill" x="${trackX + 1}" y="${barY + 1}" width="${fill.toFixed(2)}" height="7"/><text class="node-gauge-read node-face-readout" x="${trackX + trackW}" y="${barY - 3}" text-anchor="end">${label}</text>${light}</g>`;
+  }
+
   function renderHubGauge(x, y, gauge) {
+    // Legacy helper retained for tests/callers; face status owns paint.
     if (!gauge) return '';
     if (gauge.type === 'spark') {
       const width = 70;
@@ -4154,6 +4319,11 @@
     return `<g class="node-chip node-chip-${chip.kind}"><rect x="${chipX}" y="${y + 6}" width="${width}" height="13" rx="1"/><text x="${chipX + width / 2}" y="${y + 15.5}" text-anchor="middle">${escapeHtml(chip.text)}</text></g>`;
   }
 
+  function floorGridMarkup(width, height) {
+    const step = FLOOR_GRID;
+    return `<defs><pattern id="plantFloorGrid" width="${step}" height="${step}" patternUnits="userSpaceOnUse"><path class="floor-grid-line" d="M${step} 0 H0 V${step}" fill="none"/></pattern></defs><rect class="floor-grid" x="0" y="0" width="${width}" height="${height}" fill="url(#plantFloorGrid)"/>`;
+  }
+
   function renderGraph() {
     renderCanvasZoom();
     if (!graph.nodes.length) {
@@ -4184,10 +4354,12 @@
       const labelX = edge.recycle ? (start.x + end.x) / 2 : mid;
       const labelY = edge.recycle ? recycleY - 8 : (start.y + end.y) / 2 - 7;
       const rate = formatEdgeRate(stream);
+      const flowing = streamIsFlowing(stream);
       const label = rate ? `${edge.recycle ? '↻ ' : ''}${rate}` : '—';
-      return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${constrained ? ' bottleneck' : ''}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}${rate ? '' : ' is-muted'}" x="${labelX}" y="${labelY}" text-anchor="middle">${escapeHtml(label)}</text>`;
+      const belt = kind === 'material' || kind === 'consumable' ? ' belt' : kind === 'electricity' ? ' cable' : kind === 'heat' ? ' pipe' : '';
+      return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${belt}${constrained ? ' bottleneck' : ''}${flowing ? ' is-flowing' : ' is-static'}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}${rate ? '' : ' is-muted'}" x="${labelX}" y="${labelY}" text-anchor="middle">${escapeHtml(label)}</text>`;
     }).join('');
-    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:${width * canvasZoom}px;height:${height * canvasZoom}px;max-width:none" aria-label="Plant floor">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
+    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:${width * canvasZoom}px;height:${height * canvasZoom}px;max-width:none" aria-label="Plant floor">${floorGridMarkup(width, height)}${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
   }
 
   function renderNode(current) {
@@ -4199,6 +4371,7 @@
     const nodeResult = result?.nodes[current.id];
     const bottlenecks = bottlenecksFor(current.id);
     const diagnosis = blockDiagnosis(current);
+    const running = !!(nodeResult && !diagnosis && !blockIsIdle(current));
     const value = diagnosis
       ? diagnosis.text
       : nodeResult?.activity !== undefined
@@ -4216,17 +4389,18 @@
     }).join('');
     const reasonTitle = diagnosis ? escapeHtml(diagnosis.detail || diagnosis.text) : '';
     const kind = units[current.unit].kind;
-    const gauge = hubGauge(current, nodeResult);
-    const chip = gauge ? null : nodeMeterChip(current, nodeResult);
-    const meterReserve = gauge ? 118 : chip ? 96 : 0;
-    const badgeWidth = Math.min(NODE_WIDTH - 16 - meterReserve, Math.max(44, String(kind).length * 7.2 + 14));
-    const flags = `${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}`;
+    const profile = buildingProfile(current.unit, kind);
+    const status = faceStatusModel(current, nodeResult, diagnosis);
+    const flags = `${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}${running ? ' is-running' : ''} building-${profile}`;
     const title = reasonTitle
       ? `<title>${reasonTitle}</title>`
       : bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : '';
     const reasonAttr = diagnosis ? ` data-reason="${escapeHtml(diagnosis.text)}"` : '';
-    const meter = gauge ? renderHubGauge(x, y, gauge) : renderMeterChip(x, y, chip);
-    return `<g class="flow-node${flags}" data-node="${current.id}"${reasonAttr} tabindex="0">${title}<rect class="node-body" x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="${NODE_RX}"/><rect class="node-kind-badge" x="${x + 8}" y="${y + 6}" width="${badgeWidth}" height="13" rx="1"/><text class="node-kind" x="${x + 8 + badgeWidth / 2}" y="${y + 15.5}" text-anchor="middle">${kind}</text><text class="node-label" x="${x + 8}" y="${y + 34}">${escapeHtml(current.label)}</text>${meter}<line class="node-status-rule" x1="${x + 8}" y1="${y + height - 16}" x2="${x + NODE_WIDTH - 8}" y2="${y + height - 16}"/><text class="node-value${diagnosis ? ' node-reason' : ''}" x="${x + 8}" y="${y + height - 5}">${escapeHtml(value)}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
+    const glyph = profile === 'tank' ? 'tank' : profile === 'silo' ? 'silo' : profile === 'solar' ? 'solar' : profile === 'furnace' ? 'heat' : profile === 'bus' ? 'bus' : kind;
+    const body = renderBuildingBody(x, y, NODE_WIDTH, height, profile);
+    const face = renderFaceStatus(x, y, height, status, diagnosis, running);
+    const badgeWidth = Math.min(92, Math.max(40, String(glyph).length * 7.0 + 12));
+    return `<g class="flow-node${flags}" data-node="${current.id}" data-profile="${profile}"${reasonAttr} tabindex="0">${title}${body}<rect class="node-kind-badge" x="${x + 8}" y="${y + 6}" width="${badgeWidth}" height="13" rx="1"/><text class="node-kind" x="${x + 8 + badgeWidth / 2}" y="${y + 15.5}" text-anchor="middle">${glyph}</text><text class="node-label" x="${x + 8}" y="${y + 34}">${escapeHtml(current.label)}</text>${face}<line class="node-status-rule" x1="${x + 8}" y1="${y + height - 16}" x2="${x + NODE_WIDTH - 8}" y2="${y + height - 16}"/><text class="node-value${diagnosis ? ' node-reason' : ''}" x="${x + 8}" y="${y + height - 5}">${escapeHtml(value)}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
   }
 
   function bottlenecksFor(nodeId) { return result?.nodes[nodeId]?.limitedBy || []; }

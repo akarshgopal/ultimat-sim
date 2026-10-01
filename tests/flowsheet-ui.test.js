@@ -1043,7 +1043,10 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
   const canvas = context.__elements.get('flowsheetCanvas').innerHTML;
   assert.match(canvas, /node-kind-badge/);
   assert.match(canvas, /node-status-rule/);
-  assert.match(canvas, /rx="3"/);
+  assert.match(canvas, /node-hit/);
+  assert.match(canvas, /node-front|node-tank-shell/);
+  assert.match(canvas, /plantFloorGrid|floor-grid/);
+  assert.match(canvas, /is-flowing|belt|pipe|cable/);
   assert.doesNotMatch(canvas, /rx="10"/);
 
   context.__FLOWSHEET_APP__.clearFactory();
@@ -1060,9 +1063,12 @@ test('process floor shows solved stream rates and skips gauges without data', ()
   const app = context.__FLOWSHEET_APP__;
   const zabuye = context.__elements.get('flowsheetCanvas').innerHTML;
   assert.match(zabuye, /node-gauge-spark/);
-  assert.match(zabuye, /node-gauge-bar/);
-  assert.match(zabuye, /node-chip-util/);
+  assert.match(zabuye, /node-gauge-bar|node-face-bar/);
+  assert.match(zabuye, /node-chip-util|data-face="util"/);
   assert.doesNotMatch(zabuye, /node-chip-power/);
+  assert.match(zabuye, /building-tank|building-silo|building-pond|building-cell|building-tower/);
+  assert.match(zabuye, /flow-edge[^"]*is-flowing/);
+  assert.match(zabuye, /node-run-light/);
   assert.match(zabuye, /t\/d/);
   assert.match(zabuye, /kg\/d/);
   assert.match(zabuye, /(?:kWh|MWh)\/d/);

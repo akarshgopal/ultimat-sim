@@ -1700,7 +1700,7 @@ button.primary-action:focus-visible {
   flex: 1;
   height: 100%;
   display: grid;
-  grid-template-columns: 228px minmax(0, 1fr) 244px;
+  grid-template-columns: 210px minmax(0, 1fr) 220px;
 }
 
 .flowsheet-sidebar {
@@ -2063,22 +2063,85 @@ button.primary-action:focus-visible {
 }
 
 .flowsheet-canvas svg { display: block; width: auto; height: auto; max-width: none; min-width: 0; }
-.flow-edge { fill: none; stroke-width: 2.25; opacity: 0.92; }
-.flow-edge.recycle { stroke-dasharray: 7 5; opacity: 1; }
-.flow-edge.material { stroke: var(--co2); }
+.floor-grid { pointer-events: none; }
+.floor-grid-line { stroke: rgba(158, 172, 190, 0.22); stroke-width: 1; }
+.flow-edge { fill: none; stroke-width: 2.25; opacity: 0.92; stroke-linecap: round; stroke-linejoin: round; }
+.flow-edge.belt { stroke-width: 7; opacity: 0.96; }
+.flow-edge.cable { stroke-width: 3.25; opacity: 0.95; stroke-dasharray: 5 4; }
+.flow-edge.pipe { stroke-width: 5; opacity: 0.95; }
+.flow-edge.recycle { stroke-dasharray: 9 6; opacity: 1; }
+.flow-edge.material { stroke: #7aa2ff; }
 .flow-edge.electricity { stroke: var(--electric); }
 .flow-edge.heat { stroke: #df8b52; }
+.flow-edge.consumable { stroke: var(--warning); }
+.flow-edge.is-static { opacity: 0.38; filter: saturate(0.55); }
+.flow-edge.is-flowing {
+  stroke-dasharray: 14 10;
+  animation: belt-flow 1.05s linear infinite;
+}
+.flow-edge.cable.is-flowing { stroke-dasharray: 6 5; animation-duration: 0.7s; }
+.flow-edge.pipe.is-flowing { stroke-dasharray: 12 8; animation-duration: 1.25s; }
+.flow-edge.bottleneck { stroke: var(--danger); stroke-width: 8; opacity: 1; }
+@keyframes belt-flow {
+  to { stroke-dashoffset: -24; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-edge.is-flowing { animation: none; }
+}
 .flow-node { cursor: grab; outline: none; touch-action: none; }
 .flow-node:active { cursor: grabbing; }
-.flow-node rect.node-body { fill: var(--bg-card); stroke: #8b9aaf; stroke-width: 1.75; }
-.flow-node:hover rect.node-body,
-.flow-node:focus-visible rect.node-body,
-.flow-node.selected rect.node-body { stroke: var(--accent); fill: var(--bg-card-hover); }
-.flow-node.bottleneck rect.node-body { stroke: var(--danger); stroke-width: 2.25; }
+.flow-node .node-hit { fill: transparent; stroke: none; pointer-events: all; }
+.flow-node .node-front {
+  fill: #1c2430;
+  stroke: #8b9aaf;
+  stroke-width: 1.85;
+}
+.flow-node .node-top {
+  fill: #2a3342;
+  stroke: #9aabbf;
+  stroke-width: 1.5;
+}
+.flow-node .node-side {
+  fill: #151c26;
+  stroke: #758398;
+  stroke-width: 1.5;
+}
+.flow-node .node-band { fill: #10161e; stroke: #6d7c90; stroke-width: 1; }
+.flow-node .node-stack { fill: #3a4556; stroke: #8b9aaf; stroke-width: 1; }
+.flow-node .node-pond-pool { fill: rgba(74, 140, 180, 0.35); stroke: #6ea0bd; stroke-width: 1; }
+.flow-node .node-solar-rib { stroke: rgba(240, 200, 90, 0.55); stroke-width: 1.25; }
+.flow-node.building-tank .node-tank-shell,
+.flow-node.building-silo .node-tank-shell { fill: #243040; stroke: #9aabbf; stroke-width: 1.85; }
+.flow-node.building-tank .node-tank-lid,
+.flow-node.building-silo .node-tank-lid,
+.flow-node.building-tank .node-tank-rim,
+.flow-node.building-silo .node-tank-rim { fill: #334257; stroke: #a8b8ca; stroke-width: 1.4; }
+.flow-node.building-solar .node-solar-top { fill: #3a4654; }
+.flow-node.building-solar .node-solar-front { fill: #1a222c; }
+.flow-node.building-pond .node-pond-front { fill: #1a2832; }
+.flow-node.building-pond .node-pond-top { fill: #2b3c48; }
+.flow-node.building-cell .node-front { fill: #1d2a38; }
+.flow-node.building-tower .node-front { fill: #222b36; }
+.flow-node.building-bus .node-bus-front { fill: #1a2430; }
+.flow-node:hover .node-front,
+.flow-node:focus-visible .node-front,
+.flow-node.selected .node-front { stroke: var(--accent); fill: #243146; }
+.flow-node:hover .node-top,
+.flow-node:focus-visible .node-top,
+.flow-node.selected .node-top { stroke: var(--accent); }
+.flow-node:hover .node-side,
+.flow-node:focus-visible .node-side,
+.flow-node.selected .node-side { stroke: var(--accent); }
+.flow-node.bottleneck .node-front,
+.flow-node.bottleneck .node-top,
+.flow-node.bottleneck .node-side,
+.flow-node.bottleneck .node-tank-shell,
+.flow-node.bottleneck .node-tank-lid { stroke: var(--danger); stroke-width: 2.35; }
 .flow-node.bottleneck .node-value { fill: var(--danger); }
+.flow-node.is-idle .node-front { stroke: var(--warning); }
+.flow-node.is-idle .node-kind-badge { fill: var(--warning); }
 .flow-node .node-kind-badge { fill: var(--accent); stroke: none; }
 .flow-node.bottleneck .node-kind-badge { fill: var(--danger); }
-.flow-node.is-idle .node-kind-badge { fill: var(--warning); }
 .flow-node .node-kind {
   fill: #1a1408;
   font-size: 8.5px;
@@ -2088,13 +2151,13 @@ button.primary-action:focus-visible {
 }
 .flow-node .node-label { fill: var(--text-primary); font-size: 13px; font-weight: 650; }
 .flow-node .node-value { fill: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
-.flow-node .node-status-rule { stroke: var(--border); stroke-width: 1; }
+.flow-node .node-status-rule { stroke: rgba(120, 136, 156, 0.55); stroke-width: 1; }
 .flow-node .node-reason { fill: var(--warning); font-weight: 650; }
+.flow-node .node-run-light.is-running { fill: #3dd68c; stroke: #1a4d34; stroke-width: 1.25; }
+.flow-node .node-run-light.is-starved { fill: var(--warning); stroke: #5a3d10; stroke-width: 1.25; }
 .flow-port.cause circle { fill: var(--warning); stroke: var(--warning); stroke-width: 4; }
-.edge-label { fill: var(--text-secondary); stroke: var(--bg-card); stroke-width: 5px; paint-order: stroke; font-size: 10px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.edge-label { fill: var(--text-secondary); stroke: #12171c; stroke-width: 5px; paint-order: stroke; font-size: 10px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .edge-label.is-muted { fill: var(--text-muted); font-weight: 550; opacity: 0.72; }
-.flow-edge.consumable { stroke: var(--warning); }
-.flow-edge.bottleneck { stroke: var(--danger); stroke-width: 5; opacity: 1; }
 .edge-label.bottleneck { fill: var(--danger); font-weight: 700; }
 .flow-node .node-chip rect { fill: #12181f; stroke: #8b9aaf; stroke-width: 1; }
 .flow-node .node-chip text,
@@ -2104,10 +2167,14 @@ button.primary-action:focus-visible {
   font-weight: 750;
   font-variant-numeric: tabular-nums;
 }
-.flow-node .node-gauge-track { fill: #10151b; stroke: #6d7c90; stroke-width: 1; }
-.flow-node .node-gauge-fill { fill: var(--accent); stroke: none; }
+.flow-node .node-gauge-track,
+.flow-node .node-face-track { fill: #0d1218; stroke: #6d7c90; stroke-width: 1; }
+.flow-node .node-gauge-fill,
+.flow-node .node-face-fill { fill: var(--accent); stroke: none; }
 .flow-node .node-gauge-cf .node-gauge-fill,
+.flow-node .node-gauge-cf .node-face-fill,
 .flow-node .node-spark-bar { fill: var(--electric); stroke: none; }
+.flow-node .node-face-status { pointer-events: none; }
 .flow-port { cursor: crosshair; outline: none; }
 .flow-port circle { fill: var(--bg-primary); stroke: var(--co2); stroke-width: 2; }
 .flow-port.electricity circle { stroke: var(--electric); }
@@ -2801,12 +2868,15 @@ label output + .quality-chip {
 #panelProcess .flowsheet-canvas.empty {
   border-radius: 2px;
   border-color: #3e4b5c;
-  background-color: #12171c;
+  background-color: #0e1318;
   background-image:
-    linear-gradient(rgba(141, 153, 168, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(141, 153, 168, 0.08) 1px, transparent 1px);
-  background-size: 16px 16px, 16px 16px;
-  box-shadow: none;
+    linear-gradient(rgba(158, 172, 190, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(158, 172, 190, 0.16) 1px, transparent 1px),
+    linear-gradient(rgba(158, 172, 190, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(158, 172, 190, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px, 24px 24px, 6px 6px, 6px 6px;
+  box-shadow: inset 0 0 0 1px rgba(90, 104, 122, 0.25);
+  min-height: min(62vh, 720px);
 }
 #panelProcess .stage-actions button,
 #panelProcess .canvas-menu summary,

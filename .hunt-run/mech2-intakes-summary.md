@@ -2,7 +2,7 @@
 
 **Branch:** `feat/mech2-practical-intakes` (from `e9dabd7`)  
 **Date:** 2026-10-01 (Europe/Berlin)  
-**Tip:** see git after merge
+**Tip on main:** `512e530` · live https://akarshgopal.github.io/ultimat-sim/
 
 ## Problem
 

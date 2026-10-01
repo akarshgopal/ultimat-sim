@@ -1067,6 +1067,105 @@ function layoutFootprintCampus({ latitude, longitude, solar, processes = [], tot
   return blocks;
 }
 
+// North-up equirectangular fit of campus rings into a diagram viewBox.
+function projectCampusDiagram(blocks, origin, options = {}) {
+  const width = Math.max(40, finiteNumber(options.width, 320));
+  const height = Math.max(40, finiteNumber(options.height, 200));
+  const pad = Math.max(0, Math.min(width / 4, finiteNumber(options.pad, 16)));
+  const viewBox = `0 0 ${width} ${height}`;
+  const list = Array.isArray(blocks) ? blocks : [];
+  const coords = coordsFrom(origin || {});
+  let originLat = coords.latitude;
+  let originLon = coords.longitude;
+  if (!Number.isFinite(originLat) || !Number.isFinite(originLon)) {
+    const seed = list.find(block => block?.ring?.length);
+    if (!seed) return { width, height, viewBox, shapes: [] };
+    originLat = finiteNumber(seed.ring[0][0]);
+    originLon = finiteNumber(seed.ring[0][1]);
+  }
+  if (!Number.isFinite(originLat) || !Number.isFinite(originLon)) {
+    return { width, height, viewBox, shapes: [] };
+  }
+  const latRad = originLat * Math.PI / 180;
+  const metersPerDegLon = Math.max(METERS_PER_DEG_LAT * Math.cos(latRad), 1e-6);
+  const prepared = [];
+  let minE = Infinity;
+  let maxE = -Infinity;
+  let minN = Infinity;
+  let maxN = -Infinity;
+  for (const block of list) {
+    const meters = [];
+    for (const pair of block?.ring || []) {
+      const lat = finiteNumber(pair?.[0]);
+      const lon = finiteNumber(pair?.[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const east = (lon - originLon) * metersPerDegLon;
+      const north = (lat - originLat) * METERS_PER_DEG_LAT;
+      meters.push({ east, north });
+      if (east < minE) minE = east;
+      if (east > maxE) maxE = east;
+      if (north < minN) minN = north;
+      if (north > maxN) maxN = north;
+    }
+    if (meters.length >= 3) prepared.push({ block, meters });
+  }
+  if (!prepared.length) return { width, height, viewBox, shapes: [] };
+  const spanE = Math.max(maxE - minE, 1e-6);
+  const spanN = Math.max(maxN - minN, 1e-6);
+  const innerW = Math.max(1, width - pad * 2);
+  const innerH = Math.max(1, height - pad * 2);
+  const scale = Math.min(innerW / spanE, innerH / spanN);
+  const ox = pad + (innerW - spanE * scale) / 2;
+  const oy = pad + (innerH - spanN * scale) / 2;
+  const round = value => Math.round(value * 10) / 10;
+  const shapes = prepared.map(({ block, meters }) => {
+    const points = meters.map(point => [
+      round(ox + (point.east - minE) * scale),
+      round(oy + (maxN - point.north) * scale),
+    ]);
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of points) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    return {
+      id: block.id,
+      label: block.label || block.id || '',
+      unit: block.unit || '',
+      kind: block.kind || '',
+      areaM2: Math.max(0, finiteNumber(block.areaM2, 0)),
+      points,
+      box: {
+        minX,
+        maxX,
+        minY,
+        maxY,
+        cx: round((minX + maxX) / 2),
+        cy: round((minY + maxY) / 2),
+        w: maxX - minX,
+        h: maxY - minY,
+      },
+    };
+  });
+  return { width, height, viewBox, shapes };
+}
+
+// True when a pad's equivalent side is wide enough to read a label at this zoom.
+function footprintLabelVisible({ areaM2, latitude, zoom, minPx = 42 } = {}) {
+  const area = Math.max(0, finiteNumber(areaM2, 0));
+  const z = finiteNumber(zoom, NaN);
+  if (!(area > 0) || !Number.isFinite(z)) return false;
+  const lat = finiteNumber(latitude, 0);
+  const metersPerPixel = 156543.03392 * Math.cos(lat * Math.PI / 180) / (2 ** z);
+  if (!(metersPerPixel > 0)) return false;
+  return Math.sqrt(area) / metersPerPixel >= finiteNumber(minPx, 42);
+}
+
 function networkPlantMarkers(network = {}) {
   const plants = network.plants || [];
   const markers = [];
@@ -1107,6 +1206,8 @@ return {
   offsetLatLng,
   padFootprintDimensions,
   layoutFootprintCampus,
+  projectCampusDiagram,
+  footprintLabelVisible,
   waterAvailabilityScreening,
   pvScreeningBand,
   landValueScreening,

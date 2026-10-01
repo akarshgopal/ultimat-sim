@@ -15,6 +15,8 @@ const {
   haToRadiusM,
   circlePolygon,
   layoutFootprintCampus,
+  projectCampusDiagram,
+  footprintLabelVisible,
   rectanglePolygon,
   waterAvailabilityScreening,
   pvScreeningBand,
@@ -435,4 +437,67 @@ test('layoutFootprintCampus returns solar + pad rings whose areas sum to inputs'
   const laid = solarBlock.areaM2 + processBlocks.reduce((sum, b) => sum + b.areaM2, 0);
   assert.ok(Math.abs(laid - (10000 + 500)) < 1e-9);
   assert.ok(rectanglePolygon(36.834, -2.463, 40, 20).length >= 4);
+});
+
+test('projectCampusDiagram is north-up and proportional', () => {
+  const origin = { latitude: 31.16, longitude: 35.43 };
+  const blocks = [
+    {
+      id: 'n',
+      kind: 'solar',
+      label: 'Solar field',
+      unit: 'solar-pv',
+      areaM2: 400,
+      ring: rectanglePolygon(origin.latitude, origin.longitude, 20, 20, 0, 40),
+    },
+    {
+      id: 's',
+      kind: 'process',
+      label: 'SWRO',
+      unit: 'swro',
+      areaM2: 400,
+      ring: rectanglePolygon(origin.latitude, origin.longitude, 20, 20, 0, -40),
+    },
+  ];
+  const diagram = projectCampusDiagram(blocks, origin, { width: 200, height: 200, pad: 10 });
+  const again = projectCampusDiagram(blocks, origin, { width: 200, height: 200, pad: 10 });
+  assert.equal(JSON.stringify(diagram.shapes), JSON.stringify(again.shapes));
+  const north = diagram.shapes.find(shape => shape.id === 'n');
+  const south = diagram.shapes.find(shape => shape.id === 's');
+  assert.ok(north.box.cy < south.box.cy);
+  assert.ok(Math.abs(north.box.w * north.box.h - south.box.w * south.box.h) / (north.box.w * north.box.h) < 0.05);
+  for (const shape of diagram.shapes) {
+    for (const [x, y] of shape.points) {
+      assert.ok(x >= 9 && x <= 191, `x ${x}`);
+      assert.ok(y >= 9 && y <= 191, `y ${y}`);
+    }
+  }
+  assert.equal(projectCampusDiagram([], origin).shapes.length, 0);
+  assert.equal(projectCampusDiagram(null).shapes.length, 0);
+
+  const solar = { landAreaM2: 10000, quality: 'cited', evidence: [] };
+  const processes = [
+    { id: 'ely', label: 'Electrolyzer', unit: 'electrolyzer', areaM2: 400, quality: 'cited', evidence: [] },
+  ];
+  const campus = layoutFootprintCampus({
+    latitude: origin.latitude,
+    longitude: origin.longitude,
+    solar,
+    processes,
+    totalHa: 1.04,
+  });
+  const fitted = projectCampusDiagram(campus, origin, { width: 320, height: 200, pad: 16 });
+  const solarShape = fitted.shapes.find(shape => shape.kind === 'solar');
+  const padShape = fitted.shapes.find(shape => shape.id === 'ely');
+  const outline = fitted.shapes.find(shape => shape.kind === 'outline');
+  assert.ok(solarShape && padShape && outline);
+  assert.ok(solarShape.box.cy < padShape.box.cy);
+  assert.ok(solarShape.box.w * solarShape.box.h > padShape.box.w * padShape.box.h * 10);
+});
+
+test('footprint labels appear only when a pad is wide enough on the map', () => {
+  assert.equal(footprintLabelVisible({ areaM2: 400, latitude: 31.16, zoom: 10 }), false);
+  assert.equal(footprintLabelVisible({ areaM2: 500000, latitude: 31.16, zoom: 15 }), true);
+  assert.equal(footprintLabelVisible({ areaM2: 0, latitude: 31.16, zoom: 16 }), false);
+  assert.equal(footprintLabelVisible({ areaM2: 1000, latitude: 31.16, zoom: NaN }), false);
 });

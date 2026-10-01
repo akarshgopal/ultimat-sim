@@ -30,47 +30,69 @@
   </div>
 
   <div class="foundry-panels">
-        <section class="tab-panel overview-panel is-active" id="panelOverview" role="tabpanel" aria-labelledby="tabOverview">
+    <section class="tab-panel overview-panel is-active" id="panelOverview" role="tabpanel" aria-labelledby="tabOverview">
       <div class="overview-dashboard">
-        <header class="overview-hero">
-          <div class="overview-hero-copy">
-            <span class="eyebrow" id="overviewDemoChip" hidden></span>
-            <h2 id="overviewSiteName">Choose a site</h2>
-            <p class="overview-honesty" id="overviewHonesty">Load a demo or build on Process.</p>
-            <p class="overview-honesty offtake-chip" id="overviewOfftake" hidden></p>
+        <header class="overview-strip">
+          <div class="overview-identity">
+            <div class="overview-identity-line">
+              <h2 id="overviewSiteName">No plant loaded</h2>
+              <span class="overview-case-chip" id="overviewDemoChip" hidden></span>
+            </div>
+            <div class="overview-chips" aria-label="Solve status">
+              <span class="status-chip idle" id="overviewSolveChip">Empty factory</span>
+              <span class="status-chip idle" id="overviewBalanceChip">Add a block</span>
+            </div>
           </div>
-          <div class="overview-hero-metrics" id="overviewCashflow" aria-label="Cashflow summary">
-            <div class="hero-metric"><span>Net cash / year</span><strong>—</strong></div>
-            <div class="hero-metric"><span>Revenue / year</span><strong>—</strong></div>
-            <div class="hero-metric"><span>CAPEX</span><strong>—</strong></div>
+          <div class="cash-gate" id="overviewCashflow" aria-label="Capital-inclusive cash gate">
+            <span class="cash-gate-label">Net cash / year</span>
+            <strong>—</strong>
+            <span class="cash-gate-verdict">No gate</span>
+            <small>R − OPEX − ann. CAPEX</small>
           </div>
+          <p class="overview-honesty" id="overviewHonesty">No plant loaded — pick a case or open Process.</p>
         </header>
 
-        <button type="button" class="issue-card" id="overviewLimiting" hidden>Empty factory</button>
-        <div class="cashflow-result" id="cashflowResult" hidden></div>
-
-        <div class="overview-split">
-          <section class="overview-block" aria-labelledby="overviewSlateHeading">
-            <h3 id="overviewSlateHeading">Top materials</h3>
-            <dl class="overview-slate" id="overviewSlate">
-              <div><dt>Products</dt><dd>None yet</dd></div>
-            </dl>
+        <div class="overview-zones">
+          <section class="overview-zone overview-zone-slate" aria-labelledby="overviewSlateHeading">
+            <h3 id="overviewSlateHeading">Slate</h3>
+            <div class="overview-slate" id="overviewSlate">
+              <p class="slate-empty">No products</p>
+            </div>
           </section>
-          <section class="overview-block" aria-labelledby="overviewLandHeading">
-            <h3 id="overviewLandHeading">Land</h3>
-            <p class="overview-oneliner" id="overviewLand">—</p>
+          <section class="overview-zone" aria-labelledby="overviewDriversHeading">
+            <h3 id="overviewDriversHeading">Constraints</h3>
+            <ul class="driver-list" id="overviewDrivers">
+              <li class="driver-row"><span class="driver-key">Plant</span><span>No plant loaded — pick a case or open Process.</span></li>
+            </ul>
+            <div class="driver-row" id="overviewOfftakeWrap" hidden>
+              <span class="driver-key">Offtake</span>
+              <p class="offtake-chip" id="overviewOfftake" hidden></p>
+            </div>
           </section>
-          <section class="overview-block" aria-labelledby="overviewYieldHeading">
-            <h3 id="overviewYieldHeading">Solar yield</h3>
-            <p class="overview-oneliner" id="overviewYield">—</p>
+          <section class="overview-zone" aria-labelledby="overviewResourcesHeading">
+            <h3 id="overviewResourcesHeading">Site resources</h3>
+            <div class="resource-pairs">
+              <div class="metric-pair" id="overviewLand">
+                <div class="metric-stat"><span>Land</span><strong>—</strong></div>
+                <div class="metric-stat"><span>Solar land</span><strong>—</strong></div>
+              </div>
+              <div class="metric-pair" id="overviewYield">
+                <div class="metric-stat"><span>Yield</span><strong>—</strong></div>
+                <div class="metric-stat"><span>Array</span><strong>—</strong></div>
+              </div>
+              <div class="metric-pair" id="overviewWater">
+                <div class="metric-stat"><span>Water</span><strong>—</strong></div>
+                <div class="metric-stat"><span>Right</span><strong>—</strong></div>
+              </div>
+            </div>
           </section>
         </div>
 
-        <section class="overview-block overview-actions-block">
-          <div class="overview-actions">
-            <button type="button" class="primary-action" id="sizeForCashflow">Optimize co-product cashflow</button>
-          </div>
-          <details class="more-section" id="sizeToTargetDetails">
+        <div class="cashflow-result" id="cashflowResult" hidden></div>
+
+        <div class="overview-toolbar">
+          <button type="button" class="primary-action" id="sizeForCashflow">Optimize co-product cashflow</button>
+          <details class="more-section overview-size-one" id="sizeToTargetDetails">
             <summary>Size one product</summary>
             <div class="overview-actions">
               <label>Product
@@ -85,26 +107,25 @@
               </label>
               <label>kg/day <input id="sizeTargetRate" type="number" min="0" step="0.5" value="5"></label>
               <button type="button" id="sizeToTarget">Size to target</button>
+              <p class="status-meta" id="sizeToTargetStatus">Single-product physics tool.</p>
             </div>
-            <p class="status-meta" id="sizeToTargetStatus">Single-product physics tool.</p>
           </details>
-          <div class="demo-scenarios" id="overviewDemoMenu" role="group" aria-label="Demo scenarios">
-            <span class="eyebrow">Scenarios</span>
-            <div class="overview-demos">
-              <button type="button" id="loadAbundanceHub" data-demo-id="abundance-hub">Brine + ammonia</button>
-              <button type="button" id="loadZabuyeHub" data-demo-id="zabuye-hub">Zabuye brine hub</button>
-            </div>
-            <details class="more-section fuels-demos">
-              <summary>Fuels demos (screening cash−)</summary>
-              <div class="overview-demos overview-demos-secondary">
-                <button type="button" id="loadMethaneRecycle" data-demo-id="methane-recycle">Methane recycle</button>
-                <button type="button" id="loadCoastalMethane" data-demo-id="coastal-methane">Coastal methane</button>
-                <button type="button" id="loadMethanolPlant" data-demo-id="coastal-methanol">Coastal methanol</button>
-                <button type="button" id="loadDemoNetwork" data-demo-id="demo-network">Fuels + minerals</button>
-              </div>
-            </details>
-          </div>
-        </section>
+          <label class="overview-cases">Cases
+            <select id="overviewCases" aria-label="Cases">
+              <option value="">Current plant</option>
+              <optgroup label="Materials">
+                <option value="zabuye-hub" id="loadZabuyeHub" data-demo-id="zabuye-hub">Zabuye</option>
+                <option value="abundance-hub" id="loadAbundanceHub" data-demo-id="abundance-hub">Dead Sea brine + NH₃</option>
+              </optgroup>
+              <optgroup label="Fuels · screening cash−">
+                <option value="methane-recycle" id="loadMethaneRecycle" data-demo-id="methane-recycle">Methane recycle</option>
+                <option value="coastal-methane" id="loadCoastalMethane" data-demo-id="coastal-methane">Coastal methane</option>
+                <option value="coastal-methanol" id="loadMethanolPlant" data-demo-id="coastal-methanol">Coastal methanol</option>
+                <option value="demo-network" id="loadDemoNetwork" data-demo-id="demo-network">Fuels + minerals</option>
+              </optgroup>
+            </select>
+          </label>
+        </div>
       </div>
     </section>
 

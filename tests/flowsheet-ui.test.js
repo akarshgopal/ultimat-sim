@@ -518,6 +518,92 @@ test('Economics screens purchased-power break-even on the frozen plant without s
   assert.match(context.__elements.get('powerBreakevenResult').textContent, /Methane/);
 });
 
+test('economics dashboard groups capital, operations, the cash gate, and screening DCF', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /id="economicsGateValue"/);
+  assert.match(html, /id="economicsWaterfall"/);
+  assert.match(html, /id="economicsCapital"/);
+  assert.match(html, /id="economicsOps"/);
+  assert.match(html, /id="economicsAssumptions"/);
+  assert.match(html, /id="economicsDcf"/);
+  assert.match(html, /Show NPV\/IRR \(screening\)/);
+  assert.match(html, /R − OPEX − ann\. CAPEX/);
+  assert.doesNotMatch(html, /id="economicsAck"/);
+  assert.doesNotMatch(html, /I understand these are screening figures/);
+  assert.doesNotMatch(html, /Network detail/);
+  assert.doesNotMatch(html, /<summary>Site footprint<\/summary>/);
+  assert.doesNotMatch(html, /Finds the purchased electricity price/);
+  assert.match(html, /Not a PPA\. Does not re-size the plant\./);
+  assert.match(html, /id="addPlantToNetwork"/);
+  const networkBodyAt = html.indexOf('id="networkBody"');
+  const networkPanelAt = html.indexOf('id="networkPanel"');
+  assert.ok(networkBodyAt > networkPanelAt);
+  assert.equal(html.slice(networkPanelAt, networkBodyAt).includes('<details'), false);
+
+  const store = {
+    data: {},
+    getItem(key) { return Object.prototype.hasOwnProperty.call(this.data, key) ? this.data[key] : null; },
+    setItem(key, value) { this.data[key] = String(value); },
+  };
+  const context = loadApp(store);
+  const app = context.__FLOWSHEET_APP__;
+  assert.match(context.__elements.get('economicsGateValue').textContent, /\$/);
+  assert.match(context.__elements.get('economicsGateNote').textContent, /cash gate/);
+  assert.match(context.__elements.get('economicsCapital').innerHTML, /Installed CAPEX/);
+  assert.match(context.__elements.get('economicsCapital').innerHTML, /Annualized CAPEX/);
+  assert.match(context.__elements.get('economicsOps').innerHTML, /Revenue/);
+  assert.match(context.__elements.get('economicsOps').innerHTML, /OPEX/);
+  assert.match(context.__elements.get('economicsOps').innerHTML, /R − OPEX/);
+  assert.doesNotMatch(context.__elements.get('economicsCapital').innerHTML, /NPV/);
+  assert.doesNotMatch(context.__elements.get('economicsOps').innerHTML, /IRR/);
+  const fall = context.__elements.get('economicsWaterfall').innerHTML;
+  assert.match(fall, /Revenue/);
+  assert.match(fall, /− OPEX/);
+  assert.match(fall, /− ann\. CAPEX/);
+  assert.match(fall, />Net</);
+  assert.equal((fall.match(/tea-fall-step/g) || []).length, 4);
+  assert.match(context.__elements.get('economicsMetrics').innerHTML, /Levelized delivered cost/);
+  const assumptions = context.__elements.get('economicsAssumptions').textContent;
+  assert.match(assumptions, /Power cost|Power band|Grid tariff|PV CAPEX/);
+  assert.match(assumptions, /CAPEX/);
+  assert.match(assumptions, /screening|not a PPA/i);
+  assert.match(assumptions, /Screening band|Not set|On /);
+  assert.equal(Boolean(context.__elements.get('economicsDcf').open), false);
+  const dcf = context.__elements.get('economicsDcfMetrics').innerHTML;
+  assert.match(dcf, /NPV/);
+  assert.match(dcf, /IRR/);
+  const wasHidden = /Hidden until this disclosure is open/.test(dcf);
+  const details = context.__elements.get('economicsDcf');
+  details.open = true;
+  details.listeners.toggle();
+  const shown = context.__elements.get('economicsDcfMetrics').innerHTML;
+  assert.doesNotMatch(shown, /Hidden until this disclosure is open/);
+  assert.match(shown, /NPV/);
+  assert.match(shown, /\$/);
+  assert.equal(store.getItem('flowsheet-economics-ack'), '1');
+  details.open = false;
+  details.listeners.toggle();
+  assert.equal(store.getItem('flowsheet-economics-ack'), '0');
+  if (wasHidden) {
+    assert.match(context.__elements.get('economicsDcfMetrics').innerHTML, /Hidden until this disclosure is open/);
+  }
+
+  assert.match(context.__elements.get('networkStatus').textContent, /No plants in this rollup/);
+  assert.equal(context.__elements.get('networkBody').hidden, true);
+  assert.equal(context.__elements.get('powerBreakevenResult').hidden, false);
+  assert.match(context.__elements.get('powerBreakevenResult').textContent, /screening/i);
+  assert.equal(context.__elements.get('siteFootprint').hidden, false);
+
+  app.loadDemoNetwork();
+  assert.equal(context.__elements.get('networkBody').hidden, false);
+  assert.match(context.__elements.get('networkPlants').innerHTML, /Open/);
+  assert.match(context.__elements.get('networkMetrics').innerHTML, /Net cash/);
+  app.clearNetwork();
+  assert.equal(context.__elements.get('networkBody').hidden, true);
+  assert.match(context.__elements.get('networkStatus').textContent, /No plants in this rollup/);
+  assert.doesNotMatch(context.__elements.get('networkStatus').textContent, /Each keeps its own/);
+});
+
 test('positive-cashflow status reports heat covered when present', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;

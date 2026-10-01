@@ -271,26 +271,64 @@
         <section class="tool-panel economics-panel" aria-live="polite">
           <div class="tool-panel-head">
             <div>
-              <span class="eyebrow">Current plant</span>
-              <h3>This factory</h3>
-            </div>
-            <div class="project-assumptions">
-              <label>Years
-                <span class="number-with-unit"><input id="projectLifeYears" type="number" min="1" step="1" value="20"><span>yr</span></span>
-              </label>
-              <label>Discount
-                <span class="number-with-unit"><input id="discountRate" type="number" min="0" step="0.1" value="8"><span>%</span></span>
-              </label>
+              <span class="eyebrow">Screening TEA</span>
+              <h3>Plant cash gate</h3>
             </div>
           </div>
           <p class="status-meta" id="economicsStatus">Complete the graph to calculate viability.</p>
           <p class="economics-banner" id="economicsBanner" hidden></p>
           <p class="economics-banner" id="economicsOfftake" hidden></p>
-          <label class="economics-ack" id="economicsAckLabel"><input id="economicsAck" type="checkbox"> I understand these are screening figures, not bankable</label>
-          <dl class="strip-metrics" id="economicsMetrics"></dl>
+          <div class="tea-dashboard">
+            <div class="tea-main">
+              <section class="tea-gate" id="economicsGate" aria-label="Cash gate">
+                <div class="tea-gate-copy">
+                  <span class="eyebrow">Annual net cash</span>
+                  <p class="tea-gate-formula">R − OPEX − ann. CAPEX</p>
+                </div>
+                <p class="tea-gate-value" id="economicsGateValue">—</p>
+                <p class="tea-gate-note" id="economicsGateNote"></p>
+              </section>
+              <div class="tea-waterfall" id="economicsWaterfall" aria-label="Revenue, operating cost, annualized CAPEX, and net cash"></div>
+              <div class="tea-groups">
+                <section class="tea-group" aria-label="Capital">
+                  <h4>Capital</h4>
+                  <dl class="strip-metrics tea-metrics" id="economicsCapital"></dl>
+                </section>
+                <section class="tea-group" aria-label="Operations">
+                  <h4>Operations</h4>
+                  <dl class="strip-metrics tea-metrics" id="economicsOps"></dl>
+                </section>
+              </div>
+              <section class="tea-group tea-products" aria-label="Products">
+                <h4>Products</h4>
+                <dl class="strip-metrics tea-metrics" id="economicsMetrics"></dl>
+              </section>
+              <details class="economics-dcf" id="economicsDcf">
+                <summary>Show NPV/IRR (screening)</summary>
+                <p class="economics-dcf-note">Screening DCF only — year-0 CAPEX and operating cash. Not a financing case.</p>
+                <dl class="strip-metrics tea-metrics" id="economicsDcfMetrics"></dl>
+              </details>
+            </div>
+            <aside class="tea-assumptions" aria-label="Screening assumptions">
+              <h4>Assumptions</h4>
+              <div class="project-assumptions">
+                <label>Years
+                  <span class="number-with-unit"><input id="projectLifeYears" type="number" min="1" step="1" value="20"><span>yr</span></span>
+                </label>
+                <label>Discount
+                  <span class="number-with-unit"><input id="discountRate" type="number" min="0" step="0.1" value="8"><span>%</span></span>
+                </label>
+              </div>
+              <div class="tea-assumption-reads" id="economicsAssumptions"></div>
+              <p class="status-meta tea-assumption-foot">Read-only. Not new financing inputs.</p>
+            </aside>
+          </div>
           <section class="power-breakeven" aria-label="Purchased-power break-even">
-            <h4>Screen power break-even</h4>
-            <p class="status-meta">Screening only. Finds the purchased electricity price ($/kWh) where this plant’s yearly net cash crosses zero if solar capital cost is replaced by bought power. One product uses that product’s sale price. All products together keeps every sale. Not a PPA. Does not re-size the plant.</p>
+            <div class="power-breakeven-head">
+              <h4>Purchased-power break-even</h4>
+              <p class="status-meta">Screening only. Price where yearly net cash crosses zero if solar capital is replaced by bought power.</p>
+              <p class="status-meta">Not a PPA. Does not re-size the plant.</p>
+            </div>
             <div class="power-breakeven-controls">
               <label>Mode
                 <select id="powerBreakevenMode">
@@ -305,7 +343,7 @@
               </label>
               <button type="button" class="primary-action" id="screenPowerBreakeven">Screen power break-even</button>
             </div>
-            <p class="status-meta power-breakeven-result" id="powerBreakevenResult" hidden></p>
+            <p class="power-breakeven-result" id="powerBreakevenResult" hidden></p>
           </section>
         </section>
 
@@ -328,34 +366,29 @@
             </div>
           </div>
           <p class="status-meta network-action-note" id="networkActionNote" aria-live="polite"></p>
-          <p class="status-meta" id="networkStatus">Separate from the plant above — multi-plant materials, land, freight, cash.</p>
-          <details class="more-section network-detail">
-            <summary>Network detail</summary>
-            <div id="networkBody" class="network-body" hidden>
-              <div class="network-plants-block">
-                <h4>Plants</h4>
-                <div id="networkPlants" class="network-plants"></div>
-              </div>
-              <div class="network-rollup">
-                <h4>Rollup</h4>
-                <dl class="strip-metrics" id="networkMetrics"></dl>
-                <h4>Product slate · t/year</h4>
-                <dl class="product-slate" id="networkProducts"></dl>
-                <div id="networkCorridors" class="network-haul"></div>
-              </div>
+          <p class="status-meta" id="networkStatus">No plants in this rollup.</p>
+          <div id="networkBody" class="network-body" hidden>
+            <div class="network-plants-block">
+              <h4>Plants</h4>
+              <div id="networkPlants" class="network-plants"></div>
             </div>
-          </details>
+            <div class="network-rollup">
+              <h4>Rollup</h4>
+              <dl class="strip-metrics" id="networkMetrics"></dl>
+              <h4>Product slate · t/year</h4>
+              <dl class="product-slate" id="networkProducts"></dl>
+              <div id="networkCorridors" class="network-haul"></div>
+            </div>
+          </div>
         </section>
 
-        <details class="more-section footprint-details">
-          <summary>Site footprint</summary>
-          <div id="siteFootprint" class="site-footprint tool-panel" hidden>
-            <svg id="siteFootprintSvg" class="footprint-svg" viewBox="0 0 160 12" aria-hidden="true"></svg>
-            <dl class="strip-metrics" id="siteFootprintMetrics"></dl>
-            <ul class="footprint-pads" id="siteFootprintPads"></ul>
-            <p class="status-meta" id="siteFootprintNote"></p>
-          </div>
-        </details>
+        <div id="siteFootprint" class="site-footprint tool-panel" hidden>
+          <h4>Site footprint</h4>
+          <svg id="siteFootprintSvg" class="footprint-svg" viewBox="0 0 160 12" aria-hidden="true"></svg>
+          <dl class="strip-metrics" id="siteFootprintMetrics"></dl>
+          <ul class="footprint-pads" id="siteFootprintPads"></ul>
+          <p class="status-meta" id="siteFootprintNote"></p>
+        </div>
       </div>
     </section>
   </div>

@@ -706,55 +706,107 @@ button.primary-action:focus-visible {
   font-size: 0.72rem;
 }
 
-.tea-waterfall {
+.tea-charts {
   display: grid;
-  gap: 5px;
-  padding: 8px 10px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.tea-chart {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
 }
 
-.tea-waterfall:empty { display: none; }
+.tea-chart figcaption {
+  margin: 0 0 2px;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 
-.tea-fall-step {
-  display: grid;
-  grid-template-columns: 7.4rem minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+.tea-waterfall,
+.tea-cashflow,
+.power-breakeven-chart {
   min-width: 0;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
 }
 
-.tea-fall-label { color: var(--text-muted); }
-.tea-fall-value { color: var(--text-primary); font-weight: 650; }
-.tea-fall-track {
-  height: 7px;
-  border-radius: 2px;
-  background: rgba(141, 153, 168, 0.18);
-  overflow: hidden;
-}
-.tea-fall-track i {
+.tea-plot {
   display: block;
-  height: 100%;
-  background: var(--electric);
+  width: 100%;
+  height: auto;
+  overflow: visible;
 }
-.tea-fall-step.is-deduct .tea-fall-track i { background: var(--warning); }
-.tea-fall-step.is-positive .tea-fall-track i { background: var(--success); }
-.tea-fall-step.is-negative .tea-fall-track i { background: var(--danger); }
-.tea-fall-step.is-positive .tea-fall-value { color: var(--success); }
-.tea-fall-step.is-negative .tea-fall-value { color: var(--danger); }
-.tea-fall-step.is-gate {
-  margin-top: 2px;
-  padding-top: 5px;
-  border-top: 1px solid var(--border);
-  font-size: 0.86rem;
+
+.tea-plot text {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 11px;
+  fill: var(--text-secondary);
 }
-.tea-fall-step.is-gate .tea-fall-label { color: var(--text-primary); font-weight: 700; }
-.tea-fall-step.is-gate .tea-fall-track { height: 11px; }
-.tea-fall-step.is-gate .tea-fall-value { font-size: 0.95rem; font-weight: 700; }
+
+.tea-plot .tea-axis-tick text,
+.tea-plot .tea-year-label { font-size: 10px; fill: var(--text-muted); }
+.tea-plot .tea-fall-label { fill: var(--text-muted); }
+.tea-plot .tea-fall-value {
+  font-weight: 650;
+  stroke: var(--bg-primary);
+  stroke-width: 3px;
+  paint-order: stroke;
+}
+.tea-plot .is-gate .tea-fall-label { fill: var(--text-primary); font-weight: 700; }
+.tea-plot .is-positive .tea-fall-value { fill: var(--success); }
+.tea-plot .is-negative .tea-fall-value { fill: var(--danger); }
+.tea-plot .tea-gate-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  fill: var(--accent);
+}
+.tea-plot .tea-zero { stroke: var(--text-muted); }
+.tea-plot line { vector-effect: non-scaling-stroke; }
+.tea-plot .is-capex-label { fill: var(--warning); font-weight: 700; }
+
+.tea-chart-empty {
+  margin: 0;
+  padding: 22px 8px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.tea-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+}
+
+.tea-chart-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  background: var(--text-muted);
+}
+.tea-chart-legend i.is-capex { background: var(--warning); }
+.tea-chart-legend i.is-positive { background: var(--success); }
+.tea-chart-legend i.is-negative { background: var(--danger); }
+
+.tea-chart-note {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
 
 .tea-groups {
   display: grid;
@@ -2268,7 +2320,8 @@ label output + .quality-chip {
   .overview-strip,
   .economics-layout,
   .tea-dashboard,
-  .tea-groups {
+  .tea-groups,
+  .tea-charts {
     grid-template-columns: 1fr;
   }
   .overview-strip { grid-template-areas: "identity" "gate" "honesty"; }
@@ -2481,6 +2534,15 @@ label output + .quality-chip {
   font-variant-numeric: tabular-nums;
 }
 .power-breakeven-result[hidden] { display: none !important; }
+.power-breakeven-chart {
+  margin: 0;
+  padding: 6px 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+.power-breakeven-chart[hidden] { display: none !important; }
+.power-breakeven-chart .tea-chart-note { margin-top: 0; }
 
 .stage-heading,
 .stage-actions {

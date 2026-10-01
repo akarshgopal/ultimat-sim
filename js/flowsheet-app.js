@@ -5038,27 +5038,362 @@
     else if (net < 0) gateEl?.classList.add('is-negative');
   }
 
-  function economicsWaterfallMarkup(econ, moneyQuality) {
-    const steps = [
-      { label: 'Revenue', value: Number(econ.annualRevenue) || 0, kind: 'source' },
-      { label: '− OPEX', value: -Math.abs(Number(econ.annualOperatingCost) || 0), kind: 'deduct' },
-      { label: '− ann. CAPEX', value: -Math.abs(Number(econ.annualizedCapex) || 0), kind: 'deduct' },
-      { label: 'Net', value: Number(econ.annualNetCash) || 0, kind: 'net' },
+  function teaChartEmpty(message) {
+    return `<p class="tea-chart-empty">${escapeHtml(message)}</p>`;
+  }
+
+  function attrNum(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(n) : '0';
+  }
+
+  function px(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? String(Math.round(n * 10) / 10) : '0';
+  }
+
+  function niceStep(span, target) {
+    const rough = span / Math.max(1, target);
+    if (!(rough > 0) || !Number.isFinite(rough)) return 1;
+    const mag = 10 ** Math.floor(Math.log10(rough));
+    if (!Number.isFinite(mag) || mag === 0) return 1;
+    const residual = rough / mag;
+    const nice = residual <= 1.5 ? 1 : residual <= 3.5 ? 2 : residual <= 7.5 ? 5 : 10;
+    return nice * mag;
+  }
+
+  function roundTo(value, step) {
+    if (!(step > 0) || !Number.isFinite(value)) return value;
+    const digits = Math.max(0, Math.min(8, Math.ceil(-Math.log10(step)) + 1));
+    return Number((Math.round(value / step) * step).toFixed(digits));
+  }
+
+  function axisFromValues(values, target = 4) {
+    const finite = values.filter(Number.isFinite);
+    if (!finite.length) return { min: 0, max: 0, ticks: [0], flat: true };
+    let lo = Math.min(0, ...finite);
+    let hi = Math.max(0, ...finite);
+    if (hi - lo < 1e-9) return { min: 0, max: 0, ticks: [0], flat: true };
+    const pad = (hi - lo) * 0.08;
+    if (lo < 0) lo -= pad;
+    if (hi > 0) hi += pad;
+    let step = niceStep(hi - lo, target);
+    let min = Math.floor(lo / step + 1e-12) * step;
+    let max = Math.ceil(hi / step - 1e-12) * step;
+    let count = Math.round((max - min) / step);
+    if (count > 8) {
+      step *= 2;
+      min = Math.floor(lo / step + 1e-12) * step;
+      max = Math.ceil(hi / step - 1e-12) * step;
+      count = Math.round((max - min) / step);
+    }
+    const ticks = [];
+    for (let i = 0; i <= count && i < 10; i += 1) ticks.push(roundTo(min + i * step, step));
+    return { min: ticks[0], max: ticks[ticks.length - 1], ticks, step, flat: false };
+  }
+
+  function trimFixed(value, digits) {
+    return value.toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+  }
+
+  function axisMoney(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n === 0) return '$0';
+    const sign = n < 0 ? '−' : '';
+    const abs = Math.abs(n);
+    const units = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'k']];
+    for (const [scale, suffix] of units) {
+      if (abs >= scale) {
+        const scaled = abs / scale;
+        const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+        return `${sign}$${trimFixed(scaled, digits)}${suffix}`;
+      }
+    }
+    const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+    return `${sign}$${trimFixed(abs, digits)}`;
+  }
+
+  function formatKwh(price) {
+    if (!Number.isFinite(price) || Math.abs(price) < 5e-5) return '$0';
+    const digits = Math.abs(price) >= 1 ? 2 : 3;
+    return `${price < 0 ? '−' : ''}$${Math.abs(price).toFixed(digits)}`;
+  }
+
+  function formatKwhTick(price, step) {
+    if (!Number.isFinite(price) || Math.abs(price) < 5e-5) return '$0';
+    const digits = step < 0.1 && Math.abs(price) < 1 ? 3 : 2;
+    const body = Math.abs(price).toFixed(digits).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+    return `${price < 0 ? '−' : ''}$${body}`;
+  }
+
+  function yMapper(scale, plotTop, plotH) {
+    if (scale.flat || !(scale.max > scale.min)) {
+      const y = plotTop + plotH / 2;
+      return () => y;
+    }
+    const span = scale.max - scale.min;
+    return value => plotTop + (scale.max - value) / span * plotH;
+  }
+
+  function waterfallSteps(econ) {
+    const revenue = Number(econ.annualRevenue) || 0;
+    const opex = Math.abs(Number(econ.annualOperatingCost) || 0);
+    const capex = Math.abs(Number(econ.annualizedCapex) || 0);
+    const net = Number.isFinite(Number(econ.annualNetCash)) ? Number(econ.annualNetCash) : revenue - opex - capex;
+    return [
+      { key: 'revenue', label: 'Revenue', kind: 'source', from: 0, to: revenue, value: revenue },
+      { key: 'opex', label: '− OPEX', kind: 'deduct', from: revenue, to: revenue - opex, value: -opex },
+      { key: 'capex', label: '− ann. CAPEX', kind: 'deduct', from: revenue - opex, to: revenue - opex - capex, value: -capex },
+      { key: 'net', label: 'Net', kind: 'net', from: 0, to: net, value: net },
     ];
-    const max = Math.max(...steps.map(step => Math.abs(step.value)), 0);
-    return steps.map(step => {
-      const width = max > 0 ? Math.min(100, (Math.abs(step.value) / max) * 100) : 0;
+  }
+
+  function economicsWaterfallMarkup(econ, moneyQuality) {
+    if (!econ) return teaChartEmpty('Complete the graph to plot the cash gate.');
+    const steps = waterfallSteps(econ);
+    const scale = axisFromValues(steps.flatMap(step => [step.from, step.to, 0]));
+    const width = 480;
+    const height = 212;
+    const padL = 58;
+    const padR = 10;
+    const padT = 22;
+    const padB = 28;
+    const plotW = width - padL - padR;
+    const plotH = height - padT - padB;
+    const plotRight = padL + plotW;
+    const y = yMapper(scale, padT, plotH);
+    const slot = plotW / steps.length;
+    const barW = Math.min(46, slot * 0.5);
+    const cx = index => padL + slot * (index + 0.5);
+    const ticks = scale.ticks.map(tick => {
+      const yy = y(tick);
+      const zero = tick === 0;
+      return `<g class="tea-axis-tick"><line x1="${padL}" y1="${px(yy)}" x2="${plotRight}" y2="${px(yy)}" stroke="${zero ? 'var(--text-muted)' : 'var(--border)'}" stroke-width="${zero ? 1.25 : 1}"${zero ? ' class="tea-zero"' : ''}></line><text x="${padL - 6}" y="${px(yy + 3)}" text-anchor="end">${escapeHtml(axisMoney(tick))}</text></g>`;
+    }).join('');
+    const bandX = cx(3) - barW / 2 - 8;
+    const band = `<rect class="tea-gate-band" x="${px(bandX)}" y="${px(padT)}" width="${px(barW + 16)}" height="${px(plotH)}" rx="4" fill="var(--accent)" opacity="0.14"></rect><text class="tea-gate-tag" x="${px(cx(3))}" y="12" text-anchor="middle">gate</text>`;
+    const connectors = steps.slice(0, 3).map((step, index) => {
+      const next = steps[index + 1];
+      const y2 = y(index === 2 ? next.to : next.from);
+      return `<line x1="${px(cx(index) + barW / 2)}" y1="${px(y(step.to))}" x2="${px(cx(index + 1) - barW / 2)}" y2="${px(y2)}" stroke="var(--text-muted)" stroke-dasharray="3 2"></line>`;
+    }).join('');
+    const columns = steps.map((step, index) => {
       const tone = step.kind === 'net'
         ? (step.value > 0 ? 'positive' : step.value < 0 ? 'negative' : 'flat')
         : step.kind;
-      const gate = step.kind === 'net' ? ' is-gate' : '';
-      return `<div class="tea-fall-step is-${tone}${gate}"><span class="tea-fall-label">${step.label}</span><span class="tea-fall-track" aria-hidden="true"><i style="width:${width}%"></i></span><span class="tea-fall-value">${formatUncertainMoney(step.value, moneyQuality)}</span></div>`;
+      const gateClass = step.kind === 'net' ? ' is-gate' : '';
+      const y0 = y(step.from);
+      const y1 = y(step.to);
+      const top = Math.min(y0, y1);
+      const barH = Math.abs(y1 - y0);
+      const fill = step.kind === 'source'
+        ? 'var(--teal)'
+        : step.kind === 'deduct'
+          ? 'var(--warning)'
+          : step.value > 0 ? 'var(--success)' : step.value < 0 ? 'var(--danger)' : 'var(--text-muted)';
+      const rect = barH > 0.4
+        ? `<rect x="${px(cx(index) - barW / 2)}" y="${px(top)}" width="${px(barW)}" height="${px(barH)}" rx="2" fill="${fill}"${step.kind === 'net' ? ' stroke="var(--text-primary)" stroke-width="1.25"' : ''}></rect>`
+        : '';
+      const plotBottom = padT + plotH - 2;
+      let labelY = top - 6;
+      if (labelY < padT + 3) labelY = top + barH + 12;
+      if (labelY > plotBottom) labelY = Math.max(padT + 12, top + Math.min(14, Math.max(barH - 2, 0)));
+      const shown = formatUncertainMoney(step.value, moneyQuality);
+      return `<g class="tea-fall-step is-${tone}${gateClass}" data-key="${step.key}" data-from="${attrNum(step.from)}" data-to="${attrNum(step.to)}"><title>${escapeHtml(step.label)} ${escapeHtml(shown)}</title>${rect}<text class="tea-fall-value" x="${px(cx(index))}" y="${px(labelY)}" text-anchor="middle">${escapeHtml(shown)}</text><text class="tea-fall-label" x="${px(cx(index))}" y="${height - 8}" text-anchor="middle">${escapeHtml(step.label)}</text></g>`;
     }).join('');
+    return `<svg class="tea-plot" viewBox="0 0 ${width} ${height}" role="img"><title>Revenue, minus operating cost, minus annualized CAPEX, net cash gate</title>${ticks}${band}${connectors}${columns}</svg>`;
+  }
+
+  function cashflowYearLabels(count) {
+    if (count <= 1) return [0];
+    if (count <= 8) return [...Array(count).keys()];
+    const last = count - 1;
+    const labels = new Set([0, last]);
+    const step = Math.max(1, Math.ceil(last / 5));
+    for (let year = 0; year <= last; year += step) labels.add(year);
+    return [...labels].sort((a, b) => a - b);
+  }
+
+  function economicsCashflowMarkup(econ, moneyQuality) {
+    const flows = Array.isArray(econ?.cashFlows) ? econ.cashFlows.map(Number) : [];
+    if (!flows.length || flows.some(value => !Number.isFinite(value))) {
+      return teaChartEmpty('Cash-flow series is incomplete.');
+    }
+    const scale = axisFromValues(flows);
+    const width = 480;
+    const height = 188;
+    const padL = 58;
+    const padR = 8;
+    const padT = 16;
+    const padB = 24;
+    const plotW = width - padL - padR;
+    const plotH = height - padT - padB;
+    const plotRight = padL + plotW;
+    const y = yMapper(scale, padT, plotH);
+    const slot = plotW / flows.length;
+    const barW = Math.max(2, Math.min(28, slot * 0.62));
+    const zeroY = y(0);
+    const ticks = scale.ticks.map(tick => {
+      const yy = y(tick);
+      const zero = tick === 0;
+      return `<g class="tea-axis-tick"><line x1="${padL}" y1="${px(yy)}" x2="${plotRight}" y2="${px(yy)}" stroke="${zero ? 'var(--text-muted)' : 'var(--border)'}" stroke-width="${zero ? 1.25 : 1}"${zero ? ' class="tea-zero"' : ''}></line><text x="${padL - 6}" y="${px(yy + 3)}" text-anchor="end">${escapeHtml(axisMoney(tick))}</text></g>`;
+    }).join('');
+    const labeled = new Set(cashflowYearLabels(flows.length));
+    const bars = flows.map((value, year) => {
+      const cx = padL + slot * (year + 0.5);
+      const y1 = y(value);
+      const top = Math.min(zeroY, y1);
+      const barH = Math.abs(y1 - zeroY);
+      const capex = year === 0;
+      const fill = capex ? 'var(--warning)' : value > 0 ? 'var(--success)' : value < 0 ? 'var(--danger)' : 'var(--text-muted)';
+      const cls = capex ? 'is-capex' : value > 0 ? 'is-positive' : value < 0 ? 'is-negative' : 'is-flat';
+      const rect = barH > 0.4
+        ? `<rect x="${px(cx - barW / 2)}" y="${px(top)}" width="${px(barW)}" height="${px(barH)}" rx="1" fill="${fill}"${capex ? ' stroke="var(--text-primary)" stroke-width="1.15"' : ''}></rect>`
+        : '';
+      const yearLabel = labeled.has(year)
+        ? `<text class="tea-year-label${capex ? ' is-capex-label' : ''}" x="${px(cx)}" y="${height - 6}" text-anchor="middle">${year}</text>`
+        : '';
+      const name = capex ? 'Year 0 · CAPEX' : `Year ${year}`;
+      return `<g class="tea-cash-bar ${cls}" data-year="${year}" data-value="${attrNum(value)}"><title>${escapeHtml(name)} ${escapeHtml(formatUncertainMoney(value, moneyQuality))}</title>${rect}${yearLabel}</g>`;
+    }).join('');
+    const later = flows.slice(1);
+    const steady = flows[1];
+    const replacement = later.length > 1 && later.slice(1).some(value => Math.abs(value - steady) > 1);
+    const legendBits = ['<span><i class="is-capex"></i>Year 0 · CAPEX</span>'];
+    if (later.some(value => value > 0)) legendBits.push('<span><i class="is-positive"></i>Operating cash</span>');
+    if (later.some(value => value < 0)) legendBits.push('<span><i class="is-negative"></i>Negative year</span>');
+    const svg = `<svg class="tea-plot" viewBox="0 0 ${width} ${height}" role="img"><title>Cash flow by project year. Year 0 is installed CAPEX.</title>${ticks}${bars}</svg>`;
+    const legend = `<p class="tea-chart-legend">${legendBits.join('')}</p>`;
+    const note = replacement ? '<p class="tea-chart-note">Dips after year 0 are asset replacements in that year.</p>' : '';
+    return `${svg}${legend}${note}`;
+  }
+
+  function breakevenMark(mode, result) {
+    if (!result || !result.status || result.status === 'unknown-material') return null;
+    if (result.status === 'flip' && Number.isFinite(Number(result.breakEven))) {
+      return { mode, kind: 'price', price: Number(result.breakEven) };
+    }
+    if (result.status === 'no-flip-always-positive' && Number.isFinite(Number(result.pMax))) {
+      return { mode, kind: 'above', price: Number(result.pMax) };
+    }
+    if (result.status === 'no-flip-always-negative' || result.status === 'non-monotonic') {
+      return { mode, kind: 'none', price: null };
+    }
+    return { mode, kind: 'none', price: null };
+  }
+
+  function priceAxis(maxPrice) {
+    const top = Math.max(Number(maxPrice) * 1.18, Number(maxPrice) + 0.01, 0.05);
+    let step = niceStep(top, 4);
+    if (step >= top) step = niceStep(top, 2);
+    let max = Math.ceil((top - 1e-12) / step) * step;
+    if (!(max > 0)) max = step || 1;
+    let count = Math.round(max / step);
+    if (count > 6) {
+      step *= 2;
+      max = Math.ceil((top - 1e-12) / step) * step;
+      count = Math.round(max / step);
+    }
+    const ticks = [];
+    for (let i = 0; i <= count && i < 8; i += 1) ticks.push(roundTo(i * step, step));
+    if (ticks[ticks.length - 1] < maxPrice) ticks.push(roundTo(max, step));
+    return { min: 0, max: ticks[ticks.length - 1] || max, ticks };
+  }
+
+  function breakevenDataAttrs(solo, shared) {
+    const part = (name, mark) => {
+      if (!mark) return '';
+      const price = mark.kind === 'price' && Number.isFinite(mark.price) ? ` data-${name}-price="${attrNum(mark.price)}"` : '';
+      const bound = mark.kind === 'above' && Number.isFinite(mark.price) ? ` data-${name}-bound="${attrNum(mark.price)}"` : '';
+      return ` data-${name}-kind="${mark.kind}"${price}${bound}`;
+    };
+    return `${part('solo', solo)}${part('shared', shared)}`;
+  }
+
+  function powerBreakevenChartMarkup(soloResult, sharedResult, active) {
+    const solo = breakevenMark('solo', soloResult);
+    const shared = breakevenMark('shared', sharedResult);
+    if (!solo && !shared) return '';
+    const marks = [solo, shared].filter(Boolean);
+    const prices = marks.filter(mark => mark.kind === 'price');
+    const aboves = marks.filter(mark => mark.kind === 'above');
+    const attrs = breakevenDataAttrs(solo, shared);
+    if (!prices.length && !aboves.length) {
+      return `<div class="tea-be-chart"${attrs}><p class="tea-chart-empty">No break-even $/kWh. Net cash stays at or below zero when purchased power is free.</p></div>`;
+    }
+    const domain = prices.length
+      ? priceAxis(Math.max(...prices.map(mark => mark.price), 0))
+      : priceAxis(Math.max(...aboves.map(mark => mark.price), 0));
+    const plotted = prices.length ? prices : aboves;
+    const width = 640;
+    const height = 84;
+    const padL = 8;
+    const padR = 8;
+    const axisY = 44;
+    const plotW = width - padL - padR;
+    const xOf = price => padL + ((price - domain.min) / (domain.max - domain.min || 1)) * plotW;
+    const firstTick = domain.ticks[0];
+    const lastTick = domain.ticks[domain.ticks.length - 1];
+    const tickStep = domain.ticks.length > 1 ? domain.ticks[1] - domain.ticks[0] : domain.max;
+    const ticks = domain.ticks.map(tick => {
+      const x = xOf(tick);
+      const anchor = tick === firstTick ? 'start' : tick === lastTick ? 'end' : 'middle';
+      return `<g class="tea-axis-tick"><line x1="${px(x)}" y1="${axisY}" x2="${px(x)}" y2="${axisY + 5}" stroke="var(--text-muted)"></line><text x="${px(x)}" y="${axisY + 18}" text-anchor="${anchor}">${escapeHtml(formatKwhTick(tick, tickStep))}</text></g>`;
+    }).join('');
+    const used = [];
+    const markers = plotted.map(mark => {
+      const x = xOf(Math.min(Math.max(mark.price, domain.min), domain.max));
+      let labelY = 16;
+      if (used.some(prev => Math.abs(prev - x) < 88)) labelY = 30;
+      used.push(x);
+      const color = mark.mode === 'shared' ? 'var(--teal)' : 'var(--electric)';
+      const on = mark.mode === active || plotted.length === 1;
+      const open = mark.kind === 'above';
+      const label = open ? `above ${formatKwh(mark.price)} · ${mark.mode}` : `${formatKwh(mark.price)} · ${mark.mode}`;
+      const dot = open
+        ? `<circle cx="${px(x)}" cy="${axisY}" r="${on ? 5 : 3.5}" fill="none" stroke="${color}" stroke-width="1.6"></circle>`
+        : `<circle cx="${px(x)}" cy="${axisY}" r="${on ? 5 : 3.5}" fill="${color}"${on ? ' stroke="var(--text-primary)" stroke-width="1.4"' : ''}></circle>`;
+      return `<g class="tea-be-mark is-${mark.mode}${mark.mode === active ? ' is-active' : ''}" data-mode="${mark.mode}" data-kind="${mark.kind}"><line x1="${px(x)}" y1="${labelY + 3}" x2="${px(x)}" y2="${axisY - 6}" stroke="${color}"></line>${dot}<text x="${px(x)}" y="${labelY}" text-anchor="middle" fill="${color}" font-weight="${on ? 700 : 600}">${escapeHtml(label)}</text></g>`;
+    }).join('');
+    const notes = [];
+    if (prices.length) {
+      for (const mark of marks) {
+        if (mark.kind === 'none') notes.push(`${mark.mode}: no $/kWh cross — cash stays ≤ 0 at free power`);
+        if (mark.kind === 'above') notes.push(`${mark.mode}: still above the gate at ${formatKwh(mark.price)}/kWh`);
+      }
+    }
+    const note = notes.length ? `<p class="tea-chart-note">${escapeHtml(notes.join(' · '))}</p>` : '';
+    const svg = `<svg class="tea-plot" viewBox="0 0 ${width} ${height}" role="img"><title>Screened purchased-power break-even in dollars per kilowatt-hour</title><line x1="${padL}" y1="${axisY}" x2="${padL + plotW}" y2="${axisY}" stroke="var(--border-light)" stroke-width="1.5"></line><text x="${width - padR}" y="${axisY - 10}" text-anchor="end" fill="var(--text-muted)">$/kWh</text>${ticks}${markers}</svg>`;
+    return `<div class="tea-be-chart"${attrs}>${svg}${note}</div>`;
+  }
+
+  function paintPowerBreakevenChart(solo, shared, active) {
+    const host = document.getElementById('powerBreakevenChart');
+    if (!host) return;
+    const markup = powerBreakevenChartMarkup(solo, shared, active);
+    if (!markup) {
+      host.hidden = true;
+      host.innerHTML = '';
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML = markup;
+  }
+
+  function clearPowerBreakevenChart() {
+    const host = document.getElementById('powerBreakevenChart');
+    if (!host) return;
+    host.hidden = true;
+    host.innerHTML = '';
   }
 
   function clearEconomicsFigures() {
     paintCashGate(null);
-    for (const id of ['economicsWaterfall', 'economicsCapital', 'economicsOps', 'economicsMetrics', 'economicsDcfMetrics']) {
+    const waterfall = document.getElementById('economicsWaterfall');
+    if (waterfall) waterfall.innerHTML = teaChartEmpty('Complete the graph to plot the cash gate.');
+    const cashflow = document.getElementById('economicsCashflow');
+    if (cashflow) cashflow.innerHTML = teaChartEmpty('Complete the graph to plot cash flow.');
+    for (const id of ['economicsCapital', 'economicsOps', 'economicsMetrics', 'economicsDcfMetrics']) {
       const el = document.getElementById(id);
       if (el) el.innerHTML = '';
     }
@@ -5103,10 +5438,12 @@
       const engine = globalThis.MaterialPowerBreakeven;
       if (!engine?.breakEvenForMaterial || !engine.formatBreakEven) {
         show('Power break-even engine is not loaded.');
+        clearPowerBreakevenChart();
         return null;
       }
       if (!result || !graph.nodes.length) {
         show('Complete the graph before screening purchased-power break-even. Screening only — not a PPA.');
+        clearPowerBreakevenChart();
         return null;
       }
       populatePowerBreakevenMaterials();
@@ -5117,13 +5454,23 @@
         show(unsupported.length
           ? `No product supported by the screening price table (${unsupported.join(', ')}). Screening only — not a PPA.`
           : 'This plant is not selling a product this screen can price. Screening only — not a PPA.');
+        clearPowerBreakevenChart();
         return null;
       }
       const screened = engine.breakEvenForMaterial(currentCaseDefinition(), result, materialId, mode);
+      const otherMode = mode === 'shared' ? 'solo' : 'shared';
+      let other = null;
+      try {
+        other = engine.breakEvenForMaterial(currentCaseDefinition(), result, materialId, otherMode);
+      } catch { other = null; }
+      const solo = mode === 'solo' ? screened : other;
+      const shared = mode === 'shared' ? screened : other;
       show(engine.formatBreakEven(screened));
+      paintPowerBreakevenChart(solo, shared, mode);
       return screened;
     } catch (error) {
       show(error?.message || String(error));
+      clearPowerBreakevenChart();
       return null;
     } finally {
       powerBreakevenSignature = powerBreakevenSignatureNow();
@@ -5154,6 +5501,7 @@
         breakeven.hidden = true;
         breakeven.textContent = '';
       }
+      clearPowerBreakevenChart();
       return;
     }
     const moneyQuality = classifyQuality({ kind: 'money' });
@@ -5170,6 +5518,8 @@
     paintCashGate(currentEconomics, moneyQuality);
     const waterfall = document.getElementById('economicsWaterfall');
     if (waterfall) waterfall.innerHTML = economicsWaterfallMarkup(currentEconomics, moneyQuality);
+    const cashflow = document.getElementById('economicsCashflow');
+    if (cashflow) cashflow.innerHTML = economicsCashflowMarkup(currentEconomics, moneyQuality);
     const capital = document.getElementById('economicsCapital');
     if (capital) {
       capital.innerHTML = metricRows([

@@ -498,6 +498,16 @@ test('Economics screens purchased-power break-even on the frozen plant without s
   assert.match(text, /screening/i);
   assert.match(text, /not a PPA/i);
   assert.equal(context.__elements.get('powerBreakevenResult').hidden, false);
+  const chart = context.__elements.get('powerBreakevenChart');
+  assert.equal(chart.hidden, false);
+  if (screened.status === 'flip') {
+    assert.match(chart.innerHTML, /<svg/);
+    assert.match(chart.innerHTML, new RegExp(`data-solo-kind="price" data-solo-price="${screened.breakEven}"`));
+    assert.match(chart.innerHTML, /data-mode="solo"/);
+  } else {
+    assert.doesNotMatch(chart.innerHTML, /data-solo-kind="price"/);
+  }
+  assert.match(chart.innerHTML, /data-shared-kind=/);
 
   context.__elements.get('powerBreakevenMode').value = 'shared';
   const shared = app.screenPowerBreakEven();
@@ -516,12 +526,34 @@ test('Economics screens purchased-power break-even on the frozen plant without s
   assert.equal(app.screenPowerBreakEven(), null);
   assert.match(context.__elements.get('powerBreakevenResult').textContent, /No product supported by the screening price table/);
   assert.match(context.__elements.get('powerBreakevenResult').textContent, /Methane/);
+  assert.equal(context.__elements.get('powerBreakevenChart').hidden, true);
+  assert.equal(context.__elements.get('powerBreakevenChart').innerHTML, '');
+});
+
+test('economics charts stay empty until the graph can support them', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.clearFactory();
+  const fall = context.__elements.get('economicsWaterfall').innerHTML;
+  const cash = context.__elements.get('economicsCashflow').innerHTML;
+  assert.match(fall, /Complete the graph to plot the cash gate/);
+  assert.match(cash, /Complete the graph to plot cash flow/);
+  assert.doesNotMatch(fall, /<svg/);
+  assert.doesNotMatch(cash, /<svg/);
+  assert.doesNotMatch(fall, /\$\d/);
+  assert.doesNotMatch(cash, /\$\d/);
+  assert.equal(context.__elements.get('powerBreakevenChart').hidden, true);
+  assert.equal(context.__elements.get('powerBreakevenChart').innerHTML, '');
 });
 
 test('economics dashboard groups capital, operations, the cash gate, and screening DCF', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /id="economicsGateValue"/);
   assert.match(html, /id="economicsWaterfall"/);
+  assert.match(html, /id="economicsCashflow"/);
+  assert.match(html, /id="powerBreakevenChart"/);
+  assert.doesNotMatch(html, /chart\.js/i);
+  assert.doesNotMatch(html, /d3(?:\.min)?\.js/i);
   assert.match(html, /id="economicsCapital"/);
   assert.match(html, /id="economicsOps"/);
   assert.match(html, /id="economicsAssumptions"/);
@@ -557,11 +589,46 @@ test('economics dashboard groups capital, operations, the cash gate, and screeni
   assert.doesNotMatch(context.__elements.get('economicsCapital').innerHTML, /NPV/);
   assert.doesNotMatch(context.__elements.get('economicsOps').innerHTML, /IRR/);
   const fall = context.__elements.get('economicsWaterfall').innerHTML;
+  assert.match(fall, /<svg/);
   assert.match(fall, /Revenue/);
   assert.match(fall, /− OPEX/);
   assert.match(fall, /− ann\. CAPEX/);
   assert.match(fall, />Net</);
+  assert.match(fall, /tea-gate-band/);
+  assert.match(fall, /tea-fall-step[^"]*is-gate/);
   assert.equal((fall.match(/tea-fall-step/g) || []).length, 4);
+  assert.ok((fall.match(/tea-axis-tick/g) || []).length >= 2);
+  const econ = app.economics;
+  const step = key => {
+    const match = fall.match(new RegExp(`data-key="${key}" data-from="([^"]+)" data-to="([^"]+)"`));
+    assert.ok(match, key);
+    return { from: Number(match[1]), to: Number(match[2]) };
+  };
+  const revenue = step('revenue');
+  assert.equal(revenue.from, 0);
+  assert.equal(revenue.to, econ.annualRevenue);
+  const opex = step('opex');
+  assert.equal(opex.from, econ.annualRevenue);
+  assert.ok(Math.abs((opex.from - opex.to) - Math.abs(econ.annualOperatingCost)) < 1e-6);
+  const capex = step('capex');
+  assert.ok(Math.abs((capex.from - capex.to) - Math.abs(econ.annualizedCapex)) < 1e-6);
+  const net = step('net');
+  assert.equal(net.from, 0);
+  assert.equal(net.to, econ.annualNetCash);
+  const cash = context.__elements.get('economicsCashflow').innerHTML;
+  assert.match(cash, /<svg/);
+  assert.match(cash, /Year 0 · CAPEX/);
+  assert.equal((cash.match(/data-year="/g) || []).length, econ.cashFlows.length);
+  const year0 = cash.match(/class="tea-cash-bar is-capex" data-year="0" data-value="([^"]+)"/);
+  assert.ok(year0);
+  assert.equal(Number(year0[1]), econ.cashFlows[0]);
+  assert.equal(econ.cashFlows[0], -econ.installedCapex);
+  assert.ok(econ.installedCapex > 0);
+  const screenedChart = context.__elements.get('powerBreakevenChart');
+  assert.equal(screenedChart.hidden, false);
+  assert.match(screenedChart.innerHTML, /\$\/kWh/);
+  assert.match(screenedChart.innerHTML, /data-solo-kind="(?:price|above|none)"/);
+  assert.match(screenedChart.innerHTML, /data-shared-kind="(?:price|above|none)"/);
   assert.match(context.__elements.get('economicsMetrics').innerHTML, /Levelized delivered cost/);
   const assumptions = context.__elements.get('economicsAssumptions').textContent;
   assert.match(assumptions, /Power cost|Power band|Grid tariff|PV CAPEX/);

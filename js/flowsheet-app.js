@@ -4030,12 +4030,12 @@
     document.getElementById('flowSummary').textContent = `${graph.nodes.length} blocks · ${graph.edges.length} connections`;
     document.getElementById('diagramTitle').textContent = site?.name || (graph.nodes.length ? 'Flowsheet' : 'Empty flowsheet');
     if (!graph.nodes.length) {
-      solveStatus.textContent = 'Empty factory';
+      solveStatus.textContent = 'No plant loaded';
       solveStatus.className = 'status-chip idle';
       balanceStatus.textContent = 'Add a block';
       balanceStatus.className = 'status-chip idle';
     } else {
-      solveStatus.textContent = result ? 'Factory running' : 'Factory incomplete';
+      solveStatus.textContent = result ? 'Plant running' : 'Plant incomplete';
       solveStatus.className = `status-chip${result ? ' good' : missing.length || solveError ? ' warn' : ''}`;
       balanceStatus.textContent = result ? (result.balances.maxAbsResidual < 1e-8 ? 'Balances closed' : 'Check balances') : pendingPort ? 'Choose compatible port' : 'Manual setpoints';
       balanceStatus.className = `status-chip${result?.balances.maxAbsResidual < 1e-8 ? ' good' : result || pendingPort ? ' warn' : ''}`;

@@ -38,6 +38,7 @@
   let activeTab = 'overview';
   const NODE_WIDTH = 220;
   const NODE_RX = 3;
+  const EMPTY_CANVAS_HTML = '<div class="empty-canvas"><span class="eyebrow">Plant floor</span><strong>No blocks</strong><p>Add a block or open a case on Overview. Drag empty canvas to pan · Fit frames the plant.</p></div>';
   const PORT_STEP = 20;
   const PORT_TOP = 58;
   const COLUMN_GAP = 120;
@@ -3934,13 +3935,188 @@
     renderCashflowResult();
   }
 
+  function finiteSeries(values) {
+    if (!Array.isArray(values) || !values.length) return null;
+    const nums = values.map(Number);
+    if (nums.some(value => !Number.isFinite(value))) return null;
+    return nums;
+  }
+
+  function formatCompactMass(kg) {
+    const n = Number(kg);
+    if (!Number.isFinite(n)) return null;
+    if (Math.abs(n) >= 1000) return `${formatNumber(n / 1000)} t/d`;
+    return `${formatNumber(n)} kg/d`;
+  }
+
+  function formatCompactEnergy(kWh, heat) {
+    const n = Number(kWh);
+    if (!Number.isFinite(n)) return null;
+    const mark = heat ? 'ₜₕ' : '';
+    if (Math.abs(n) >= 1000) return `${formatNumber(n / 1000)} MWh${mark}/d`;
+    return `${formatNumber(n)} kWh${mark}/d`;
+  }
+
+  function formatEdgeRate(stream) {
+    if (!stream) return null;
+    if (stream.kind === 'material') return formatCompactMass(FlowsheetModel.streamMassKg(stream));
+    if (stream.kind === 'consumable') {
+      const unit = stream.unit === 'kg/day' ? 'kg/d' : (stream.unit || '');
+      return `${formatNumber(stream.amount)} ${unit}`.trim();
+    }
+    if (stream.kind === 'heat') return formatCompactEnergy(stream.kWh, true);
+    if (stream.kind === 'electricity') return formatCompactEnergy(stream.kWh, false);
+    return null;
+  }
+
+  function utilizationRatio(current, nodeResult) {
+    const capacity = Number(current.capacity);
+    const activity = Number(nodeResult?.activity);
+    if (!(capacity > 0) || !Number.isFinite(activity)) return null;
+    return activity / capacity;
+  }
+
+  function ratioGauge(fraction, title, tone) {
+    if (!Number.isFinite(fraction)) return null;
+    const clamped = Math.max(0, Math.min(1, fraction));
+    return { type: 'bar', fraction: clamped, read: `${formatNumber(clamped * 100)}%`, title, tone };
+  }
+
+  function monthlyYieldGauge(current) {
+    const solarBacked = current.unit === 'solar-pv'
+      || (current.unit === 'electricity-source' && current.siteResource === 'electricity');
+    if (!solarBacked) return null;
+    const raw = finiteSeries(site?.meteo?.monthlyPVKWhPerKWp || site?.solar?.monthlyPVKWhPerKWp);
+    if (!raw) return null;
+    const months = raw.length >= 13 ? raw.slice(1, 13) : raw.slice(0, 12);
+    if (months.length < 2 || months.some(value => !Number.isFinite(value)) || months.every(value => value <= 0)) return null;
+    const low = Math.min(...months);
+    const high = Math.max(...months);
+    return {
+      type: 'spark',
+      series: months,
+      title: `Monthly yield ${formatNumber(low)}–${formatNumber(high)} kWh/kWp·day`,
+    };
+  }
+
+  function configuredFactorGauge(current) {
+    if (['solar-pv', 'nuclear-electricity'].includes(current.unit)) {
+      const factor = Number(current.params?.capacityFactor);
+      if (!Number.isFinite(factor) || factor < 0 || factor > 1) return null;
+      return {
+        type: 'bar',
+        fraction: factor,
+        read: `${formatNumber(factor * 100)}%`,
+        title: `Capacity factor ${formatNumber(factor * 100)}%`,
+        tone: 'cf',
+      };
+    }
+    if (current.unit === 'solar-thermal') {
+      const sunHours = Number(current.params?.sunHours);
+      if (!Number.isFinite(sunHours) || sunHours < 0 || sunHours > 24) return null;
+      return {
+        type: 'bar',
+        fraction: sunHours / 24,
+        read: `${formatNumber(sunHours)}h`,
+        title: `${formatNumber(sunHours)} sun hours`,
+        tone: 'cf',
+      };
+    }
+    return null;
+  }
+
+  function busDispatchGauge(current) {
+    if (current.unit !== 'electrical-bus' || !result?.streams) return null;
+    const offered = Number(result.nodes?.[current.id]?.available?.kWh);
+    const used = result.streams
+      .filter(edge => edge.from.node === current.id && edge.stream?.kind === 'electricity')
+      .reduce((sum, edge) => sum + (Number(edge.stream.kWh) || 0), 0);
+    if (!(offered > 0) || !Number.isFinite(used)) return null;
+    return ratioGauge(used / offered, `Bus dispatch ${formatNumber(used)} / ${formatNumber(offered)} kWh/d`, 'util');
+  }
+
+  function activityGauge(current, nodeResult, allowed, title) {
+    if (!allowed.has(current.unit)) return null;
+    return ratioGauge(utilizationRatio(current, nodeResult), title, 'util');
+  }
+
+  function hubGauge(current, nodeResult) {
+    return monthlyYieldGauge(current)
+      || configuredFactorGauge(current)
+      || busDispatchGauge(current)
+      || activityGauge(current, nodeResult, new Set(['swro', 'med', 'msf']), 'Water train utilization')
+      || activityGauge(current, nodeResult, new Set(['battery', 'thermal-storage']), 'Storage throughput');
+  }
+
+  function electricityDrawKWh(nodeResult) {
+    const consumed = nodeResult?.consumed;
+    if (!consumed || typeof consumed !== 'object') return null;
+    let sum = 0;
+    let found = false;
+    for (const stream of Object.values(consumed)) {
+      if (stream?.kind === 'electricity' && Number.isFinite(stream.kWh)) {
+        sum += stream.kWh;
+        found = true;
+      }
+    }
+    return found ? sum : null;
+  }
+
+  function nodeMeterChip(current, nodeResult) {
+    const util = utilizationRatio(current, nodeResult);
+    if (util != null) {
+      const shown = Math.max(0, Math.min(1, util));
+      return { kind: 'util', text: `${formatNumber(shown * 100)}%` };
+    }
+    if (['source', 'sink', 'junction'].includes(units[current.unit].kind)) return null;
+    const kWh = electricityDrawKWh(nodeResult);
+    if (!(kWh > 0)) return null;
+    return { kind: 'power', text: formatCompactEnergy(kWh, false) };
+  }
+
+  function renderHubGauge(x, y, gauge) {
+    if (!gauge) return '';
+    if (gauge.type === 'spark') {
+      const width = 70;
+      const height = 13;
+      const gx = x + NODE_WIDTH - 8 - width;
+      const gy = y + 6;
+      const peak = Math.max(...gauge.series, 0);
+      if (!(peak > 0)) return '';
+      const slot = width / gauge.series.length;
+      const bars = gauge.series.map((value, index) => {
+        const barHeight = Math.max(0, (value / peak) * height);
+        if (!(barHeight > 0)) return '';
+        const barWidth = Math.max(0.8, slot - 0.7);
+        return `<rect class="node-spark-bar" x="${(gx + index * slot).toFixed(2)}" y="${(gy + height - barHeight).toFixed(2)}" width="${barWidth.toFixed(2)}" height="${barHeight.toFixed(2)}"/>`;
+      }).join('');
+      return `<g class="node-gauge node-gauge-spark"><title>${escapeHtml(gauge.title)}</title>${bars}</g>`;
+    }
+    const read = String(gauge.read || '');
+    const readWidth = Math.max(18, read.length * 5.6);
+    const barWidth = 34;
+    const gx = x + NODE_WIDTH - 8 - readWidth - 4 - barWidth;
+    const barX = gx + readWidth + 4;
+    const barY = y + 9;
+    const fill = Math.max(0, (barWidth - 2) * gauge.fraction);
+    const tone = gauge.tone === 'cf' ? ' node-gauge-cf' : ' node-gauge-util';
+    return `<g class="node-gauge node-gauge-bar${tone}"><title>${escapeHtml(gauge.title)}</title><text class="node-gauge-read" x="${gx.toFixed(2)}" y="${y + 16}">${escapeHtml(read)}</text><rect class="node-gauge-track" x="${barX}" y="${barY}" width="${barWidth}" height="6" rx="1"/><rect class="node-gauge-fill" x="${barX + 1}" y="${barY + 1}" width="${fill.toFixed(2)}" height="4"/></g>`;
+  }
+
+  function renderMeterChip(x, y, chip) {
+    if (!chip) return '';
+    const width = Math.min(92, Math.max(34, String(chip.text).length * 5.8 + 10));
+    const chipX = x + NODE_WIDTH - 8 - width;
+    return `<g class="node-chip node-chip-${chip.kind}"><rect x="${chipX}" y="${y + 6}" width="${width}" height="13" rx="1"/><text x="${chipX + width / 2}" y="${y + 15.5}" text-anchor="middle">${escapeHtml(chip.text)}</text></g>`;
+  }
+
   function renderGraph() {
     renderCanvasZoom();
     if (!graph.nodes.length) {
       canvas.classList.add('empty');
       const hint = document.getElementById('canvasPanHint');
       if (hint) hint.hidden = true;
-      canvas.innerHTML = '<div class="empty-canvas"><span class="eyebrow">Flowsheet</span><strong>Empty flowsheet</strong><p>Add a block or open a case on Overview. Drag empty canvas to pan · Fit frames the plant.</p></div>';
+      canvas.innerHTML = EMPTY_CANVAS_HTML;
       return;
     }
     canvas.classList.remove('empty');
@@ -3963,9 +4139,11 @@
         : `M${start.x} ${start.y} C${mid} ${start.y},${mid} ${end.y},${end.x} ${end.y}`;
       const labelX = edge.recycle ? (start.x + end.x) / 2 : mid;
       const labelY = edge.recycle ? recycleY - 8 : (start.y + end.y) / 2 - 7;
-      return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${constrained ? ' bottleneck' : ''}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}" x="${labelX}" y="${labelY}" text-anchor="middle">${stream ? `${edge.recycle ? '↻ ' : ''}${formatStream(stream)}` : ''}</text>`;
+      const rate = formatEdgeRate(stream);
+      const label = rate ? `${edge.recycle ? '↻ ' : ''}${rate}` : '—';
+      return `<path class="flow-edge ${kind}${edge.recycle ? ' recycle' : ''}${constrained ? ' bottleneck' : ''}" d="${path}"/><text class="edge-label${constrained ? ' bottleneck' : ''}${rate ? '' : ' is-muted'}" x="${labelX}" y="${labelY}" text-anchor="middle">${escapeHtml(label)}</text>`;
     }).join('');
-    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:${width * canvasZoom}px;height:${height * canvasZoom}px;max-width:none" aria-label="Flowsheet">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
+    canvas.innerHTML = `<svg viewBox="0 0 ${width} ${height}" style="width:${width * canvasZoom}px;height:${height * canvasZoom}px;max-width:none" aria-label="Plant floor">${edges}${graph.nodes.map(renderNode).join('')}</svg>`;
   }
 
   function renderNode(current) {
@@ -3994,13 +4172,17 @@
     }).join('');
     const reasonTitle = diagnosis ? escapeHtml(diagnosis.detail || diagnosis.text) : '';
     const kind = units[current.unit].kind;
-    const badgeWidth = Math.min(NODE_WIDTH - 16, Math.max(52, String(kind).length * 7.2 + 14));
+    const gauge = hubGauge(current, nodeResult);
+    const chip = gauge ? null : nodeMeterChip(current, nodeResult);
+    const meterReserve = gauge ? 118 : chip ? 96 : 0;
+    const badgeWidth = Math.min(NODE_WIDTH - 16 - meterReserve, Math.max(44, String(kind).length * 7.2 + 14));
     const flags = `${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}`;
     const title = reasonTitle
       ? `<title>${reasonTitle}</title>`
       : bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : '';
     const reasonAttr = diagnosis ? ` data-reason="${escapeHtml(diagnosis.text)}"` : '';
-    return `<g class="flow-node${flags}" data-node="${current.id}"${reasonAttr} tabindex="0">${title}<rect class="node-body" x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="${NODE_RX}"/><rect class="node-kind-badge" x="${x + 8}" y="${y + 6}" width="${badgeWidth}" height="13" rx="2"/><text class="node-kind" x="${x + 8 + badgeWidth / 2}" y="${y + 15.5}" text-anchor="middle">${kind}</text><text class="node-label" x="${x + 8}" y="${y + 34}">${current.label}</text><line class="node-status-rule" x1="${x + 8}" y1="${y + height - 16}" x2="${x + NODE_WIDTH - 8}" y2="${y + height - 16}"/><text class="node-value${diagnosis ? ' node-reason' : ''}" x="${x + 8}" y="${y + height - 5}">${escapeHtml(value)}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
+    const meter = gauge ? renderHubGauge(x, y, gauge) : renderMeterChip(x, y, chip);
+    return `<g class="flow-node${flags}" data-node="${current.id}"${reasonAttr} tabindex="0">${title}<rect class="node-body" x="${x}" y="${y}" width="${NODE_WIDTH}" height="${height}" rx="${NODE_RX}"/><rect class="node-kind-badge" x="${x + 8}" y="${y + 6}" width="${badgeWidth}" height="13" rx="1"/><text class="node-kind" x="${x + 8 + badgeWidth / 2}" y="${y + 15.5}" text-anchor="middle">${kind}</text><text class="node-label" x="${x + 8}" y="${y + 34}">${escapeHtml(current.label)}</text>${meter}<line class="node-status-rule" x1="${x + 8}" y1="${y + height - 16}" x2="${x + NODE_WIDTH - 8}" y2="${y + height - 16}"/><text class="node-value${diagnosis ? ' node-reason' : ''}" x="${x + 8}" y="${y + height - 5}">${escapeHtml(value)}</text>${portMarkup(inputs, 'in')}${portMarkup(outputs, 'out')}</g>`;
   }
 
   function bottlenecksFor(nodeId) { return result?.nodes[nodeId]?.limitedBy || []; }
@@ -4028,7 +4210,7 @@
     const solveStatus = document.getElementById('solveStatus');
     const balanceStatus = document.getElementById('balanceStatus');
     document.getElementById('flowSummary').textContent = `${graph.nodes.length} blocks · ${graph.edges.length} connections`;
-    document.getElementById('diagramTitle').textContent = site?.name || (graph.nodes.length ? 'Flowsheet' : 'Empty flowsheet');
+    document.getElementById('diagramTitle').textContent = site?.name || (graph.nodes.length ? 'Plant floor' : 'No blocks');
     if (!graph.nodes.length) {
       solveStatus.textContent = 'No plant loaded';
       solveStatus.className = 'status-chip idle';

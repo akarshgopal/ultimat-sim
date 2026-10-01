@@ -939,8 +939,9 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
   const css = fs.readFileSync(path.join(root, 'flowsheet.css'), 'utf8');
   const source = fs.readFileSync(path.join(root, 'js/flowsheet-app.js'), 'utf8');
   const process = html.slice(html.indexOf('id="panelProcess"'), html.indexOf('id="panelEconomics"'));
-  assert.doesNotMatch(process, /Blank factory|Start here|Factory floor|Saved factories/);
-  assert.match(process, /Empty flowsheet/);
+  assert.doesNotMatch(process, /Blank factory|Start here|Factory floor|Saved factories|Empty factory/);
+  assert.match(process, /Plant floor/);
+  assert.match(process, /No blocks/);
   assert.match(process, /Add a block or open a case on Overview/);
   assert.match(process, />Canvas</);
   assert.ok(process.indexOf('id="zoomFit"') < process.indexOf('>Canvas<'));
@@ -980,8 +981,62 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
 
   context.__FLOWSHEET_APP__.clearFactory();
   const empty = context.__elements.get('flowsheetCanvas').innerHTML;
-  assert.match(empty, /Empty flowsheet/);
+  assert.match(empty, /Plant floor/);
+  assert.match(empty, /No blocks/);
   assert.match(empty, /Add a block or open a case on Overview/);
-  assert.doesNotMatch(empty, /Blank factory|Start here/);
-  assert.equal(context.__elements.get('diagramTitle').textContent, 'Empty flowsheet');
+  assert.doesNotMatch(empty, /Blank factory|Start here|Empty factory|Empty flowsheet/);
+  assert.equal(context.__elements.get('diagramTitle').textContent, 'No blocks');
+});
+
+test('process floor shows solved stream rates and skips gauges without data', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  const zabuye = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(zabuye, /node-gauge-spark/);
+  assert.match(zabuye, /node-gauge-bar/);
+  assert.match(zabuye, /node-chip-util/);
+  assert.doesNotMatch(zabuye, /node-chip-power/);
+  assert.match(zabuye, /t\/d/);
+  assert.match(zabuye, /kg\/d/);
+  assert.match(zabuye, /(?:kWh|MWh)\/d/);
+  assert.match(zabuye, />Lithium</);
+  assert.match(zabuye, />Salt</);
+  assert.match(zabuye, />Potash</);
+  assert.doesNotMatch(zabuye, /edge-label is-muted/);
+  assert.doesNotMatch(zabuye, /Empty factory/);
+
+  app.loadAbundanceHub();
+  const deadSea = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(deadSea, /node-gauge-spark/);
+  assert.match(deadSea, />Lithium</);
+  assert.match(deadSea, /(?:kWh|MWh)\/d/);
+  assert.equal(context.__elements.get('diagramTitle').textContent, 'Dead Sea industrial shore');
+
+  app.clearFactory();
+  assert.equal(context.__elements.get('diagramTitle').textContent, 'No blocks');
+  assert.doesNotMatch(context.__elements.get('flowsheetCanvas').innerHTML, /Empty factory|Empty flowsheet/);
+
+  const dac = app.addNode('dac');
+  const sabatier = app.addNode('sabatier');
+  app.choosePort({ node: dac.id, port: 'capturedCo2', direction: 'out' });
+  app.choosePort({ node: sabatier.id, port: 'co2', direction: 'in' });
+  const open = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(open, /edge-label is-muted/);
+  assert.match(open, /—<\/text>/);
+  assert.doesNotMatch(open, /node-gauge/);
+  assert.doesNotMatch(open, /node-chip/);
+
+  app.clearFactory();
+  app.addNode('swro');
+  const bareWater = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.doesNotMatch(bareWater, /node-gauge/);
+  assert.doesNotMatch(bareWater, /node-chip/);
+
+  app.loadCoastalMethane(0);
+  const coastal = context.__elements.get('flowsheetCanvas').innerHTML;
+  assert.match(coastal, /node-gauge-bar/);
+  assert.match(coastal, />SWRO</);
+  assert.match(coastal, /(?:kWh|MWh)\/d/);
+  assert.doesNotMatch(coastal, /Bus dispatch 0 \//);
+  assert.doesNotMatch(coastal, /edge-label is-muted/);
 });

@@ -1828,9 +1828,9 @@ button.primary-action:focus-visible {
   padding: 10px 12px;
   text-align: left;
   color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  background: rgba(24, 28, 32, 0.94);
+  border: 1px solid #8b9aaf;
+  border-radius: 2px;
+  background: rgba(18, 23, 28, 0.94);
 }
 
 .empty-canvas .eyebrow { margin-bottom: 4px; }
@@ -1848,14 +1848,14 @@ button.primary-action:focus-visible {
 }
 
 .flowsheet-canvas svg { display: block; width: auto; height: auto; max-width: none; min-width: 0; }
-.flow-edge { fill: none; stroke-width: 2; opacity: 0.68; }
+.flow-edge { fill: none; stroke-width: 2.25; opacity: 0.92; }
 .flow-edge.recycle { stroke-dasharray: 7 5; opacity: 1; }
 .flow-edge.material { stroke: var(--co2); }
 .flow-edge.electricity { stroke: var(--electric); }
 .flow-edge.heat { stroke: #df8b52; }
 .flow-node { cursor: grab; outline: none; touch-action: none; }
 .flow-node:active { cursor: grabbing; }
-.flow-node rect.node-body { fill: var(--bg-card); stroke: var(--border-light); stroke-width: 1.25; transition: 0.15s ease; }
+.flow-node rect.node-body { fill: var(--bg-card); stroke: #8b9aaf; stroke-width: 1.75; }
 .flow-node:hover rect.node-body,
 .flow-node:focus-visible rect.node-body,
 .flow-node.selected rect.node-body { stroke: var(--accent); fill: var(--bg-card-hover); }
@@ -1876,10 +1876,23 @@ button.primary-action:focus-visible {
 .flow-node .node-status-rule { stroke: var(--border); stroke-width: 1; }
 .flow-node .node-reason { fill: var(--warning); font-weight: 650; }
 .flow-port.cause circle { fill: var(--warning); stroke: var(--warning); stroke-width: 4; }
-.edge-label { fill: var(--text-muted); stroke: var(--bg-card); stroke-width: 5px; paint-order: stroke; font-size: 11px; }
+.edge-label { fill: var(--text-secondary); stroke: var(--bg-card); stroke-width: 5px; paint-order: stroke; font-size: 10px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.edge-label.is-muted { fill: var(--text-muted); font-weight: 550; opacity: 0.72; }
 .flow-edge.consumable { stroke: var(--warning); }
 .flow-edge.bottleneck { stroke: var(--danger); stroke-width: 5; opacity: 1; }
 .edge-label.bottleneck { fill: var(--danger); font-weight: 700; }
+.flow-node .node-chip rect { fill: #12181f; stroke: #8b9aaf; stroke-width: 1; }
+.flow-node .node-chip text,
+.flow-node .node-gauge-read {
+  fill: var(--text-secondary);
+  font-size: 8.5px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.flow-node .node-gauge-track { fill: #10151b; stroke: #6d7c90; stroke-width: 1; }
+.flow-node .node-gauge-fill { fill: var(--accent); stroke: none; }
+.flow-node .node-gauge-cf .node-gauge-fill,
+.flow-node .node-spark-bar { fill: var(--electric); stroke: none; }
 .flow-port { cursor: crosshair; outline: none; }
 .flow-port circle { fill: var(--bg-primary); stroke: var(--co2); stroke-width: 2; }
 .flow-port.electricity circle { stroke: var(--electric); }
@@ -2567,8 +2580,22 @@ label output + .quality-chip {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-soft);
 }
-.flowsheet-canvas {
-  border-radius: var(--radius-lg);
+#panelProcess .flowsheet-canvas,
+#panelProcess .flowsheet-canvas.empty {
+  border-radius: 2px;
+  border-color: #3e4b5c;
+  background-color: #12171c;
+  background-image:
+    linear-gradient(rgba(141, 153, 168, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(141, 153, 168, 0.08) 1px, transparent 1px);
+  background-size: 16px 16px, 16px 16px;
+  box-shadow: none;
+}
+#panelProcess .stage-actions button,
+#panelProcess .canvas-menu summary,
+#panelProcess .canvas-zoom,
+#panelProcess .canvas-zoom button {
+  border-radius: 2px;
 }
 .more-section > summary {
   border-radius: 0;

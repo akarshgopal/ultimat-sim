@@ -985,4 +985,3 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
   assert.doesNotMatch(empty, /Blank factory|Start here/);
   assert.equal(context.__elements.get('diagramTitle').textContent, 'Empty flowsheet');
 });
-});

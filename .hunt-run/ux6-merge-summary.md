@@ -2,7 +2,7 @@
 
 **Time:** 2026-10-01 ~13:02 CEST (UTC+2)  
 **Base:** `16337b9` (main tip before merge)  
-**Merge tip:** 1e1155e (1e1155ea237c4ce1d1262077d4fefc07ed04dbf2)  
+**Merge tip:**  ()
 **Brief:** `.hunt-run/ux6-visuals-brief.md`  
 **Live:** https://akarshgopal.github.io/ultimat-sim/
 

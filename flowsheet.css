@@ -644,15 +644,214 @@ button.primary-action:focus-visible {
 
 .economics-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
   align-items: start;
 }
 
-.economics-layout .site-footprint,
-.economics-layout .footprint-details {
+.economics-layout .site-footprint {
   grid-column: 1 / -1;
 }
+
+.tea-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
+  gap: 12px 16px;
+  align-items: start;
+  margin-top: 8px;
+}
+
+.tea-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tea-gate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "copy value"
+    "note value";
+  gap: 2px 16px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+
+.tea-gate.is-positive { border-left-color: var(--success); }
+.tea-gate.is-negative { border-left-color: var(--danger); }
+.tea-gate-copy { grid-area: copy; }
+.tea-gate-formula {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.tea-gate-value {
+  grid-area: value;
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.tea-gate.is-positive .tea-gate-value { color: var(--success); }
+.tea-gate.is-negative .tea-gate-value { color: var(--danger); }
+.tea-gate-note {
+  grid-area: note;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.tea-waterfall {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
+}
+
+.tea-waterfall:empty { display: none; }
+
+.tea-fall-step {
+  display: grid;
+  grid-template-columns: 7.4rem minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tea-fall-label { color: var(--text-muted); }
+.tea-fall-value { color: var(--text-primary); font-weight: 650; }
+.tea-fall-track {
+  height: 7px;
+  border-radius: 2px;
+  background: rgba(141, 153, 168, 0.18);
+  overflow: hidden;
+}
+.tea-fall-track i {
+  display: block;
+  height: 100%;
+  background: var(--electric);
+}
+.tea-fall-step.is-deduct .tea-fall-track i { background: var(--warning); }
+.tea-fall-step.is-positive .tea-fall-track i { background: var(--success); }
+.tea-fall-step.is-negative .tea-fall-track i { background: var(--danger); }
+.tea-fall-step.is-positive .tea-fall-value { color: var(--success); }
+.tea-fall-step.is-negative .tea-fall-value { color: var(--danger); }
+.tea-fall-step.is-gate {
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+  font-size: 0.86rem;
+}
+.tea-fall-step.is-gate .tea-fall-label { color: var(--text-primary); font-weight: 700; }
+.tea-fall-step.is-gate .tea-fall-track { height: 11px; }
+.tea-fall-step.is-gate .tea-fall-value { font-size: 0.95rem; font-weight: 700; }
+
+.tea-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tea-group h4,
+.tea-assumptions h4,
+.power-breakeven h4 {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tea-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.tea-products { min-width: 0; }
+
+.tea-assumptions {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+}
+
+.tea-assumptions .project-assumptions {
+  flex: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.tea-assumption-reads {
+  display: grid;
+  gap: 8px;
+}
+
+.tea-read {
+  display: grid;
+  gap: 1px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.tea-read span,
+.tea-read small {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.tea-read strong {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.tea-assumption-foot { margin: 0; }
+
+.economics-dcf {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  padding: 0 10px;
+}
+
+.economics-dcf > summary {
+  padding: 8px 0;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.economics-dcf-note {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.economics-dcf[open] { padding-bottom: 8px; }
+.economics-dcf .tea-metrics { margin-bottom: 2px; }
 
 .tool-panel {
   min-width: 0;
@@ -1842,13 +2041,27 @@ label output + .quality-chip {
 @media (max-width: 960px) {
   .overview-zones,
   .overview-strip,
-  .economics-layout {
+  .economics-layout,
+  .tea-dashboard,
+  .tea-groups {
     grid-template-columns: 1fr;
   }
   .overview-strip { grid-template-areas: "identity" "gate" "honesty"; }
   .network-body { grid-template-columns: 1fr; }
   .overview-cases { margin-left: 0; }
   .overview-cases select { min-width: 0; width: 100%; }
+  .tea-gate {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "copy"
+      "value"
+      "note";
+  }
+  .tea-gate-value { text-align: left; font-size: 1.45rem; }
+}
+
+@media (min-width: 960px) {
+  .power-breakeven-controls { flex-wrap: nowrap; }
 }
 
 @media (max-width: 400px) {
@@ -2002,23 +2215,20 @@ label output + .quality-chip {
 }
 .offtake-chip[hidden] { display: none !important; }
 .power-breakeven {
-  margin-top: 14px;
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
-.power-breakeven h4 {
-  margin: 0 0 6px;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
+.power-breakeven-head p { margin: 0; }
+.power-breakeven-head p + p { margin-top: 2px; }
 .power-breakeven-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: end;
-  margin: 8px 0;
+  margin: 0;
 }
 .power-breakeven-controls label {
   color: var(--text-muted);
@@ -2030,16 +2240,20 @@ label output + .quality-chip {
   margin-top: 2px;
   min-width: 8rem;
 }
-.power-breakeven-result { margin-top: 4px; }
-.economics-ack {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 8px;
-  color: var(--text-secondary);
-  font-size: 0.74rem;
+.power-breakeven-result {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
 }
-.economics-ack input { margin-top: 2px; }
+.power-breakeven-result[hidden] { display: none !important; }
 
 .stage-heading,
 .stage-actions {
@@ -2113,21 +2327,19 @@ label output + .quality-chip {
 }
 
 .more-section:has(> .site-truth:empty),
-.more-section:has(> .site-rights:empty),
-.more-section.network-detail:has(#networkBody[hidden]),
-.more-section.footprint-details:has(#siteFootprint[hidden]) {
+.more-section:has(> .site-rights:empty) {
   display: none;
 }
 
-.footprint-details {
+.site-footprint[hidden] { display: none !important; }
+
+.economics-layout > .site-footprint {
+  margin-top: 0;
   padding: 8px 16px 12px;
-  border-bottom: 1px solid var(--border);
 }
 
-.footprint-details > summary {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.64rem;
+.economics-layout > .site-footprint .strip-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
 .network-detail { margin-top: 6px; }
@@ -2252,8 +2464,8 @@ label output + .quality-chip {
 .exit-focus[hidden] { display: none !important; }
 .economics-layout .network-panel {
   border-top: 2px solid var(--border);
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 0;
+  padding-top: 10px;
 }
 @media (max-width: 800px) {
   .delta-board { grid-template-columns: 1fr; }

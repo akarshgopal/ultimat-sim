@@ -43,6 +43,8 @@
   let result = null;
   let currentEconomics = null;
   let baseline = null;
+  let powerBreakevenSignature = '';
+  let syncingEconomicsDisclosure = false;
   const MIN_ZOOM = 0.08;
   const MAX_ZOOM = 2;
   const READABLE_ZOOM = 0.5;
@@ -551,13 +553,25 @@
   document.getElementById('zoomReset').addEventListener('click', () => setCanvasZoom(1));
   document.getElementById('zoomFit')?.addEventListener('click', () => fitCanvas({ compact: true }));
   document.getElementById('canvasZoom').addEventListener('input', event => setCanvasZoom(Number(event.target.value) / 100));
-  document.getElementById('economicsAck')?.addEventListener('change', event => {
-    setEconomicsAcknowledgment(event.target.checked);
+  document.getElementById('economicsDcf')?.addEventListener('toggle', () => {
+    if (syncingEconomicsDisclosure) return;
+    const dcf = document.getElementById('economicsDcf');
+    const open = Boolean(dcf?.open);
+    if (open === economicsAcknowledgment()) return;
+    setEconomicsAcknowledgment(open);
     renderEconomics();
     renderNetwork();
   });
   document.getElementById('screenPowerBreakeven')?.addEventListener('click', screenPowerBreakEven);
-  document.getElementById('powerBreakevenMode')?.addEventListener('change', populatePowerBreakevenMaterials);
+  document.getElementById('powerBreakevenMode')?.addEventListener('change', () => {
+    populatePowerBreakevenMaterials();
+    powerBreakevenSignature = '';
+    if (currentEconomics) screenPowerBreakEven();
+  });
+  document.getElementById('powerBreakevenMaterial')?.addEventListener('change', () => {
+    powerBreakevenSignature = '';
+    if (currentEconomics) screenPowerBreakEven();
+  });
   document.getElementById('captureBaseline').addEventListener('click', captureBaseline);
   document.getElementById('clearBaseline').addEventListener('click', clearBaseline);
   document.getElementById('projectLifeYears').addEventListener('input', handleProjectEconomics);
@@ -4136,7 +4150,10 @@
     const details = panel.closest?.('details');
     if (!site) {
       panel.hidden = true;
-      if (details) details.hidden = true;
+      if (details) {
+        details.hidden = true;
+        details.open = false;
+      }
       if (metrics) metrics.innerHTML = '';
       if (pads) pads.innerHTML = '';
       if (note) note.textContent = '';
@@ -4146,7 +4163,10 @@
     const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
     const hasArea = footprint.totalAreaM2 > 0;
     panel.hidden = !hasArea;
-    if (details) details.hidden = !hasArea;
+    if (details) {
+      details.hidden = !hasArea;
+      details.open = hasArea;
+    }
     if (!hasArea) {
       if (metrics) metrics.innerHTML = '';
       if (pads) pads.innerHTML = '';
@@ -4392,10 +4412,13 @@
     else panel.classList.remove('is-empty');
     body.hidden = empty;
     const details = body.closest?.('details');
-    if (details) details.hidden = empty;
+    if (details) {
+      details.hidden = empty;
+      details.open = !empty;
+    }
     if (empty) {
       if (networkEditor && networkEditor.type !== 'add') networkEditor = null;
-      status.textContent = 'Add sited plants. Each keeps its own physics solve; the network rolls up materials, land, freight, and cash.';
+      status.textContent = 'No plants in this rollup.';
       plants.innerHTML = '';
       metrics.innerHTML = '';
       products.innerHTML = '';
@@ -4422,7 +4445,7 @@
     metrics.innerHTML = metricRows([
       ['CAPEX', formatUncertainMoney(networkResult.installedCapex, moneyQuality), { quality: moneyQuality }],
       ['Annualized CAPEX', formatUncertainMoney(networkResult.annualizedCapex, moneyQuality), { quality: moneyQuality }],
-      ['NPV', showBankable ? formatUncertainMoney(networkResult.npv, moneyQuality) : 'hidden until acknowledged / corridors', { quality: moneyQuality }],
+      ['NPV', showBankable ? formatUncertainMoney(networkResult.npv, moneyQuality) : 'hidden until NPV/IRR disclosure is open', { quality: moneyQuality }],
       ['Net cash (R − OPEX − ann. CAPEX)', formatUncertainMoney(networkResult.annualNetCash, moneyQuality), { quality: moneyQuality }],
       ['Revenue', formatUncertainMoney(networkResult.annualRevenue, moneyQuality), { quality: moneyQuality }],
       ['Cost', formatUncertainMoney(networkResult.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
@@ -4674,6 +4697,190 @@
     select.disabled = shared;
   }
 
+  const SCREENING_PACK_BY_UNIT = {
+    'brine-minerals': 'minerals',
+    'chlor-alkali': 'chlor-alkali',
+    'bromine-recovery': 'bromine-recovery',
+    asu: 'asu',
+    ammonia: 'ammonia',
+    swro: 'swro',
+    electrolyzer: 'electrolyzer',
+    dac: 'dac',
+    'dac-solid': 'dac',
+    'dac-liquid': 'dac',
+    'dac-electroswing': 'dac',
+    sabatier: 'sabatier',
+    methanol: 'methanol',
+    'solar-pv': 'solar-pv',
+  };
+
+  function screeningPackFor(node) {
+    const packs = globalThis.TeaScreening?.packs;
+    if (!packs || !node) return null;
+    const byUnit = SCREENING_PACK_BY_UNIT[node.unit];
+    if (byUnit && packs[byUnit]) return packs[byUnit];
+    const source = String(node.economics?.source || '');
+    if (/solar|PV|ATB/i.test(source) && packs['solar-pv']) return packs['solar-pv'];
+    return null;
+  }
+
+  function formatIntensity(value, unit) {
+    const n = formatNumber(value);
+    const raw = String(unit || '');
+    if (!raw) return `$${n}`;
+    if (raw.startsWith('$')) return `$${n}${raw.slice(1)}`;
+    return `$${n} ${raw}`;
+  }
+
+  function isSolarCapexNode(node) {
+    if (!node) return false;
+    if (node.unit === 'solar-pv' && Number.isFinite(Number(node.params?.capexPerKW))) return true;
+    return Number.isFinite(Number(node.economics?.capexIntensity)) && /solar|PV|ATB/i.test(String(node.economics?.source || ''));
+  }
+
+  function powerPriceReadout() {
+    const grid = graph.nodes.find(node => node.unit === 'grid-electricity' && Number.isFinite(Number(node.params?.pricePerMWh)));
+    if (grid) {
+      return { label: 'Grid tariff', value: `$${formatNumber(grid.params.pricePerMWh)}/MWh`, note: 'Block param · not a PPA', nodeId: grid.id };
+    }
+    const priced = graph.nodes.find(node => (
+      node.unit === 'electricity-source' || node.unit === 'grid-electricity' || node.id === 'power' || node.siteResource === 'electricity'
+    ) && Number.isFinite(Number(node.economics?.unitCost)));
+    if (priced) {
+      return { label: 'Power cost', value: `$${formatNumber(priced.economics.unitCost)}/kWh`, note: 'On the power block · screening · not a PPA', nodeId: priced.id };
+    }
+    const solar = graph.nodes.find(isSolarCapexNode);
+    if (solar) {
+      const intensity = Number(solar.economics?.capexIntensity);
+      if (Number.isFinite(intensity)) {
+        const pack = screeningPackFor(solar) || globalThis.TeaScreening?.packs?.['solar-pv'];
+        return { label: 'PV CAPEX', value: formatIntensity(intensity, pack?.intensityUnit || '$/kWp'), note: 'On the power block · screening', nodeId: solar.id };
+      }
+      return { label: 'PV CAPEX', value: `$${formatNumber(solar.params.capexPerKW)}/kW`, note: 'Block param · screening', nodeId: solar.id };
+    }
+    const table = globalThis.TeaScreening?.costs?.power;
+    if (table && Number.isFinite(Number(table.value))) {
+      return {
+        label: 'Power band',
+        value: formatIntensity(table.value, table.unit || '$/kWh'),
+        note: 'Screening table · not on this plant · not a PPA',
+        nodeId: null,
+      };
+    }
+    return { label: 'Power price', value: 'Not set', note: 'No purchased-power price on this plant', nodeId: null };
+  }
+
+  function capexIntensityReadout(skipId) {
+    const usable = node => node && node.id !== skipId;
+    const nodes = graph.nodes.filter(node => usable(node) && Number.isFinite(Number(node.economics?.capexIntensity)));
+    const node = nodes.find(item => item.economics?.capexIntensityBand)
+      || nodes.find(item => item.unit === 'brine-minerals')
+      || nodes.find(item => !isSolarCapexNode(item))
+      || nodes[0]
+      || graph.nodes.find(item => usable(item) && item.unit === 'solar-pv' && Number.isFinite(Number(item.params?.capexPerKW)))
+      || graph.nodes.find(item => usable(item) && Number(item.economics?.capexRate) > 0)
+      || null;
+    if (!node) return { label: 'CAPEX intensity', value: 'Not set', note: 'No intensity on this plant' };
+    if (node.unit === 'solar-pv' && !Number.isFinite(Number(node.economics?.capexIntensity)) && Number.isFinite(Number(node.params?.capexPerKW))) {
+      return { label: 'PV CAPEX', value: `$${formatNumber(node.params.capexPerKW)}/kW`, note: 'Block param · screening' };
+    }
+    const intensity = Number(node.economics?.capexIntensity ?? node.economics?.capexRate);
+    const pack = screeningPackFor(node);
+    const band = node.economics?.capexIntensityBand;
+    const solar = isSolarCapexNode(node);
+    const label = band || node.unit === 'brine-minerals' ? 'Minerals CAPEX' : solar ? 'PV CAPEX' : 'CAPEX intensity';
+    const note = band
+      ? `Screening band $${formatNumber(band.low)}–$${formatNumber(band.high)} · not bankable`
+      : `On ${node.id} · screening`;
+    return { label, value: formatIntensity(intensity, pack?.intensityUnit), note };
+  }
+
+  function paintAssumptionReadouts() {
+    const host = document.getElementById('economicsAssumptions');
+    if (!host) return;
+    const power = powerPriceReadout();
+    const capex = capexIntensityReadout(power.nodeId);
+    host.innerHTML = [power, capex].map(row => (
+      `<div class="tea-read"><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(row.value)}</strong><small>${escapeHtml(row.note)}</small></div>`
+    )).join('');
+  }
+
+  function paintCashGate(econ, moneyQuality) {
+    const gateEl = document.getElementById('economicsGate');
+    const valueEl = document.getElementById('economicsGateValue');
+    const noteEl = document.getElementById('economicsGateNote');
+    gateEl?.classList.remove('is-positive', 'is-negative');
+    if (!econ) {
+      if (valueEl) valueEl.textContent = '—';
+      if (noteEl) noteEl.textContent = '';
+      return;
+    }
+    const net = Number(econ.annualNetCash);
+    if (valueEl) valueEl.textContent = formatUncertainMoney(net, moneyQuality);
+    if (noteEl) {
+      noteEl.textContent = net > 0
+        ? 'Above the cash gate · screening'
+        : net < 0
+          ? 'Below the cash gate · screening'
+          : 'At the cash gate · screening';
+    }
+    if (net > 0) gateEl?.classList.add('is-positive');
+    else if (net < 0) gateEl?.classList.add('is-negative');
+  }
+
+  function economicsWaterfallMarkup(econ, moneyQuality) {
+    const steps = [
+      { label: 'Revenue', value: Number(econ.annualRevenue) || 0, kind: 'source' },
+      { label: '− OPEX', value: -Math.abs(Number(econ.annualOperatingCost) || 0), kind: 'deduct' },
+      { label: '− ann. CAPEX', value: -Math.abs(Number(econ.annualizedCapex) || 0), kind: 'deduct' },
+      { label: 'Net', value: Number(econ.annualNetCash) || 0, kind: 'net' },
+    ];
+    const max = Math.max(...steps.map(step => Math.abs(step.value)), 0);
+    return steps.map(step => {
+      const width = max > 0 ? Math.min(100, (Math.abs(step.value) / max) * 100) : 0;
+      const tone = step.kind === 'net'
+        ? (step.value > 0 ? 'positive' : step.value < 0 ? 'negative' : 'flat')
+        : step.kind;
+      const gate = step.kind === 'net' ? ' is-gate' : '';
+      return `<div class="tea-fall-step is-${tone}${gate}"><span class="tea-fall-label">${step.label}</span><span class="tea-fall-track" aria-hidden="true"><i style="width:${width}%"></i></span><span class="tea-fall-value">${formatUncertainMoney(step.value, moneyQuality)}</span></div>`;
+    }).join('');
+  }
+
+  function clearEconomicsFigures() {
+    paintCashGate(null);
+    for (const id of ['economicsWaterfall', 'economicsCapital', 'economicsOps', 'economicsMetrics', 'economicsDcfMetrics']) {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '';
+    }
+  }
+
+  function syncEconomicsDisclosure() {
+    const dcf = document.getElementById('economicsDcf');
+    if (!dcf) return;
+    const open = economicsAcknowledgment();
+    if (Boolean(dcf.open) === open) return;
+    syncingEconomicsDisclosure = true;
+    try { dcf.open = open; }
+    finally { syncingEconomicsDisclosure = false; }
+  }
+
+  function powerBreakevenSignatureNow() {
+    if (!currentEconomics) return '';
+    const mode = document.getElementById('powerBreakevenMode')?.value || 'solo';
+    const material = document.getElementById('powerBreakevenMaterial')?.value || '';
+    return [
+      mode,
+      material,
+      currentEconomics.annualNetCash,
+      currentEconomics.installedCapex,
+      currentEconomics.annualRevenue,
+      currentEconomics.annualOperatingCost,
+      projectEconomics.projectLifeYears,
+      projectEconomics.discountRate,
+      graph.nodes.length,
+    ].join('|');
+  }
+
   function screenPowerBreakEven() {
     const out = document.getElementById('powerBreakevenResult');
     const show = text => {
@@ -4682,48 +4889,61 @@
       out.textContent = text;
       return text;
     };
-    const engine = globalThis.MaterialPowerBreakeven;
-    if (!engine?.breakEvenForMaterial || !engine.formatBreakEven) {
-      show('Power break-even engine is not loaded.');
-      return null;
-    }
-    if (!result || !graph.nodes.length) {
-      show('Complete the graph before screening purchased-power break-even. Screening only — not a PPA.');
-      return null;
-    }
-    populatePowerBreakevenMaterials();
-    const mode = document.getElementById('powerBreakevenMode')?.value || 'solo';
-    const materialId = document.getElementById('powerBreakevenMaterial')?.value || '';
-    if (!materialId) {
-      const unsupported = unsupportedSoldLabels();
-      show(unsupported.length
-        ? `No product supported by the screening price table (${unsupported.join(', ')}). Screening only — not a PPA.`
-        : 'This plant is not selling a product this screen can price. Screening only — not a PPA.');
-      return null;
-    }
     try {
+      const engine = globalThis.MaterialPowerBreakeven;
+      if (!engine?.breakEvenForMaterial || !engine.formatBreakEven) {
+        show('Power break-even engine is not loaded.');
+        return null;
+      }
+      if (!result || !graph.nodes.length) {
+        show('Complete the graph before screening purchased-power break-even. Screening only — not a PPA.');
+        return null;
+      }
+      populatePowerBreakevenMaterials();
+      const mode = document.getElementById('powerBreakevenMode')?.value || 'solo';
+      const materialId = document.getElementById('powerBreakevenMaterial')?.value || '';
+      if (!materialId) {
+        const unsupported = unsupportedSoldLabels();
+        show(unsupported.length
+          ? `No product supported by the screening price table (${unsupported.join(', ')}). Screening only — not a PPA.`
+          : 'This plant is not selling a product this screen can price. Screening only — not a PPA.');
+        return null;
+      }
       const screened = engine.breakEvenForMaterial(currentCaseDefinition(), result, materialId, mode);
       show(engine.formatBreakEven(screened));
       return screened;
     } catch (error) {
       show(error?.message || String(error));
       return null;
+    } finally {
+      powerBreakevenSignature = powerBreakevenSignatureNow();
     }
   }
 
+  function refreshPowerBreakevenReadout() {
+    if (!currentEconomics) return;
+    if (powerBreakevenSignatureNow() === powerBreakevenSignature) return;
+    screenPowerBreakEven();
+  }
+
   function renderEconomics() {
-    const metrics = document.getElementById('economicsMetrics');
     const status = document.getElementById('economicsStatus');
     const banner = document.getElementById('economicsBanner');
-    const ack = document.getElementById('economicsAck');
     document.getElementById('projectLifeYears').value = projectEconomics.projectLifeYears;
     document.getElementById('discountRate').value = projectEconomics.discountRate * 100;
-    if (ack && ack.checked !== economicsAcknowledgment()) ack.checked = economicsAcknowledgment();
     populatePowerBreakevenMaterials();
+    paintAssumptionReadouts();
+    syncEconomicsDisclosure();
     if (!currentEconomics) {
       status.textContent = result ? `Economics unavailable: ${solveError}` : 'Complete the graph to calculate viability.';
-      metrics.innerHTML = '';
       if (banner) banner.hidden = true;
+      clearEconomicsFigures();
+      powerBreakevenSignature = '';
+      const breakeven = document.getElementById('powerBreakevenResult');
+      if (breakeven) {
+        breakeven.hidden = true;
+        breakeven.textContent = '';
+      }
       return;
     }
     const moneyQuality = classifyQuality({ kind: 'money' });
@@ -4733,30 +4953,50 @@
     if (banner) {
       banner.hidden = !gate.length;
       banner.textContent = gate.length
-        ? `Screening — not bankable (${gate.join('; ')}). Acknowledge below to reveal IRR/NPV.`
+        ? `Screening — not bankable (${gate.join('; ')}). Open “Show NPV/IRR (screening)” for DCF.`
         : '';
     }
-    status.textContent = `${currentEconomics.periodDays} operating days/year · screening co-product cashflow; annual net cash is capital-inclusive (R − OPEX − annualized CAPEX). NPV/IRR use year-0 CAPEX + operating cash. Edit assumptions in the inspector.`;
-    const rows = [
-      ['Installed CAPEX', formatUncertainMoney(currentEconomics.installedCapex, moneyQuality), { quality: moneyQuality }],
-      ['Annualized CAPEX', formatUncertainMoney(currentEconomics.annualizedCapex, moneyQuality), { quality: moneyQuality }],
-      ['Annual revenue', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), { quality: moneyQuality }],
-      ['Annual operating cost', formatUncertainMoney(currentEconomics.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
-      ['Annual operating cash (R − OPEX)', formatUncertainMoney(currentEconomics.annualOperatingCash, moneyQuality), { quality: moneyQuality }],
-      ['Annual net cash (R − OPEX − ann. CAPEX)', formatUncertainMoney(currentEconomics.annualNetCash, moneyQuality), { quality: moneyQuality }],
-    ];
-    if (showBankable) {
-      rows.push(['NPV', formatUncertainMoney(currentEconomics.npv, moneyQuality), { quality: moneyQuality }]);
-      rows.push(['IRR', formatRate(currentEconomics.irr), { quality: moneyQuality }]);
-    } else {
-      rows.push(['NPV', 'hidden until acknowledged', { quality: moneyQuality }]);
-      rows.push(['IRR', 'hidden until acknowledged', { quality: moneyQuality }]);
+    status.textContent = `${currentEconomics.periodDays} operating days/year · screening. Annual net cash is R − OPEX − ann. CAPEX. NPV/IRR are DCF and stay in the disclosure.`;
+    paintCashGate(currentEconomics, moneyQuality);
+    const waterfall = document.getElementById('economicsWaterfall');
+    if (waterfall) waterfall.innerHTML = economicsWaterfallMarkup(currentEconomics, moneyQuality);
+    const capital = document.getElementById('economicsCapital');
+    if (capital) {
+      capital.innerHTML = metricRows([
+        ['Installed CAPEX', formatUncertainMoney(currentEconomics.installedCapex, moneyQuality), { quality: moneyQuality }],
+        ['Annualized CAPEX', formatUncertainMoney(currentEconomics.annualizedCapex, moneyQuality), { quality: moneyQuality }],
+      ]);
     }
-    rows.push(['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatUncertainMoney(currentEconomics.levelizedDeliveredCost, productQuality)}/unit`, { quality: productQuality }]);
-    rows.push(...(currentEconomics.sinks || []).filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0).map(sink => (
-      [`Sold ${sink.id}`, `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`, { quality: productQuality }]
-    )));
-    metrics.innerHTML = metricRows(rows);
+    const ops = document.getElementById('economicsOps');
+    if (ops) {
+      const operating = Number(currentEconomics.annualOperatingCash);
+      ops.innerHTML = metricRows([
+        ['Revenue<small>per year</small>', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), { quality: moneyQuality }],
+        ['OPEX<small>per year</small>', formatUncertainMoney(currentEconomics.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
+        ['Operating cash<small>R − OPEX</small>', formatUncertainMoney(operating, moneyQuality), { quality: moneyQuality, tone: operating < 0 ? 'negative' : operating > 0 ? 'positive' : '' }],
+      ]);
+    }
+    const metrics = document.getElementById('economicsMetrics');
+    if (metrics) {
+      const productRows = [
+        ['Levelized delivered cost', currentEconomics.levelizedDeliveredCost == null ? '—' : `${formatUncertainMoney(currentEconomics.levelizedDeliveredCost, productQuality)}/unit`, { quality: productQuality }],
+        ...(currentEconomics.sinks || []).filter(sink => sink.disposition === 'sale' && sink.deliveredAmount > 0).map(sink => (
+          [`Sold ${sink.id}`, `${formatUncertainNumber(sink.deliveredAmount / 1000, productQuality)} t/year`, { quality: productQuality }]
+        )),
+      ];
+      metrics.innerHTML = metricRows(productRows);
+    }
+    const dcf = document.getElementById('economicsDcfMetrics');
+    if (dcf) {
+      dcf.innerHTML = metricRows(showBankable ? [
+        ['NPV', formatUncertainMoney(currentEconomics.npv, moneyQuality), { quality: moneyQuality }],
+        ['IRR', formatRate(currentEconomics.irr), { quality: moneyQuality }],
+      ] : [
+        ['NPV', 'Hidden until this disclosure is open', { quality: moneyQuality }],
+        ['IRR', 'Hidden until this disclosure is open', { quality: moneyQuality }],
+      ]);
+    }
+    refreshPowerBreakevenReadout();
   }
 
   function renderInspectorPort(current, port, declaration) {
@@ -4888,7 +5128,10 @@
     return `${chip}${bandText}${cite}`;
   }
   function metricRows(rows) {
-    return rows.map(([term, value, meta]) => `<div><dt>${term}</dt><dd>${value}${metricMetaMarkup(meta)}</dd></div>`).join('');
+    return rows.map(([term, value, meta]) => {
+      const tone = meta && typeof meta === 'object' && (meta.tone === 'positive' || meta.tone === 'negative') ? ` class="${meta.tone}"` : '';
+      return `<div><dt>${term}</dt><dd${tone}>${value}${metricMetaMarkup(meta)}</dd></div>`;
+    }).join('');
   }
 
   window.__FLOWSHEET_APP__ = {

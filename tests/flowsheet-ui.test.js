@@ -985,3 +985,44 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
   assert.doesNotMatch(empty, /Blank factory|Start here/);
   assert.equal(context.__elements.get('diagramTitle').textContent, 'Empty flowsheet');
 });
+
+test('Location footprint is a campus diagram and Overview links to it', () => {
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const overview = html.slice(html.indexOf('id="panelOverview"'), html.indexOf('id="panelLocation"'));
+  const location = html.slice(html.indexOf('id="panelLocation"'), html.indexOf('id="panelProcess"'));
+  const economics = html.slice(html.indexOf('id="panelEconomics"'));
+  assert.match(location, /id="siteFootprint"/);
+  assert.match(location, /Campus footprint/);
+  assert.match(location, /Add blocks to size pads/);
+  assert.match(location, /id="siteMapHa"/);
+  assert.doesNotMatch(economics, /id="siteFootprint"/);
+  assert.match(overview, /id="overviewFootprint"/);
+  assert.match(overview, /id="overviewFootprintLink"/);
+  assert.match(overview, />Location</);
+  assert.doesNotMatch(html, /empire/i);
+  assert.doesNotMatch(html, /viewBox="0 0 160 12"/);
+
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  assert.equal(context.__elements.get('siteFootprint').hidden, false);
+  assert.match(context.__elements.get('siteFootprintSvg').innerHTML, /polygon/);
+  assert.match(context.__elements.get('siteFootprintSvg').innerHTML, /ha/);
+  assert.match(context.__elements.get('siteFootprintTotal').textContent, /ha/);
+  assert.match(context.__elements.get('siteFootprintPads').innerHTML, /data-footprint-pad/);
+  assert.equal(context.__elements.get('overviewFootprint').hidden, false);
+  assert.match(context.__elements.get('overviewFootprintSvg').innerHTML, /polygon/);
+  assert.match(context.__elements.get('overviewFootprintHa').textContent, /ha|m²/);
+  assert.match(context.__elements.get('siteMapHa').textContent, /ha|m²/);
+  assert.equal(context.__elements.get('siteMapHa').hidden, false);
+  assert.equal(context.__elements.get('siteFootprintEmpty').hidden, true);
+
+  app.clearFactory();
+  assert.equal(context.__elements.get('siteFootprint').hidden, false);
+  assert.equal(context.__elements.get('siteFootprintEmpty').hidden, false);
+  assert.match(context.__elements.get('siteFootprintEmpty').textContent, /Add blocks to size pads/);
+  assert.equal(context.__elements.get('siteFootprintSvg').innerHTML, '');
+  assert.equal(context.__elements.get('overviewFootprint').hidden, true);
+  assert.equal(context.__elements.get('siteMapFootprintEmpty').hidden, false);
+  assert.match(context.__elements.get('siteMapFootprintEmpty').textContent, /Add blocks to size pads/);
+});

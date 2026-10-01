@@ -72,6 +72,7 @@
   let siteMapMarker = null;
   let siteMapOverlays = { osm: null, pvgis: null, water: null, land: null, footprint: null, network: null };
   let siteMapEnabled = { osm: true, pvgis: true, water: false, land: false, footprint: true, network: false };
+  let siteMapFootprintById = {};
   let activeDemoId = null;
   let lastCashflowCompare = null;
   let preSizingSeed = null;
@@ -715,8 +716,23 @@
         if (input) input.checked = false;
       }
     }
+    syncMapLayerChipState();
     updateSiteMapOverlays();
   });
+  document.getElementById('siteFootprint')?.addEventListener('click', event => {
+    const pad = event.target.closest?.('[data-footprint-pad]');
+    const id = pad?.dataset?.footprintPad || pad?.getAttribute?.('data-footprint-pad');
+    if (id) focusFootprintPad(id);
+  });
+  document.getElementById('siteFootprint')?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const pad = event.target.closest?.('[data-footprint-pad]');
+    if (!pad || pad.tagName === 'BUTTON') return;
+    event.preventDefault();
+    const id = pad.dataset?.footprintPad || pad.getAttribute?.('data-footprint-pad');
+    if (id) focusFootprintPad(id);
+  });
+  document.getElementById('overviewFootprint')?.addEventListener('click', () => activateTab('location'));
   document.getElementById('siteBatteryKWh').addEventListener('change', event => {
     if (!site) return;
     const batteryKWh = Math.max(0, Number(event.target.value) || 0);
@@ -3016,18 +3032,30 @@
       if (source.available === false) return '';
       const ui = MAP_LAYER_UI[id] || { label: source.label, tone: id };
       const checked = siteMapEnabled[id] ? ' checked' : '';
+      const on = siteMapEnabled[id] ? ' is-on' : '';
       const citeText = source.cite?.label || '';
       const title = citeText.replace(/"/g, '&quot;');
-      return `<label class="map-layer-chip map-layer-chip--${ui.tone}" title="${title}"><input type="checkbox" data-layer="${id}"${checked}><span class="map-layer-dot" aria-hidden="true"></span><span class="map-layer-label">${ui.label}</span></label>`;
+      return `<label class="map-layer-chip map-layer-chip--${ui.tone}${on}" title="${title}"><input type="checkbox" data-layer="${id}"${checked}><span class="map-layer-dot" aria-hidden="true"></span><span class="map-layer-label">${ui.label}</span></label>`;
     }).join('');
     siteMapLayersReady = true;
   }
 
+  function syncMapLayerChipState() {
+    const root = document.getElementById('siteMapLayers');
+    const labels = root?.querySelectorAll?.('.map-layer-chip') || [];
+    for (const label of labels) {
+      const input = label.querySelector?.('input');
+      label.classList?.toggle?.('is-on', !!(input && input.checked));
+    }
+  }
+
   function clearSiteMapLayer(id) {
     const layer = siteMapOverlays[id];
-    if (!layer || !siteMap) return;
-    try { siteMap.removeLayer(layer); } catch { /* already removed */ }
+    if (layer && siteMap) {
+      try { siteMap.removeLayer(layer); } catch { /* already removed */ }
+    }
     siteMapOverlays[id] = null;
+    if (id === 'footprint') siteMapFootprintById = {};
   }
 
   function showSiteMapLayer(id) {
@@ -3457,6 +3485,9 @@
         } catch { /* overlays are optional while PVGIS fetches */ }
         applyCoordinates();
       });
+      siteMap.on('zoomend', () => {
+        try { refreshFootprintLabels(); } catch { /* labels are optional */ }
+      });
       showSiteMapAvailable();
       return siteMap;
     } catch {
@@ -3479,9 +3510,16 @@
   }
 
   function updateSiteMapOverlays() {
-    if (!siteMap || typeof L === 'undefined') return;
+    const footprint = currentSiteFootprint();
+    if (!siteMap || typeof L === 'undefined') {
+      syncFootprintMapChrome(footprint);
+      return;
+    }
     const coords = readMapCoordinates();
-    if (!coords) return;
+    if (!coords) {
+      syncFootprintMapChrome(footprint);
+      return;
+    }
 
     if (siteMapOverlays.osm) {
       if (siteMapEnabled.osm) {
@@ -3504,8 +3542,7 @@
     }
 
     clearSiteMapLayer('footprint');
-    if (siteMapEnabled.footprint && MapSite && typeof FlowsheetFootprint !== 'undefined') {
-      const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
+    if (siteMapEnabled.footprint && MapSite && footprint && footprint.totalAreaM2 > 0 && typeof L.polygon === 'function') {
       const campus = typeof MapSite.layoutFootprintCampus === 'function'
         ? MapSite.layoutFootprintCampus({
           latitude: coords.latitude,
@@ -3515,27 +3552,33 @@
           totalHa: footprint.totalHa,
         })
         : [];
-      if (campus.length) {
+      if (campus.length && typeof L.layerGroup === 'function') {
         const group = L.layerGroup();
         for (const block of campus) {
           if (!block.ring?.length) continue;
           const isOutline = block.kind === 'outline';
+          const isSolar = block.kind === 'solar';
           const color = footprintColor(block.unit, { cssVar: false });
           const poly = L.polygon(block.ring, {
-            color: isOutline ? '#7a8fa3' : color,
-            weight: isOutline ? 1 : 2,
-            dashArray: isOutline ? '4 4' : null,
-            fillColor: color,
-            fillOpacity: isOutline ? 0.04 : block.kind === 'solar' ? 0.22 : 0.45,
+            color: isOutline ? '#e7eef6' : '#0b1016',
+            weight: isOutline ? 2.25 : 1.75,
+            opacity: 0.95,
+            dashArray: isOutline ? '7 4' : null,
+            fillColor: isOutline ? '#9aafc4' : color,
+            fillOpacity: isOutline ? 0.14 : isSolar ? 0.58 : 0.78,
             interactive: true,
           });
+          poly.__footprintBlock = block;
           poly.bindPopup(footprintPopupHtml(block));
+          bindFootprintTooltip(poly, block);
           poly.addTo(group);
+          if (block.id) siteMapFootprintById[block.id] = poly;
         }
         group.addTo(siteMap);
         siteMapOverlays.footprint = group;
       }
     }
+    syncFootprintMapChrome(footprint);
 
     clearSiteMapLayer('network');
     if (siteMapEnabled.network && MapSite) {
@@ -3926,6 +3969,7 @@
 
     if (slate) slate.innerHTML = renderSlateTable(overviewSaleRecords());
     renderOverviewResources(landQuality);
+    renderOverviewFootprint();
     renderOverviewDrivers();
     const offtake = document.getElementById('overviewOfftake');
     const offtakeWrap = document.getElementById('overviewOfftakeWrap');
@@ -4145,21 +4189,172 @@
     return '0 ha';
   }
 
-  function footprintBarSvg(footprint) {
-    const total = footprint.totalAreaM2;
-    if (!(total > 0)) return '';
-    const width = 160;
-    const height = 12;
-    const solarShare = footprint.solar.landAreaM2 / total;
-    let x = solarShare * width;
-    const solarRect = `<rect x="0" y="0" width="${Math.max(0, x)}" height="${height}" fill="var(--warning)" opacity="0.9"></rect>`;
-    const padRects = footprint.processes.map(item => {
-      const w = Math.max(item.areaM2 / total * width, footprint.processes.length ? 1.2 : 0);
-      const rect = `<rect x="${x}" y="0" width="${w}" height="${height}" fill="${footprintColor(item.unit)}" opacity="0.95"></rect>`;
-      x += w;
-      return rect;
-    }).join('');
-    return `${solarRect}${padRects}`;
+  function currentSiteFootprint() {
+    if (!site || typeof FlowsheetFootprint === 'undefined') return null;
+    return FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
+  }
+
+  function footprintDiagramFor(footprint, size) {
+    if (!footprint || !(footprint.totalAreaM2 > 0) || !MapSite?.layoutFootprintCampus || !MapSite?.projectCampusDiagram) return null;
+    const latitude = Number(site?.latitude);
+    const longitude = Number(site?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    const blocks = MapSite.layoutFootprintCampus({
+      latitude,
+      longitude,
+      solar: footprint.solar,
+      processes: footprint.processes,
+      totalHa: footprint.totalHa,
+    });
+    if (!blocks.length) return null;
+    return MapSite.projectCampusDiagram(blocks, { latitude, longitude }, size);
+  }
+
+  function campusDiagramMarkup(diagram, { labels = true, interactive = false } = {}) {
+    if (!diagram?.shapes?.length) return '';
+    const rank = { outline: 0, solar: 1, process: 2 };
+    const shapes = diagram.shapes.slice().sort((left, right) => (rank[left.kind] ?? 1) - (rank[right.kind] ?? 1));
+    const polygons = [];
+    const texts = [];
+    for (const shape of shapes) {
+      const pts = shape.points.map(point => point.join(',')).join(' ');
+      const isOutline = shape.kind === 'outline';
+      const fill = footprintColor(shape.unit, { cssVar: false });
+      const opacity = isOutline ? 0.14 : shape.kind === 'solar' ? 0.62 : 0.84;
+      const stroke = isOutline ? '#d7e2ee' : '#0c1117';
+      const weight = isOutline ? 1.4 : 1.1;
+      const dash = isOutline ? ' stroke-dasharray="5 3"' : '';
+      const haText = formatHa((Number(shape.areaM2) || 0) / 10000);
+      const title = `${shape.label || shape.id || 'Pad'} · ${haText}`;
+      const padAttr = interactive && !isOutline && shape.id
+        ? ` data-footprint-pad="${escapeHtml(shape.id)}" tabindex="0"`
+        : '';
+      polygons.push(
+        `<g${padAttr}><title>${escapeHtml(title)}</title><polygon points="${pts}" fill="${fill}" fill-opacity="${opacity}" stroke="${stroke}" stroke-width="${weight}"${dash}></polygon></g>`
+      );
+      if (!labels) continue;
+      if (isOutline && shape.box.h >= 28) {
+        texts.push(`<text class="footprint-ha" x="${shape.box.cx}" y="${(shape.box.minY + 13).toFixed(1)}" text-anchor="middle">${escapeHtml(haText)}</text>`);
+      } else if (!isOutline && shape.box.w >= 34 && shape.box.h >= 14) {
+        const raw = String(shape.label || '');
+        const name = raw.length > 18 ? `${raw.slice(0, 16)}…` : raw;
+        if (name) texts.push(`<text class="footprint-pad-name" x="${shape.box.cx}" y="${shape.box.cy}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(name)}</text>`);
+      }
+    }
+    return `${polygons.join('')}${texts.join('')}`;
+  }
+
+  function footprintLegendMarkup(footprint) {
+    const items = [];
+    if (footprint.solar?.landAreaM2 > 0) {
+      items.push({ id: 'solar', unit: 'solar-pv', label: 'Solar field', detail: formatHa(footprint.solar.ha) });
+    }
+    for (const item of footprint.processes || []) {
+      const quality = item.quality && item.quality !== 'cited' ? ` · ${item.quality}` : '';
+      items.push({
+        id: item.id,
+        unit: item.unit,
+        label: item.label,
+        detail: `${formatNumber(item.areaM2)} m²${quality}`,
+      });
+    }
+    if (!items.length) return '<li class="pad-legend-empty">Add blocks to size pads</li>';
+    const rows = items.map(item => (
+      `<li><button type="button" class="pad-legend" data-footprint-pad="${escapeHtml(item.id)}"><span class="pad-swatch" style="background:${footprintColor(item.unit)}"></span>${escapeHtml(item.label)} · ${escapeHtml(item.detail)}</button></li>`
+    )).join('');
+    if (!footprint.processes?.length) {
+      return `${rows}<li class="pad-legend-empty">Add blocks to size pads</li>`;
+    }
+    return rows;
+  }
+
+  function syncFootprintMapChrome(footprint) {
+    const haEl = document.getElementById('siteMapHa');
+    const emptyEl = document.getElementById('siteMapFootprintEmpty');
+    const enabled = !!siteMapEnabled.footprint;
+    const hasArea = !!(footprint && footprint.totalAreaM2 > 0);
+    if (haEl) {
+      haEl.hidden = !(enabled && hasArea);
+      haEl.textContent = enabled && hasArea ? formatHa(footprint.totalHa) : '';
+    }
+    if (emptyEl) {
+      emptyEl.hidden = !(enabled && !hasArea);
+      emptyEl.textContent = 'Add blocks to size pads';
+    }
+  }
+
+  function bindFootprintTooltip(poly, block) {
+    if (typeof poly?.bindTooltip !== 'function' || !block) return;
+    const isOutline = block.kind === 'outline';
+    const text = isOutline
+      ? formatHa((Number(block.areaM2) || 0) / 10000)
+      : (block.label || block.id || '');
+    if (!text) return;
+    const coords = readMapCoordinates();
+    const zoom = siteMap?.getZoom?.();
+    const visible = MapSite?.footprintLabelVisible
+      ? MapSite.footprintLabelVisible({ areaM2: block.areaM2, latitude: coords?.latitude, zoom })
+      : false;
+    let offset = [0, 0];
+    if (isOutline && visible && Number.isFinite(zoom)) {
+      const latitude = Number(coords?.latitude) || 0;
+      const metersPerPixel = 156543.03392 * Math.cos(latitude * Math.PI / 180) / (2 ** zoom);
+      const radiusPx = Math.sqrt((Number(block.areaM2) || 0) / Math.PI) / metersPerPixel;
+      offset = [0, -Math.max(14, Math.min(radiusPx * 0.72, 96))];
+    }
+    try { poly.unbindTooltip?.(); } catch { /* no tooltip yet */ }
+    poly.bindTooltip(text, {
+      permanent: visible,
+      direction: 'center',
+      offset,
+      className: isOutline ? 'footprint-map-ha' : 'footprint-map-label',
+      opacity: 1,
+    });
+  }
+
+  function refreshFootprintLabels() {
+    for (const poly of Object.values(siteMapFootprintById)) {
+      if (poly?.__footprintBlock) bindFootprintTooltip(poly, poly.__footprintBlock);
+    }
+  }
+
+  function focusFootprintPad(id) {
+    if (!id || !siteMap) return false;
+    const layer = siteMapFootprintById[id];
+    if (!layer || typeof layer.openPopup !== 'function') return false;
+    try {
+      if (activeTab !== 'location') activateTab('location');
+      const bounds = typeof layer.getBounds === 'function' ? layer.getBounds() : null;
+      if (bounds && typeof siteMap.fitBounds === 'function') {
+        siteMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 17, animate: false });
+      }
+      layer.openPopup();
+      siteMapMarker?.bringToFront?.();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function renderOverviewFootprint() {
+    const wrap = document.getElementById('overviewFootprint');
+    const svg = document.getElementById('overviewFootprintSvg');
+    const ha = document.getElementById('overviewFootprintHa');
+    if (!wrap) return;
+    const footprint = currentSiteFootprint();
+    const hasArea = !!(site && graph.nodes.length && footprint && footprint.totalAreaM2 > 0);
+    wrap.hidden = !hasArea;
+    if (!hasArea) {
+      if (svg) svg.innerHTML = '';
+      if (ha) ha.textContent = '';
+      return;
+    }
+    if (ha) ha.textContent = formatHa(footprint.totalHa);
+    const diagram = footprintDiagramFor(footprint, { width: 160, height: 96, pad: 4 });
+    if (svg) {
+      if (diagram?.viewBox) svg.setAttribute('viewBox', diagram.viewBox);
+      svg.innerHTML = diagram ? campusDiagramMarkup(diagram, { labels: false, interactive: false }) : '';
+    }
   }
 
   function renderSiteFootprint() {
@@ -4168,35 +4363,34 @@
     const pads = document.getElementById('siteFootprintPads');
     const note = document.getElementById('siteFootprintNote');
     const svg = document.getElementById('siteFootprintSvg');
-    if (!panel || !FlowsheetFootprint) return;
-    const details = panel.closest?.('details');
-    if (!site) {
-      panel.hidden = true;
-      if (details) {
-        details.hidden = true;
-        details.open = false;
+    const empty = document.getElementById('siteFootprintEmpty');
+    const total = document.getElementById('siteFootprintTotal');
+    if (!panel) return;
+    panel.hidden = false;
+    const footprint = currentSiteFootprint();
+    const hasArea = !!(footprint && footprint.totalAreaM2 > 0);
+    if (empty) {
+      empty.hidden = hasArea;
+      empty.textContent = 'Add blocks to size pads';
+    }
+    if (total) total.textContent = hasArea ? formatHa(footprint.totalHa) : '';
+    if (!hasArea) {
+      if (svg) {
+        svg.hidden = true;
+        svg.innerHTML = '';
       }
       if (metrics) metrics.innerHTML = '';
       if (pads) pads.innerHTML = '';
       if (note) note.textContent = '';
-      if (svg) svg.innerHTML = '';
+      syncFootprintMapChrome(footprint);
       return;
     }
-    const footprint = FlowsheetFootprint.estimateFootprint({ site, graph, solved: result });
-    const hasArea = footprint.totalAreaM2 > 0;
-    panel.hidden = !hasArea;
-    if (details) {
-      details.hidden = !hasArea;
-      details.open = hasArea;
+    const diagram = footprintDiagramFor(footprint, { width: 320, height: 200, pad: 16 });
+    if (svg) {
+      svg.hidden = false;
+      if (diagram?.viewBox) svg.setAttribute('viewBox', diagram.viewBox);
+      svg.innerHTML = diagram ? campusDiagramMarkup(diagram, { labels: true, interactive: true }) : '';
     }
-    if (!hasArea) {
-      if (metrics) metrics.innerHTML = '';
-      if (pads) pads.innerHTML = '';
-      if (note) note.textContent = '';
-      if (svg) svg.innerHTML = '';
-      return;
-    }
-    if (svg) svg.innerHTML = footprintBarSvg(footprint);
     if (metrics) {
       const landQuality = classifyQuality({ kind: 'land' });
       const padQuality = classifyQuality({ kind: 'intensity', sourceNote: footprint.processes.some(item => item.quality === 'cited') ? 'cited pad intensities' : 'order-of-magnitude screening' });
@@ -4208,17 +4402,11 @@
         ['Total', `${formatUncertainHa(footprint.totalHa)} · ${formatUncertainNumber(footprint.totalAcres, landQuality)} acres`, { quality: landQuality }],
       ]);
     }
-    if (pads) {
-      pads.innerHTML = footprint.processes
-        .map(item => {
-          const quality = item.quality && item.quality !== 'cited' ? ` · ${item.quality}` : '';
-          return `<li><span class="pad-swatch" style="background:${footprintColor(item.unit)}"></span>${item.label} · ${formatNumber(item.areaM2)} m²${quality}</li>`;
-        })
-        .join('');
-    }
+    if (pads) pads.innerHTML = footprintLegendMarkup(footprint);
     if (note) {
       note.textContent = 'Process pads use cited or screening intensities × activity (not surveyed layouts). Solar = panel area ÷ GCR.';
     }
+    syncFootprintMapChrome(footprint);
   }
 
   function draftSiteLabel() {

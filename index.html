@@ -85,6 +85,15 @@
                 <div class="metric-stat"><span>Right</span><strong>—</strong></div>
               </div>
             </div>
+            <div class="overview-footprint" id="overviewFootprint" hidden>
+              <button type="button" id="overviewFootprintLink" class="overview-footprint-link">
+                <svg id="overviewFootprintSvg" class="footprint-svg footprint-mini" viewBox="0 0 160 96" role="img" aria-label="Campus footprint"></svg>
+                <span class="overview-footprint-meta">
+                  <strong id="overviewFootprintHa"></strong>
+                  <span>Location</span>
+                </span>
+              </button>
+            </div>
           </section>
         </div>
 
@@ -152,8 +161,23 @@
                 <p class="site-map-legend-cite" id="siteMapLegendCite"></p>
               </details>
             </div>
+            <p class="site-map-ha" id="siteMapHa" hidden></p>
+            <p class="site-map-footprint-empty" id="siteMapFootprintEmpty" hidden>Add blocks to size pads</p>
           </div>
           <p class="status-meta" id="siteMapStatus">Click map to set site · Solar, water, and land fill the map (one colormap at a time).</p>
+        </div>
+        <div id="siteFootprint" class="site-footprint">
+          <div class="site-footprint-head">
+            <h4>Campus footprint</h4>
+            <p class="footprint-total" id="siteFootprintTotal"></p>
+          </div>
+          <div class="footprint-stage">
+            <svg id="siteFootprintSvg" class="footprint-svg footprint-campus" viewBox="0 0 320 200" role="img" aria-label="Campus footprint diagram"></svg>
+            <p class="footprint-empty" id="siteFootprintEmpty" hidden>Add blocks to size pads</p>
+          </div>
+          <dl class="strip-metrics" id="siteFootprintMetrics"></dl>
+          <ul class="footprint-pads" id="siteFootprintPads"></ul>
+          <p class="status-meta" id="siteFootprintNote"></p>
         </div>
         <details class="more-section" id="siteLocationDetails" open>
           <summary>Coordinates</summary>
@@ -403,13 +427,6 @@
           </div>
         </section>
 
-        <div id="siteFootprint" class="site-footprint tool-panel" hidden>
-          <h4>Site footprint</h4>
-          <svg id="siteFootprintSvg" class="footprint-svg" viewBox="0 0 160 12" aria-hidden="true"></svg>
-          <dl class="strip-metrics" id="siteFootprintMetrics"></dl>
-          <ul class="footprint-pads" id="siteFootprintPads"></ul>
-          <p class="status-meta" id="siteFootprintNote"></p>
-        </div>
       </div>
     </section>
   </div>

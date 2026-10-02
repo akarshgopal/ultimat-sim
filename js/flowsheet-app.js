@@ -398,7 +398,7 @@
     'consumable-source': { label: 'Consumables', palette: { section: 'utility', order: 8, glyph: 'C', tone: 'methane', description: 'Sorbent or reagent makeup' } },
     'consumable-sink': { label: 'Spent media', palette: { section: 'utility', order: 12, glyph: '↓C', tone: 'methane', description: 'Dispose spent sorbent or reagent' } },
     'electrical-bus': { label: 'Electricity bus', palette: { section: 'utility', order: 1, glyph: '⚡↗', description: 'One supply → many blocks' } },
-    'material-splitter': { label: 'Material splitter', palette: { section: 'utility', order: 2, glyph: 'M↗', tone: 'water', description: 'One stream → many branches' } },
+    'material-splitter': { label: 'Material splitter', palette: { section: 'utility', order: 2, glyph: 'M↗', tone: 'water', description: 'One stream → many branches; optional priority fill + overflow' } },
     'material-mixer': { label: 'Material mixer', palette: { section: 'utility', order: 3, glyph: '↘M', tone: 'water', description: 'Many streams → one output' } },
     'intake-pump': {
       label: 'Intake pump', capacity: 1000, rate: 1000, activityUnit: 'm³/day',
@@ -2911,6 +2911,10 @@
     }
     if (event.target.name === 'heatTemperature') { current.temperature = Number(event.target.value); updateSourceStream(current); }
     if (event.target.name === 'branchWeight') graph.edges[Number(event.target.dataset.edge)].weight = Number(event.target.value);
+    if (event.target.name === 'branchPriority') {
+      const value = Number(event.target.value);
+      graph.edges[Number(event.target.dataset.edge)].priority = Number.isFinite(value) ? value : 0;
+    }
     if (event.target.name === 'edgeCapacity') {
       const edge = graph.edges[Number(event.target.dataset.edge)];
       const raw = String(event.target.value ?? '').trim();
@@ -6542,7 +6546,7 @@
       const edge = graph.edges[index];
       const peerId = declaration.direction === 'in' ? edge.from.node : edge.to.node;
       const weight = units[current.unit].kind === 'splitter' && declaration.direction === 'out'
-        ? `<label class="branch-weight">Share <input name="branchWeight" data-edge="${index}" type="range" min="0.1" max="10" step="0.1" value="${edge.weight ?? 1}"></label>`
+        ? `<label class="branch-weight">Share <input name="branchWeight" data-edge="${index}" type="range" min="0.1" max="10" step="0.1" value="${edge.weight ?? 1}" title="Relative share within the same priority tier"></label><label class="branch-priority">Priority <input name="branchPriority" data-edge="${index}" type="number" min="0" max="9" step="1" value="${Number.isFinite(Number(edge.priority)) ? Number(edge.priority) : 0}" title="Higher fills first (Factorio priority output). Equal priorities share by weight, then MECH12 overflow."></label>`
         : '';
       const capValue = edge.capacity == null || edge.capacity === '' || !Number.isFinite(Number(edge.capacity))
         ? ''

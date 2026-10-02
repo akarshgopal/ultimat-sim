@@ -763,23 +763,41 @@ function scaleNodeStreams(result, scale) {
 }
 
 
-// MECH12: Factorio-style splitter overflow. Capacities are per-branch maxima
-// (sink accept / edge cap, or frozen delivered for non-sink targets). Water-fill
-// blocked leftovers onto free legs by weight; only then reject at the inlet.
-function allocateSplitterOverflow(available, weights, capacities) {
+// MECH12 + MECH13: Factorio splitter overflow with optional priority fill.
+// Capacities are per-branch maxima (sink accept / edge cap, or frozen delivered
+// for non-sink targets). Among eligible outlets, water-fill only the current
+// highest-priority tier by weight; when that tier saturates, spill to the next
+// (MECH12). Equal / unset priorities (default 0) → bit-identical to MECH12.
+// Inlet rejects only after every useful tier saturates.
+function allocateSplitterOverflow(available, weights, capacities, priorities = null) {
   const n = weights.length;
   const alloc = Array(n).fill(0);
   let remaining = Math.max(0, available);
-  const active = new Set();
+  const prios = priorities && priorities.length === n
+    ? priorities.map(value => {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : 0;
+    })
+    : Array(n).fill(0);
+  const eligible = new Set();
   for (let i = 0; i < n; i += 1) {
-    if (weights[i] > 0 && capacities[i] > 1e-15) active.add(i);
+    if (weights[i] > 0 && capacities[i] > 1e-15) eligible.add(i);
   }
   let guard = 0;
-  while (remaining > 1e-12 && active.size && guard < n + 3) {
+  while (remaining > 1e-12 && eligible.size && guard < n + 3) {
     guard += 1;
+    let maxPrio = -Infinity;
+    for (const i of eligible) maxPrio = Math.max(maxPrio, prios[i]);
+    const active = new Set();
+    for (const i of eligible) {
+      if (prios[i] === maxPrio) active.add(i);
+    }
     let weightSum = 0;
     for (const i of active) weightSum += weights[i];
-    if (weightSum <= 0) break;
+    if (weightSum <= 0) {
+      for (const i of active) eligible.delete(i);
+      continue;
+    }
     const saturated = [];
     for (const i of active) {
       const offer = remaining * (weights[i] / weightSum);
@@ -790,7 +808,7 @@ function allocateSplitterOverflow(available, weights, capacities) {
       }
     }
     if (saturated.length) {
-      for (const i of saturated) active.delete(i);
+      for (const i of saturated) eligible.delete(i);
       remaining = available - alloc.reduce((sum, value) => sum + value, 0);
       if (remaining < 0) remaining = 0;
       continue;
@@ -971,14 +989,18 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
       continue;
     }
 
-    // Material splitter (MECH12): Factorio overflow — blocked branches keep what
-    // they can; leftover rebalances onto free sink legs by weight; inlet
-    // backpressures only when leftover remains after free legs saturate.
+    // Material splitter (MECH12+13): priority tiers fill first, then Factorio
+    // overflow rebalances onto free lower-priority legs by weight; inlet
+    // backpressures only when leftover remains after useful legs saturate.
     if (unit.kind === 'splitter') {
       if (!result.available || !outgoing.length) continue;
       result.available = scrubTinyNegativeMols(result.available);
       const want = safeStreamAmount(result.available);
       const weights = outgoing.map(edge => nonnegative(Number(edge.weight ?? 1), 'split weight'));
+      const priorities = outgoing.map(edge => {
+        const value = Number(edge.priority);
+        return Number.isFinite(value) ? value : 0;
+      });
       const deliveredAmts = [];
       const capacities = [];
       let reason = null;
@@ -1007,7 +1029,7 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
         ))) reason = reason || 'logistics';
       }
       if (!(want > 1e-15)) continue;
-      const alloc = allocateSplitterOverflow(want, weights, capacities);
+      const alloc = allocateSplitterOverflow(want, weights, capacities, priorities);
       let got = 0;
       for (let i = 0; i < outgoing.length; i += 1) {
         const edge = outgoing[i];

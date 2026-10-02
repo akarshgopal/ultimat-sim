@@ -2428,8 +2428,9 @@ button.primary-action:focus-visible {
 .port-row small { color: var(--text-muted); font-size: 0.7rem; }
 .port-connection { margin-top: 5px; }
 .port-connection button { margin-top: 4px; }
-.branch-weight { display: grid; grid-template-columns: auto 90px; align-items: center; gap: 6px; color: var(--text-muted); font-size: 0.7rem; }
-.branch-weight input { margin: 0; }
+.branch-weight, .branch-priority { display: grid; grid-template-columns: auto 90px; align-items: center; gap: 6px; color: var(--text-muted); font-size: 0.7rem; }
+.branch-weight input, .branch-priority input { margin: 0; }
+.branch-priority input { width: 90px; }
 .port-row button,
 .delete-node {
   padding: 5px 7px;

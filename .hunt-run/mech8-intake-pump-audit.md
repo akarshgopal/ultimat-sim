@@ -64,6 +64,6 @@
 
 ## 5. Shipped
 
-- **Tip:** (pending merge)
+- **Tip:** `dd472ce` on `main`
 - **Pages:** https://akarshgopal.github.io/ultimat-sim/
 - **Tests:** 258 pass (+6 MECH8)

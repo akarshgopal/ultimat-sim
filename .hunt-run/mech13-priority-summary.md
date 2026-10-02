@@ -1,6 +1,6 @@
 # MECH13 — Priority fill on material-splitter outlets
 
-**Tip:** (set after push)
+**Tip:** `160a189` on `main`
 **Tests:** 292 pass
 **Live:** https://akarshgopal.github.io/ultimat-sim/
 

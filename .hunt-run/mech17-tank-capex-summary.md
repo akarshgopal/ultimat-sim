@@ -1,6 +1,7 @@
 # MECH17 — Tank CAPEX + footprint (+ Process shortcuts)
 
-**Feat tip:** (set after commit)
+**Feat tip:** `2d9de32`
+**Pages:** live
 **Tests:** 321 pass
 **Date:** 2026-10-02 CEST
 

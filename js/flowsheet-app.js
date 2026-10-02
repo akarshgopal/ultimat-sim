@@ -414,6 +414,19 @@
         { label: 'Elimelech & Phillip 2011 SWRO plant SEC band', url: 'https://doi.org/10.1126/science.1200488' },
       ],
     },
+    'gas-blower': {
+      label: 'Gas blower', capacity: 25000, rate: 25000, activityUnit: 'Nm³/day',
+      palette: { section: 'utility', order: 4.5, glyph: 'F', tone: 'carbon', description: 'Air / flue move — needs bus power or the line starves' },
+      params: { blowerKWhPerNm3: 0.001 },
+      controls: [
+        { key: 'blowerKWhPerNm3', label: 'Blower energy', min: 0, max: 0.02, step: 0.0005, unit: 'kWh/Nm³' },
+      ],
+      sourceNote: 'MECH10 screening process fan / duct+filter (~0.5–5 kWh per 1000 Nm³). Default 0.001 kWh/Nm³. Pass-through gas; electricity from the bus. Not a Keith CE contactor fan (~0.00004 kWh/Nm³) — dial down for contactor-only. DAC/ASU plant electricity SECs stay as-is; this is additive until you lower those. Not a fan curve.',
+      references: [
+        { label: 'Keith et al. 2018 Carbon Engineering (contactor fan order-of-magnitude)', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
+        { label: 'IEA Direct Air Capture 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
+      ],
+    },
     'material-buffer': {
       label: 'Buffer tank', capacity: 10000, rate: 1000, activityUnit: 'kg/day',
       palette: { section: 'utility', order: 5, glyph: 'T', tone: 'water', description: 'Store mass across hours — fill, hold, discharge' },
@@ -4529,7 +4542,7 @@
     }
     if (kind === 'sink') return 'silo';
     if (kind === 'buffer' || unit === 'material-buffer') return 'tank';
-    if (unit === 'intake-pump') return 'pipe';
+    if (unit === 'intake-pump' || unit === 'gas-blower') return 'pipe';
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf') return 'pond';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery') return 'cell';

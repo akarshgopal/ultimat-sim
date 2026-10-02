@@ -673,6 +673,61 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   };
 }
 
+// Gas transfer / intake blower (air, flue). Screening fan SEC is duct move only —
+// DAC/ASU plant electricity still excludes or folds BOP unless the user lowers it
+// (see MECH10 audit). Twin of intake-pump for gas phase.
+function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
+  const feed = validateStream(inlets.in, 'material');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  if (feed.phase !== 'gas') throw new Error('Gas blower is for gas feeds (use an intake pump for liquid)');
+  const installed = nonnegative(capacity ?? 0, 'capacity');
+  const requested = requestedActivity == null || requestedActivity === ''
+    ? installed
+    : nonnegative(Number(requestedActivity), 'requestedActivity');
+  const nm3PerKmol = nonnegative(Number(params.nm3PerKmol ?? 22.414), 'nm3PerKmol');
+  if (nm3PerKmol === 0) throw new Error('nm3PerKmol must be greater than zero');
+  const secKgRaw = params.blowerKWhPerKg;
+  const useKg = secKgRaw != null && secKgRaw !== '';
+  const sec = useKg
+    ? nonnegative(Number(secKgRaw), 'blowerKWhPerKg')
+    : nonnegative(Number(params.blowerKWhPerNm3 ?? 0.001), 'blowerKWhPerNm3');
+  const feedKg = streamMassKg(feed);
+  const totalMol = Object.values(feed.mol).reduce((sum, amount) => sum + amount, 0);
+  const feedNm3 = totalMol * nm3PerKmol / 1000;
+  const feedAmount = useKg ? feedKg : feedNm3;
+  const planned = Math.min(requested, installed);
+  const limits = {
+    capacity: installed,
+    in: feedAmount,
+    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
+  };
+  const activity = Math.min(planned, limits.in, limits.electricity);
+  const fraction = feedAmount === 0 ? 0 : activity / feedAmount;
+  const consumedFeed = scaleStream(feed, fraction);
+  const limitingValue = Math.min(limits.capacity, limits.in, limits.electricity);
+  const limitedBy = reached(activity, requested)
+    ? []
+    : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name);
+  return {
+    activity,
+    requestedInputs: {
+      in: scaleStream(feed, feedAmount === 0 ? 0 : planned / feedAmount),
+      electricity: { kind: 'electricity', kWh: planned * sec },
+    },
+    consumed: {
+      in: consumedFeed,
+      electricity: { kind: 'electricity', kWh: activity * sec },
+    },
+    outlets: { out: cloneStream(consumedFeed) },
+    limitedBy,
+    blowerBasis: useKg ? 'kg' : 'nm3',
+    blowerKWhPerUnit: sec,
+    nm3PerKmol,
+  };
+}
+
 const UNITS = Object.freeze({
   'material-source': {
     kind: 'source',
@@ -742,6 +797,15 @@ const UNITS = Object.freeze({
       out: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: intakePump,
+  },
+  'gas-blower': {
+    kind: 'converter',
+    ports: {
+      in: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      out: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: gasBlower,
   },
   'material-sink': {
     kind: 'sink',

@@ -1,6 +1,6 @@
 # MECH9 — Heat & power export / curtailment caps
 
-**Tip:** (filled after push)
+**Tip:** `b7a9e1a` on `main`
 **Tests:** 265 pass
 **Pages:** https://akarshgopal.github.io/ultimat-sim/
 

@@ -54,3 +54,10 @@ Factorio/CoI: a full belt stops the machine; a capped grid interconnect / coolin
 - Heat quality (T_C) rejection curves beyond energy cap
 - CAPEX for interconnect / cooling
 
+
+
+## 5. Shipped
+
+- **Tip:** `b7a9e1a` on `main`
+- **Pages:** https://akarshgopal.github.io/ultimat-sim/
+- **Tests:** 265 pass

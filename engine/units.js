@@ -673,6 +673,13 @@ const UNITS = Object.freeze({
       out: { direction: 'out', kind: 'material', required: true },
     },
   },
+  'material-buffer': {
+    kind: 'buffer',
+    ports: {
+      in: { direction: 'in', kind: 'material', required: true },
+      out: { direction: 'out', kind: 'material', required: true },
+    },
+  },
   'material-sink': {
     kind: 'sink',
     ports: { in: { direction: 'in', kind: 'material', required: true } },

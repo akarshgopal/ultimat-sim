@@ -230,6 +230,97 @@ function validateSite({ site, graph }) {
   }
 }
 
+function finiteBufferCapacityKg(params = {}) {
+  if (params.capacityKg == null || params.capacityKg === '') return Infinity;
+  const capacity = Number(params.capacityKg);
+  if (!Number.isFinite(capacity)) return Infinity;
+  return nonnegative(capacity, 'capacityKg');
+}
+
+function bufferStartInventoryKg(params = {}) {
+  const raw = params.inventoryKg ?? params.initialKg ?? 0;
+  return nonnegative(Number(raw) || 0, 'inventoryKg');
+}
+
+function scaleMaterialToMass(stream, massKg) {
+  const current = streamMassKg(stream);
+  if (massKg <= 0) return scaleStream(stream, 0);
+  if (current <= 0) throw new Error('Cannot scale an empty material stream to a positive mass');
+  return scaleStream(stream, massKg / current);
+}
+
+// Charge inlet into inventory up to capacity, then discharge up to the setpoint.
+// End inventory carries across solveHorizon hours via params.inventoryKg.
+function evaluateBuffer(node, inlets, requestedActivity) {
+  const params = node.params || {};
+  const inlet = validateStream(inlets.in, 'material');
+  const capacityKg = finiteBufferCapacityKg(params);
+  let inventoryKg = bufferStartInventoryKg(params);
+  if (Number.isFinite(capacityKg)) inventoryKg = Math.min(inventoryKg, capacityKg);
+  const startInventoryKg = inventoryKg;
+
+  let stored = null;
+  if (params.storedStream) {
+    stored = cloneStream(validateStream(params.storedStream, 'material'));
+    const storedMass = streamMassKg(stored);
+    if (inventoryKg > 0 && storedMass > 0) stored = scaleMaterialToMass(stored, inventoryKg);
+    else if (inventoryKg <= 0) stored = scaleStream(stored, 0);
+  }
+
+  const inMass = streamMassKg(inlet);
+  const free = Number.isFinite(capacityKg) ? Math.max(0, capacityKg - inventoryKg) : Infinity;
+  const acceptedMass = Math.min(inMass, free);
+  const limitedBy = [];
+  if (acceptedMass + Math.max(1, acceptedMass) * 1e-9 < inMass) limitedBy.push('capacity');
+  const accepted = scaleStream(inlet, inMass === 0 ? 0 : acceptedMass / inMass);
+
+  if (acceptedMass > 0) {
+    if (!stored || inventoryKg <= 1e-12) {
+      stored = cloneStream(accepted);
+      inventoryKg = acceptedMass;
+    } else {
+      stored = mixMaterial([scaleMaterialToMass(stored, inventoryKg), accepted]);
+      inventoryKg = streamMassKg(stored);
+    }
+  }
+
+  const requested = requestedActivity == null || requestedActivity === ''
+    ? inventoryKg
+    : nonnegative(Number(requestedActivity), 'requestedActivity');
+  const dischargeMass = Math.min(requested, inventoryKg);
+  if (requested > 0 && dischargeMass + Math.max(1, dischargeMass) * 1e-9 < requested) {
+    limitedBy.push('inventory');
+  }
+
+  const template = stored && streamMassKg(stored) > 0
+    ? stored
+    : (acceptedMass > 0 ? accepted : inlet);
+  const outlet = dischargeMass <= 0
+    ? scaleStream(template, 0)
+    : scaleMaterialToMass(template, dischargeMass);
+
+  inventoryKg = Math.max(0, inventoryKg - dischargeMass);
+  if (inventoryKg <= 1e-12) {
+    inventoryKg = 0;
+    stored = scaleStream(template, 0);
+  } else {
+    stored = scaleMaterialToMass(template, inventoryKg);
+  }
+
+  return {
+    activity: dischargeMass,
+    inventoryKg,
+    capacityKg: Number.isFinite(capacityKg) ? capacityKg : null,
+    fill: Number.isFinite(capacityKg) && capacityKg > 0 ? inventoryKg / capacityKg : null,
+    startInventoryKg,
+    storedStream: cloneStream(stored),
+    requestedInputs: { in: cloneStream(inlet) },
+    consumed: { in: accepted },
+    outlets: { out: outlet },
+    limitedBy: [...new Set(limitedBy)],
+  };
+}
+
 function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), edgeLimits = null) {
   const { nodes, edges } = caseDefinition.graph;
   const remaining = siteBudgets(caseDefinition.site);
@@ -292,6 +383,13 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), 
     const inlets = Object.fromEntries(
       incoming.map(edge => [edge.to.port, cloneStream(edgeStreams.get(edge))])
     );
+    if (unit.kind === 'buffer') {
+      const result = evaluateBuffer(node, inlets, caseDefinition.operation?.setpoints?.[node.id]);
+      nodeResults[node.id] = result;
+      for (const edge of incoming) edgeStreams.set(edge, result.consumed[edge.to.port]);
+      for (const edge of outgoing) setOutlet(edge, result.outlets[edge.from.port]);
+      continue;
+    }
     if (unit.kind === 'sink') {
       const incomingStreams = incoming.map(edge => cloneStream(edgeStreams.get(edge)));
       nodeResults[node.id] = {
@@ -483,6 +581,30 @@ function calculateBalances(nodes, edges, edgeStreams, nodeResults) {
     }
     if (result.received?.kind === 'electricity') electricityConsumed += result.received.kWh;
     if (result.received?.kind === 'heat') heatConsumed += result.received.kWh;
+    // Buffer SOC change is inventory, not a loss: +Δ sinks elements, −Δ sources them.
+    if (result.inventoryKg != null && result.startInventoryKg != null) {
+      const deltaKg = result.inventoryKg - result.startInventoryKg;
+      if (Math.abs(deltaKg) > 1e-12) {
+        const candidates = [result.storedStream, result.consumed?.in, result.outlets?.out].filter(Boolean);
+        let basis = candidates.find(stream => stream.kind === 'material' && streamMassKg(stream) > 1e-15);
+        if (!basis) basis = candidates.find(stream => stream.kind === 'material');
+        if (basis) {
+          const basisMass = streamMassKg(basis);
+          const accounted = basisMass > 0
+            ? scaleStream(basis, Math.abs(deltaKg) / basisMass)
+            : scaleStream(basis, 0);
+          if (streamMassKg(accounted) > 1e-15) {
+            if (deltaKg > 0) {
+              add(sinkElements, elementAmounts(accounted));
+              sinkCharge += chargeAmount(accounted);
+            } else {
+              add(sourceElements, elementAmounts(accounted));
+              sourceCharge += chargeAmount(accounted);
+            }
+          }
+        }
+      }
+    }
   }
 
   const elements = {};
@@ -613,6 +735,13 @@ function accumulateSolved(totals, solved) {
     if (result.available && result.available.kWh != null) {
       current.available = addStreams(current.available, result.available);
     }
+    if (result.inventoryKg != null) {
+      current.inventoryKg = result.inventoryKg;
+      current.capacityKg = result.capacityKg;
+      current.fill = result.fill;
+      current.startInventoryKg = result.startInventoryKg;
+    }
+    if (result.storedStream) current.storedStream = cloneStream(result.storedStream);
     current.limitedBy = [...new Set([...(current.limitedBy || []), ...(result.limitedBy || [])])];
     for (const group of ['requestedInputs', 'consumed', 'outlets']) {
       if (!result[group]) continue;
@@ -650,6 +779,28 @@ function solveHorizon(caseDefinition) {
   for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'converter')) {
     remainingDemand[node.id] = caseDefinition.operation?.setpoints?.[node.id] ?? 0;
   }
+  // Buffers with an explicit daily discharge setpoint spread it across hours.
+  // No setpoint → drain-available each hour (pass-through / empty the tank).
+  for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'buffer')) {
+    const raw = caseDefinition.operation?.setpoints?.[node.id];
+    if (raw == null || raw === '') continue;
+    remainingDemand[node.id] = Number(raw) || 0;
+  }
+
+  const bufferState = new Map();
+  for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'buffer')) {
+    const params = node.params || {};
+    let stored = params.storedStream ? cloneStream(params.storedStream) : null;
+    let inventoryKg = nonnegative(Number(params.inventoryKg ?? params.initialKg ?? 0) || 0, 'inventoryKg');
+    const capacityKg = finiteBufferCapacityKg(params);
+    if (Number.isFinite(capacityKg)) inventoryKg = Math.min(inventoryKg, capacityKg);
+    if (stored && inventoryKg > 0 && streamMassKg(stored) > 0) {
+      stored = scaleMaterialToMass(stored, inventoryKg);
+    } else if (inventoryKg <= 0 && stored) {
+      stored = scaleStream(stored, 0);
+    }
+    bufferState.set(node.id, { inventoryKg, storedStream: stored });
+  }
 
   const totals = {
     nodes: {},
@@ -658,7 +809,7 @@ function solveHorizon(caseDefinition) {
     edgeLimits: [],
     balances: { elements: {}, chargeMol: 0, electricityKWh: 0, heatKWh: 0, maxAbsResidual: 0 },
     convergence: { converged: true, iterations: 24, largestResidual: 0 },
-    horizon: { hours: [], solarKWp, profile: hours, batteryKWh },
+    horizon: { hours: [], solarKWp, profile: hours, batteryKWh, buffers: {} },
   };
 
   for (let hour = 0; hour < 24; hour += 1) {
@@ -693,6 +844,7 @@ function solveHorizon(caseDefinition) {
     }
     const sunLeft = hours.slice(hour).filter(value => value > 0).length || 1;
     const power = pv + discharge;
+    const hoursLeft = 24 - hour;
     for (const node of hourCase.graph.nodes) {
       if (UNITS[node.unit].kind === 'source' && node.siteResource && hourCase.site.resources[node.siteResource]) {
         node.params.stream = cloneStream(hourCase.site.resources[node.siteResource].stream);
@@ -701,6 +853,20 @@ function solveHorizon(caseDefinition) {
         node.capacity = (caseDefinition.graph.nodes.find(item => item.id === node.id).capacity || 0) / 24;
         const leftover = remainingDemand[node.id] || 0;
         hourCase.operation.setpoints[node.id] = power === 0 ? 0 : Math.min(leftover, node.capacity, leftover / sunLeft);
+      }
+      if (UNITS[node.unit].kind === 'buffer') {
+        const state = bufferState.get(node.id);
+        node.params = { ...(node.params || {}) };
+        node.params.inventoryKg = state.inventoryKg;
+        if (state.storedStream) node.params.storedStream = cloneStream(state.storedStream);
+        if (Object.prototype.hasOwnProperty.call(remainingDemand, node.id)) {
+          const leftover = remainingDemand[node.id] || 0;
+          // Buffers are not sun-gated: spread remaining discharge across hours left.
+          hourCase.operation.setpoints[node.id] = Math.min(leftover, leftover / hoursLeft);
+        } else {
+          // No daily setpoint → drain whatever is in the tank this hour.
+          delete hourCase.operation.setpoints[node.id];
+        }
       }
     }
     const sabatier = hourCase.graph.nodes.find(node => node.unit === 'sabatier');
@@ -763,6 +929,19 @@ function solveHorizon(caseDefinition) {
     for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'converter')) {
       remainingDemand[node.id] = Math.max(0, (remainingDemand[node.id] || 0) - (solved.nodes[node.id]?.activity || 0));
     }
+    for (const id of Object.keys(remainingDemand)) {
+      const node = caseDefinition.graph.nodes.find(item => item.id === id);
+      if (!node || UNITS[node.unit].kind !== 'buffer') continue;
+      remainingDemand[id] = Math.max(0, (remainingDemand[id] || 0) - (solved.nodes[id]?.activity || 0));
+    }
+    for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'buffer')) {
+      const result = solved.nodes[node.id];
+      if (!result) continue;
+      bufferState.set(node.id, {
+        inventoryKg: result.inventoryKg ?? 0,
+        storedStream: result.storedStream ? cloneStream(result.storedStream) : null,
+      });
+    }
     for (const [id] of Object.entries(caseDefinition.site.resources || {})) {
       if (id === 'electricity' || id === 'grid') continue;
       const used = hourCase.graph.nodes
@@ -776,10 +955,23 @@ function solveHorizon(caseDefinition) {
     soc = Math.min(batteryKWh, soc + Math.min(Math.max(0, pv - supplied) * eta, powerKW));
     const methane = solved.nodes.sabatier?.activity || 0;
     const h2 = solved.nodes.electrolyzer?.activity || 0;
+    const hourBuffers = {};
+    for (const [id, state] of bufferState) {
+      const capacityKg = finiteBufferCapacityKg(
+        caseDefinition.graph.nodes.find(item => item.id === id)?.params || {}
+      );
+      hourBuffers[id] = {
+        soc: state.inventoryKg,
+        capacityKg: Number.isFinite(capacityKg) ? capacityKg : null,
+        fill: Number.isFinite(capacityKg) && capacityKg > 0 ? state.inventoryKg / capacityKg : null,
+      };
+      totals.horizon.buffers[id] = hourBuffers[id];
+    }
     totals.horizon.hours.push({
       hour, pv, discharge, soc, supplied,
       methane,
       h2,
+      buffers: hourBuffers,
       limited: Object.entries(solved.nodes)
         .filter(([, result]) => result.limitedBy?.length)
         .map(([id]) => id),

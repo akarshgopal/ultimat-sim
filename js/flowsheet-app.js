@@ -400,6 +400,16 @@
     'electrical-bus': { label: 'Electricity bus', palette: { section: 'utility', order: 1, glyph: '⚡↗', description: 'One supply → many blocks' } },
     'material-splitter': { label: 'Material splitter', palette: { section: 'utility', order: 2, glyph: 'M↗', tone: 'water', description: 'One stream → many branches' } },
     'material-mixer': { label: 'Material mixer', palette: { section: 'utility', order: 3, glyph: '↘M', tone: 'water', description: 'Many streams → one output' } },
+    'material-buffer': {
+      label: 'Buffer tank', capacity: 10000, rate: 1000, activityUnit: 'kg/day',
+      palette: { section: 'utility', order: 4, glyph: 'T', tone: 'water', description: 'Store mass across hours — fill, hold, discharge' },
+      params: { capacityKg: 10000, initialKg: 0 },
+      controls: [
+        { key: 'capacityKg', label: 'Tank capacity', min: 0, max: 1e6, step: 100, unit: 'kg' },
+        { key: 'initialKg', label: 'Starting inventory', min: 0, max: 1e6, step: 100, unit: 'kg' },
+      ],
+      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream.',
+    },
     'material-sink': { label: 'Material sink', palette: { section: 'utility', order: 9, glyph: '↓', description: 'Capture, store, sell, or discard' } },
     'heat-sink': { label: 'Heat sink', palette: { section: 'utility', order: 10, glyph: '↓H', tone: 'carbon', description: 'Reject or recover process heat' } },
     'electricity-sink': { label: 'Electricity sink', palette: { section: 'utility', order: 11, glyph: '↓⚡', description: 'Export or curtail electricity' } },
@@ -965,7 +975,7 @@
       Object.assign(current.params, definition.presets[current.processPreset].params);
     }
     if (kind === 'source') configureNewSource(current, options);
-    if (kind === 'converter') setpoints[id] = definition.rate;
+    if (kind === 'converter' || kind === 'buffer') setpoints[id] = definition.rate;
     current.economics = defaultEconomics(current);
     graph.nodes.push(current);
     if (!options.silent) {
@@ -2819,6 +2829,12 @@
       current.params[event.target.dataset.param] = Number(event.target.value);
       if (['battery', 'thermal-storage'].includes(current.unit) && event.target.dataset.param === 'capexPerKWh') current.economics.installedCapex = current.capacity * current.params.capexPerKWh;
     }
+    if (event.target.name === 'bufferParameter') {
+      current.params[event.target.dataset.param] = Number(event.target.value);
+      if (event.target.dataset.param === 'capacityKg') {
+        current.capacity = Math.max(current.capacity || 0, Number(event.target.value) || 0);
+      }
+    }
     if (event.target.name === 'sourceParameter') {
       current.processPreset = 'custom';
       current.params[event.target.dataset.param] = Number(event.target.value);
@@ -4448,6 +4464,7 @@
       return 'intake';
     }
     if (kind === 'sink') return 'silo';
+    if (kind === 'buffer' || unit === 'material-buffer') return 'tank';
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf') return 'pond';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery') return 'cell';
@@ -5493,10 +5510,18 @@
     document.getElementById('nodeControls').innerHTML = controlsFor(current);
     const nodeResult = result?.nodes[current.id];
     const metrics = nodeResult?.activity !== undefined ? [
-      ['Achieved', `${formatNumber(nodeResult.activity)} ${catalog[current.unit].activityUnit}`],
-      ['Requested', `${formatNumber(setpoints[current.id])} ${catalog[current.unit].activityUnit}`],
+      ['Achieved', `${formatNumber(nodeResult.activity)} ${catalog[current.unit]?.activityUnit || ''}`],
+      ['Requested', `${formatNumber(setpoints[current.id])} ${catalog[current.unit]?.activityUnit || ''}`],
       ['Limited by', formatLimitedBy(current, nodeResult)],
-    ] : nodeResult?.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')]] : [];
+      ...(nodeResult.inventoryKg != null ? [[
+        'Inventory',
+        `${formatNumber(nodeResult.inventoryKg)} kg${nodeResult.capacityKg != null ? ` / ${formatNumber(nodeResult.capacityKg)} kg` : ''}${nodeResult.fill != null ? ` (${formatNumber(nodeResult.fill * 100)}%)` : ''}`,
+      ]] : []),
+    ] : nodeResult?.inventoryKg != null ? [[
+      'Inventory',
+      `${formatNumber(nodeResult.inventoryKg)} kg${nodeResult.capacityKg != null ? ` / ${formatNumber(nodeResult.capacityKg)} kg` : ''}`,
+    ], ...(nodeResult.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')]] : [])]
+      : nodeResult?.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')]] : [];
     document.getElementById('inspectorMetrics').innerHTML = metricRows([...metrics, ...economicsRows(current)]);
     document.getElementById('streamList').innerHTML = Object.entries(units[current.unit].ports).map(([port, declaration]) => renderInspectorPort(current, port, declaration)).join('');
     document.getElementById('recipeList').innerHTML = nodeResult?.requestedInputs ? `${recipeGroup('INFLOW', nodeResult.requestedInputs)}${recipeGroup('OUTFLOW', nodeResult.outlets)}` : '<p class="status-meta">Complete the graph to calculate flows.</p>';
@@ -5596,6 +5621,17 @@
           ? 'Intake settings'
           : 'Source settings';
       return `<fieldset><legend>${sourceLegend}</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
+    }
+    if (kind === 'buffer') {
+      const definition = catalog[current.unit];
+      const parameters = (definition.controls || []).map(control => (
+        `<label>${control.label} <output>${formatNumber(current.params[control.key] ?? 0)}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="bufferParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key] ?? 0}">`
+      )).join('');
+      const nodeResult = result?.nodes[current.id];
+      const socLine = nodeResult?.inventoryKg != null
+        ? `<p class="status-meta">Inventory ${formatNumber(nodeResult.inventoryKg)} kg${nodeResult.capacityKg != null ? ` / ${formatNumber(nodeResult.capacityKg)} kg` : ''}${nodeResult.fill != null ? ` (${formatNumber(nodeResult.fill * 100)}% full)` : ''}</p>`
+        : '<p class="status-meta">Inventory updates after solve. Horizon carries SOC hour to hour.</p>';
+      return `<fieldset><legend>Buffer tank</legend><label>Discharge setpoint <output>${formatNumber(setpoints[current.id] ?? 0)} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${Math.max(current.capacity || 0, definition.capacity || 0, setpoints[current.id] || 0, 1)}" step="1" value="${setpoints[current.id] ?? 0}">${parameters}${socLine}<p class="status-meta">${definition.sourceNote || ''}</p></fieldset><button class="delete-node" id="deleteNode" type="button">Delete buffer</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }

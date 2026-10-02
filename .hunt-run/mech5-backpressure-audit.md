@@ -62,6 +62,6 @@ Factorio/CoI: a full belt / closed offtake **stops the machine**, not just paint
 
 ## 5. Shipped
 
-- **Tip:** _(see merge commit)_
+- **Tip:** `299eb29` on `main`
 - **Pages:** https://akarshgopal.github.io/ultimat-sim/
 - **Tests:** 242 pass

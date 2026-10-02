@@ -61,3 +61,11 @@ Factorio/CoI “why is this machine red?” is a **chain**, not a local tag. We 
 - Horizon per-hour cause timelines
 - Auto-highlight the binding edge when selecting a starved block
 - Pull-demand / two-pass allocation (separate mechanic)
+
+---
+
+## 5. Shipped
+
+- **Tip:** `07d84eb` on `main`
+- **Pages:** https://akarshgopal.github.io/ultimat-sim/
+- **Tests:** 237 pass

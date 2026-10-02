@@ -1,6 +1,6 @@
 # MECH4 — Root-cause starvation chains
 
-**Shipped on tip:** (filled after push)
+**Shipped on tip:** `07d84eb` · Pages https://akarshgopal.github.io/ultimat-sim/
 **Tests:** 237 pass
 
 ## What

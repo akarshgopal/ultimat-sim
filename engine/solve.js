@@ -821,7 +821,24 @@ function allocateSplitterOverflow(available, weights, capacities, priorities = n
   return alloc;
 }
 
-function splitterBranchCapacity(edge, deliveredAmt, down, downResult) {
+function bufferOutletFeedsSink(bufferNode, edges, nodeById) {
+  if (!bufferNode) return false;
+  const outEdge = edges.find(edge => edge.from.node === bufferNode.id && !edge.recycle);
+  if (!outEdge) return false;
+  const target = nodeById.get(outEdge.to.node);
+  return !!(target && UNITS[target.unit]?.kind === 'sink');
+}
+
+function bufferOverflowRoomKg(down, downResult) {
+  if (!downResult) return 0;
+  const start = Number(downResult.startInventoryKg);
+  const startInv = Number.isFinite(start) ? Math.max(0, start) : 0;
+  const capacityKg = downResult.capacityKg;
+  if (capacityKg == null || !Number.isFinite(capacityKg)) return Infinity;
+  return Math.max(0, capacityKg - startInv);
+}
+
+function splitterBranchCapacity(edge, deliveredAmt, down, downResult, edges, nodeById) {
   const downKind = down ? UNITS[down.unit]?.kind : null;
   const edgeCap = finiteEdgeCapacity(edge);
   if (downKind === 'sink') {
@@ -834,16 +851,62 @@ function splitterBranchCapacity(edge, deliveredAmt, down, downResult) {
     if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
     return Math.max(0, cap);
   }
-  // Non-sink targets (buffer / mixer / converter / nested splitter): freeze at
-  // current delivered this tranche — no invented buffer inventory from overflow.
+  // MECH14: free material-buffer legs absorb leftover up to remaining tank room
+  // when their outlet feeds a sink (pass-through or fixed discharge). Buffer →
+  // converter / mixer / nested splitter stays frozen — growing outlet would need
+  // a second evaluate pass.
+  if (downKind === 'buffer' && bufferOutletFeedsSink(down, edges, nodeById)) {
+    let cap = bufferOverflowRoomKg(down, downResult);
+    if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
+    return Math.max(0, cap);
+  }
+  // Non-absorbing targets: freeze at current delivered — no invented inventory.
   let cap = Math.max(0, deliveredAmt);
   if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
   return cap;
 }
 
+function applyBufferOverflowIntake(down, downResult, offer, setpoint, edges, edgeStreams, nodeResults, nodeById) {
+  const result = evaluateBuffer(down, { in: offer }, setpoint);
+  nodeResults[down.id] = result;
+  const inEdge = edges.find(edge => edge.to.node === down.id && !edge.recycle);
+  if (inEdge) edgeStreams.set(inEdge, cloneStream(result.consumed.in));
+  const outEdge = edges.find(edge => edge.from.node === down.id && !edge.recycle);
+  if (outEdge && result.outlets?.out) {
+    edgeStreams.set(outEdge, cloneStream(result.outlets.out));
+    const sink = nodeById.get(outEdge.to.node);
+    const sinkResult = nodeResults[outEdge.to.node];
+    if (sink && UNITS[sink.unit]?.kind === 'sink' && sinkResult) {
+      const next = cloneStream(result.outlets.out);
+      sinkResult.received = next;
+      if (sinkResult.consumed) sinkResult.consumed.in = cloneStream(next);
+      if (sinkResult.requestedInputs) {
+        const prevReq = sinkResult.requestedInputs.in;
+        const prevAmt = prevReq ? safeStreamAmount(prevReq) : 0;
+        const got = safeStreamAmount(next);
+        if (got + Math.max(1, got) * 1e-9 >= prevAmt) {
+          sinkResult.requestedInputs.in = cloneStream(next);
+        }
+      }
+      const accept = sinkResult.acceptKg != null && Number.isFinite(sinkResult.acceptKg)
+        ? sinkResult.acceptKg
+        : (sinkResult.acceptKWh != null && Number.isFinite(sinkResult.acceptKWh)
+          ? sinkResult.acceptKWh
+          : Infinity);
+      const got = safeStreamAmount(next);
+      if (Number.isFinite(accept) && got + Math.max(1, got) * 1e-9 >= accept && accept >= 0) {
+        sinkResult.limitedBy = [...new Set([...(sinkResult.limitedBy || []), 'export'])];
+      } else if (Number.isFinite(accept) && got + Math.max(1, accept) * 1e-9 < accept) {
+        sinkResult.limitedBy = (sinkResult.limitedBy || []).filter(item => item !== 'export');
+      }
+    }
+  }
+  return safeStreamAmount(result.consumed?.in);
+}
+
 // After sinks/buffers rewrite inlets, scale upstream producers so mass/energy close
 // and converters actually throttle (Factorio full-belt / closed offtake).
-function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits = null) {
+function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits = null, setpoints = null) {
   const nodeById = new Map(nodes.map(node => [node.id, node]));
   const order = topologicalOrder(nodes, edges).slice().reverse();
   for (const node of order) {
@@ -989,8 +1052,8 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
       continue;
     }
 
-    // Material splitter (MECH12+13): priority tiers fill first, then Factorio
-    // overflow rebalances onto free lower-priority legs by weight; inlet
+    // Material splitter (MECH12–14): priority tiers fill first, then Factorio
+    // overflow rebalances onto free sink / buffer(→sink) legs by weight; inlet
     // backpressures only when leftover remains after useful legs saturate.
     if (unit.kind === 'splitter') {
       if (!result.available || !outgoing.length) continue;
@@ -1016,7 +1079,7 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
         const downResult = nodeResults[edge.to.node];
         const downKind = down ? UNITS[down.unit]?.kind : null;
         const downLimits = downResult?.limitedBy || [];
-        capacities.push(splitterBranchCapacity(edge, deliveredAmt, down, downResult));
+        capacities.push(splitterBranchCapacity(edge, deliveredAmt, down, downResult, edges, nodeById));
         if (downKind === 'sink' && downLimits.includes('export')) reason = reason || 'export';
         else if (downKind === 'buffer' && (downLimits.includes('capacity') || downLimits.includes('export'))) {
           reason = reason || 'export';
@@ -1034,12 +1097,20 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
       for (let i = 0; i < outgoing.length; i += 1) {
         const edge = outgoing[i];
         const target = Math.max(0, alloc[i]);
-        got += target;
-        const next = scaleStream(result.available, want === 0 ? 0 : target / want);
-        edgeStreams.set(edge, scrubTinyNegativeMols(next));
+        const next = scrubTinyNegativeMols(scaleStream(result.available, want === 0 ? 0 : target / want));
+        edgeStreams.set(edge, next);
         const down = nodeById.get(edge.to.node);
         const downResult = nodeResults[edge.to.node];
         const downKind = down ? UNITS[down.unit]?.kind : null;
+        if (downKind === 'buffer' && downResult && bufferOutletFeedsSink(down, edges, nodeById)) {
+          // MECH14: re-charge the tank from the overflow offer so SOC / consumed stay honest.
+          const setpoint = setpoints ? setpoints[down.id] : undefined;
+          got += applyBufferOverflowIntake(
+            down, downResult, next, setpoint, edges, edgeStreams, nodeResults, nodeById
+          );
+          continue;
+        }
+        got += target;
         if (downKind === 'sink' && downResult) {
           downResult.received = cloneStream(next);
           if (downResult.consumed) downResult.consumed.in = cloneStream(next);
@@ -1212,7 +1283,7 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), 
   // runs on the allocated pass (and on graphs with no bus).
   const hasBus = nodes.some(node => node.unit === 'electrical-bus');
   if (!(allocations == null && hasBus)) {
-    reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits);
+    reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits, caseDefinition.operation?.setpoints);
   }
   return { edgeStreams, nodeResults };
 }

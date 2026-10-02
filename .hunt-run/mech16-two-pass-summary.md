@@ -1,6 +1,7 @@
 # MECH16 — Two-pass buffer→converter (summary)
 
-**Branch tip:** d2a8427a432953f6d63ceb9b0b0aafa06bd527a9
+**Feat tip:** `61d2b1f`
+**Main merge:** `211ffaa`
 **Tests:** 313 pass
 **Date:** 2026-10-02 CEST
 

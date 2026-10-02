@@ -433,8 +433,24 @@
       ],
       sourceNote: 'MECH7: blank offtake on a sale sink uses Destination annualDemandLimit ÷ operating days (TEA regional demand); vent/disposal stay unlimited unless you type a cap. A typed kg/day override always wins — upstream converters throttle and cause chains show export capped.',
     },
-    'heat-sink': { label: 'Heat sink', palette: { section: 'utility', order: 10, glyph: '↓H', tone: 'carbon', description: 'Reject or recover process heat' } },
-    'electricity-sink': { label: 'Electricity sink', palette: { section: 'utility', order: 11, glyph: '↓⚡', description: 'Export or curtail electricity' } },
+    'heat-sink': {
+      label: 'Heat sink',
+      palette: { section: 'utility', order: 10, glyph: '↓H', tone: 'carbon', description: 'Reject or recover process heat — optional kWh cap backpressures upstream' },
+      params: {},
+      controls: [
+        { key: 'acceptKWh', label: 'Export / reject limit', min: 0, max: 1e6, step: 10, unit: 'kWh/day', optional: true },
+      ],
+      sourceNote: 'MECH9: blank = unlimited heat rejection. A typed kWh/day cap backpressures upstream converters (waste heat / heaters) and cause chains show export capped.',
+    },
+    'electricity-sink': {
+      label: 'Electricity sink',
+      palette: { section: 'utility', order: 11, glyph: '↓⚡', description: 'Export or curtail electricity — optional kWh cap backpressures generation' },
+      params: {},
+      controls: [
+        { key: 'acceptKWh', label: 'Export / curtailment limit', min: 0, max: 1e6, step: 10, unit: 'kWh/day', optional: true },
+      ],
+      sourceNote: 'MECH9: blank = unlimited export/curtailment. On a power bus, put this sink last in priority so loads take power first; the cap limits surplus export and trims generation. Cause chains show curtailment capped.',
+    },
   };
   const NODE_DISPLAY_LABELS = {
     dac: 'DAC',
@@ -2864,7 +2880,7 @@
       if (raw === '' || event.target.dataset.cleared === '1') delete current.params[key];
       else {
         const value = Number(raw);
-        if (!Number.isFinite(value) || value < 0) solveError = 'Offtake limit must be ≥ 0 (blank = demand-backed or unlimited).';
+        if (!Number.isFinite(value) || value < 0) solveError = 'Export / offtake limit must be ≥ 0 (blank = demand-backed or unlimited).';
         else current.params[key] = value;
       }
     }
@@ -5720,6 +5736,27 @@
         : 'Max kg accepted this solve day. Blank = unlimited (no annualDemandLimit on this sink).';
       const acceptControl = `<label>Export / offtake limit <output>${acceptOut}</output></label><input name="sinkParameter" data-param="acceptKg" type="number" min="0" step="any" placeholder="${placeholder}" value="${escapeHtml(acceptValue)}" title="${escapeHtml(title)}">`;
       return `<fieldset><legend>Offtake</legend>${acceptControl}${receivedLine}${demandLine}<p class="status-meta">${definition.sourceNote || ''}</p></fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete sink</button>`;
+    }
+    if (kind === 'sink' && (current.unit === 'heat-sink' || current.unit === 'electricity-sink')) {
+      const definition = catalog[current.unit] || {};
+      const acceptRaw = current.params?.acceptKWh;
+      const acceptValue = acceptRaw == null || acceptRaw === '' ? '' : acceptRaw;
+      const isPower = current.unit === 'electricity-sink';
+      const acceptOut = acceptValue !== '' ? `${formatNumber(acceptValue)} kWh/day` : 'Unlimited';
+      const nodeResult = result?.nodes[current.id];
+      const capNote = nodeResult?.acceptKWh != null
+        ? ` / ${formatNumber(nodeResult.acceptKWh)} kWh cap${nodeResult.acceptSource === 'manual' ? ' · manual' : ''}`
+        : '';
+      const receivedLine = nodeResult?.received
+        ? `<p class="status-meta">Received ${formatStream(nodeResult.received)}${capNote}</p>`
+        : '';
+      const label = isPower ? 'Export / curtailment limit' : 'Export / reject limit';
+      const title = isPower
+        ? 'Max kWh accepted this solve day (grid export or curtailment). Blank = unlimited.'
+        : 'Max heat kWh rejected this solve day. Blank = unlimited.';
+      const acceptControl = `<label>${label} <output>${acceptOut}</output></label><input name="sinkParameter" data-param="acceptKWh" type="number" min="0" step="any" placeholder="Unlimited" value="${escapeHtml(acceptValue)}" title="${escapeHtml(title)}">`;
+      const legend = isPower ? 'Export / curtailment' : 'Heat reject';
+      return `<fieldset><legend>${legend}</legend>${acceptControl}${receivedLine}<p class="status-meta">${definition.sourceNote || ''}</p></fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete sink</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }

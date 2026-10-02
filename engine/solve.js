@@ -254,10 +254,13 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
     }
 
     if (kind === 'sink' && limits.includes('export')) {
+      const curtail = nodeById.get(nodeId)?.unit === 'electricity-sink';
       steps.push({
         code: 'export-capped',
         nodeId,
-        text: `${nodeLabel(nodeId)} export capped`,
+        text: curtail
+          ? `${nodeLabel(nodeId)} curtailment capped`
+          : `${nodeLabel(nodeId)} export capped`,
       });
       return steps;
     }
@@ -652,7 +655,7 @@ function sinkPeriodDays(caseDefinition) {
 
 function hasManualSinkAccept(node, setpoint) {
   const params = node.params || {};
-  for (const key of ['acceptKg', 'acceptAmount']) {
+  for (const key of ['acceptKg', 'acceptAmount', 'acceptKWh']) {
     if (params[key] != null && params[key] !== '') return true;
   }
   return setpoint != null && setpoint !== '';
@@ -669,12 +672,13 @@ function demandBackedAcceptKg(node, periodDays) {
   return annual / period;
 }
 
-// Manual acceptKg / acceptAmount / sink setpoint win. Else TEA
-// economics.annualDemandLimit / periodDays (MECH7). Blank+no demand = unlimited.
+// Manual acceptKg / acceptAmount / acceptKWh / sink setpoint win. Else TEA
+// economics.annualDemandLimit / periodDays on material-sink only (MECH7).
+// Blank+no demand = unlimited. Energy sinks never demand-back (different units).
 function finiteSinkAccept(node, setpoint, periodDays = 365) {
   const params = node.params || {};
   const candidates = [];
-  for (const key of ['acceptKg', 'acceptAmount']) {
+  for (const key of ['acceptKg', 'acceptAmount', 'acceptKWh']) {
     if (params[key] == null || params[key] === '') continue;
     candidates.push(nonnegative(Number(params[key]), key));
   }
@@ -682,8 +686,10 @@ function finiteSinkAccept(node, setpoint, periodDays = 365) {
     candidates.push(nonnegative(Number(setpoint), 'sinkAccept'));
   }
   if (candidates.length) return Math.min(...candidates);
-  const demandDaily = demandBackedAcceptKg(node, periodDays);
-  if (demandDaily != null) return demandDaily;
+  if (node?.unit === 'material-sink') {
+    const demandDaily = demandBackedAcceptKg(node, periodDays);
+    if (demandDaily != null) return demandDaily;
+  }
   return Infinity;
 }
 
@@ -714,7 +720,18 @@ function evaluateSink(node, inlet, setpoint, periodDays = 365) {
   const acceptCap = finiteSinkAccept(node, setpoint, periodDays);
   const acceptedAmt = Math.min(requested, acceptCap);
   const limitedBy = [];
+  const isEnergy = clean.kind === 'electricity' || clean.kind === 'heat';
   if (acceptedAmt + Math.max(1, acceptedAmt) * 1e-9 < requested) limitedBy.push('export');
+  else if (
+    isEnergy
+    && Number.isFinite(acceptCap)
+    && acceptCap > 0
+    && requested + Math.max(1, acceptCap) * 1e-9 >= acceptCap
+  ) {
+    // Bus allocation already delivered exactly the accept cap — still a binding
+    // curtailment/export limit even though the allocated inlet equals the cap.
+    limitedBy.push('export');
+  }
   const accepted = scaleStream(clean, requested === 0 ? 0 : acceptedAmt / requested);
   let acceptSource = null;
   if (Number.isFinite(acceptCap)) {
@@ -722,7 +739,8 @@ function evaluateSink(node, inlet, setpoint, periodDays = 365) {
   }
   return {
     received: accepted,
-    acceptKg: Number.isFinite(acceptCap) ? acceptCap : null,
+    acceptKg: !isEnergy && Number.isFinite(acceptCap) ? acceptCap : null,
+    acceptKWh: isEnergy && Number.isFinite(acceptCap) ? acceptCap : null,
     acceptSource,
     requestedInputs: { in: cloneStream(inlet) },
     consumed: { in: accepted },
@@ -983,11 +1001,28 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), 
     if (unit.kind === 'sink') {
       const incomingStreams = incoming.map(edge => cloneStream(edgeStreams.get(edge)));
       const setpoint = caseDefinition.operation?.setpoints?.[node.id];
-      if (incomingStreams.length === 1
-        && (incomingStreams[0].kind === 'material' || incomingStreams[0].kind === 'consumable')) {
-        const result = evaluateSink(node, incomingStreams[0], setpoint, sinkPeriodDays(caseDefinition));
+      const periodDays = sinkPeriodDays(caseDefinition);
+      if (!incomingStreams.length) {
+        nodeResults[node.id] = { received: null, limitedBy: [] };
+        continue;
+      }
+      const inletKind = incomingStreams[0].kind;
+      if (inletKind === 'material' || inletKind === 'consumable') {
+        const result = evaluateSink(node, incomingStreams[0], setpoint, periodDays);
         nodeResults[node.id] = result;
         for (const edge of incoming) edgeStreams.set(edge, result.consumed[edge.to.port] || result.consumed.in);
+      } else if (inletKind === 'electricity' || inletKind === 'heat') {
+        // Heat sinks allow fan-in; mix first, then clamp, then scale each leg.
+        const inlet = incomingStreams.length > 1 ? mixHeat(incomingStreams) : incomingStreams[0];
+        const result = evaluateSink(node, inlet, setpoint, periodDays);
+        nodeResults[node.id] = result;
+        const want = streamAmount(inlet);
+        const got = streamAmount(result.received);
+        const scale = want === 0 ? 0 : got / want;
+        for (const edge of incoming) {
+          const prior = edgeStreams.get(edge);
+          edgeStreams.set(edge, scaleStream(prior, scale));
+        }
       } else {
         nodeResults[node.id] = {
           received: incomingStreams.length > 1 ? mixHeat(incomingStreams) : incomingStreams[0],
@@ -1035,8 +1070,10 @@ function allocateElectricity(caseDefinition, plan, edgeLimits = null) {
     let remaining = plan.nodeResults[bus.id].available.kWh;
     for (const { edge } of ordered) {
       const result = plan.nodeResults[edge.to.node];
-      const wanted = result.requestedInputs[edge.to.port].kWh;
-      const usable = result.consumed[edge.to.port].kWh;
+      // MECH9: electricity-sink reports requestedInputs/consumed via evaluateSink.
+      // Missing fields → allocate nothing (legacy crash guard).
+      const wanted = result?.requestedInputs?.[edge.to.port]?.kWh ?? 0;
+      const usable = result?.consumed?.[edge.to.port]?.kWh ?? 0;
       const capacity = finiteEdgeCapacity(edge);
       const withoutCap = Math.min(wanted, usable, remaining);
       const kWh = Math.min(withoutCap, capacity);
@@ -1176,7 +1213,12 @@ function calculateBalances(nodes, edges, edgeStreams, nodeResults) {
   }
 
   for (const result of Object.values(nodeResults)) {
+    // MECH9 evaluateSink stashes consumed+requestedInputs for bus allocation, but
+    // received is the sink tally — do not double-count energy on sinks.
+    const sinkEnergy = result.received
+      && (result.received.kind === 'electricity' || result.received.kind === 'heat');
     for (const stream of Object.values(result.consumed || {})) {
+      if (sinkEnergy && (stream.kind === 'electricity' || stream.kind === 'heat')) continue;
       if (stream.kind === 'electricity') electricityConsumed += stream.kWh;
       if (stream.kind === 'heat') heatConsumed += stream.kWh;
     }

@@ -60,6 +60,6 @@ MECH5 left a hole: a capped offtake behind a splitter silently destroys mass and
 
 ## 5. Shipped
 
-- **Tip:** (see docs commit after push)
+- **Tip:** `9bce275` on `main`
 - **Pages:** https://akarshgopal.github.io/ultimat-sim/
 - **Tests:** 247 pass

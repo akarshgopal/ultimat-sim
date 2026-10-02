@@ -3092,19 +3092,34 @@
     const nodeResult = result.nodes[current.id];
     const limits = nodeResult?.limitedBy || [];
     if (limits.length) {
+      const causeText = nodeResult.causeText || '';
+      const root = nodeResult.causeChain?.length
+        ? nodeResult.causeChain[nodeResult.causeChain.length - 1]
+        : null;
       const limit = limits[0];
-      if (/site budget/i.test(String(limit))) {
-        return supply || { code: 'limited', text: 'Limited by site budget', action: 'resource', nodeId: current.id };
+      if (/site budget/i.test(String(limit)) || root?.code === 'site-budget') {
+        return supply || {
+          code: 'limited',
+          text: root?.text || 'Limited by site budget',
+          detail: causeText || root?.text || 'Limited by site budget',
+          action: 'resource',
+          nodeId: root?.nodeId || current.id,
+        };
       }
       const port = limitingPort(current, limit);
       const upstream = feedingNode(current, port);
       const upstreamSupply = upstream ? sourceSupplyDiagnosis(upstream) : null;
-      if (upstreamSupply) return upstreamSupply;
+      if (upstreamSupply) {
+        if (causeText) upstreamSupply.detail = causeText;
+        return upstreamSupply;
+      }
       const declared = units[current.unit].ports[port];
+      const short = root?.text || `Limited by ${portName(limit)}`;
       return {
         code: 'limited',
-        text: `Limited by ${portName(limit)}`,
-        action: declared ? 'port' : 'process',
+        text: short,
+        detail: causeText || short,
+        action: declared ? 'port' : (root?.code === 'logistics' ? 'process' : 'process'),
         port: declared ? port : undefined,
         nodeId: current.id,
       };
@@ -4751,9 +4766,12 @@
     const profile = buildingProfile(current.unit, kind, current);
     const status = faceStatusModel(current, nodeResult, diagnosis);
     const flags = `${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}${running ? ' is-running' : ''} building-${profile}`;
+    const bottleneckTitle = nodeResult?.causeText
+      ? `Bottleneck: ${nodeResult.causeText}`
+      : bottlenecks.length ? `Bottleneck: ${bottlenecks.map(portName).join(', ')}` : '';
     const title = reasonTitle
       ? `<title>${reasonTitle}</title>`
-      : bottlenecks.length ? `<title>Bottleneck: ${bottlenecks.map(portName).join(', ')}</title>` : '';
+      : bottleneckTitle ? `<title>${escapeHtml(bottleneckTitle)}</title>` : '';
     const reasonAttr = diagnosis ? ` data-reason="${escapeHtml(diagnosis.text)}"` : '';
     const glyph = intake?.glyph
       || (profile === 'tank' ? 'tank'
@@ -5509,10 +5527,12 @@
     }
     document.getElementById('nodeControls').innerHTML = controlsFor(current);
     const nodeResult = result?.nodes[current.id];
+    const causeRow = nodeResult?.causeText ? [['Cause', nodeResult.causeText]] : [];
     const metrics = nodeResult?.activity !== undefined ? [
       ['Achieved', `${formatNumber(nodeResult.activity)} ${catalog[current.unit]?.activityUnit || ''}`],
       ['Requested', `${formatNumber(setpoints[current.id])} ${catalog[current.unit]?.activityUnit || ''}`],
       ['Limited by', formatLimitedBy(current, nodeResult)],
+      ...causeRow,
       ...(nodeResult.inventoryKg != null ? [[
         'Inventory',
         `${formatNumber(nodeResult.inventoryKg)} kg${nodeResult.capacityKg != null ? ` / ${formatNumber(nodeResult.capacityKg)} kg` : ''}${nodeResult.fill != null ? ` (${formatNumber(nodeResult.fill * 100)}%)` : ''}`,
@@ -5520,8 +5540,8 @@
     ] : nodeResult?.inventoryKg != null ? [[
       'Inventory',
       `${formatNumber(nodeResult.inventoryKg)} kg${nodeResult.capacityKg != null ? ` / ${formatNumber(nodeResult.capacityKg)} kg` : ''}`,
-    ], ...(nodeResult.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')]] : [])]
-      : nodeResult?.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')]] : [];
+    ], ...(nodeResult.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')]] : []), ...causeRow]
+      : nodeResult?.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')], ...causeRow] : [...causeRow];
     document.getElementById('inspectorMetrics').innerHTML = metricRows([...metrics, ...economicsRows(current)]);
     document.getElementById('streamList').innerHTML = Object.entries(units[current.unit].ports).map(([port, declaration]) => renderInspectorPort(current, port, declaration)).join('');
     document.getElementById('recipeList').innerHTML = nodeResult?.requestedInputs ? `${recipeGroup('INFLOW', nodeResult.requestedInputs)}${recipeGroup('OUTFLOW', nodeResult.outlets)}` : '<p class="status-meta">Complete the graph to calculate flows.</p>';

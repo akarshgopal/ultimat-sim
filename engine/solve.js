@@ -65,6 +65,7 @@ function solveOperation(caseDefinition) {
   const balances = calculateBalances(nodes, edges, solved.edgeStreams, solved.nodeResults);
   const heatIntegration = collectHeatIntegration(caseDefinition, solved.nodeResults);
   tagLogisticsLimits(nodes, edges, solved.nodeResults, edgeLimits);
+  attachCauseChains(caseDefinition, solved.nodeResults, edgeLimits);
   const warnings = nodes
     .filter(node => solved.nodeResults[node.id]?.limitedBy?.length)
     .map(node => `${node.id} limited by ${solved.nodeResults[node.id].limitedBy.join(', ')}`);
@@ -174,6 +175,250 @@ function tagLogisticsLimits(nodes, edges, nodeResults, edgeLimits) {
   }
 }
 
+
+
+// Walk limitedBy upstream into a readable cause chain (symptom ← … ← root).
+// Diagnosis only — does not change activities, streams, or balances.
+function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
+  const nodes = caseDefinition?.graph?.nodes || [];
+  const edges = caseDefinition?.graph?.edges || [];
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const limitsByInlet = new Map();
+  for (const limit of edgeLimits || []) {
+    limitsByInlet.set(`${limit.to.node}:${limit.to.port}`, limit);
+  }
+
+  function nodeLabel(nodeId) {
+    const node = nodeById.get(nodeId);
+    return node?.label || nodeId;
+  }
+
+  function streamQty(stream) {
+    if (!stream) return 0;
+    return streamAmount(stream);
+  }
+
+  function passthroughIn(nodeId) {
+    return edges.find(edge => edge.to.node === nodeId && !edge.recycle) || null;
+  }
+
+  function explainUpstream(nodeId, seen) {
+    if (!nodeId || seen.has(nodeId)) return [];
+    const node = nodeById.get(nodeId);
+    if (!node) return [];
+    const kind = UNITS[node.unit]?.kind;
+    if (['junction', 'splitter', 'mixer'].includes(kind)) {
+      seen.add(nodeId);
+      const incoming = passthroughIn(nodeId);
+      return incoming ? explainUpstream(incoming.from.node, seen) : [];
+    }
+    return explainNode(nodeId, seen);
+  }
+
+  function explainNode(nodeId, seen = new Set()) {
+    if (!nodeId || seen.has(nodeId)) return [];
+    seen.add(nodeId);
+    const node = nodeById.get(nodeId);
+    const result = nodeResults[nodeId];
+    if (!node || !result) return [];
+    const kind = UNITS[node.unit]?.kind;
+    const limits = result.limitedBy || [];
+    const steps = [];
+
+    if (limits.includes('site budget')) {
+      steps.push({
+        code: 'site-budget',
+        nodeId,
+        text: `${nodeLabel(nodeId)} site budget`,
+      });
+      return steps;
+    }
+
+    if (kind === 'buffer' && limits.includes('inventory')) {
+      steps.push({
+        code: 'empty-buffer',
+        nodeId,
+        text: `${nodeLabel(nodeId)} buffer empty`,
+      });
+      return steps;
+    }
+
+    if (kind === 'buffer' && limits.includes('capacity')) {
+      steps.push({
+        code: 'full-buffer',
+        nodeId,
+        text: `${nodeLabel(nodeId)} buffer full`,
+      });
+      // Full tank is a local root for backpressure; still useful alone.
+      return steps;
+    }
+
+    if (limits.includes('logistics')) {
+      const edgeLimit = (edgeLimits || []).find(item => item.to.node === nodeId)
+        || null;
+      if (edgeLimit) {
+        steps.push({
+          code: 'logistics',
+          nodeId,
+          text: `${edgeLimit.from.node}→${edgeLimit.to.node} logistics`,
+          edge: {
+            from: { ...edgeLimit.from },
+            to: { ...edgeLimit.to },
+            capacity: edgeLimit.capacity,
+          },
+          port: edgeLimit.to.port,
+        });
+        // Logistics clamp is usually the root; only keep walking if the
+        // supplier itself is independently limited (site budget / inventory).
+        const supplier = explainUpstream(edgeLimit.from.node, new Set(seen));
+        const deep = supplier.filter(step => (
+          step.code === 'site-budget'
+          || step.code === 'empty-buffer'
+          || step.code === 'full-buffer'
+          || step.code === 'empty-source'
+          || step.code === 'missing-inlet'
+        ));
+        return steps.concat(deep);
+      }
+    }
+
+    // Prefer material/heat inlets over co-listed electricity so craft min() ties
+    // do not bury a real upstream root (site budget / empty buffer).
+    const inletLimits = limits.filter(limit => (
+      limit !== 'logistics' && limit !== 'site budget' && limit !== 'inventory'
+    ));
+    inletLimits.sort((a, b) => Number(a === 'electricity') - Number(b === 'electricity'));
+
+    let foundRoot = false;
+    for (const limit of inletLimits) {
+      if (foundRoot) break;
+      const port = limit;
+      const edge = edges.find(item => (
+        item.to.node === nodeId
+        && (item.to.port === port || (port === 'electricity' && item.to.port === 'electricity'))
+        && !item.recycle
+      ));
+      if (!edge) {
+        const declared = UNITS[node.unit]?.ports?.[port];
+        if (declared?.direction === 'in') {
+          steps.push({
+            code: 'missing-inlet',
+            nodeId,
+            port,
+            text: `${nodeLabel(nodeId)} missing ${port}`,
+          });
+          foundRoot = true;
+        } else if (limit === 'capacity') {
+          steps.push({
+            code: 'local',
+            nodeId,
+            limit,
+            text: `${nodeLabel(nodeId)} nameplate capacity`,
+          });
+          foundRoot = true;
+        } else if (!steps.length) {
+          steps.push({
+            code: 'local',
+            nodeId,
+            limit,
+            text: `${nodeLabel(nodeId)} limited by ${limit}`,
+          });
+        }
+        continue;
+      }
+
+      const edgeLimit = limitsByInlet.get(`${edge.to.node}:${edge.to.port}`);
+      const branch = [];
+      if (edgeLimit && !limits.includes('logistics')) {
+        branch.push({
+          code: 'logistics',
+          nodeId,
+          text: `${edgeLimit.from.node}→${edgeLimit.to.node} logistics`,
+          edge: {
+            from: { ...edgeLimit.from },
+            to: { ...edgeLimit.to },
+            capacity: edgeLimit.capacity,
+          },
+          port: edge.to.port,
+        });
+        foundRoot = true;
+      } else {
+        branch.push({
+          code: 'inlet',
+          nodeId,
+          port,
+          text: `${nodeLabel(nodeId)} short on ${port}`,
+        });
+      }
+
+      const upstream = explainUpstream(edge.from.node, new Set(seen));
+      if (upstream.length) {
+        branch.push(...upstream);
+        foundRoot = true;
+        steps.push(...branch);
+        break;
+      }
+
+      const upNode = nodeById.get(edge.from.node);
+      const upResult = nodeResults[edge.from.node];
+      if (upNode && upResult) {
+        const upKind = UNITS[upNode.unit]?.kind;
+        if (upKind === 'source' && streamQty(upResult.supplied || upResult.available) <= 1e-9) {
+          branch.push({
+            code: 'empty-source',
+            nodeId: upNode.id,
+            text: `${nodeLabel(upNode.id)} supplying nothing`,
+          });
+          foundRoot = true;
+        } else if (
+          upKind === 'buffer'
+          && (upResult.activity || 0) <= 1e-9
+          && (upResult.inventoryKg || 0) <= 1e-9
+        ) {
+          branch.push({
+            code: 'empty-buffer',
+            nodeId: upNode.id,
+            text: `${nodeLabel(upNode.id)} buffer empty`,
+          });
+          foundRoot = true;
+        }
+      }
+
+      // Keep the first unexplained inlet as a local symptom; skip later co-limits.
+      if (foundRoot || !steps.length) steps.push(...branch);
+      if (foundRoot) break;
+    }
+
+    if (!steps.length && limits.length) {
+      steps.push({
+        code: 'local',
+        nodeId,
+        text: `${nodeLabel(nodeId)} limited by ${limits.join(', ')}`,
+      });
+    }
+    return steps;
+  }
+
+  for (const node of nodes) {
+    const result = nodeResults[node.id];
+    if (!result) continue;
+    if (!result.limitedBy?.length) {
+      delete result.causeChain;
+      delete result.causeText;
+      continue;
+    }
+    const chain = explainNode(node.id, new Set());
+    // Drop redundant consecutive duplicates.
+    const deduped = [];
+    for (const step of chain) {
+      const prev = deduped[deduped.length - 1];
+      if (prev && prev.code === step.code && prev.nodeId === step.nodeId && prev.text === step.text) continue;
+      deduped.push(step);
+    }
+    result.causeChain = deduped;
+    result.causeText = deduped.map(step => step.text).join(' ← ');
+  }
+}
 
 function unverifiedRightsWarnings(site) {
   const rights = site?.rights;
@@ -995,8 +1240,9 @@ function solveHorizon(caseDefinition) {
       : [`${totals.horizon.hours.filter(entry => entry.pv > 0).length} daylight hours on the selected typical day`]
   );
   totals.heatIntegration = collectHeatIntegration(caseDefinition, totals.nodes);
+  attachCauseChains(caseDefinition, totals.nodes, totals.edgeLimits || []);
   return totals;
 }
 
-return { solveOperation, solveHorizon, hourlyProfile, validateGraph, unverifiedRightsWarnings };
+return { solveOperation, solveHorizon, hourlyProfile, validateGraph, unverifiedRightsWarnings, attachCauseChains };
 });

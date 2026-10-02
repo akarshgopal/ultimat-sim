@@ -48,3 +48,12 @@
 - Intake / pump energy on practical feeds
 - CAPEX for offtake terminals
 - Horizon per-hour offtake nomination UI
+
+---
+
+## 5. Shipped
+
+- **Tip:** `598a637` on `main`
+- **Pages:** https://akarshgopal.github.io/ultimat-sim/
+- **Tests:** 252 pass
+

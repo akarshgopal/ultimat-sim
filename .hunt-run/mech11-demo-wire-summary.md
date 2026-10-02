@@ -1,6 +1,6 @@
 # MECH11 — Wire intake pumps + gas blowers into stock demos
 
-**Tip:**  on 
+**Tip:** `a8c8fe4` on `main` (docs `8c99226`)
 **Tests:** 278 pass
 **Live:** https://akarshgopal.github.io/ultimat-sim/
 

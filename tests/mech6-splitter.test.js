@@ -73,35 +73,28 @@ test('unconstrained equal split stays balanced and closes mass', () => {
   assert.ok(solved.balances.maxAbsResidual < 1e-8, JSON.stringify(solved.balances));
 });
 
-test('capped sink on one splitter branch backpressures inlet without boosting sibling', () => {
+// MECH12: Factorio overflow — free sibling absorbs leftover; inlet stays open.
+test('capped sink on one splitter branch overflows onto free sibling', () => {
   const solved = solveOperation(equalSplitCase({ acceptA: 10 }));
   assert.ok(Math.abs(streamMassKg(solved.nodes.a.received) - 10) < 1e-6);
-  // Sibling keeps its original weight share (50), not overflow (90).
-  assert.ok(Math.abs(streamMassKg(solved.nodes.b.received) - 50) < 1e-6);
-  assert.ok(Math.abs(streamMassKg(solved.nodes.feed.supplied) - 60) < 1e-6);
-  assert.ok(Math.abs(streamMassKg(solved.nodes.split.available) - 60) < 1e-6);
-  assert.ok(solved.nodes.split.limitedBy.includes('export'));
+  assert.ok(Math.abs(streamMassKg(solved.nodes.b.received) - 90) < 1e-6);
+  assert.ok(Math.abs(streamMassKg(solved.nodes.feed.supplied) - 100) < 1e-6);
+  assert.ok(Math.abs(streamMassKg(solved.nodes.split.available) - 100) < 1e-6);
+  assert.ok(!(solved.nodes.split.limitedBy || []).includes('export'));
   assert.ok(solved.nodes.a.limitedBy.includes('export'));
-  assert.match(solved.nodes.split.causeText, /branch blocked/);
-  assert.match(solved.nodes.split.causeText, /export capped/);
-  assert.deepEqual(codes(solved.nodes.split).slice(0, 2), ['branch-blocked', 'export-capped']);
   assert.ok(solved.balances.maxAbsResidual < 1e-8, JSON.stringify(solved.balances));
 });
 
-test('logistics cap on one splitter branch backpressures inlet', () => {
+test('logistics cap on one splitter branch overflows onto free sibling', () => {
   const solved = solveOperation(equalSplitCase({ capacityA: 15 }));
   assert.ok(Math.abs(streamMassKg(solved.nodes.a.received) - 15) < 1e-6);
-  assert.ok(Math.abs(streamMassKg(solved.nodes.b.received) - 50) < 1e-6);
-  assert.ok(Math.abs(streamMassKg(solved.nodes.feed.supplied) - 65) < 1e-6);
-  assert.ok(solved.nodes.split.limitedBy.includes('logistics'));
-  assert.match(solved.nodes.split.causeText, /branch blocked/);
-  assert.match(solved.nodes.split.causeText, /logistics/);
-  assert.ok(codes(solved.nodes.split).includes('branch-blocked'));
-  assert.ok(codes(solved.nodes.split).includes('logistics'));
+  assert.ok(Math.abs(streamMassKg(solved.nodes.b.received) - 85) < 1e-6);
+  assert.ok(Math.abs(streamMassKg(solved.nodes.feed.supplied) - 100) < 1e-6);
+  assert.ok(!(solved.nodes.split.limitedBy || []).includes('logistics'));
   assert.ok(solved.balances.maxAbsResidual < 1e-8, JSON.stringify(solved.balances));
 });
 
-test('converter upstream of splitter throttles when one offtake is capped', () => {
+test('converter upstream of splitter stays open when free branch can take overflow', () => {
   const definition = {
     site: {
       resources: {
@@ -165,22 +158,17 @@ test('converter upstream of splitter throttles when one offtake is capped', () =
   assert.ok(freeH2 > 10, `free H2 ${freeH2}`);
 
   const solved = solveOperation(definition);
-  // Equal split of free H2 would send freeH2/2 to sale; cap 5 ⇒ inlet = 5 + freeH2/2
-  // after backpressure, craft scales to that total.
-  const expectedIn = 5 + freeH2 / 2;
-  assert.ok(Math.abs(streamMassKg(solved.nodes.split.available) - expectedIn) / expectedIn < 1e-4);
+  // MECH12: sale takes 5, store takes the rest — craft stays at free rate.
+  assert.ok(Math.abs(streamMassKg(solved.nodes.split.available) - freeH2) / freeH2 < 1e-4);
   assert.ok(Math.abs(streamMassKg(solved.nodes.sale.received) - 5) < 1e-6);
-  assert.ok(Math.abs(streamMassKg(solved.nodes.store.received) - freeH2 / 2) < 1e-4);
-  assert.ok(solved.nodes.ely.limitedBy.includes('export'));
-  assert.ok(solved.nodes.split.limitedBy.includes('export'));
-  assert.match(solved.nodes.ely.causeText, /blocked by export/);
-  assert.match(solved.nodes.ely.causeText, /branch blocked/);
-  assert.ok(codes(solved.nodes.ely).includes('branch-blocked'));
-  assert.ok(codes(solved.nodes.ely).includes('export-capped'));
+  assert.ok(Math.abs(streamMassKg(solved.nodes.store.received) - (freeH2 - 5)) / freeH2 < 1e-4);
+  assert.ok(!(solved.nodes.ely.limitedBy || []).includes('export'));
+  assert.ok(!(solved.nodes.split.limitedBy || []).includes('export'));
+  assert.ok(solved.nodes.sale.limitedBy.includes('export'));
   assert.ok(solved.balances.maxAbsResidual < 1e-8, JSON.stringify(solved.balances));
 });
 
-test('Zabuye unconstrained stays bit-identical under MECH6', () => {
+test('Zabuye unconstrained stays bit-identical under MECH6/12', () => {
   const a = solveOperation(clone(siteZabuyeAbundance()));
   const b = solveOperation(clone(siteZabuyeAbundance()));
   assert.equal(a.nodes.minerals.activity, b.nodes.minerals.activity);

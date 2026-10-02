@@ -762,6 +762,67 @@ function scaleNodeStreams(result, scale) {
   return result;
 }
 
+
+// MECH12: Factorio-style splitter overflow. Capacities are per-branch maxima
+// (sink accept / edge cap, or frozen delivered for non-sink targets). Water-fill
+// blocked leftovers onto free legs by weight; only then reject at the inlet.
+function allocateSplitterOverflow(available, weights, capacities) {
+  const n = weights.length;
+  const alloc = Array(n).fill(0);
+  let remaining = Math.max(0, available);
+  const active = new Set();
+  for (let i = 0; i < n; i += 1) {
+    if (weights[i] > 0 && capacities[i] > 1e-15) active.add(i);
+  }
+  let guard = 0;
+  while (remaining > 1e-12 && active.size && guard < n + 3) {
+    guard += 1;
+    let weightSum = 0;
+    for (const i of active) weightSum += weights[i];
+    if (weightSum <= 0) break;
+    const saturated = [];
+    for (const i of active) {
+      const offer = remaining * (weights[i] / weightSum);
+      const room = capacities[i] - alloc[i];
+      if (offer > room + Math.max(1, room) * 1e-9) {
+        alloc[i] = capacities[i];
+        saturated.push(i);
+      }
+    }
+    if (saturated.length) {
+      for (const i of saturated) active.delete(i);
+      remaining = available - alloc.reduce((sum, value) => sum + value, 0);
+      if (remaining < 0) remaining = 0;
+      continue;
+    }
+    for (const i of active) {
+      alloc[i] += remaining * (weights[i] / weightSum);
+    }
+    remaining = 0;
+  }
+  return alloc;
+}
+
+function splitterBranchCapacity(edge, deliveredAmt, down, downResult) {
+  const downKind = down ? UNITS[down.unit]?.kind : null;
+  const edgeCap = finiteEdgeCapacity(edge);
+  if (downKind === 'sink') {
+    let cap = Infinity;
+    if (downResult?.acceptKg != null && Number.isFinite(downResult.acceptKg)) {
+      cap = downResult.acceptKg;
+    } else if (downResult?.acceptKWh != null && Number.isFinite(downResult.acceptKWh)) {
+      cap = downResult.acceptKWh;
+    }
+    if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
+    return Math.max(0, cap);
+  }
+  // Non-sink targets (buffer / mixer / converter / nested splitter): freeze at
+  // current delivered this tranche — no invented buffer inventory from overflow.
+  let cap = Math.max(0, deliveredAmt);
+  if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
+  return cap;
+}
+
 // After sinks/buffers rewrite inlets, scale upstream producers so mass/energy close
 // and converters actually throttle (Factorio full-belt / closed offtake).
 function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits = null) {
@@ -910,24 +971,30 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
       continue;
     }
 
-    // Material splitter: keep each branch's delivered amount (no overflow onto
-    // free legs). Backpressure the inlet by the rejected sum so mass closes.
+    // Material splitter (MECH12): Factorio overflow — blocked branches keep what
+    // they can; leftover rebalances onto free sink legs by weight; inlet
+    // backpressures only when leftover remains after free legs saturate.
     if (unit.kind === 'splitter') {
       if (!result.available || !outgoing.length) continue;
       result.available = scrubTinyNegativeMols(result.available);
       const want = safeStreamAmount(result.available);
-      let got = 0;
+      const weights = outgoing.map(edge => nonnegative(Number(edge.weight ?? 1), 'split weight'));
+      const deliveredAmts = [];
+      const capacities = [];
       let reason = null;
-      for (const edge of outgoing) {
+      for (let i = 0; i < outgoing.length; i += 1) {
+        const edge = outgoing[i];
         let delivered = edgeStreams.get(edge);
         if (!delivered) delivered = scaleStream(result.available, 0);
         delivered = scrubTinyNegativeMols(delivered);
         edgeStreams.set(edge, delivered);
-        got += safeStreamAmount(delivered);
+        const deliveredAmt = safeStreamAmount(delivered);
+        deliveredAmts.push(deliveredAmt);
         const down = nodeById.get(edge.to.node);
         const downResult = nodeResults[edge.to.node];
         const downKind = down ? UNITS[down.unit]?.kind : null;
         const downLimits = downResult?.limitedBy || [];
+        capacities.push(splitterBranchCapacity(edge, deliveredAmt, down, downResult));
         if (downKind === 'sink' && downLimits.includes('export')) reason = reason || 'export';
         else if (downKind === 'buffer' && (downLimits.includes('capacity') || downLimits.includes('export'))) {
           reason = reason || 'export';
@@ -939,12 +1006,50 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
           && item.to?.node === edge.to.node
         ))) reason = reason || 'logistics';
       }
-      if (want > 1e-15 && got + Math.max(1, got) * 1e-9 < want) {
+      if (!(want > 1e-15)) continue;
+      const alloc = allocateSplitterOverflow(want, weights, capacities);
+      let got = 0;
+      for (let i = 0; i < outgoing.length; i += 1) {
+        const edge = outgoing[i];
+        const target = Math.max(0, alloc[i]);
+        got += target;
+        const next = scaleStream(result.available, want === 0 ? 0 : target / want);
+        edgeStreams.set(edge, scrubTinyNegativeMols(next));
+        const down = nodeById.get(edge.to.node);
+        const downResult = nodeResults[edge.to.node];
+        const downKind = down ? UNITS[down.unit]?.kind : null;
+        if (downKind === 'sink' && downResult) {
+          downResult.received = cloneStream(next);
+          if (downResult.consumed) downResult.consumed.in = cloneStream(next);
+          if (downResult.requestedInputs) {
+            // Keep requested at the pre-overflow offer when larger; else match.
+            const prevReq = downResult.requestedInputs.in;
+            const prevAmt = prevReq ? safeStreamAmount(prevReq) : 0;
+            if (target + Math.max(1, target) * 1e-9 >= prevAmt) {
+              downResult.requestedInputs.in = cloneStream(next);
+            }
+          }
+          const accept = downResult.acceptKg != null && Number.isFinite(downResult.acceptKg)
+            ? downResult.acceptKg
+            : (downResult.acceptKWh != null && Number.isFinite(downResult.acceptKWh)
+              ? downResult.acceptKWh
+              : Infinity);
+          if (Number.isFinite(accept) && target + Math.max(1, target) * 1e-9 >= accept && accept >= 0) {
+            downResult.limitedBy = [...new Set([...(downResult.limitedBy || []), 'export'])];
+          } else if (Number.isFinite(accept) && target + Math.max(1, accept) * 1e-9 < accept) {
+            downResult.limitedBy = (downResult.limitedBy || []).filter(item => item !== 'export');
+          }
+        }
+      }
+      if (got + Math.max(1, got) * 1e-9 < want) {
         const scale = got / want;
         result.available = scaleStream(result.available, scale);
         result.limitedBy = [...new Set([...(result.limitedBy || []), reason || 'export'])];
         if (incoming[0]) edgeStreams.set(incoming[0], cloneStream(result.available));
-        // Outlets stay at their delivered amounts — do not re-split.
+      } else {
+        // Fully absorbed (possibly via overflow) — clear stale export/logistics
+        // tags from an earlier pass so upstream converters stay unthrottled.
+        result.limitedBy = (result.limitedBy || []).filter(item => item !== 'export' && item !== 'logistics');
       }
       continue;
     }

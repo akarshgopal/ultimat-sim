@@ -1,6 +1,6 @@
 # MECH18 — Tank fluid $/m³ + regional tea · pump/blower CAPEX+pad · Delete undo
 
-**Feat tip:** 
+**Feat tip:** `1cdc770`
 **Pages:** live
 **Tests:** 333 pass
 **Date:** 2026-10-02 CEST

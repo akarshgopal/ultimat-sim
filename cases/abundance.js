@@ -84,7 +84,12 @@ function createAbundanceCase(options = {}) {
   const airN2Mol = nitrogenKg * 1000 / SUBSTANCES.N2.molarMassG / 0.98;
   const air = { kind: 'material', mol: { N2: airN2Mol, O2: airN2Mol * 0.268 }, phase: 'gas', T_C: 25, P_bar: 1 };
   const material = (substance, mol, phase = 'solid') => ({ kind: 'material', mol: { [substance]: mol }, phase, T_C: 25, P_bar: 1 });
-  const powerKWh = streamMassKg(brine) * 0.05 + causticKg * 2.5 + bromineKg * 0.2 + nitrogenKg * 0.25 + ammoniaKg * 0.6 + 10;
+  const brineKg = streamMassKg(brine);
+  const brineDensityKgM3 = (Number(assay.density_kg_per_L) > 0 ? Number(assay.density_kg_per_L) : 1.2) * 1000;
+  const brineM3 = brineKg / brineDensityKgM3;
+  // MECH11: lake lift on an intake-pump (0.4 kWh/m³ screening); not folded into minerals SEC.
+  const brinePumpKWh = brineM3 * 0.4;
+  const powerKWh = brineKg * 0.05 + brinePumpKWh + causticKg * 2.5 + bromineKg * 0.2 + nitrogenKg * 0.25 + ammoniaKg * 0.6 + 10;
   const outputs = ['lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'raffinate'];
 
   const sale = id => (id === 'raffinate'
@@ -97,12 +102,13 @@ function createAbundanceCase(options = {}) {
     graph: {
       nodes: [
         { id: 'brine', unit: 'material-source', sourcePreset: 'brine', params: { stream: brine }, economics: tea.bindCost('brine', { region }) },
+        { id: 'brine-pump', unit: 'intake-pump', capacity: brineM3, params: { pumpKWhPerM3: 0.4, densityKgM3: brineDensityKgM3 } },
         { id: 'salt-feed', unit: 'material-source', sourcePreset: 'salt', params: { stream: material('NaCl', causticMol) }, economics: tea.bindCost('salt-feed', { region }) },
         { id: 'water', unit: 'material-source', sourcePreset: 'water', params: { stream: material('H2O', causticMol, 'liquid') }, economics: tea.bindCost('water', { region }) },
         { id: 'air', unit: 'material-source', sourcePreset: 'air', params: { stream: air }, economics: { unitCost: 0 } },
         { id: 'power', unit: 'electricity-source', params: { stream: { kind: 'electricity', kWh: powerKWh } }, economics: tea.bindCost('power', { region }) },
         { id: 'power-bus', unit: 'electrical-bus' },
-        { id: 'minerals', unit: 'brine-minerals', capacity: streamMassKg(brine), params: { electricityKWhPerKgBrine: 0.05, lithiumRecovery: 0.9, bromideRecovery, magnesiumRecovery: 0.5, potashRecovery: 0.7, gypsumRecovery: 0.7, saltRecovery: 0.5 }, economics: tea.bindCapex('minerals', { variableOM: 0.01, region }) },
+        { id: 'minerals', unit: 'brine-minerals', capacity: brineKg, params: { electricityKWhPerKgBrine: 0.05, lithiumRecovery: 0.9, bromideRecovery, magnesiumRecovery: 0.5, potashRecovery: 0.7, gypsumRecovery: 0.7, saltRecovery: 0.5 }, economics: tea.bindCapex('minerals', { variableOM: 0.01, region }) },
         { id: 'chlor-alkali', unit: 'chlor-alkali', capacity: causticKg, params: { electricityKWhPerKg: 2.5 }, economics: tea.bindCapex('chlor-alkali', { variableOM: 0.05, region }) },
         { id: 'bromine-recovery', unit: 'bromine-recovery', capacity: bromineKg, params: { electricityKWhPerKg: 0.2 }, economics: tea.bindCapex('bromine-recovery', { variableOM: 0.03, region }) },
         { id: 'asu', unit: 'asu', capacity: nitrogenKg, params: { nitrogenRecovery: 0.98, oxygenRecovery: 0.95, electricityKWhPerKgN2: 0.25 }, economics: tea.bindCapex('asu', { variableOM: 0.02, region }) },
@@ -116,11 +122,13 @@ function createAbundanceCase(options = {}) {
         { id: 'offgas', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [
-        { from: { node: 'brine', port: 'out' }, to: { node: 'minerals', port: 'brine' } },
+        { from: { node: 'brine', port: 'out' }, to: { node: 'brine-pump', port: 'in' } },
+        { from: { node: 'brine-pump', port: 'out' }, to: { node: 'minerals', port: 'brine' } },
         { from: { node: 'salt-feed', port: 'out' }, to: { node: 'chlor-alkali', port: 'salt' } },
         { from: { node: 'water', port: 'out' }, to: { node: 'chlor-alkali', port: 'water' } },
         { from: { node: 'air', port: 'out' }, to: { node: 'asu', port: 'air' } },
         { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        { from: { node: 'power-bus', port: 'out' }, to: { node: 'brine-pump', port: 'electricity' } },
         ...['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia'].map(id => ({ from: { node: 'power-bus', port: 'out' }, to: { node: id, port: 'electricity' } })),
         ...outputs.map(port => ({ from: { node: 'minerals', port }, to: { node: port, port: 'in' } })),
         { from: { node: 'minerals', port: 'bromide' }, to: { node: 'bromine-recovery', port: 'bromide' } },
@@ -136,8 +144,8 @@ function createAbundanceCase(options = {}) {
       ],
     },
     operation: {
-      setpoints: { minerals: streamMassKg(brine), 'chlor-alkali': causticKg, 'bromine-recovery': bromineKg, asu: nitrogenKg, ammonia: ammoniaKg },
-      priorities: { 'power-bus': ['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia'] },
+      setpoints: { 'brine-pump': brineM3, minerals: brineKg, 'chlor-alkali': causticKg, 'bromine-recovery': bromineKg, asu: nitrogenKg, ammonia: ammoniaKg },
+      priorities: { 'power-bus': ['brine-pump', 'minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia'] },
     },
   };
 }

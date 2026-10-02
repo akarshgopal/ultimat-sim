@@ -21,7 +21,7 @@ const WATER_PER_KG_H2 = SUBSTANCES.H2O.molarMassG / SUBSTANCES.H2.molarMassG;
 const EVIDENCE = [
   { label: 'Solar: PVGIS-ERA5, 2005–2023 monthly at Mejillones (−23.100, −70.448); 23° tilt, north-facing. SARAH3 does not cover this longitude.', url: PVGIS_URL },
   { label: 'PEM: DOE 2022 system status, 55 kWh/kg H₂; not a future target', url: 'https://www.energy.gov/cmei/fuels/technical-targets-proton-exchange-membrane-electrolysis' },
-  { label: 'SWRO plant SEC band: Elimelech & Phillip 2011; Voutchkov 2018 RO-train 2.5–2.8 kWh/m³', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
+  { label: 'SWRO plant-only SEC 3.1 kWh/m³ after MECH11 intake-pump (was 3.5 with intake); Elimelech & Phillip 2011; Voutchkov 2018 RO-train 2.5–2.8', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
   { label: 'Seawater: Millero/Pilson S=35 majors scaled 34.9/35 for SE Pacific / Atacama coast; not a NaCl proxy', url: MILLERO_URL },
   { label: 'NOAA NCEI World Ocean Atlas 2023 Volume 2: Salinity (DOI)', url: WOA_URL },
   { label: 'Air: 422.45 ppm, 2024 global estimate; dry O₂/N₂ balance is simplified', url: 'https://essd.copernicus.org/articles/17/965/2025/' },
@@ -76,11 +76,20 @@ function createMethanolCase(month = 0) {
   const seawater = seawaterFromAssay(assay, massKg);
   const air = airFromCo2Ppm(422.45, 25000);
   const waterPerKg = H2_PER_KG * WATER_PER_KG_H2;
-  const kWhPerKg = H2_PER_KG * 55 + CO2_PER_KG * 0.5 + waterPerKg / 1000 / 0.45 * 3.5 + 0.5;
+  const seawaterM3PerKg = waterPerKg / 1000 / 0.45;
+  // MECH11: plant-only SWRO 3.1 + intake-pump 0.4 + ~4 kWh/kg air-blower pad + methanol 0.5.
+  const kWhPerKg = H2_PER_KG * 55 + CO2_PER_KG * 0.5 + seawaterM3PerKg * 3.1 + seawaterM3PerKg * 0.4 + 4 + 0.5;
   const target = Math.min(5, electricityKWh / kWhPerKg);
   const h2Requested = target * H2_PER_KG;
   const dacRequested = target * CO2_PER_KG;
   const roRequested = h2Requested * WATER_PER_KG_H2 / 1000;
+  const seawaterPumpM3 = roRequested / 0.45;
+  const airMass = streamMassKg(air);
+  const airCo2MassFraction = airMass > 0 ? air.mol.CO2 * SUBSTANCES.CO2.molarMassG / 1000 / airMass : 0;
+  const airKgForDac = airCo2MassFraction > 0 ? dacRequested / 0.9 / airCo2MassFraction : 0;
+  const airTotalMol = Object.values(air.mol).reduce((sum, amount) => sum + amount, 0);
+  const airNm3PerKg = airMass > 0 ? (airTotalMol * 22.414 / 1000) / airMass : 22.414 / 29;
+  const airBlowerNm3 = airKgForDac * airNm3PerKg;
   const heatKWh = 30;
   const heatT_C = 100;
   const definition = {
@@ -88,7 +97,9 @@ function createMethanolCase(month = 0) {
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
+        { id: 'air-blower', unit: 'gas-blower', capacity: airBlowerNm3, params: { blowerKWhPerNm3: 0.001 } },
         { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { ...tea.bindCost('seawater'), unitCost: 0.001 } },
+        { id: 'seawater-pump', unit: 'intake-pump', capacity: seawaterPumpM3, params: { pumpKWhPerM3: 0.4, densityKgM3: FEED_DENSITY_KG_M3 } },
         {
           id: 'electricity',
           unit: 'electricity-source',
@@ -125,7 +136,7 @@ function createMethanolCase(month = 0) {
           id: 'swro',
           unit: 'swro',
           capacity: 10,
-          params: { recovery: 0.45, secKWhPerM3: 3.5, feedDensityKgM3: FEED_DENSITY_KG_M3, productDensityKgM3: 1000, ionRejection: 1 },
+          params: { recovery: 0.45, secKWhPerM3: 3.1, feedDensityKgM3: FEED_DENSITY_KG_M3, productDensityKgM3: 1000, ionRejection: 1 },
           economics: tea.bindCapexPack('swro', { capacity: 10 }),
         },
         { id: 'electrical-bus', unit: 'electrical-bus' },
@@ -153,11 +164,15 @@ function createMethanolCase(month = 0) {
         { id: 'process-water', unit: 'material-sink', economics: tea.bindSale('water') },
       ],
       edges: [
-        { from: { node: 'air', port: 'out' }, to: { node: 'dac', port: 'air' } },
+        { from: { node: 'air', port: 'out' }, to: { node: 'air-blower', port: 'in' } },
+        { from: { node: 'air-blower', port: 'out' }, to: { node: 'dac', port: 'air' } },
         { from: { node: 'heat', port: 'out' }, to: { node: 'dac', port: 'heat' } },
         { from: { node: 'consumables', port: 'out' }, to: { node: 'dac', port: 'consumables' } },
-        { from: { node: 'seawater', port: 'out' }, to: { node: 'swro', port: 'feed' } },
+        { from: { node: 'seawater', port: 'out' }, to: { node: 'seawater-pump', port: 'in' } },
+        { from: { node: 'seawater-pump', port: 'out' }, to: { node: 'swro', port: 'feed' } },
         { from: { node: 'electricity', port: 'out' }, to: { node: 'electrical-bus', port: 'in' } },
+        { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'air-blower', port: 'electricity' } },
+        { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'seawater-pump', port: 'electricity' } },
         { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'dac', port: 'electricity' } },
         { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'swro', port: 'electricity' } },
         { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'electrolyzer', port: 'electricity' } },
@@ -178,12 +193,14 @@ function createMethanolCase(month = 0) {
     },
     operation: {
       setpoints: {
+        'air-blower': airBlowerNm3,
+        'seawater-pump': seawaterPumpM3,
         dac: dacRequested,
         swro: roRequested,
         electrolyzer: h2Requested,
         methanol: target,
       },
-      priorities: { 'electrical-bus': ['dac', 'swro', 'electrolyzer', 'methanol'] },
+      priorities: { 'electrical-bus': ['air-blower', 'seawater-pump', 'dac', 'swro', 'electrolyzer', 'methanol'] },
       boundaryLimitedBy: target < 5 ? ['site solar electricity'] : [],
     },
   };
@@ -246,7 +263,7 @@ function createMethanolCase(month = 0) {
       brineConcession: right('concession', 'unverified', 'Atacama minerals nearby are not a brine concession for this plant'),
       saltPurchase: right('purchase', 'unverified', 'No salt purchase agreement; the plant does not buy salt'),
     },
-    notes: 'Representative-day methanol plant at the Mejillones industrial bay preset. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Atacama Pacific multi-ion assay (data/atacama-pacific-seawater.json), not a NaCl proxy. Grid, freshwater, and seawater discharge rights are unverified zeros. Methanol synthesis electricity 0.5 kWh/kg and $0.40/kg product price are screening assumptions, not plant quotes. Annual economics repeat the selected typical day for 365 days.',
+    notes: 'Representative-day methanol plant at the Mejillones industrial bay preset. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Atacama Pacific multi-ion assay (data/atacama-pacific-seawater.json), not a NaCl proxy. Grid, freshwater, and seawater discharge rights are unverified zeros. Methanol synthesis electricity 0.5 kWh/kg and $0.40/kg product price are screening assumptions, not plant quotes. MECH11 wires seawater→intake-pump→SWRO and air→gas-blower→DAC; SWRO SEC is plant-only 3.1 kWh/m³ (intake share on the pump at 0.4 kWh/m³). Annual economics repeat the selected typical day for 365 days.',
   };
   return definition;
 }

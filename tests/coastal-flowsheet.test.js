@@ -46,7 +46,7 @@ test('coastal methane uses solid-sorbent DAC and closes balances', () => {
   assert.ok(solved.warnings.some(message => message.includes('unverified site right: gridImport')));
   assert.ok(solved.warnings.some(message => message.includes('unverified site right: freshwater')));
   assert.ok(solved.warnings.some(message => message.includes('unverified site right: seawaterDischarge')));
-  assert.equal(solved.nodes.sabatier.activity, 5);
+  assert.ok(Math.abs(solved.nodes.sabatier.activity - 5) < 1e-9);
   assert.ok(solved.nodes['spent-media'].received.amount > 0);
   assert.equal(solved.nodes['spent-media'].received.chemicalId, 'amine-sorbent');
   assertClosed(solved);

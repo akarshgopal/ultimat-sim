@@ -8,6 +8,7 @@
   else root.FlowsheetSolver = api;
 })(globalThis, (model, units, heat) => {
 const {
+  SUBSTANCES,
   chargeAmount,
   cloneStream,
   elementAmounts,
@@ -802,7 +803,28 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
           item.from?.node === edge.from.node && item.from?.port === edge.from.port
           && item.to?.node === edge.to.node
         ))) binding = 'logistics';
-        // Downstream converter under-drawing a feed is NOT offtake backpressure.
+        // Downstream converter under-drawing: backpressure when the consumer is
+        // blocked by something other than THIS feed port (H2-short Sabatier must
+        // push back on DAC CO2; intake pumps / blowers always match pull).
+        if (!binding && downKind === 'converter') {
+          const wantDown = safeStreamAmount(produced);
+          const gotDown = safeStreamAmount(delivered);
+          if (wantDown > 1e-15 && gotDown + Math.max(1, gotDown) * 1e-9 < wantDown) {
+            const feedPorts = new Set([
+              'in', 'feed', 'air', 'brine', 'co2', 'hydrogen', 'water', 'salt',
+              'nitrogen', 'chlorine', 'bromide', 'consumables', 'electricity', 'heat',
+            ]);
+            const limitedByThisFeed = downLimits.includes(edge.to.port);
+            const isLift = node.unit === 'intake-pump' || node.unit === 'gas-blower';
+            const blockedOtherwise = downLimits.some(limit => (
+              limit === 'export' || limit === 'logistics' || limit === 'capacity'
+              || (!feedPorts.has(limit) && limit !== edge.to.port)
+            ));
+            if (isLift || (!limitedByThisFeed && (blockedOtherwise || downLimits.includes('hydrogen') || downLimits.includes('electricity') || downLimits.includes('export')))) {
+              binding = downLimits.includes('logistics') ? 'logistics' : 'export';
+            }
+          }
+        }
         if (!binding) continue;
         const want = safeStreamAmount(produced);
         const got = safeStreamAmount(delivered);
@@ -925,6 +947,24 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
         // Outlets stay at their delivered amounts — do not re-split.
       }
       continue;
+    }
+  }
+
+  // After upstream converters shrink waste-heat/product edges, refresh sink
+  // receipts so heat/electricity balances stay closed (MECH11 lift backpressure).
+  for (const node of nodes) {
+    const unit = UNITS[node.unit];
+    if (unit?.kind !== 'sink') continue;
+    const result = nodeResults[node.id];
+    if (!result) continue;
+    const incoming = edges.filter(edge => edge.to.node === node.id && !edge.recycle);
+    const streams = incoming.map(edge => edgeStreams.get(edge)).filter(Boolean);
+    if (!streams.length) continue;
+    if (streams[0].kind === 'heat') {
+      result.received = streams.length > 1 ? mixHeat(streams) : cloneStream(streams[0]);
+    } else if (streams[0].kind === 'electricity') {
+      const kWh = streams.reduce((sum, stream) => sum + (Number(stream.kWh) || 0), 0);
+      result.received = { kind: 'electricity', kWh };
     }
   }
 }
@@ -1407,6 +1447,57 @@ function accumulateSolved(totals, solved) {
 // One representative day as 24 hourly operating solves. Daily setpoints are leftover
 // demand; nameplate is capacity/24. Site electricity is the hourly PV yield plus
 // optional battery discharge. Other site budgets are remaining daily quantities.
+
+function syncHourlyLiftSetpoints(hourCase) {
+  const setpoints = hourCase.operation.setpoints || (hourCase.operation.setpoints = {});
+  for (const node of hourCase.graph.nodes) {
+    if (node.unit === 'intake-pump') {
+      const out = hourCase.graph.edges.find(edge => edge.from.node === node.id && edge.from.port === 'out');
+      if (!out) continue;
+      const down = hourCase.graph.nodes.find(item => item.id === out.to.node);
+      if (!down) continue;
+      if (down.unit === 'swro' || down.unit === 'med' || down.unit === 'msf') {
+        const recovery = Number(down.params?.recovery ?? 0.45) || 0.45;
+        const productM3 = Number(setpoints[down.id]) || 0;
+        const m3 = recovery > 0 ? productM3 / recovery : 0;
+        node.capacity = m3;
+        setpoints[node.id] = m3;
+      } else if (down.unit === 'brine-minerals') {
+        const brineKg = Number(setpoints[down.id]) || 0;
+        const density = Number(node.params?.densityKgM3 ?? 1200) || 1200;
+        const m3 = density > 0 ? brineKg / density : 0;
+        node.capacity = m3;
+        setpoints[node.id] = m3;
+      }
+      continue;
+    }
+    if (node.unit !== 'gas-blower') continue;
+    const out = hourCase.graph.edges.find(edge => edge.from.node === node.id && edge.from.port === 'out');
+    if (!out) continue;
+    const down = hourCase.graph.nodes.find(item => item.id === out.to.node);
+    if (!down || !String(down.unit || '').startsWith('dac')) continue;
+    const dacKg = Number(setpoints[down.id]) || 0;
+    const capture = Number(down.params?.captureFraction ?? 0.9) || 0.9;
+    const inEdge = hourCase.graph.edges.find(edge => edge.to.node === node.id && edge.to.port === 'in');
+    const airNode = inEdge && hourCase.graph.nodes.find(item => item.id === inEdge.from.node);
+    const air = airNode?.params?.stream;
+    let nm3PerKg = 22.414 / 29;
+    let co2MassFraction = 0;
+    if (air?.mol) {
+      const mass = streamMassKg(air);
+      const totalMol = Object.values(air.mol).reduce((sum, amount) => sum + amount, 0);
+      if (mass > 0 && totalMol > 0) nm3PerKg = (totalMol * 22.414 / 1000) / mass;
+      const co2Mol = air.mol.CO2 || 0;
+      const co2Kg = co2Mol * (SUBSTANCES.CO2?.molarMassG || 44.0095) / 1000;
+      co2MassFraction = mass > 0 ? co2Kg / mass : 0;
+    }
+    const airKg = capture > 0 && co2MassFraction > 0 ? dacKg / capture / co2MassFraction : 0;
+    const nm3 = airKg * nm3PerKg;
+    node.capacity = nm3;
+    setpoints[node.id] = nm3;
+  }
+}
+
 function solveHorizon(caseDefinition) {
   const hours = hourlyProfile(caseDefinition.site);
   if (!hours) return solveOperation(caseDefinition);
@@ -1424,6 +1515,8 @@ function solveHorizon(caseDefinition) {
   }
   const remainingDemand = {};
   for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'converter')) {
+    // MECH11 lifts track downstream hourly duty — do not bank independent remaining.
+    if (node.unit === 'intake-pump' || node.unit === 'gas-blower') continue;
     remainingDemand[node.id] = caseDefinition.operation?.setpoints?.[node.id] ?? 0;
   }
   // Buffers with an explicit daily discharge setpoint spread it across hours.
@@ -1497,6 +1590,7 @@ function solveHorizon(caseDefinition) {
         node.params.stream = cloneStream(hourCase.site.resources[node.siteResource].stream);
       }
       if (UNITS[node.unit].kind === 'converter') {
+        if (node.unit === 'intake-pump' || node.unit === 'gas-blower') continue;
         node.capacity = (caseDefinition.graph.nodes.find(item => item.id === node.id).capacity || 0) / 24;
         const leftover = remainingDemand[node.id] || 0;
         hourCase.operation.setpoints[node.id] = power === 0 ? 0 : Math.min(leftover, node.capacity, leftover / sunLeft);
@@ -1569,6 +1663,15 @@ function solveHorizon(caseDefinition) {
       }
       if (sabatier) hourCase.operation.setpoints[sabatier.id] = 0;
       if (dac) hourCase.operation.setpoints[dac.id] = 0;
+    }
+    syncHourlyLiftSetpoints(hourCase);
+    if (power === 0) {
+      for (const node of hourCase.graph.nodes) {
+        if (node.unit === 'intake-pump' || node.unit === 'gas-blower') {
+          node.capacity = 0;
+          hourCase.operation.setpoints[node.id] = 0;
+        }
+      }
     }
     const solved = solveOperation(hourCase);
     if (powerBudgetThrottled(hourCase.graph.nodes, solved.nodes)) powerCut = true;

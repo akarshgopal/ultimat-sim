@@ -51,7 +51,9 @@ const DEFAULT_PARAMS = {
   },
   swro: {
     recovery: 0.45,
-    secKWhPerM3: 3.5,
+    // Plant-only SEC after MECH11 intake-pump takes the ~0.4 kWh/m³ open-intake share
+    // (was 3.5 plant-with-intake; Elimelech & Phillip 2011 band; Voutchkov RO-train 2.5–2.8).
+    secKWhPerM3: 3.1,
     feedDensityKgM3: 1000,
     productDensityKgM3: 1000,
     ionRejection: 1,
@@ -103,9 +105,21 @@ function createSabatierCase(overrides = {}) {
     ? CO2_KG_PER_KG_CH4 / params.dac.captureFraction / airCo2MassFraction
     : Infinity;
   const offgasKgPerKgCH4 = airKgPerKgCH4 - CO2_KG_PER_KG_CH4;
+  const seawaterM3PerKgCH4 = productWaterKgPerKgCH4 / 1000 / params.swro.recovery;
+  // MECH11: explicit intake-pump @ 0.4 kWh/m³ + air blower @ 0.001 kWh/Nm³ (screening).
+  const intakePumpKWhPerKgCH4 = seawaterM3PerKgCH4 * 0.4;
+  const airNm3PerKg = (() => {
+    const totalMol = Object.values(air.mol || {}).reduce((sum, amount) => sum + amount, 0);
+    const mass = streamMassKg(air);
+    if (!(mass > 0) || !(totalMol > 0)) return 22.414 / 29; // ~Nm³/kg dry air fallback
+    return (totalMol * 22.414 / 1000) / mass;
+  })();
+  const blowerKWhPerKgCH4 = Number.isFinite(airKgPerKgCH4) ? airKgPerKgCH4 * airNm3PerKg * 0.001 : 0;
   const electricityKWhPerKgCH4 =
     CO2_KG_PER_KG_CH4 * params.dac.electricityKWhPerKgCO2
-    + productWaterKgPerKgCH4 / 1000 / params.swro.recovery * params.swro.secKWhPerM3
+    + seawaterM3PerKgCH4 * params.swro.secKWhPerM3
+    + intakePumpKWhPerKgCH4
+    + blowerKWhPerKgCH4
     + H2_KG_PER_KG_CH4 * params.electrolyzer.secKWhPerKgH2
     + params.sabatier.electricityKWhPerKgCH4;
   const heatKWhPerKgCH4 = CO2_KG_PER_KG_CH4 * params.dac.heatKWhPerKgCO2;
@@ -123,6 +137,13 @@ function createSabatierCase(overrides = {}) {
   const roRequested = overrides.roRequested
     ?? Math.max(0, h2Requested * H2O_KG_PER_KG_H2
       - (recycleWater ? upstreamTarget * H2O_RECOVERED_PER_KG_CH4 : 0)) / 1000;
+  const dacRequestedKg = overrides.dacRequested ?? upstreamTarget * CO2_KG_PER_KG_CH4;
+  // Match lift duties to downstream pull so pumps/blowers do not dump unused feed (balance closed).
+  const seawaterPumpM3 = params.swro.recovery > 0 ? roRequested / params.swro.recovery : 0;
+  const airKgForDac = airCo2MassFraction > 0
+    ? dacRequestedKg / params.dac.captureFraction / airCo2MassFraction
+    : 0;
+  const airBlowerNm3 = airKgForDac * airNm3PerKg;
 
   const boundaryLimitedBy = [];
   if (boundaryTarget < Math.min(sabatierRequested, sabatierCapacity)) {
@@ -136,7 +157,9 @@ function createSabatierCase(overrides = {}) {
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
+        { id: 'air-blower', unit: 'gas-blower', capacity: airBlowerNm3, params: { blowerKWhPerNm3: 0.001 } },
         { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { ...tea.bindCost('seawater'), unitCost: 0.001 } },
+        { id: 'seawater-pump', unit: 'intake-pump', capacity: seawaterPumpM3, params: { pumpKWhPerM3: 0.4, densityKgM3: params.swro.feedDensityKgM3 || 1000 } },
         {
           id: 'electricity',
           unit: 'electricity-source',
@@ -183,11 +206,15 @@ function createSabatierCase(overrides = {}) {
           : [{ id: 'sabatier-water', unit: 'material-sink', economics: tea.bindSale('water') }]),
       ],
       edges: [
-        { from: { node: 'air', port: 'out' }, to: { node: 'dac', port: 'air' } },
+        { from: { node: 'air', port: 'out' }, to: { node: 'air-blower', port: 'in' } },
+        { from: { node: 'air-blower', port: 'out' }, to: { node: 'dac', port: 'air' } },
         { from: { node: 'heat', port: 'out' }, to: { node: 'dac', port: 'heat' } },
         { from: { node: 'consumables', port: 'out' }, to: { node: 'dac', port: 'consumables' } },
-        { from: { node: 'seawater', port: 'out' }, to: { node: 'swro', port: 'feed' } },
+        { from: { node: 'seawater', port: 'out' }, to: { node: 'seawater-pump', port: 'in' } },
+        { from: { node: 'seawater-pump', port: 'out' }, to: { node: 'swro', port: 'feed' } },
         { from: { node: 'electricity', port: 'out' }, to: { node: 'electrical-bus', port: 'in' } },
+        { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'air-blower', port: 'electricity' } },
+        { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'seawater-pump', port: 'electricity' } },
         { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'dac', port: 'electricity' } },
         { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'swro', port: 'electricity' } },
         { from: { node: 'electrical-bus', port: 'out' }, to: { node: 'electrolyzer', port: 'electricity' } },
@@ -221,12 +248,14 @@ function createSabatierCase(overrides = {}) {
     },
     operation: {
       setpoints: {
-        dac: overrides.dacRequested ?? upstreamTarget * CO2_KG_PER_KG_CH4,
+        'air-blower': airBlowerNm3,
+        'seawater-pump': seawaterPumpM3,
+        dac: dacRequestedKg,
         swro: roRequested,
         electrolyzer: h2Requested,
         sabatier: boundaryLimitedBy.length ? upstreamTarget : sabatierRequested,
       },
-      priorities: { 'electrical-bus': ['dac', 'swro', 'electrolyzer', 'sabatier'] },
+      priorities: { 'electrical-bus': ['air-blower', 'seawater-pump', 'dac', 'swro', 'electrolyzer', 'sabatier'] },
       boundaryLimitedBy,
     },
   };

@@ -47,7 +47,8 @@ test('brine→minerals edge capacity clamps minerals activity and product mass',
   const freeLi = streamMassKg(free.nodes.lithium.received);
 
   const limited = clone(freeCase);
-  const brineEdge = limited.graph.edges.find(edge => edge.from.node === 'brine' && edge.to.node === 'minerals');
+  // MECH11: brine→brine-pump→minerals; clamp the pump→minerals leg.
+  const brineEdge = limited.graph.edges.find(edge => edge.from.node === 'brine-pump' && edge.to.node === 'minerals');
   assert.ok(brineEdge);
   brineEdge.capacity = free.nodes.minerals.activity * 0.4;
 
@@ -56,10 +57,10 @@ test('brine→minerals edge capacity clamps minerals activity and product mass',
   assert.ok(solved.nodes.minerals.limitedBy.includes('logistics'));
   assert.ok(solved.nodes.minerals.limitedBy.includes('brine'));
   assert.equal(solved.edgeLimits.length, 1);
-  assert.equal(solved.edgeLimits[0].from.node, 'brine');
+  assert.equal(solved.edgeLimits[0].from.node, 'brine-pump');
   assert.equal(solved.edgeLimits[0].to.node, 'minerals');
   assert.ok(Math.abs(streamMassKg(solved.nodes.lithium.received) - freeLi * 0.4) < 1e-6);
-  assert.ok(solved.warnings.some(message => /brine→minerals limited by logistics capacity/.test(message)));
+  assert.ok(solved.warnings.some(message => /brine-pump→minerals limited by logistics capacity/.test(message)));
 
   delete brineEdge.capacity;
   const recovered = solveOperation(limited);

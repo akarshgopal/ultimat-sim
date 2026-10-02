@@ -20,7 +20,7 @@ const ALBORAN_URL = 'https://en.wikipedia.org/wiki/Alboran_Sea';
 const EVIDENCE = [
   { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; 2023 hourly typical day for dispatch', url: PVGIS_URL },
   { label: 'PEM: DOE 2022 system status, 55 kWh/kg H₂; not a future target', url: 'https://www.energy.gov/cmei/fuels/technical-targets-proton-exchange-membrane-electrolysis' },
-  { label: 'SWRO plant SEC band: Elimelech & Phillip 2011; Voutchkov 2018 RO-train 2.5–2.8 kWh/m³', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
+  { label: 'SWRO plant-only SEC 3.1 kWh/m³ after MECH11 intake-pump (was 3.5 with intake); Elimelech & Phillip 2011; Voutchkov 2018 RO-train 2.5–2.8', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
   { label: 'Seawater: Millero/Pilson S=35 majors scaled 36.5/35 for Alboran MAW near Almería; not a NaCl proxy', url: MILLERO_URL },
   { label: 'Alboran Sea Modified Atlantic Water salinity context (~36.5 g/kg)', url: ALBORAN_URL },
   { label: 'Air: 422.45 ppm, 2024 global estimate; dry O₂/N₂ balance is simplified', url: 'https://essd.copernicus.org/articles/17/965/2025/' },
@@ -59,7 +59,9 @@ function createCoastalCase(month = 0) {
   const co2 = 44.0095 / 16.04246;
   const water = h2 * 18.01528 / 2.01588;
   // Match this example's upstream setpoints; installed capacities stay fixed.
-  const target = Math.min(5, electricityKWh / (h2 * 55 + co2 * 0.5 + water / 1000 * 3.5 + 1));
+  // MECH11: SWRO plant-only 3.1 (+ intake-pump 0.4 on feed) and ~4 kWh/kg air-blower pad.
+  const seawaterM3 = water / 1000 / 0.45;
+  const target = Math.min(5, electricityKWh / (h2 * 55 + co2 * 0.5 + seawaterM3 * 3.1 + seawaterM3 * 0.4 + 4 + 1));
   const definition = sabatier.createSabatierCase({
     co2Ppm: 422.45, seawater, electricityKWh,
     h2Requested: target * h2, dacRequested: target * co2,
@@ -132,7 +134,7 @@ function createCoastalCase(month = 0) {
       database: HOURLY.database,
       url: HOURLY.url,
     } : null,
-    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Alboran multi-ion assay (data/almeria-seawater.json), not a NaCl proxy. Grid, freshwater, and seawater discharge rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
+    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Alboran multi-ion assay (data/almeria-seawater.json), not a NaCl proxy. MECH11 wires seawater→intake-pump→SWRO and air→gas-blower→DAC on the bus; SWRO SEC is plant-only 3.1 kWh/m³ (intake share moved to the pump at 0.4 kWh/m³). Grid, freshwater, and seawater discharge rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
   };
   definition.operation.boundaryLimitedBy = target < 5 ? ['site solar electricity'] : [];
   return definition;

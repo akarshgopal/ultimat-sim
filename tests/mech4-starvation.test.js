@@ -25,18 +25,18 @@ function codes(result) {
   return (result.causeChain || []).map(step => step.code);
 }
 
-test('brine→minerals logistics chain names the clamped edge', () => {
+test('brine-pump→minerals logistics chain names the clamped edge', () => {
   const freeCase = siteZabuyeAbundance();
   const free = solveOperation(clone(freeCase));
   const limited = clone(freeCase);
-  const brineEdge = limited.graph.edges.find(edge => edge.from.node === 'brine' && edge.to.node === 'minerals');
+  const brineEdge = limited.graph.edges.find(edge => edge.from.node === 'brine-pump' && edge.to.node === 'minerals');
   brineEdge.capacity = free.nodes.minerals.activity * 0.4;
 
   const solved = solveOperation(limited);
   assert.ok(solved.nodes.minerals.limitedBy.includes('logistics'));
-  assert.ok(solved.nodes.minerals.causeText.includes('brine→minerals logistics'));
+  assert.ok(solved.nodes.minerals.causeText.includes('brine-pump→minerals logistics'));
   assert.deepEqual(codes(solved.nodes.minerals), ['logistics']);
-  assert.equal(solved.nodes.minerals.causeChain[0].edge.from.node, 'brine');
+  assert.equal(solved.nodes.minerals.causeChain[0].edge.from.node, 'brine-pump');
   assert.equal(solved.nodes.minerals.causeChain[0].edge.to.node, 'minerals');
 });
 

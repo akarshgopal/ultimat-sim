@@ -149,11 +149,90 @@ function sourceFeeding(definition, nodeId, port) {
   const upstream = nodeBy(definition, node => node.id === edge.from.node);
   if (!upstream) return null;
   if (String(upstream.unit).includes('source')) return upstream;
+  // MECH11: walk past intake pumps / gas blowers / buffers to the assay source.
+  if (upstream.unit === 'intake-pump' || upstream.unit === 'gas-blower' || upstream.unit === 'material-buffer') {
+    return sourceFeeding(definition, upstream.id, 'in') || upstream;
+  }
   if (upstream.unit === 'material-mixer' || upstream.unit === 'electrical-bus') {
     const feed = definition.graph.edges.find(item => item.to.node === upstream.id && !item.recycle);
     return feed ? nodeBy(definition, node => node.id === feed.from.node) : upstream;
   }
   return upstream;
+}
+
+function intakePumpElectricityKWh(definition, brineKg) {
+  const pump = nodeBy(definition, node => node.unit === 'intake-pump' && (node.id === 'brine-pump' || node.id.includes('brine')));
+  if (!pump || !(brineKg > 0)) return 0;
+  const density = Number(pump.params?.densityKgM3 ?? 1025) || 1025;
+  const sec = pump.params?.pumpKWhPerKg != null && pump.params?.pumpKWhPerKg !== ''
+    ? Number(pump.params.pumpKWhPerKg)
+    : Number(pump.params?.pumpKWhPerM3 ?? 0.4);
+  if (!(sec >= 0) || !(density > 0)) return 0;
+  return pump.params?.pumpKWhPerKg != null && pump.params?.pumpKWhPerKg !== ''
+    ? brineKg * sec
+    : (brineKg / density) * sec;
+}
+
+
+function airNm3PerKgFromDefinition(definition) {
+  const air = nodeBy(definition, node => node.id === 'air') || nodeBy(definition, node => node.siteResource === 'air');
+  const stream = air?.params?.stream;
+  if (!stream?.mol) return 22.414 / 29;
+  const mass = streamMassKg(stream);
+  const totalMol = Object.values(stream.mol).reduce((sum, amount) => sum + amount, 0);
+  if (!(mass > 0) || !(totalMol > 0)) return 22.414 / 29;
+  return (totalMol * 22.414 / 1000) / mass;
+}
+
+function liftElectricityKWh(definition, { seawaterKg = 0, airKg = 0, feedDensity = 1025 } = {}) {
+  let kWh = 0;
+  for (const pump of definition.graph.nodes.filter(node => node.unit === 'intake-pump' && node.id !== 'brine-pump')) {
+    const density = Number(pump.params?.densityKgM3 ?? feedDensity) || feedDensity;
+    const useKg = pump.params?.pumpKWhPerKg != null && pump.params?.pumpKWhPerKg !== '';
+    const sec = useKg
+      ? Number(pump.params.pumpKWhPerKg)
+      : Number(pump.params?.pumpKWhPerM3 ?? 0.4);
+    if (!(sec >= 0) || !(seawaterKg > 0) || !(density > 0)) continue;
+    kWh += useKg ? seawaterKg * sec : (seawaterKg / density) * sec;
+  }
+  for (const blower of definition.graph.nodes.filter(node => node.unit === 'gas-blower')) {
+    const useKg = blower.params?.blowerKWhPerKg != null && blower.params?.blowerKWhPerKg !== '';
+    const sec = useKg
+      ? Number(blower.params.blowerKWhPerKg)
+      : Number(blower.params?.blowerKWhPerNm3 ?? 0.001);
+    if (!(sec >= 0) || !(airKg > 0)) continue;
+    kWh += useKg ? airKg * sec : airKg * airNm3PerKgFromDefinition(definition) * sec;
+  }
+  return kWh;
+}
+
+function syncLiftDuties(definition, duties = {}) {
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  const seawaterKg = Number(duties.seawaterKg) || 0;
+  const airKg = Number(duties.airKg) || 0;
+  const swro = Number(duties.swro) || 0;
+  for (const pump of definition.graph.nodes.filter(node => node.unit === 'intake-pump' && node.id !== 'brine-pump')) {
+    const density = Number(pump.params?.densityKgM3 ?? duties.feedDensity ?? 1025) || 1025;
+    let m3 = 0;
+    if (seawaterKg > 0 && density > 0) m3 = seawaterKg / density;
+    else if (swro > 0) {
+      const desal = converter(definition, 'desal');
+      const recovery = Number(desal?.params?.recovery ?? 0.45) || 0.45;
+      m3 = recovery > 0 ? swro / recovery : 0;
+    }
+    pump.capacity = m3;
+    setpoints[pump.id] = m3;
+  }
+  for (const blower of definition.graph.nodes.filter(node => node.unit === 'gas-blower')) {
+    if (!(airKg > 0)) {
+      blower.capacity = 0;
+      setpoints[blower.id] = 0;
+      continue;
+    }
+    const nm3 = airKg * airNm3PerKgFromDefinition(definition);
+    blower.capacity = nm3;
+    setpoints[blower.id] = nm3;
+  }
 }
 
 function chainParams(definition) {
@@ -470,7 +549,9 @@ function estimateDuties(definition, methaneKg, recoveredPerKg, caps, heatCredit 
     const makeupWaterKg = Math.max(0, methane * chain.waterKgPerKg - methane * recycleCredit);
     const swro = makeupWaterKg / chain.productDensity;
     const seawaterKg = (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity;
-    const processElectricityKWh = h2 * chain.secH2 + co2 * chain.secDac + swro * chain.secDesal + methane * chain.secCh4;
+    const airKg = airKgForCo2(definition, co2, chain.captureFraction);
+    const processElectricityKWh = h2 * chain.secH2 + co2 * chain.secDac + swro * chain.secDesal + methane * chain.secCh4
+      + liftElectricityKWh(definition, { seawaterKg, airKg, feedDensity: chain.feedDensity });
     const dacHeatKWh = co2 * chain.heatDac;
     const desalHeatKWh = swro * chain.heatDesal;
     const sources = [];
@@ -520,7 +601,7 @@ function estimateDuties(definition, methaneKg, recoveredPerKg, caps, heatCredit 
       heatCoveredKWh: cascade.heatCoveredKWh,
       heatResidualKWh: cascade.heatResidualKWh,
       solarKWp,
-      airKg: airKgForCo2(definition, co2, chain.captureFraction),
+      airKg,
       consumablesKg: co2 * chain.consumablesPerKgCO2,
       yieldPerKWp,
       _scaleBasis: methane,
@@ -547,7 +628,8 @@ function estimateH2Duties(definition, h2Kg, caps, heatCredit = true) {
     const seawaterKg = chain.desal
       ? (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity
       : makeupWaterKg;
-    const processElectricityKWh = h2 * chain.secH2 + swro * chain.secDesal;
+    const processElectricityKWh = h2 * chain.secH2 + swro * chain.secDesal
+      + liftElectricityKWh(definition, { seawaterKg, airKg: 0, feedDensity: chain.feedDensity });
     const desalHeatKWh = swro * chain.heatDesal;
     const sinks = desalHeatKWh > 0 && chain.desal
       ? [{ id: chain.desal.id, demandKWh: desalHeatKWh, minT_C: chain.minHeatDesal }]
@@ -603,10 +685,12 @@ function estimateMethanolDuties(definition, methanolKg, caps, heatCredit = true)
     const seawaterKg = chain.desal && swro > 0
       ? (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity
       : makeupWaterKg;
+    const airKg = usesDac ? airKgForCo2(definition, co2, chain.captureFraction) : 0;
     const processElectricityKWh = methanol * chain.secMeoh
       + (usesElectrolyzer ? h2 * chain.secH2 : 0)
       + (usesDac ? co2 * chain.secDac : 0)
-      + swro * chain.secDesal;
+      + swro * chain.secDesal
+      + liftElectricityKWh(definition, { seawaterKg, airKg, feedDensity: chain.feedDensity });
     const sources = [];
     const sinks = [];
     if (methanol > 0 && chain.wasteHeatPerKg > 0) {
@@ -643,7 +727,7 @@ function estimateMethanolDuties(definition, methanolKg, caps, heatCredit = true)
       heatCoveredKWh: cascade.heatCoveredKWh,
       heatResidualKWh: cascade.heatResidualKWh,
       solarKWp,
-      airKg: usesDac ? airKgForCo2(definition, co2, chain.captureFraction) : 0,
+      airKg,
       consumablesKg: usesDac ? co2 * chain.consumablesPerKgCO2 : 0,
       yieldPerKWp,
       _scaleBasis: methanol,
@@ -672,10 +756,12 @@ function estimateAmmoniaDuties(definition, ammoniaKg, caps, heatCredit = true) {
     const seawaterKg = chain.desal && swro > 0
       ? (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity
       : makeupWaterKg;
+    const airKg = usesAsu ? airKgForN2(definition, n2, chain.nitrogenRecovery) : 0;
     const processElectricityKWh = ammonia * chain.secNH3
       + (usesElectrolyzer ? h2 * chain.secH2 : 0)
       + (usesAsu ? n2 * chain.secAsu : 0)
-      + swro * chain.secDesal;
+      + swro * chain.secDesal
+      + liftElectricityKWh(definition, { seawaterKg, airKg, feedDensity: chain.feedDensity });
     const sinks = [];
     const desalHeatKWh = swro * chain.heatDesal;
     if (desalHeatKWh > 0 && chain.desal) {
@@ -706,7 +792,7 @@ function estimateAmmoniaDuties(definition, ammoniaKg, caps, heatCredit = true) {
       heatCoveredKWh: cascade.heatCoveredKWh,
       heatResidualKWh: cascade.heatResidualKWh,
       solarKWp,
-      airKg: usesAsu ? airKgForN2(definition, n2, chain.nitrogenRecovery) : 0,
+      airKg,
       consumablesKg: 0,
       yieldPerKWp,
       _scaleBasis: ammonia,
@@ -851,6 +937,7 @@ function applyDuties(definition, duties) {
   applyPowerAndSite(definition, duties);
   for (const node of [air, seawater, heat, consumables]) syncSiteResource(definition, node);
 
+  syncLiftDuties(definition, duties);
   definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
 }
 
@@ -934,6 +1021,7 @@ function applyH2Duties(definition, duties) {
   applyPowerAndSite(definition, duties);
   syncSiteResource(definition, water);
   syncSiteResource(definition, heat);
+  syncLiftDuties(definition, duties);
   definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
 }
 
@@ -970,6 +1058,7 @@ function applyMethanolDuties(definition, duties) {
   if (duties.consumablesKg > 0) setConsumable(consumables, duties.consumablesKg);
   applyPowerAndSite(definition, duties);
   for (const node of [seawater, air, heat, consumables]) syncSiteResource(definition, node);
+  syncLiftDuties(definition, duties);
   definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
 }
 
@@ -1003,6 +1092,7 @@ function applyAmmoniaDuties(definition, duties) {
   setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
   applyPowerAndSite(definition, duties);
   for (const node of [seawater, air, heat]) syncSiteResource(definition, node);
+  syncLiftDuties(definition, duties);
   definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
 }
 
@@ -1128,6 +1218,13 @@ function applyMineralDuties(definition, duties) {
   minerals.capacity = duties.brineKg;
   const brine = brineSource(definition, minerals);
   if (duties.brineKg >= 0) setMaterial(brine, duties.brineKg, definition);
+  const brinePump = nodeBy(definition, item => item.id === 'brine-pump' || (item.unit === 'intake-pump' && String(item.id).includes('brine')));
+  if (brinePump && duties.brineKg >= 0) {
+    const density = Number(brinePump.params?.densityKgM3 ?? 1200) || 1200;
+    const brineM3 = duties.brineKg / density;
+    brinePump.capacity = brineM3;
+    setpoints[brinePump.id] = brineM3;
+  }
   const heat = nodeBy(definition, node => node.id === 'heat') || nodeBy(definition, node => node.siteResource === 'heat');
   setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
   applyPowerAndSite(definition, duties);
@@ -1471,7 +1568,8 @@ function sizeMinerals(definition, product, target, opts) {
   const sec = Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05);
   const currentBrineKg = streamMassKg(brine.params.stream);
   const suppliedKWh = Number(electricityNode(definition)?.params?.stream?.kWh) || 0;
-  let otherKWh = Math.max(0, suppliedKWh - currentBrineKg * sec);
+  const pumpKWh0 = intakePumpElectricityKWh(definition, currentBrineKg);
+  let otherKWh = Math.max(0, suppliedKWh - currentBrineKg * sec - pumpKWh0);
   let yieldPerKg = yield0;
 
   return iterateSize({
@@ -1485,7 +1583,7 @@ function sizeMinerals(definition, product, target, opts) {
       const yieldPerKWp = dailyPvKWhPerKWp(current);
       const raw = kg => {
         const brineKg = Math.max(0, kg);
-        const processElectricityKWh = brineKg * sec + otherKWh;
+        const processElectricityKWh = brineKg * sec + intakePumpElectricityKWh(current, brineKg) + otherKWh;
         const sinks = processHeatSinks(current);
         const cascade = dutyHeat({
           definition: current,
@@ -1528,7 +1626,7 @@ function sizeMinerals(definition, product, target, opts) {
       const brineActivity = activity(solved, minerals);
       if (duties.brineKg > 0 && achieved > 0) yieldPerKg = achieved / duties.brineKg;
       const consumedKWh = electricityConsumed(solved);
-      otherKWh = Math.max(0, consumedKWh - brineActivity * sec);
+      otherKWh = Math.max(0, consumedKWh - brineActivity * sec - intakePumpElectricityKWh(current, brineActivity));
       const gaps = [
         relativeGap(brineActivity, duties.brineKg),
         relativeGap(consumedKWh, duties.electricityKWh),
@@ -1845,6 +1943,14 @@ function applyAbundanceScale(definition, baseline, scale, slateMode) {
   minerals.capacity = brineKg;
   definition.operation.setpoints[minerals.id] = brineKg;
 
+  const brinePump = nodeBy(definition, item => item.id === 'brine-pump' || item.unit === 'intake-pump');
+  if (brinePump) {
+    const density = Number(brinePump.params?.densityKgM3 ?? 1200) || 1200;
+    const brineM3 = brineKg / density;
+    brinePump.capacity = brineM3;
+    definition.operation.setpoints[brinePump.id] = brineM3;
+  }
+
   for (const id of ABUNDANCE_DOWNSTREAM) {
     const node = nodeBy(definition, item => item.id === id);
     if (!node) continue;
@@ -1876,7 +1982,8 @@ function applyAbundanceScale(definition, baseline, scale, slateMode) {
     }
     const power = electricityNode(definition);
     if (power?.params?.stream) {
-      power.params.stream.kWh = brineKg * Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05);
+      power.params.stream.kWh = brineKg * Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05)
+        + intakePumpElectricityKWh(definition, brineKg);
     }
   } else if (slateMode === 'minerals+halogens') {
     if (!nodeBy(definition, item => item.id === 'hydrogen-vent')) {
@@ -1889,7 +1996,9 @@ function applyAbundanceScale(definition, baseline, scale, slateMode) {
     const br = Number(definition.operation.setpoints['bromine-recovery'] || 0);
     const power = electricityNode(definition);
     if (power?.params?.stream) {
-      power.params.stream.kWh = brineKg * Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05) + ca * 2.5 + br * 0.2;
+      power.params.stream.kWh = brineKg * Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05)
+        + intakePumpElectricityKWh(definition, brineKg)
+        + ca * 2.5 + br * 0.2;
     }
   }
 

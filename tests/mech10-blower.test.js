@@ -102,12 +102,14 @@ function blowerCase({
   };
 }
 
-test('unconstrained methanol demo stays bit-identical without gas blowers', () => {
+test('stock methanol demo exposes gas blower on the air path', () => {
   const solved = solveOperation(clone(createMethanolCase(0)));
   assert.equal(solved.edgeLimits.length, 0);
   assert.ok(solved.nodes.dac.activity > 0);
   assert.ok(solved.nodes.methanol.activity > 0);
-  assert.ok(!Object.values(solved.nodes).some(node => node.blowerKWhPerUnit != null));
+  assert.ok(solved.nodes['air-blower'].activity > 0);
+  assert.ok(solved.nodes['air-blower'].blowerKWhPerUnit > 0);
+  assert.ok(solved.nodes['seawater-pump'].activity > 0);
 });
 
 test('gas blower passes air when bus power covers blowerKWhPerNm3', () => {

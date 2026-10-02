@@ -152,7 +152,9 @@ test('H2 sizing does not credit parked Sabatier waste heat', () => {
   assert.ok((last.heatCoveredKWh || 0) < 1e-9);
   assert.ok((sized.heatCoveredKWh || 0) < 1e-9);
   const swro = 10 * WATER_KG_PER_KG_H2 / 1000;
-  const processKWh = 10 * 55 + swro * 3.5;
+  const feedM3 = swro / 0.45;
+  // MECH11: plant-only SWRO 3.1 + intake-pump 0.4 kWh/m³ on feed.
+  const processKWh = 10 * 55 + swro * 3.1 + feedM3 * 0.4;
   assert.ok(Math.abs(last.electricityKWh - processKWh) / processKWh < 1e-6);
   const heat = sized.definition.graph.nodes.find(node => node.unit === 'heat-source');
   assert.ok(heat);

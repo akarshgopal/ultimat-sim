@@ -1199,8 +1199,8 @@ test('resource strip lights Zabuye power, cash, and land and hides an empty wate
   assert.equal(app.site.id, 'china-zabuye');
   assert.equal(strip.hidden, false);
   assert.match(strip.innerHTML, /data-hud="power"/);
-  assert.match(strip.innerHTML, /5 \/ 5\.01 MWh\/d/);
-  assert.match(strip.innerHTML, /Bus dispatch 5,000 \/ 5,010 kWh\/d/);
+  assert.match(strip.innerHTML, /5\.03 \/ 5\.04 MWh\/d/);
+  assert.match(strip.innerHTML, /Bus dispatch 5,033\.33 \/ 5,043\.33 kWh\/d/);
   assert.match(strip.innerHTML, /data-hud="cash"/);
   assert.match(strip.innerHTML, /\$2\.4M\/y/);
   assert.match(strip.innerHTML, /is-positive/);
@@ -1210,7 +1210,7 @@ test('resource strip lights Zabuye power, cash, and land and hides an empty wate
   assert.doesNotMatch(strip.innerHTML, /—/);
 
   app.loadZabuyeHub();
-  assert.match(strip.innerHTML, /50 \/ 50\.1 MWh\/d/);
+  assert.match(strip.innerHTML, /50\.33 \/ 50\.43 MWh\/d/);
   assert.match(strip.innerHTML, /\$24M\/y/);
   assert.match(strip.innerHTML, /12 ha/);
   assert.doesNotMatch(strip.innerHTML, /data-hud="water"/);

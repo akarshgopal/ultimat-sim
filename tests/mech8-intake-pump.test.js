@@ -98,15 +98,18 @@ function pumpCase({
   return definition;
 }
 
-test('unconstrained Zabuye and coastal demos stay bit-identical without intake pumps', () => {
+test('stock Zabuye and coastal demos expose intake pumps on the floor', () => {
   const zabuye = solveOperation(clone(siteZabuyeAbundance()));
   assert.equal(zabuye.edgeLimits.length, 0);
   assert.ok(zabuye.nodes.minerals.activity > 0);
-  assert.ok(!Object.values(zabuye.nodes).some(node => node.pumpKWhPerUnit != null));
+  assert.ok(zabuye.nodes['brine-pump'].activity > 0);
+  assert.ok(zabuye.nodes['brine-pump'].pumpKWhPerUnit > 0);
 
   const coastal = solveOperation(clone(createCoastalCase()));
   assert.equal(coastal.edgeLimits.length, 0);
   assert.ok(coastal.nodes.swro.activity > 0);
+  assert.ok(coastal.nodes['seawater-pump'].activity > 0);
+  assert.ok(coastal.nodes['seawater-pump'].pumpKWhPerUnit > 0);
 });
 
 test('intake pump passes liquid when bus power covers pumpKWhPerM3', () => {
@@ -186,39 +189,18 @@ test('pumpKWhPerKg basis uses mass instead of volume', () => {
 });
 
 test('Zabuye brine path starves minerals when intake pump loses bus power', () => {
+  // MECH11: brine-pump is stock-wired on Zabuye; starve its bus cable.
   const base = clone(siteZabuyeAbundance());
   const free = solveOperation(clone(base));
   const freeLi = streamMassKg(free.nodes.lithium.received);
+  assert.ok(free.nodes['brine-pump'].activity > 0);
+  assert.ok(freeLi > 0);
 
-  // Insert pump between brine and minerals; wire bus → pump; prioritize pump first.
-  const nodes = base.graph.nodes;
-  nodes.push({
-    id: 'brine-pump',
-    unit: 'intake-pump',
-    capacity: 200,
-    params: { pumpKWhPerM3: 0.4, densityKgM3: 1200 },
-  });
-  const brineEdge = base.graph.edges.find(edge => edge.from.node === 'brine' && edge.to.node === 'minerals');
-  assert.ok(brineEdge);
-  brineEdge.to = { node: 'brine-pump', port: 'in' };
-  base.graph.edges.push(
-    { from: { node: 'brine-pump', port: 'out' }, to: { node: 'minerals', port: 'brine' } },
-    { from: { node: 'power-bus', port: 'out' }, to: { node: 'brine-pump', port: 'electricity' } },
-  );
-  base.operation.setpoints['brine-pump'] = 200;
-  const prior = base.operation.priorities['power-bus'];
-  assert.ok(Array.isArray(prior));
-  base.operation.priorities['power-bus'] = ['brine-pump', ...prior];
-
-  const powered = solveOperation(clone(base));
-  assert.ok(powered.nodes['brine-pump'].activity > 0);
-  assert.ok(streamMassKg(powered.nodes.lithium.received) > freeLi * 0.5);
-
-  // Starve: give the pump cable almost no power.
   const starved = clone(base);
   const cable = starved.graph.edges.find(edge => (
     edge.from.node === 'power-bus' && edge.to.node === 'brine-pump'
   ));
+  assert.ok(cable);
   cable.capacity = 0;
   const solved = solveOperation(starved);
   assert.equal(solved.nodes['brine-pump'].activity, 0);

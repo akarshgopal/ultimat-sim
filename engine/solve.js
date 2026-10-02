@@ -262,6 +262,50 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
       return steps;
     }
 
+    if (kind === 'splitter' && (limits.includes('export') || limits.includes('logistics'))) {
+      steps.push({
+        code: 'branch-blocked',
+        nodeId,
+        text: `${nodeLabel(nodeId)} branch blocked`,
+      });
+      const downEdges = edges.filter(edge => edge.from.node === nodeId && !edge.recycle);
+      for (const edge of downEdges) {
+        const edgeLimit = (edgeLimits || []).find(item => (
+          item.from?.node === edge.from.node && item.from?.port === edge.from.port
+          && item.to?.node === edge.to.node
+        ));
+        if (edgeLimit) {
+          steps.push({
+            code: 'logistics',
+            nodeId,
+            text: `${edgeLimit.from.node}→${edgeLimit.to.node} logistics`,
+            edge: {
+              from: { ...edgeLimit.from },
+              to: { ...edgeLimit.to },
+              capacity: edgeLimit.capacity,
+            },
+            port: edge.to.port,
+          });
+          return steps;
+        }
+        const down = nodeById.get(edge.to.node);
+        if (!down) continue;
+        const downKind = UNITS[down.unit]?.kind;
+        if (downKind === 'sink' || downKind === 'buffer' || downKind === 'splitter') {
+          const more = explainNode(edge.to.node, new Set(seen));
+          if (more.length) return steps.concat(more);
+        }
+        if (['junction', 'mixer'].includes(downKind)) {
+          const through = edges.find(item => item.from.node === edge.to.node && !item.recycle);
+          if (through) {
+            const more = explainNode(through.to.node, new Set(seen));
+            if (more.length) return steps.concat(more);
+          }
+        }
+      }
+      return steps;
+    }
+
     if (limits.includes('export')) {
       steps.push({
         code: 'export',
@@ -273,7 +317,7 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
         const down = nodeById.get(edge.to.node);
         if (!down) continue;
         const downKind = UNITS[down.unit]?.kind;
-        if (downKind === 'sink' || downKind === 'buffer') {
+        if (downKind === 'sink' || downKind === 'buffer' || downKind === 'splitter') {
           const more = explainNode(edge.to.node, new Set(seen));
           if (more.length) return steps.concat(more);
         }
@@ -699,6 +743,10 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
           binding = 'export';
         } else if ((downKind === 'mixer' || downKind === 'junction') && downLimits.includes('export')) {
           binding = 'export';
+        } else if (downKind === 'splitter' && (
+          downLimits.includes('export') || downLimits.includes('logistics')
+        )) {
+          binding = downLimits.includes('export') ? 'export' : 'logistics';
         } else if (edgeLimits?.some(item => (
           item.from?.node === edge.from.node && item.from?.port === edge.from.port
           && item.to?.node === edge.to.node
@@ -785,6 +833,45 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
           edgeStreams.set(incoming[0], cloneStream(result.available));
         }
         edgeStreams.set(outEdge, cloneStream(result.available));
+      }
+      continue;
+    }
+
+    // Material splitter: keep each branch's delivered amount (no overflow onto
+    // free legs). Backpressure the inlet by the rejected sum so mass closes.
+    if (unit.kind === 'splitter') {
+      if (!result.available || !outgoing.length) continue;
+      result.available = scrubTinyNegativeMols(result.available);
+      const want = safeStreamAmount(result.available);
+      let got = 0;
+      let reason = null;
+      for (const edge of outgoing) {
+        let delivered = edgeStreams.get(edge);
+        if (!delivered) delivered = scaleStream(result.available, 0);
+        delivered = scrubTinyNegativeMols(delivered);
+        edgeStreams.set(edge, delivered);
+        got += safeStreamAmount(delivered);
+        const down = nodeById.get(edge.to.node);
+        const downResult = nodeResults[edge.to.node];
+        const downKind = down ? UNITS[down.unit]?.kind : null;
+        const downLimits = downResult?.limitedBy || [];
+        if (downKind === 'sink' && downLimits.includes('export')) reason = reason || 'export';
+        else if (downKind === 'buffer' && (downLimits.includes('capacity') || downLimits.includes('export'))) {
+          reason = reason || 'export';
+        } else if ((downKind === 'mixer' || downKind === 'junction' || downKind === 'splitter')
+          && (downLimits.includes('export') || downLimits.includes('logistics'))) {
+          reason = reason || (downLimits.includes('export') ? 'export' : 'logistics');
+        } else if (edgeLimits?.some(item => (
+          item.from?.node === edge.from.node && item.from?.port === edge.from.port
+          && item.to?.node === edge.to.node
+        ))) reason = reason || 'logistics';
+      }
+      if (want > 1e-15 && got + Math.max(1, got) * 1e-9 < want) {
+        const scale = got / want;
+        result.available = scaleStream(result.available, scale);
+        result.limitedBy = [...new Set([...(result.limitedBy || []), reason || 'export'])];
+        if (incoming[0]) edgeStreams.set(incoming[0], cloneStream(result.available));
+        // Outlets stay at their delivered amounts — do not re-split.
       }
       continue;
     }

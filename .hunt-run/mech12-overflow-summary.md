@@ -1,6 +1,6 @@
 # MECH12 — Splitter overflow onto free legs
 
-**Tip:** (pending push)
+**Tip:** `ada523c` on `main`
 **Tests:** 284 pass
 **Live:** https://akarshgopal.github.io/ultimat-sim/
 

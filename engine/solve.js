@@ -835,12 +835,48 @@ function allocateSplitterOverflow(available, weights, capacities, priorities = n
   return alloc;
 }
 
-function bufferOutletFeedsSink(bufferNode, edges, nodeById) {
-  if (!bufferNode) return false;
-  const outEdge = edges.find(edge => edge.from.node === bufferNode.id && !edge.recycle);
+function bufferOutletEdge(bufferNode, edges) {
+  if (!bufferNode) return null;
+  return edges.find(edge => edge.from.node === bufferNode.id && !edge.recycle) || null;
+}
+
+// MECH14 sink absorb + MECH16 converter absorb. Mixer / nested splitter /
+// buffer→buffer stay frozen (need a fuller cascade pass).
+function bufferOutletCanAbsorbOverflow(bufferNode, edges, nodeById) {
+  const outEdge = bufferOutletEdge(bufferNode, edges);
   if (!outEdge) return false;
   const target = nodeById.get(outEdge.to.node);
-  return !!(target && UNITS[target.unit]?.kind === 'sink');
+  if (!target) return false;
+  const kind = UNITS[target.unit]?.kind;
+  return kind === 'sink' || kind === 'converter';
+}
+
+function bankBufferOutletReject(result, delivered, reason = 'export') {
+  if (!result?.outlets?.out || !delivered) return;
+  const produced = scrubTinyNegativeMols(result.outlets.out);
+  const gotStream = scrubTinyNegativeMols(delivered);
+  const want = safeStreamAmount(produced);
+  const got = safeStreamAmount(gotStream);
+  if (!(want > 1e-15) || !(got + Math.max(1, got) * 1e-9 < want)) return;
+  const rejected = want - got;
+  result.outlets.out = cloneStream(gotStream);
+  result.activity = got;
+  result.inventoryKg = (result.inventoryKg || 0) + rejected;
+  if (result.capacityKg != null && Number.isFinite(result.capacityKg)) {
+    result.inventoryKg = Math.min(result.inventoryKg, result.capacityKg);
+    result.fill = result.capacityKg > 0 ? result.inventoryKg / result.capacityKg : null;
+  }
+  if (result.storedStream && result.inventoryKg > 1e-12) {
+    try {
+      result.storedStream = scaleMaterialToMass(
+        streamMassKg(result.storedStream) > 1e-15 ? result.storedStream : produced,
+        result.inventoryKg
+      );
+    } catch {
+      result.storedStream = cloneStream(produced.kind === 'material' ? produced : result.storedStream);
+    }
+  }
+  result.limitedBy = [...new Set([...(result.limitedBy || []), reason || 'export'])];
 }
 
 function bufferOverflowRoomKg(down, downResult) {
@@ -865,11 +901,10 @@ function splitterBranchCapacity(edge, deliveredAmt, down, downResult, edges, nod
     if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
     return Math.max(0, cap);
   }
-  // MECH14: free material-buffer legs absorb leftover up to remaining tank room
-  // when their outlet feeds a sink (pass-through or fixed discharge). Buffer →
-  // converter / mixer / nested splitter stays frozen — growing outlet would need
-  // a second evaluate pass.
-  if (downKind === 'buffer' && bufferOutletFeedsSink(down, edges, nodeById)) {
+  // MECH14/16: free material-buffer legs absorb leftover up to remaining tank
+  // room when outlet feeds a sink or converter. Mixer / nested splitter /
+  // buffer→buffer stay frozen.
+  if (downKind === 'buffer' && bufferOutletCanAbsorbOverflow(down, edges, nodeById)) {
     let cap = bufferOverflowRoomKg(down, downResult);
     if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
     return Math.max(0, cap);
@@ -880,39 +915,133 @@ function splitterBranchCapacity(edge, deliveredAmt, down, downResult, edges, nod
   return cap;
 }
 
-function applyBufferOverflowIntake(down, downResult, offer, setpoint, edges, edgeStreams, nodeResults, nodeById) {
+function refreshSinkFromOffer(sink, sinkResult, next) {
+  if (!sink || !sinkResult || !next) return;
+  sinkResult.received = cloneStream(next);
+  if (sinkResult.consumed) sinkResult.consumed.in = cloneStream(next);
+  if (sinkResult.requestedInputs) {
+    const prevReq = sinkResult.requestedInputs.in;
+    const prevAmt = prevReq ? safeStreamAmount(prevReq) : 0;
+    const got = safeStreamAmount(next);
+    if (got + Math.max(1, got) * 1e-9 >= prevAmt) {
+      sinkResult.requestedInputs.in = cloneStream(next);
+    }
+  }
+  const accept = sinkResult.acceptKg != null && Number.isFinite(sinkResult.acceptKg)
+    ? sinkResult.acceptKg
+    : (sinkResult.acceptKWh != null && Number.isFinite(sinkResult.acceptKWh)
+      ? sinkResult.acceptKWh
+      : Infinity);
+  const got = safeStreamAmount(next);
+  if (Number.isFinite(accept) && got + Math.max(1, got) * 1e-9 >= accept && accept >= 0) {
+    sinkResult.limitedBy = [...new Set([...(sinkResult.limitedBy || []), 'export'])];
+  } else if (Number.isFinite(accept) && got + Math.max(1, accept) * 1e-9 < accept) {
+    sinkResult.limitedBy = (sinkResult.limitedBy || []).filter(item => item !== 'export');
+  }
+}
+
+// MECH16: after buffer outlet grows, re-craft the downstream converter from
+// current edgeStreams inlets and bank any unconsumed feed back into the tank.
+function inletOfferForConverterReeval(edge, feedEdge, nodeResults, nodeById, edgeStreams) {
+  const current = edgeStreams.get(edge);
+  if (!current) return scaleStream({ kind: 'electricity', kWh: 0 }, 0);
+  if (edge === feedEdge) return cloneStream(current);
+  const up = nodeById.get(edge.from.node);
+  const upResult = up ? nodeResults[up.id] : null;
+  const kind = up ? UNITS[up.unit]?.kind : null;
+  // Direct sources still hold full available; edgeStreams may already be the
+  // first-pass consumed stub. Bus/junction keep the allocated edge (plan-pass
+  // foresight for buffer→converter overflow stays deferred).
+  if (kind === 'source' && upResult?.available) return cloneStream(upResult.available);
+  if ((kind === 'converter' || kind === 'buffer') && upResult?.outlets?.[edge.from.port]) {
+    return cloneStream(upResult.outlets[edge.from.port]);
+  }
+  return cloneStream(current);
+}
+
+function reevaluateConverterAfterBufferFeed(
+  converter, feedEdge, bufferResult, edges, edgeStreams, nodeResults, nodeById, edgeLimits, setpoints
+) {
+  const unit = UNITS[converter.unit];
+  if (!unit?.evaluate) return;
+  const incoming = edges.filter(edge => edge.to.node === converter.id && !edge.recycle);
+  const outgoing = edges.filter(edge => edge.from.node === converter.id && !edge.recycle);
+  const inlets = Object.fromEntries(
+    incoming.map(edge => [
+      edge.to.port,
+      inletOfferForConverterReeval(edge, feedEdge, nodeResults, nodeById, edgeStreams),
+    ])
+  );
+  const result = unit.evaluate({
+    inlets,
+    requestedActivity: setpoints ? setpoints[converter.id] : undefined,
+    capacity: converter.capacity,
+    params: converter.params,
+  });
+  nodeResults[converter.id] = result;
+  for (const edge of incoming) {
+    const consumed = result.consumed?.[edge.to.port];
+    if (consumed) edgeStreams.set(edge, cloneStream(consumed));
+  }
+  for (const edge of outgoing) {
+    let outlet = result.outlets?.[edge.from.port];
+    if (!outlet) continue;
+    // Quiet re-clamp — do not duplicate edgeLimits rows from the topo pass.
+    const capacity = finiteEdgeCapacity(edge);
+    const requested = safeStreamAmount(outlet);
+    if (Number.isFinite(capacity) && requested > capacity + Math.max(1, capacity) * 1e-9) {
+      outlet = scaleStream(outlet, requested === 0 ? 0 : capacity / requested);
+    }
+    edgeStreams.set(edge, cloneStream(outlet));
+    const down = nodeById.get(edge.to.node);
+    const downResult = nodeResults[edge.to.node];
+    if (down && UNITS[down.unit]?.kind === 'sink' && downResult) {
+      refreshSinkFromOffer(down, downResult, outlet);
+    }
+  }
+  const taken = edgeStreams.get(feedEdge);
+  if (taken) {
+    bankBufferOutletReject(bufferResult, taken);
+    edgeStreams.set(feedEdge, cloneStream(bufferResult.outlets.out));
+  }
+}
+
+function applyBufferOverflowIntake(
+  down, downResult, offer, setpoint, edges, edgeStreams, nodeResults, nodeById, edgeLimits = null, setpoints = null
+) {
   const result = evaluateBuffer(down, { in: offer }, setpoint);
   nodeResults[down.id] = result;
   const inEdge = edges.find(edge => edge.to.node === down.id && !edge.recycle);
   if (inEdge) edgeStreams.set(inEdge, cloneStream(result.consumed.in));
   const outEdge = edges.find(edge => edge.from.node === down.id && !edge.recycle);
   if (outEdge && result.outlets?.out) {
-    edgeStreams.set(outEdge, cloneStream(result.outlets.out));
-    const sink = nodeById.get(outEdge.to.node);
-    const sinkResult = nodeResults[outEdge.to.node];
-    if (sink && UNITS[sink.unit]?.kind === 'sink' && sinkResult) {
-      const next = cloneStream(result.outlets.out);
-      sinkResult.received = next;
-      if (sinkResult.consumed) sinkResult.consumed.in = cloneStream(next);
-      if (sinkResult.requestedInputs) {
-        const prevReq = sinkResult.requestedInputs.in;
-        const prevAmt = prevReq ? safeStreamAmount(prevReq) : 0;
-        const got = safeStreamAmount(next);
-        if (got + Math.max(1, got) * 1e-9 >= prevAmt) {
-          sinkResult.requestedInputs.in = cloneStream(next);
-        }
+    let outStream = cloneStream(result.outlets.out);
+    const capacity = finiteEdgeCapacity(outEdge);
+    const requested = safeStreamAmount(outStream);
+    if (Number.isFinite(capacity) && requested > capacity + Math.max(1, capacity) * 1e-9) {
+      outStream = scaleStream(outStream, requested === 0 ? 0 : capacity / requested);
+      if (edgeLimits) {
+        edgeLimits.push({
+          from: { node: outEdge.from.node, port: outEdge.from.port },
+          to: { node: outEdge.to.node, port: outEdge.to.port },
+          port: outEdge.to.port,
+          capacity,
+          requested,
+          delivered: safeStreamAmount(outStream),
+        });
       }
-      const accept = sinkResult.acceptKg != null && Number.isFinite(sinkResult.acceptKg)
-        ? sinkResult.acceptKg
-        : (sinkResult.acceptKWh != null && Number.isFinite(sinkResult.acceptKWh)
-          ? sinkResult.acceptKWh
-          : Infinity);
-      const got = safeStreamAmount(next);
-      if (Number.isFinite(accept) && got + Math.max(1, got) * 1e-9 >= accept && accept >= 0) {
-        sinkResult.limitedBy = [...new Set([...(sinkResult.limitedBy || []), 'export'])];
-      } else if (Number.isFinite(accept) && got + Math.max(1, accept) * 1e-9 < accept) {
-        sinkResult.limitedBy = (sinkResult.limitedBy || []).filter(item => item !== 'export');
-      }
+      bankBufferOutletReject(result, outStream, 'logistics');
+      outStream = cloneStream(result.outlets.out);
+    }
+    edgeStreams.set(outEdge, outStream);
+    const target = nodeById.get(outEdge.to.node);
+    const targetKind = target ? UNITS[target.unit]?.kind : null;
+    if (targetKind === 'sink') {
+      refreshSinkFromOffer(target, nodeResults[outEdge.to.node], result.outlets.out);
+    } else if (targetKind === 'converter') {
+      reevaluateConverterAfterBufferFeed(
+        target, outEdge, result, edges, edgeStreams, nodeResults, nodeById, edgeLimits, setpoints
+      );
     }
   }
   return safeStreamAmount(result.consumed?.in);
@@ -1075,9 +1204,9 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
       continue;
     }
 
-    // Material splitter (MECH12–14): priority tiers fill first, then Factorio
-    // overflow rebalances onto free sink / buffer(→sink) legs by weight; inlet
-    // backpressures only when leftover remains after useful legs saturate.
+    // Material splitter (MECH12–16): priority tiers fill first, then Factorio
+    // overflow rebalances onto free sink / buffer(→sink|converter) legs by weight;
+    // inlet backpressures only when leftover remains after useful legs saturate.
     if (unit.kind === 'splitter') {
       if (!result.available || !outgoing.length) continue;
       result.available = scrubTinyNegativeMols(result.available);
@@ -1125,11 +1254,12 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
         const down = nodeById.get(edge.to.node);
         const downResult = nodeResults[edge.to.node];
         const downKind = down ? UNITS[down.unit]?.kind : null;
-        if (downKind === 'buffer' && downResult && bufferOutletFeedsSink(down, edges, nodeById)) {
-          // MECH14: re-charge the tank from the overflow offer so SOC / consumed stay honest.
+        if (downKind === 'buffer' && downResult && bufferOutletCanAbsorbOverflow(down, edges, nodeById)) {
+          // MECH14/16: re-charge tank; if outlet → converter, re-craft (two-pass).
           const setpoint = setpoints ? setpoints[down.id] : undefined;
           got += applyBufferOverflowIntake(
-            down, downResult, next, setpoint, edges, edgeStreams, nodeResults, nodeById
+            down, downResult, next, setpoint, edges, edgeStreams, nodeResults, nodeById,
+            edgeLimits, setpoints
           );
           continue;
         }

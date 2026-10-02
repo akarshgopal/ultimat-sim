@@ -183,20 +183,22 @@ test('priority sale fills first then overflows into buffer', () => {
   assert.ok(solved.balances.maxAbsResidual < 1e-8, JSON.stringify(solved.balances));
 });
 
-test('buffer feeding converter stays frozen at weight share', () => {
-  // Equal split 50/50; A capped at 10. Without MECH14 absorb, tank stays at 50
-  // (frozen) and feed backpressures to 60 — same as MECH12 non-sink freeze.
+test('buffer feeding converter absorbs overflow (MECH16)', () => {
+  // Equal split 50/50; A capped at 10. MECH16 opens tank→ely so leftover
+  // fills the tank (90) and feed stays at 100.
   const solved = solveOperation(splitBufferCase({
     acceptA: 10,
     capacityKg: 1000,
     bufferToConverter: true,
   }));
   assert.ok(Math.abs(streamMassKg(solved.nodes.a.received) - 10) < 1e-6);
-  assert.ok(Math.abs(streamMassKg(solved.nodes.tank.consumed.in) - 50) < 1e-6, JSON.stringify({
+  assert.ok(Math.abs(streamMassKg(solved.nodes.tank.consumed.in) - 90) < 1e-6, JSON.stringify({
     tankIn: streamMassKg(solved.nodes.tank.consumed.in),
     feed: streamMassKg(solved.nodes.feed.supplied),
+    ely: solved.nodes.ely?.activity,
   }));
-  assert.ok(Math.abs(streamMassKg(solved.nodes.feed.supplied) - 60) < 1e-6);
+  assert.ok(Math.abs(streamMassKg(solved.nodes.feed.supplied) - 100) < 1e-6);
+  assert.ok(solved.nodes.ely.activity > 5, solved.nodes.ely.activity);
   assert.ok(solved.balances.maxAbsResidual < 1e-8, JSON.stringify(solved.balances));
 });
 

@@ -253,6 +253,41 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
       return steps;
     }
 
+    if (kind === 'sink' && limits.includes('export')) {
+      steps.push({
+        code: 'export-capped',
+        nodeId,
+        text: `${nodeLabel(nodeId)} export capped`,
+      });
+      return steps;
+    }
+
+    if (limits.includes('export')) {
+      steps.push({
+        code: 'export',
+        nodeId,
+        text: `${nodeLabel(nodeId)} blocked by export`,
+      });
+      const downEdges = edges.filter(edge => edge.from.node === nodeId && !edge.recycle);
+      for (const edge of downEdges) {
+        const down = nodeById.get(edge.to.node);
+        if (!down) continue;
+        const downKind = UNITS[down.unit]?.kind;
+        if (downKind === 'sink' || downKind === 'buffer') {
+          const more = explainNode(edge.to.node, new Set(seen));
+          if (more.length) return steps.concat(more);
+        }
+        if (['junction', 'mixer'].includes(downKind)) {
+          const through = edges.find(item => item.from.node === edge.to.node && !item.recycle);
+          if (through) {
+            const more = explainNode(through.to.node, new Set(seen));
+            if (more.length) return steps.concat(more);
+          }
+        }
+      }
+      return steps;
+    }
+
     if (limits.includes('logistics')) {
       const edgeLimit = (edgeLimits || []).find(item => item.to.node === nodeId)
         || null;
@@ -285,7 +320,7 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
     // Prefer material/heat inlets over co-listed electricity so craft min() ties
     // do not bury a real upstream root (site budget / empty buffer).
     const inletLimits = limits.filter(limit => (
-      limit !== 'logistics' && limit !== 'site budget' && limit !== 'inventory'
+      limit !== 'logistics' && limit !== 'site budget' && limit !== 'inventory' && limit !== 'export'
     ));
     inletLimits.sort((a, b) => Number(a === 'electricity') - Number(b === 'electricity'));
 
@@ -566,6 +601,196 @@ function evaluateBuffer(node, inlets, requestedActivity) {
   };
 }
 
+function finiteSinkAccept(node, setpoint) {
+  const params = node.params || {};
+  const candidates = [];
+  for (const key of ['acceptKg', 'acceptAmount']) {
+    if (params[key] == null || params[key] === '') continue;
+    candidates.push(nonnegative(Number(params[key]), key));
+  }
+  if (setpoint != null && setpoint !== '') {
+    candidates.push(nonnegative(Number(setpoint), 'sinkAccept'));
+  }
+  if (!candidates.length) return Infinity;
+  return Math.min(...candidates);
+}
+
+// Optional offtake / disposal rate. Blank accept = unlimited (legacy infinite sink).
+function scrubTinyNegativeMols(stream) {
+  if (!stream || stream.kind !== 'material' || !stream.mol) return stream;
+  let changed = false;
+  const mol = { ...stream.mol };
+  for (const [id, amount] of Object.entries(mol)) {
+    if (amount < 0) {
+      if (amount < -1e-9) {
+        throw new Error(`mol.${id} must be a finite nonnegative number`);
+      }
+      mol[id] = 0;
+      changed = true;
+    }
+  }
+  return changed ? { ...stream, mol } : stream;
+}
+
+function safeStreamAmount(stream) {
+  return streamAmount(scrubTinyNegativeMols(stream));
+}
+
+function evaluateSink(node, inlet, setpoint) {
+  const clean = scrubTinyNegativeMols(inlet);
+  const requested = streamAmount(clean);
+  const acceptCap = finiteSinkAccept(node, setpoint);
+  const acceptedAmt = Math.min(requested, acceptCap);
+  const limitedBy = [];
+  if (acceptedAmt + Math.max(1, acceptedAmt) * 1e-9 < requested) limitedBy.push('export');
+  const accepted = scaleStream(clean, requested === 0 ? 0 : acceptedAmt / requested);
+  return {
+    received: accepted,
+    acceptKg: Number.isFinite(acceptCap) ? acceptCap : null,
+    requestedInputs: { in: cloneStream(inlet) },
+    consumed: { in: accepted },
+    limitedBy,
+  };
+}
+
+function scaleNodeStreams(result, scale) {
+  if (!(scale < 1 - 1e-15)) return result;
+  if (result.activity != null) result.activity *= scale;
+  for (const group of ['requestedInputs', 'consumed', 'outlets']) {
+    const bag = result[group];
+    if (!bag) continue;
+    for (const [port, stream] of Object.entries(bag)) {
+      bag[port] = scaleStream(stream, scale);
+    }
+  }
+  return result;
+}
+
+// After sinks/buffers rewrite inlets, scale upstream producers so mass/energy close
+// and converters actually throttle (Factorio full-belt / closed offtake).
+function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits = null) {
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const order = topologicalOrder(nodes, edges).slice().reverse();
+  for (const node of order) {
+    const unit = UNITS[node.unit];
+    const result = nodeResults[node.id];
+    if (!result || !unit) continue;
+    const incoming = edges.filter(edge => edge.to.node === node.id && !edge.recycle);
+    const outgoing = edges.filter(edge => edge.from.node === node.id && !edge.recycle);
+
+    if (unit.kind === 'converter') {
+      let scale = 1;
+      let reason = null;
+      for (const edge of outgoing) {
+        let produced = result.outlets?.[edge.from.port];
+        let delivered = edgeStreams.get(edge);
+        if (!produced || !delivered) continue;
+        produced = scrubTinyNegativeMols(produced);
+        delivered = scrubTinyNegativeMols(delivered);
+        result.outlets[edge.from.port] = produced;
+        edgeStreams.set(edge, delivered);
+        const down = nodeById.get(edge.to.node);
+        const downResult = nodeResults[edge.to.node];
+        const downKind = down ? UNITS[down.unit]?.kind : null;
+        const downLimits = downResult?.limitedBy || [];
+        let binding = null;
+        if (downKind === 'sink' && downLimits.includes('export')) binding = 'export';
+        else if (downKind === 'buffer' && (downLimits.includes('capacity') || downLimits.includes('export'))) {
+          binding = 'export';
+        } else if ((downKind === 'mixer' || downKind === 'junction') && downLimits.includes('export')) {
+          binding = 'export';
+        } else if (edgeLimits?.some(item => (
+          item.from?.node === edge.from.node && item.from?.port === edge.from.port
+          && item.to?.node === edge.to.node
+        ))) binding = 'logistics';
+        // Downstream converter under-drawing a feed is NOT offtake backpressure.
+        if (!binding) continue;
+        const want = safeStreamAmount(produced);
+        const got = safeStreamAmount(delivered);
+        if (want > 1e-15 && got + Math.max(1, got) * 1e-9 < want) {
+          scale = Math.min(scale, got / want);
+          reason = binding;
+        }
+      }
+      if (scale < 1 - 1e-12) {
+        scaleNodeStreams(result, scale);
+        if (reason) result.limitedBy = [...new Set([...(result.limitedBy || []), reason])];
+        for (const edge of incoming) {
+          const consumed = result.consumed?.[edge.to.port];
+          if (consumed) edgeStreams.set(edge, cloneStream(consumed));
+        }
+        for (const edge of outgoing) {
+          const outlet = result.outlets?.[edge.from.port];
+          if (outlet) edgeStreams.set(edge, applyEdgeCapacity(edge, outlet, null));
+        }
+      }
+      continue;
+    }
+
+    if (unit.kind === 'buffer') {
+      const outEdge = outgoing[0];
+      if (!outEdge || !result.outlets?.out) continue;
+      let produced = scrubTinyNegativeMols(result.outlets.out);
+      let delivered = scrubTinyNegativeMols(edgeStreams.get(outEdge));
+      if (!delivered) continue;
+      result.outlets.out = produced;
+      edgeStreams.set(outEdge, delivered);
+      const want = safeStreamAmount(produced);
+      const got = safeStreamAmount(delivered);
+      if (want > 1e-15 && got + Math.max(1, got) * 1e-9 < want) {
+        const rejected = want - got;
+        result.outlets.out = cloneStream(delivered);
+        result.activity = got;
+        result.inventoryKg = (result.inventoryKg || 0) + rejected;
+        if (result.capacityKg != null && Number.isFinite(result.capacityKg)) {
+          result.inventoryKg = Math.min(result.inventoryKg, result.capacityKg);
+          result.fill = result.capacityKg > 0 ? result.inventoryKg / result.capacityKg : null;
+        }
+        if (result.storedStream && result.inventoryKg > 1e-12) {
+          try {
+            result.storedStream = scaleMaterialToMass(
+              streamMassKg(result.storedStream) > 1e-15 ? result.storedStream : produced,
+              result.inventoryKg
+            );
+          } catch {
+            result.storedStream = cloneStream(delivered.kind === 'material' ? produced : result.storedStream);
+          }
+        }
+        result.limitedBy = [...new Set([...(result.limitedBy || []), 'export'])];
+        edgeStreams.set(outEdge, cloneStream(delivered));
+      }
+      continue;
+    }
+
+    // Single-outlet junctions/mixers only. Electrical-bus (and any fan-out
+    // junction) carries one available and many allocated legs — do not scale.
+    if (unit.kind === 'mixer' || (unit.kind === 'junction' && outgoing.length === 1)) {
+      const outEdge = outgoing[0];
+      if (!outEdge || !result.available) continue;
+      result.available = scrubTinyNegativeMols(result.available);
+      const outStream = scrubTinyNegativeMols(edgeStreams.get(outEdge) || result.available);
+      edgeStreams.set(outEdge, outStream);
+      const want = safeStreamAmount(result.available);
+      const got = safeStreamAmount(outStream);
+      if (want > 1e-15 && got + Math.max(1, got) * 1e-9 < want) {
+        const scale = got / want;
+        result.available = scaleStream(result.available, scale);
+        result.limitedBy = [...new Set([...(result.limitedBy || []), 'export'])];
+        if (unit.kind === 'mixer') {
+          for (const edge of incoming) {
+            const prior = edgeStreams.get(edge);
+            if (prior) edgeStreams.set(edge, scaleStream(prior, scale));
+          }
+        } else if (incoming[0]) {
+          edgeStreams.set(incoming[0], cloneStream(result.available));
+        }
+        edgeStreams.set(outEdge, cloneStream(result.available));
+      }
+      continue;
+    }
+  }
+}
+
 function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), edgeLimits = null) {
   const { nodes, edges } = caseDefinition.graph;
   const remaining = siteBudgets(caseDefinition.site);
@@ -637,9 +862,17 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), 
     }
     if (unit.kind === 'sink') {
       const incomingStreams = incoming.map(edge => cloneStream(edgeStreams.get(edge)));
-      nodeResults[node.id] = {
-        received: incomingStreams.length > 1 ? mixHeat(incomingStreams) : incomingStreams[0],
-      };
+      const setpoint = caseDefinition.operation?.setpoints?.[node.id];
+      if (incomingStreams.length === 1
+        && (incomingStreams[0].kind === 'material' || incomingStreams[0].kind === 'consumable')) {
+        const result = evaluateSink(node, incomingStreams[0], setpoint);
+        nodeResults[node.id] = result;
+        for (const edge of incoming) edgeStreams.set(edge, result.consumed[edge.to.port] || result.consumed.in);
+      } else {
+        nodeResults[node.id] = {
+          received: incomingStreams.length > 1 ? mixHeat(incomingStreams) : incomingStreams[0],
+        };
+      }
       continue;
     }
     const result = unit.evaluate({
@@ -651,6 +884,13 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), 
     nodeResults[node.id] = result;
     for (const edge of incoming) edgeStreams.set(edge, result.consumed[edge.to.port]);
     for (const edge of outgoing) setOutlet(edge, result.outlets[edge.from.port]);
+  }
+  // Plan pass (allocations == null) with a power bus must leave producers at full
+  // wanted so allocateElectricity sees true demand. Export/buffer backpressure
+  // runs on the allocated pass (and on graphs with no bus).
+  const hasBus = nodes.some(node => node.unit === 'electrical-bus');
+  if (!(allocations == null && hasBus)) {
+    reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits);
   }
   return { edgeStreams, nodeResults };
 }

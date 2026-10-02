@@ -410,7 +410,15 @@
       ],
       sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream.',
     },
-    'material-sink': { label: 'Material sink', palette: { section: 'utility', order: 9, glyph: '↓', description: 'Capture, store, sell, or discard' } },
+    'material-sink': {
+      label: 'Material sink',
+      palette: { section: 'utility', order: 9, glyph: '↓', description: 'Capture, store, sell, or discard — optional offtake cap backpressures upstream' },
+      params: {},
+      controls: [
+        { key: 'acceptKg', label: 'Export / offtake limit', min: 0, max: 1e6, step: 10, unit: 'kg/day', optional: true },
+      ],
+      sourceNote: 'MECH5: blank offtake limit = unlimited sink (legacy). Set a kg/day cap to close the offtake — upstream converters throttle and cause chains show export capped.',
+    },
     'heat-sink': { label: 'Heat sink', palette: { section: 'utility', order: 10, glyph: '↓H', tone: 'carbon', description: 'Reject or recover process heat' } },
     'electricity-sink': { label: 'Electricity sink', palette: { section: 'utility', order: 11, glyph: '↓⚡', description: 'Export or curtail electricity' } },
   };
@@ -2833,6 +2841,17 @@
       current.params[event.target.dataset.param] = Number(event.target.value);
       if (event.target.dataset.param === 'capacityKg') {
         current.capacity = Math.max(current.capacity || 0, Number(event.target.value) || 0);
+      }
+    }
+    if (event.target.name === 'sinkParameter') {
+      const key = event.target.dataset.param;
+      const raw = String(event.target.value ?? '').trim();
+      if (!current.params) current.params = {};
+      if (raw === '' || event.target.dataset.cleared === '1') delete current.params[key];
+      else {
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0) solveError = 'Offtake limit must be ≥ 0 (blank = unlimited).';
+        else current.params[key] = value;
       }
     }
     if (event.target.name === 'sourceParameter') {
@@ -5652,6 +5671,18 @@
         ? `<p class="status-meta">Inventory ${formatNumber(nodeResult.inventoryKg)} kg${nodeResult.capacityKg != null ? ` / ${formatNumber(nodeResult.capacityKg)} kg` : ''}${nodeResult.fill != null ? ` (${formatNumber(nodeResult.fill * 100)}% full)` : ''}</p>`
         : '<p class="status-meta">Inventory updates after solve. Horizon carries SOC hour to hour.</p>';
       return `<fieldset><legend>Buffer tank</legend><label>Discharge setpoint <output>${formatNumber(setpoints[current.id] ?? 0)} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${Math.max(current.capacity || 0, definition.capacity || 0, setpoints[current.id] || 0, 1)}" step="1" value="${setpoints[current.id] ?? 0}">${parameters}${socLine}<p class="status-meta">${definition.sourceNote || ''}</p></fieldset><button class="delete-node" id="deleteNode" type="button">Delete buffer</button>`;
+    }
+    if (kind === 'sink' && current.unit === 'material-sink') {
+      const definition = catalog[current.unit] || {};
+      const acceptRaw = current.params?.acceptKg;
+      const acceptValue = acceptRaw == null || acceptRaw === '' ? '' : acceptRaw;
+      const acceptOut = acceptValue === '' ? 'Unlimited' : `${formatNumber(acceptValue)} kg/day`;
+      const nodeResult = result?.nodes[current.id];
+      const receivedLine = nodeResult?.received
+        ? `<p class="status-meta">Received ${formatStream(nodeResult.received)}${nodeResult.acceptKg != null ? ` / ${formatNumber(nodeResult.acceptKg)} kg cap` : ''}</p>`
+        : '';
+      const acceptControl = `<label>Export / offtake limit <output>${acceptOut}</output></label><input name="sinkParameter" data-param="acceptKg" type="number" min="0" step="any" placeholder="Unlimited" value="${escapeHtml(acceptValue)}" title="Max kg accepted this solve day. Blank = unlimited (legacy infinite sink).">`;
+      return `<fieldset><legend>Offtake</legend>${acceptControl}${receivedLine}<p class="status-meta">${definition.sourceNote || ''}</p></fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete sink</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }

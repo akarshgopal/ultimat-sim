@@ -619,6 +619,60 @@ function energyStorage(kind) {
   };
 }
 
+
+// Liquid transfer / open-intake pump. Screening SEC is lift only — SWRO plant SEC
+// still includes a literature intake share unless the user lowers it (see MECH8 audit).
+function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
+  const feed = validateStream(inlets.in, 'material');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  if (feed.phase !== 'liquid') throw new Error('Intake pump is for liquid feeds (use a blower for gas)');
+  const installed = nonnegative(capacity ?? 0, 'capacity');
+  const requested = requestedActivity == null || requestedActivity === ''
+    ? installed
+    : nonnegative(Number(requestedActivity), 'requestedActivity');
+  const density = nonnegative(Number(params.densityKgM3 ?? 1025), 'densityKgM3');
+  if (density === 0) throw new Error('densityKgM3 must be greater than zero');
+  const secKgRaw = params.pumpKWhPerKg;
+  const useKg = secKgRaw != null && secKgRaw !== '';
+  const sec = useKg
+    ? nonnegative(Number(secKgRaw), 'pumpKWhPerKg')
+    : nonnegative(Number(params.pumpKWhPerM3 ?? 0.4), 'pumpKWhPerM3');
+  const feedKg = streamMassKg(feed);
+  const feedM3 = feedKg / density;
+  const feedAmount = useKg ? feedKg : feedM3;
+  const planned = Math.min(requested, installed);
+  const limits = {
+    capacity: installed,
+    in: feedAmount,
+    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
+  };
+  const activity = Math.min(planned, limits.in, limits.electricity);
+  const fraction = feedAmount === 0 ? 0 : activity / feedAmount;
+  const consumedFeed = scaleStream(feed, fraction);
+  const limitingValue = Math.min(limits.capacity, limits.in, limits.electricity);
+  const limitedBy = reached(activity, requested)
+    ? []
+    : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name);
+  return {
+    activity,
+    requestedInputs: {
+      in: scaleStream(feed, feedAmount === 0 ? 0 : planned / feedAmount),
+      electricity: { kind: 'electricity', kWh: planned * sec },
+    },
+    consumed: {
+      in: consumedFeed,
+      electricity: { kind: 'electricity', kWh: activity * sec },
+    },
+    outlets: { out: cloneStream(consumedFeed) },
+    limitedBy,
+    pumpBasis: useKg ? 'kg' : 'm3',
+    pumpKWhPerUnit: sec,
+    densityKgM3: density,
+  };
+}
+
 const UNITS = Object.freeze({
   'material-source': {
     kind: 'source',
@@ -679,6 +733,15 @@ const UNITS = Object.freeze({
       in: { direction: 'in', kind: 'material', required: true },
       out: { direction: 'out', kind: 'material', required: true },
     },
+  },
+  'intake-pump': {
+    kind: 'converter',
+    ports: {
+      in: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      out: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: intakePump,
   },
   'material-sink': {
     kind: 'sink',

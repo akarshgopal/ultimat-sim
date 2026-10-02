@@ -400,9 +400,23 @@
     'electrical-bus': { label: 'Electricity bus', palette: { section: 'utility', order: 1, glyph: '⚡↗', description: 'One supply → many blocks' } },
     'material-splitter': { label: 'Material splitter', palette: { section: 'utility', order: 2, glyph: 'M↗', tone: 'water', description: 'One stream → many branches' } },
     'material-mixer': { label: 'Material mixer', palette: { section: 'utility', order: 3, glyph: '↘M', tone: 'water', description: 'Many streams → one output' } },
+    'intake-pump': {
+      label: 'Intake pump', capacity: 1000, rate: 1000, activityUnit: 'm³/day',
+      palette: { section: 'utility', order: 4, glyph: 'P', tone: 'water', description: 'Liquid lift — needs bus power or the line starves' },
+      params: { pumpKWhPerM3: 0.4, densityKgM3: 1025 },
+      controls: [
+        { key: 'pumpKWhPerM3', label: 'Pump energy', min: 0, max: 2, step: 0.05, unit: 'kWh/m³' },
+        { key: 'densityKgM3', label: 'Liquid density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
+      ],
+      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. SWRO plant SEC 3.5 still includes a literature intake share — lower SWRO toward RO-train (~2.5–2.8) if you model lift here separately. Not a head–flow curve.',
+      references: [
+        { label: 'Voutchkov 2018 desalination energy (DOI 10.1016/j.desal.2017.10.033)', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
+        { label: 'Elimelech & Phillip 2011 SWRO plant SEC band', url: 'https://doi.org/10.1126/science.1200488' },
+      ],
+    },
     'material-buffer': {
       label: 'Buffer tank', capacity: 10000, rate: 1000, activityUnit: 'kg/day',
-      palette: { section: 'utility', order: 4, glyph: 'T', tone: 'water', description: 'Store mass across hours — fill, hold, discharge' },
+      palette: { section: 'utility', order: 5, glyph: 'T', tone: 'water', description: 'Store mass across hours — fill, hold, discharge' },
       params: { capacityKg: 10000, initialKg: 0 },
       controls: [
         { key: 'capacityKg', label: 'Tank capacity', min: 0, max: 1e6, step: 100, unit: 'kg' },
@@ -4499,6 +4513,7 @@
     }
     if (kind === 'sink') return 'silo';
     if (kind === 'buffer' || unit === 'material-buffer') return 'tank';
+    if (unit === 'intake-pump') return 'pipe';
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf') return 'pond';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery') return 'cell';

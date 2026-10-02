@@ -337,7 +337,9 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
     }
 
     if (limits.includes('logistics')) {
+      // Inlet clamp (consumer) or outlet clamp (buffer/source transfer line — MECH15).
       const edgeLimit = (edgeLimits || []).find(item => item.to.node === nodeId)
+        || (edgeLimits || []).find(item => item.from.node === nodeId)
         || null;
       if (edgeLimit) {
         steps.push({
@@ -615,24 +617,36 @@ function evaluateBuffer(node, inlets, requestedActivity) {
   const requested = requestedActivity == null || requestedActivity === ''
     ? inventoryKg
     : nonnegative(Number(requestedActivity), 'requestedActivity');
-  const dischargeMass = Math.min(requested, inventoryKg);
+  let dischargeMass = Math.min(requested, inventoryKg);
   if (requested > 0 && dischargeMass + Math.max(1, dischargeMass) * 1e-9 < requested) {
     limitedBy.push('inventory');
   }
 
+  // Prefer stored composition; else learn from this hour's accepted inlet.
+  // Empty inlet + initialKg without storedStream must not throw (MECH15).
   const template = stored && streamMassKg(stored) > 0
     ? stored
     : (acceptedMass > 0 ? accepted : inlet);
+  const templateMass = streamMassKg(template);
+  if (dischargeMass > 0 && templateMass <= 1e-15) {
+    dischargeMass = 0;
+    limitedBy.push('inventory');
+  }
   const outlet = dischargeMass <= 0
-    ? scaleStream(template, 0)
+    ? scaleStream(templateMass > 0 ? template : inlet, 0)
     : scaleMaterialToMass(template, dischargeMass);
 
   inventoryKg = Math.max(0, inventoryKg - dischargeMass);
   if (inventoryKg <= 1e-12) {
     inventoryKg = 0;
-    stored = scaleStream(template, 0);
-  } else {
+    stored = scaleStream(templateMass > 0 ? template : inlet, 0);
+  } else if (templateMass > 1e-15) {
     stored = scaleMaterialToMass(template, inventoryKg);
+  } else if (stored && streamMassKg(stored) > 1e-15) {
+    stored = scaleMaterialToMass(stored, inventoryKg);
+  } else {
+    // Numeric SOC held; composition arrives with the next non-empty inlet.
+    stored = scaleStream(inlet, 0);
   }
 
   return {
@@ -1019,7 +1033,16 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
             result.storedStream = cloneStream(delivered.kind === 'material' ? produced : result.storedStream);
           }
         }
-        result.limitedBy = [...new Set([...(result.limitedBy || []), 'export'])];
+        // MECH15: outlet edge.capacity → logistics; dest-full / export BP → export.
+        const outletLogistics = edgeLimits?.some(item => (
+          item.from?.node === node.id
+          && item.from?.port === outEdge.from.port
+          && item.to?.node === outEdge.to.node
+        ));
+        result.limitedBy = [...new Set([
+          ...(result.limitedBy || []),
+          outletLogistics ? 'logistics' : 'export',
+        ])];
         edgeStreams.set(outEdge, cloneStream(delivered));
       }
       continue;

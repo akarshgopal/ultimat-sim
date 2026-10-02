@@ -79,3 +79,13 @@ Mirrors the **already-shipping** site-battery pattern (SOC outside the hourly cr
 - Root-cause starvation chains (next mechanic candidate)
 - Gas vs liquid headspace / density UI
 
+
+---
+
+## 5. Shipped
+
+- **Commit:** `30ea7fd` on `main`
+- **Tests:** 230 pass (`tests/mech3-buffers.test.js` +7)
+- **Pages:** https://akarshgopal.github.io/ultimat-sim/ (`gh-pages` `a68c4bb`)
+- **Live tip:** hard-refresh after deploy
+

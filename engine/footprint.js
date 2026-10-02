@@ -52,6 +52,8 @@ const PROCESS_LABELS = Object.freeze({
   'dac-electroswing': 'Electro-swing DAC',
   battery: 'Battery yard',
   'material-buffer': 'Buffer tank',
+  'intake-pump': 'Intake pump',
+  'gas-blower': 'Gas blower',
   sabatier: 'Methane plant',
   methanol: 'Methanol plant',
   swro: 'SWRO',
@@ -344,6 +346,39 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  'intake-pump': Object.freeze({
+    id: 'intake-pump',
+    label: PROCESS_LABELS['intake-pump'],
+    // Screening pump skid + manifold pad; not a surveyed plot.
+    basis: 'capacityM3Day',
+    intensity: 0.15,
+    unitLabel: 'm²/(m³/day)',
+    range: Object.freeze([0.05, 0.4]),
+    floorM2: 6,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening open-intake / transfer pump skid pad ~0.05–0.4 m²/(m³/day); floor 6 m² — not a surveyed plot',
+        url: 'https://www.matche.com/equipcost/PumpCentr.html',
+      }),
+    ]),
+  }),
+  'gas-blower': Object.freeze({
+    id: 'gas-blower',
+    label: PROCESS_LABELS['gas-blower'],
+    basis: 'capacityNm3Day',
+    intensity: 0.002,
+    unitLabel: 'm²/(Nm³/day)',
+    range: Object.freeze([0.0005, 0.01]),
+    floorM2: 6,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening process fan / blower pad ~0.0005–0.01 m²/(Nm³/day); floor 6 m² — not a surveyed plot',
+        url: 'https://doi.org/10.1016/j.joule.2018.05.006',
+      }),
+    ]),
+  }),
 });
 
 function clamp(value, min, max) {
@@ -545,6 +580,21 @@ function padBatteryKWh(batteryKWh) {
   return padAreaFromIntensity(spec, kWh / 1000);
 }
 
+
+function padIntakePump(node) {
+  const spec = intensitySpec('intake-pump');
+  const capacity = Math.max(0, finiteNumber(node.capacity));
+  if (!(capacity > 0)) return 0;
+  return padAreaFromIntensity(spec, capacity);
+}
+
+function padGasBlower(node) {
+  const spec = intensitySpec('gas-blower');
+  const capacity = Math.max(0, finiteNumber(node.capacity));
+  if (!(capacity > 0)) return 0;
+  return padAreaFromIntensity(spec, capacity);
+}
+
 function padBuffer(node) {
   const spec = intensitySpec('material-buffer');
   const kg = Math.max(0, finiteNumber(node.params?.capacityKg ?? node.capacity));
@@ -568,6 +618,8 @@ const PROCESS_PADS = Object.freeze({
   asu: padAsu,
   ammonia: padAmmonia,
   'material-buffer': padBuffer,
+  'intake-pump': padIntakePump,
+  'gas-blower': padGasBlower,
 });
 
 function processRecord(node, areaM2) {

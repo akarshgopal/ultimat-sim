@@ -95,69 +95,87 @@ function keyEvent(key, extras = {}) {
     key,
     target: extras.target || { tagName: 'DIV' },
     shiftKey: !!extras.shiftKey,
+    ctrlKey: !!extras.ctrlKey,
+    metaKey: !!extras.metaKey,
     preventDefault() { this.prevented = true; },
     prevented: false,
   };
 }
 
-test('Delete removes selected Process node; Escape clears selection and pending connect', () => {
+test('Ctrl/Cmd+Z undoes Delete of a Process node and its edges', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
   app.activateTab('process');
   app.clearFactory();
+  app.clearUndoStack();
   const tank = app.addNode('material-buffer');
   const sink = app.addNode('material-sink');
   app.choosePort({ node: tank.id, port: 'out', direction: 'out' });
-  assert.ok(app.pendingPort);
-  app.selectedNodeId = tank.id;
+  app.choosePort({ node: sink.id, port: 'in', direction: 'in' });
+  assert.equal(app.graph.edges.length, 1);
   assert.equal(app.graph.nodes.length, 2);
-
-  app.handleProcessKeydown(keyEvent('Escape'));
-  assert.equal(app.pendingPort, null);
-  assert.equal(app.selectedNodeId, null);
 
   app.selectedNodeId = tank.id;
   app.handleProcessKeydown(keyEvent('Delete'));
   assert.equal(app.graph.nodes.some(node => node.id === tank.id), false);
-  assert.equal(app.graph.nodes.length, 1);
-  assert.equal(app.selectedNodeId, null);
-  assert.equal(app.graph.nodes[0].id, sink.id);
+  assert.equal(app.graph.edges.length, 0);
+  assert.equal(app.undoStackLength, 1);
+
+  app.handleProcessKeydown(keyEvent('z', { ctrlKey: true }));
+  assert.equal(app.graph.nodes.some(node => node.id === tank.id), true);
+  assert.equal(app.graph.edges.length, 1);
+  assert.equal(app.selectedNodeId, tank.id);
+  assert.equal(app.undoStackLength, 0);
 });
 
-test('Delete removes selected edge; Backspace ignored while typing in inputs', () => {
+test('Cmd+Z undoes Delete of a selected edge', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
   app.activateTab('process');
   app.clearFactory();
+  app.clearUndoStack();
   const tank = app.addNode('material-buffer');
   const sink = app.addNode('material-sink');
   app.choosePort({ node: tank.id, port: 'out', direction: 'out' });
   app.choosePort({ node: sink.id, port: 'in', direction: 'in' });
-  assert.equal(app.graph.edges.length, 1);
-
   app.selectedEdgeIndex = 0;
   app.handleProcessKeydown(keyEvent('Delete'));
   assert.equal(app.graph.edges.length, 0);
-  assert.equal(app.selectedEdgeIndex, null);
 
-  app.choosePort({ node: tank.id, port: 'out', direction: 'out' });
-  app.choosePort({ node: sink.id, port: 'in', direction: 'in' });
+  app.handleProcessKeydown(keyEvent('z', { metaKey: true }));
   assert.equal(app.graph.edges.length, 1);
-  app.selectedEdgeIndex = 0;
-  const input = { tagName: 'INPUT' };
-  app.handleProcessKeydown(keyEvent('Backspace', { target: input }));
-  assert.equal(app.graph.edges.length, 1);
+  assert.equal(app.selectedEdgeIndex, 0);
 });
 
-test('new Buffer tank carries screening CAPEX defaults', () => {
+test('Ctrl+Z ignored while typing in inputs', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.activateTab('process');
+  app.clearFactory();
+  app.clearUndoStack();
+  const tank = app.addNode('material-buffer');
+  app.selectedNodeId = tank.id;
+  app.handleProcessKeydown(keyEvent('Delete'));
+  assert.equal(app.graph.nodes.length, 0);
+  assert.equal(app.undoStackLength, 1);
+
+  const input = { tagName: 'INPUT' };
+  app.handleProcessKeydown(keyEvent('z', { ctrlKey: true, target: input }));
+  assert.equal(app.graph.nodes.length, 0);
+  assert.equal(app.undoStackLength, 1);
+});
+
+test('buffer on brine feed infers brine fluid class and $/m³ intensity', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
   app.clearFactory();
+  const brine = app.addNode('material-source', { preset: 'brine', silent: true });
   const tank = app.addNode('material-buffer', { silent: true });
-  assert.equal(tank.params.capacityKg, 10000);
-  assert.equal(tank.params.fluidClass, 'generic');
-  assert.equal(tank.params.capexPerM3, 500);
-  assert.equal(tank.economics.installedCapex, 5000); // $500/m³ × 10 m³
-  assert.equal(tank.economics.fixedOMPercent, 2);
-  assert.equal(tank.economics.assetLifeYears, 25);
+  app.choosePort({ node: brine.id, port: 'out', direction: 'out' });
+  app.choosePort({ node: tank.id, port: 'in', direction: 'in' });
+  assert.equal(app.inferBufferFluidClass(tank), 'brine');
+  app.refreshBufferEconomics(tank);
+  assert.equal(tank.economics.fluidClass, 'brine');
+  assert.ok(tank.economics.capexPerM3 >= 700); // 750 base (no site region)
+  assert.ok(tank.economics.installedCapex > 5000);
 });

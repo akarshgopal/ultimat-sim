@@ -47,6 +47,8 @@
   const COLUMN_GAP = 120;
   let selectedNodeId = null;
   let selectedEdgeIndex = null;
+  let undoStack = [];
+  const UNDO_STACK_MAX = 20;
   let pendingPort = null;
   let result = null;
   let currentEconomics = null;
@@ -408,7 +410,7 @@
         { key: 'pumpKWhPerM3', label: 'Pump energy', min: 0, max: 2, step: 0.05, unit: 'kWh/m³' },
         { key: 'densityKgM3', label: 'Liquid density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
       ],
-      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. SWRO plant SEC 3.5 still includes a literature intake share — lower SWRO toward RO-train (~2.5–2.8) if you model lift here separately. Not a head–flow curve.',
+      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. MECH18 screening CAPEX ~$350/(m³/day) × regional tea CAPEX×; campus pad ~0.15 m²/(m³/day) (floor 6 m²). SWRO plant SEC should stay plant-only if lift is modeled here. Not a head–flow curve or vendor quote.',
       references: [
         { label: 'Voutchkov 2018 desalination energy (DOI 10.1016/j.desal.2017.10.033)', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
         { label: 'Elimelech & Phillip 2011 SWRO plant SEC band', url: 'https://doi.org/10.1126/science.1200488' },
@@ -421,7 +423,7 @@
       controls: [
         { key: 'blowerKWhPerNm3', label: 'Blower energy', min: 0, max: 0.02, step: 0.0005, unit: 'kWh/Nm³' },
       ],
-      sourceNote: 'MECH10 screening process fan / duct+filter (~0.5–5 kWh per 1000 Nm³). Default 0.001 kWh/Nm³. Pass-through gas; electricity from the bus. Not a Keith CE contactor fan (~0.00004 kWh/Nm³) — dial down for contactor-only. DAC/ASU plant electricity SECs stay as-is; this is additive until you lower those. Not a fan curve.',
+      sourceNote: 'MECH10 screening process fan / duct+filter (~0.5–5 kWh per 1000 Nm³). Default 0.001 kWh/Nm³. Pass-through gas; electricity from the bus. MECH18 screening CAPEX ~$1.5/(Nm³/day) × regional tea CAPEX×; campus pad ~0.002 m²/(Nm³/day) (floor 6 m²). Not a Keith CE contactor fan (~0.00004 kWh/Nm³) — dial down for contactor-only. Not a fan curve or vendor quote.',
       references: [
         { label: 'Keith et al. 2018 Carbon Engineering (contactor fan order-of-magnitude)', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
         { label: 'IEA Direct Air Capture 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
@@ -430,13 +432,14 @@
     'material-buffer': {
       label: 'Buffer tank', capacity: 10000, rate: 1000, activityUnit: 'kg/day',
       palette: { section: 'utility', order: 5, glyph: 'T', tone: 'water', description: 'Store mass across hours — fill, hold, discharge' },
-      params: { capacityKg: 10000, initialKg: 0, capexPerKg: 0.5 },
+      params: { capacityKg: 10000, initialKg: 0 },
       controls: [
         { key: 'capacityKg', label: 'Tank capacity', min: 0, max: 1e6, step: 100, unit: 'kg' },
         { key: 'initialKg', label: 'Starting inventory', min: 0, max: 1e6, step: 100, unit: 'kg' },
-        { key: 'capexPerKg', label: 'Installed CAPEX', min: 0.05, max: 5, step: 0.05, unit: '$/kg capacity' },
+        { key: 'densityKgM3', label: 'Density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
+        { key: 'capexPerM3', label: 'CAPEX intensity', min: 50, max: 2000, step: 25, unit: '$/m³ capacity' },
       ],
-      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH17 screening CAPEX ~$0.50/kg capacity (atmospheric process tank + foundation band); campus pad ~1 m²/t capacity (pad+dike screening). Not a vendor quote or surveyed plot.',
+      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH18 tank CAPEX uses fluid-class $/m³ (freshwater/seawater/brine/generic) × regional tea CAPEX×; generic $500/m³ ≡ MECH17 $0.50/kg at ρ=1000. Campus pad ~1 m²/t capacity. Not a vendor quote or surveyed plot.',
       references: [
         { label: 'EPA USP guide / tank-farm layout screening (pad+dike order)', url: 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf' },
         { label: 'Matches process equipment — atmospheric storage tank cost order', url: 'https://www.matche.com/equipcost/Tank.html' },
@@ -2581,10 +2584,18 @@
     return false;
   }
 
+  function pushUndo(entry) {
+    undoStack.push(entry);
+    if (undoStack.length > UNDO_STACK_MAX) undoStack.shift();
+  }
+
   function deleteSelection() {
     if (selectedEdgeIndex != null && Number.isFinite(Number(selectedEdgeIndex))
       && selectedEdgeIndex >= 0 && selectedEdgeIndex < graph.edges.length) {
-      graph.edges.splice(selectedEdgeIndex, 1);
+      const edgeIndex = selectedEdgeIndex;
+      const edge = graph.edges[edgeIndex];
+      pushUndo({ type: 'edge', edgeIndex, edge: JSON.parse(JSON.stringify(edge)) });
+      graph.edges.splice(edgeIndex, 1);
       selectedEdgeIndex = null;
       pendingPort = null;
       solveAndRender();
@@ -2592,11 +2603,56 @@
     }
     if (selectedNodeId && node(selectedNodeId)) {
       const id = selectedNodeId;
-      graph.edges = graph.edges.filter(edge => edge.from.node !== id && edge.to.node !== id);
       const index = graph.nodes.findIndex(candidate => candidate.id === id);
-      if (index >= 0) graph.nodes.splice(index, 1);
+      if (index < 0) return false;
+      const removedNode = JSON.parse(JSON.stringify(graph.nodes[index]));
+      const removedEdges = graph.edges
+        .map((edge, edgeIndex) => ({ edgeIndex, edge }))
+        .filter(item => item.edge.from.node === id || item.edge.to.node === id)
+        .map(item => ({ edgeIndex: item.edgeIndex, edge: JSON.parse(JSON.stringify(item.edge)) }));
+      const setpoint = setpoints[id];
+      pushUndo({
+        type: 'node',
+        nodeIndex: index,
+        node: removedNode,
+        edges: removedEdges,
+        setpoint: setpoint === undefined ? undefined : JSON.parse(JSON.stringify(setpoint)),
+      });
+      graph.edges = graph.edges.filter(edge => edge.from.node !== id && edge.to.node !== id);
+      graph.nodes.splice(index, 1);
       delete setpoints[id];
       selectedNodeId = null;
+      selectedEdgeIndex = null;
+      pendingPort = null;
+      solveAndRender();
+      return true;
+    }
+    return false;
+  }
+
+  function undoLastDelete() {
+    const entry = undoStack.pop();
+    if (!entry) return false;
+    if (entry.type === 'edge') {
+      const idx = Math.min(Math.max(0, entry.edgeIndex), graph.edges.length);
+      graph.edges.splice(idx, 0, entry.edge);
+      selectedEdgeIndex = idx;
+      selectedNodeId = null;
+      pendingPort = null;
+      solveAndRender();
+      return true;
+    }
+    if (entry.type === 'node') {
+      const idx = Math.min(Math.max(0, entry.nodeIndex), graph.nodes.length);
+      graph.nodes.splice(idx, 0, entry.node);
+      // Restore incident edges in original relative order (by recorded edgeIndex).
+      const sorted = [...(entry.edges || [])].sort((a, b) => a.edgeIndex - b.edgeIndex);
+      for (const item of sorted) {
+        const at = Math.min(Math.max(0, item.edgeIndex), graph.edges.length);
+        graph.edges.splice(at, 0, item.edge);
+      }
+      if (entry.setpoint !== undefined) setpoints[entry.node.id] = entry.setpoint;
+      selectedNodeId = entry.node.id;
       selectedEdgeIndex = null;
       pendingPort = null;
       solveAndRender();
@@ -2644,6 +2700,11 @@
       return;
     }
     const key = event.key;
+    if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'Z') && !event.shiftKey) {
+      event.preventDefault();
+      undoLastDelete();
+      return;
+    }
     if (key === 'Escape') {
       event.preventDefault();
       if (canvasFocused) setCanvasFocus(false);
@@ -2991,15 +3052,25 @@
       if (['battery', 'thermal-storage'].includes(current.unit) && event.target.dataset.param === 'capexPerKWh') current.economics.installedCapex = current.capacity * current.params.capexPerKWh;
     }
     if (event.target.name === 'bufferParameter') {
-      current.params[event.target.dataset.param] = Number(event.target.value);
-      if (event.target.dataset.param === 'capacityKg') {
-        current.capacity = Math.max(current.capacity || 0, Number(event.target.value) || 0);
-      }
-      if (['capacityKg', 'capexPerKg'].includes(event.target.dataset.param)) {
-        current.economics ||= defaultEconomics(current);
-        const kg = Number(current.params.capacityKg) || 0;
-        const rate = Number(current.params.capexPerKg) || 0;
-        current.economics.installedCapex = kg * rate;
+      const key = event.target.dataset.param;
+      if (key === 'fluidClass') {
+        current.params.fluidClass = event.target.value;
+        // Reset density/intensity so fluid-class defaults apply.
+        delete current.params.densityKgM3;
+        delete current.params.capexPerM3;
+        delete current.params.densityOverride;
+        delete current.params.intensityOverride;
+        refreshBufferEconomics(current);
+      } else {
+        current.params[key] = Number(event.target.value);
+        if (key === 'capacityKg') {
+          current.capacity = Math.max(current.capacity || 0, Number(event.target.value) || 0);
+        }
+        if (key === 'densityKgM3') current.params.densityOverride = true;
+        if (key === 'capexPerM3') current.params.intensityOverride = true;
+        if (['capacityKg', 'capexPerM3', 'densityKgM3', 'capexPerKg'].includes(key)) {
+          refreshBufferEconomics(current);
+        }
       }
     }
     if (event.target.name === 'sinkParameter') {
@@ -5834,7 +5905,7 @@
       const socLine = nodeResult?.inventoryKg != null
         ? `<p class="status-meta">Inventory ${formatNumber(nodeResult.inventoryKg)} kg${nodeResult.capacityKg != null ? ` / ${formatNumber(nodeResult.capacityKg)} kg` : ''}${nodeResult.fill != null ? ` (${formatNumber(nodeResult.fill * 100)}% full)` : ''}</p>`
         : '<p class="status-meta">Inventory updates after solve. Horizon carries SOC hour to hour.</p>';
-      return `<fieldset><legend>Buffer tank</legend><label>Discharge setpoint <output>${formatNumber(setpoints[current.id] ?? 0)} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${Math.max(current.capacity || 0, definition.capacity || 0, setpoints[current.id] || 0, 1)}" step="1" value="${setpoints[current.id] ?? 0}">${parameters}${socLine}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete buffer</button>`;
+      return `<fieldset><legend>Buffer tank</legend><label>Discharge setpoint <output>${formatNumber(setpoints[current.id] ?? 0)} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${Math.max(current.capacity || 0, definition.capacity || 0, setpoints[current.id] || 0, 1)}" step="1" value="${setpoints[current.id] ?? 0}">${(() => { const tea = teaApi(); const fluids = tea?.tankByFluid ? Object.values(tea.tankByFluid) : [{ id: 'generic', label: 'Generic liquid', capexPerM3: 500 }]; const currentFluid = inferBufferFluidClass(current); return `<label>Fluid class<select name="bufferParameter" data-param="fluidClass">${fluids.map(f => `<option value="${f.id}"${f.id === currentFluid ? ' selected' : ''}>${escapeHtml(f.label)} ($${formatNumber(f.capexPerM3)}/m³)</option>`).join('')}</select></label>`; })()}${parameters}${socLine}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete buffer</button>`;
     }
     if (kind === 'sink' && current.unit === 'material-sink') {
       const definition = catalog[current.unit] || {};
@@ -5894,6 +5965,120 @@
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }
 
+
+  function teaApi() {
+    return globalThis.TeaScreening || null;
+  }
+
+  function siteRegionForTea() {
+    return site?.region || site?.demandRegion || site?.demandRegionId || null;
+  }
+
+  function inferBufferFluidClass(current) {
+    const explicitRaw = current?.params?.fluidClass;
+    const tea = teaApi();
+    const explicit = tea?.resolveTankFluidClass
+      ? tea.resolveTankFluidClass(explicitRaw)
+      : (explicitRaw ? String(explicitRaw) : null);
+    // 'generic' means unset — still allow upstream intake inference.
+    if (explicit && explicit !== 'generic') return explicit;
+    // Walk one or two hops upstream for a practical intake identity.
+    const seen = new Set();
+    const queue = [current?.id];
+    while (queue.length) {
+      const id = queue.shift();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      for (const edge of graph.edges) {
+        if (edge.to?.node !== id) continue;
+        const upstream = node(edge.from.node);
+        if (!upstream) continue;
+        if (upstream.unit === 'material-source') {
+          const intake = intakeKind(upstream);
+          const key = intake?.key;
+          if (key === 'brine') return 'brine';
+          if (key === 'seawater') return 'seawater';
+          if (key === 'water' || key === 'freshwater') return 'freshwater';
+        }
+        if (upstream.unit === 'intake-pump' || upstream.unit === 'material-buffer' || upstream.unit === 'material-splitter' || upstream.unit === 'material-mixer') {
+          queue.push(upstream.id);
+        }
+      }
+    }
+    return 'generic';
+  }
+
+  function refreshBufferEconomics(current) {
+    if (!current || current.unit !== 'material-buffer') return;
+    current.params ||= {};
+    const tea = teaApi();
+    const fluidClass = inferBufferFluidClass(current);
+    current.params.fluidClass = fluidClass;
+    const kg = Number(current.params.capacityKg ?? current.capacity) || 0;
+    if (tea?.bindTankCapex) {
+      const density = Number(current.params.densityKgM3);
+      const capexPerM3 = Number(current.params.capexPerM3);
+      const densityOverride = current.params.densityOverride === true && Number.isFinite(density) && density > 0;
+      const intensityOverride = current.params.intensityOverride === true && Number.isFinite(capexPerM3) && capexPerM3 >= 0;
+      const bound = tea.bindTankCapex({
+        fluidClass,
+        capacityKg: kg,
+        densityKgM3: densityOverride ? density : undefined,
+        capexPerM3: intensityOverride ? capexPerM3 : undefined,
+        region: siteRegionForTea(),
+      });
+      // Mirror pre-region intensity into params for the inspector slider.
+      current.params.densityKgM3 = bound.densityKgM3;
+      current.params.capexPerM3 = bound.capexPerM3 / (bound.regionMultiplier || 1);
+      current.params.capexPerKg = bound.capexPerKg;
+      current.economics = {
+        ...(current.economics || {}),
+        installedCapex: bound.installedCapex,
+        fixedOMPercent: bound.fixedOMPercent,
+        variableOM: bound.variableOM,
+        assetLifeYears: bound.assetLifeYears,
+        capexPerM3: bound.capexPerM3,
+        fluidClass: bound.fluidClass,
+        fluidLabel: bound.fluidLabel,
+        intensityUnit: bound.intensityUnit,
+        quality: bound.quality,
+        source: bound.source,
+        note: bound.note,
+        evidence: bound.evidence,
+        regionMultiplier: bound.regionMultiplier,
+      };
+      return;
+    }
+    // Fallback without TeaScreening: MECH17 $0.50/kg.
+    const rate = Number(current.params.capexPerKg) || 0.5;
+    current.economics = {
+      installedCapex: kg * rate,
+      fixedOMPercent: 2,
+      variableOM: 0,
+      assetLifeYears: 25,
+    };
+  }
+
+  function refreshLiftEconomics(current) {
+    const tea = teaApi();
+    if (!tea?.bindCapexPack) return;
+    if (current.unit === 'intake-pump') {
+      current.economics = {
+        ...tea.bindCapexPack('intake-pump', { capacity: current.capacity, region: siteRegionForTea() }),
+        ...(current.economics?.installedCapex != null && current.economics?.capexRate == null
+          ? { installedCapex: current.economics.installedCapex }
+          : {}),
+      };
+    } else if (current.unit === 'gas-blower') {
+      current.economics = {
+        ...tea.bindCapexPack('gas-blower', { capacity: current.capacity, region: siteRegionForTea() }),
+        ...(current.economics?.installedCapex != null && current.economics?.capexRate == null
+          ? { installedCapex: current.economics.installedCapex }
+          : {}),
+      };
+    }
+  }
+
   function defaultEconomics(current) {
     const kind = units[current.unit].kind;
     if (kind === 'source') {
@@ -5909,6 +6094,13 @@
             : current.unit === 'consumable-source' ? 1 : 0;
       return { unitCost };
     }
+    if (current.unit === 'intake-pump' || current.unit === 'gas-blower') {
+      const tea = teaApi();
+      if (tea?.bindCapexPack) {
+        return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
+      }
+      return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
+    }
     if (kind === 'converter') return {
       installedCapex: ['battery', 'thermal-storage'].includes(current.unit) ? current.capacity * current.params.capexPerKWh : 0,
       fixedOMPercent: 3,
@@ -5916,14 +6108,8 @@
       assetLifeYears: 20,
     };
     if (kind === 'buffer') {
-      const kg = Number(current.params?.capacityKg ?? current.capacity) || 0;
-      const rate = Number(current.params?.capexPerKg) || 0.5;
-      return {
-        installedCapex: kg * rate,
-        fixedOMPercent: 2,
-        variableOM: 0,
-        assetLifeYears: 25,
-      };
+      refreshBufferEconomics(current);
+      return current.economics || { installedCapex: 0, fixedOMPercent: 2, assetLifeYears: 25 };
     }
     if (kind === 'sink') return { disposition: 'vent', unitPrice: 0, disposalCost: 0, annualDemandLimit: (globalThis.TeaScreening && globalThis.TeaScreening.EDITOR_DEMAND_DEFAULT) || 1e6 };
     return {};
@@ -5947,7 +6133,7 @@
       const variable = kind === 'buffer'
         ? ''
         : field('variableOM', 'Variable O&M / activity unit');
-      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? '<p class="status-meta">Screening tank CAPEX = capacity × $/kg. Capacity or $/kg sliders refresh installed CAPEX.</p>' : ''}</fieldset>`;
+      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? `<p class="status-meta">Tank CAPEX = (kg ÷ density) × $/m³${economics.fluidLabel ? ` · fluid: <strong>${escapeHtml(economics.fluidLabel)}</strong>` : ''}${economics.capexPerM3 != null ? ` · intensity $${formatNumber(economics.capexPerM3)}/m³` : ''}${economics.regionMultiplier != null && economics.regionMultiplier !== 1 ? ` · region ×${formatNumber(economics.regionMultiplier)}` : ''}. Fluid class follows the upstream intake when unset.</p>` : (current.unit === 'intake-pump' || current.unit === 'gas-blower') ? '<p class="status-meta">Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX.</p>' : ''}</fieldset>`;
     }
     return `<fieldset><legend>Destination economics</legend><label>Disposition<select name="economics" data-economics="disposition">${['sale', 'disposal', 'vent', 'reinjection'].map(value => `<option value="${value}"${economics.disposition === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>${field('unitPrice', 'Sale price / unit')}${field('annualDemandLimit', 'Annual demand limit', '1')}${field('disposalCost', 'Disposal cost / unit')}</fieldset>`;
   }
@@ -6758,11 +6944,25 @@
       ['Conversion loss', `${formatNumber((1 - params.efficiency) * 100)}%`],
     ];
     if (current.unit === 'material-buffer') {
+      const econ = current.economics || {};
       const kg = Number(params.capacityKg ?? current.capacity) || 0;
-      const rate = Number(params.capexPerKg) || 0.5;
+      const perM3 = Number(econ.capexPerM3 ?? params.capexPerM3) || 500;
+      const installed = Number(econ.installedCapex);
+      const capex = Number.isFinite(installed) ? installed : kg * (Number(params.capexPerKg) || 0.5);
+      const fluid = econ.fluidLabel || params.fluidClass || 'generic';
       return [
-        ['Installed tank CAPEX', formatUncertainMoney(kg * rate, moneyQuality), { quality: moneyQuality }],
-        ['CAPEX intensity', `$${formatNumber(rate)}/kg capacity`, { quality: moneyQuality }],
+        ['Installed tank CAPEX', formatUncertainMoney(capex, moneyQuality), { quality: moneyQuality }],
+        ['Fluid / intensity', `${escapeHtml(String(fluid))} · $${formatNumber(perM3)}/m³`, { quality: moneyQuality }],
+      ];
+    }
+    if (current.unit === 'intake-pump' || current.unit === 'gas-blower') {
+      const econ = current.economics || {};
+      const rate = Number(econ.capexRate ?? econ.capexIntensity) || 0;
+      const installed = econ.installedCapex != null ? Number(econ.installedCapex) : rate * (Number(current.capacity) || 0);
+      const unitLabel = current.unit === 'intake-pump' ? '$/(m³/day)' : '$/(Nm³/day)';
+      return [
+        ['Installed lift CAPEX', formatUncertainMoney(installed, moneyQuality), { quality: moneyQuality }],
+        ['CAPEX intensity', `$${formatNumber(rate)}${unitLabel}`, { quality: moneyQuality }],
       ];
     }
     if (!Number.isFinite(params.capacityKW) || !Number.isFinite(params.capexPerKW)) return [];
@@ -6827,11 +7027,14 @@
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
-    deleteSelection, clearCanvasSelection, handleProcessKeydown, nudgeSelectedNode,
+    deleteSelection, undoLastDelete, clearCanvasSelection, handleProcessKeydown, nudgeSelectedNode,
     get selectedNodeId() { return selectedNodeId; },
     set selectedNodeId(value) { selectedNodeId = value; },
     get selectedEdgeIndex() { return selectedEdgeIndex; },
     set selectedEdgeIndex(value) { selectedEdgeIndex = value; },
+    get undoStackLength() { return undoStack.length; },
+    clearUndoStack() { undoStack = []; },
+    inferBufferFluidClass, refreshBufferEconomics,
     get pendingPort() { return pendingPort; },
     set pendingPort(value) { pendingPort = value; },
     solve: solveAndRender, fitCanvas, showCause(nodeId) {

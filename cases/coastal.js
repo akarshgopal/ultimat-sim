@@ -72,6 +72,13 @@ function createCoastalCase(month = 0) {
   node('dac').params.consumablesPerKgCO2 = 0.02;
   node('consumables').params.stream = { kind: 'consumable', amount: 1, unit: 'kg/day', label: 'Amine sorbent makeup', chemicalId: 'amine-sorbent' };
   node('electricity').economics = tea.bindCapexPack('solar-pv', { capacity: solarKWp });
+  // MECH18: regional CAPEX× for Europe on intake pump + air blower (sabatier binds without region).
+  if (node('seawater-pump')) {
+    node('seawater-pump').economics = tea.bindCapexPack('intake-pump', { capacity: node('seawater-pump').capacity, region: 'Europe' });
+  }
+  if (node('air-blower')) {
+    node('air-blower').economics = tea.bindCapexPack('gas-blower', { capacity: node('air-blower').capacity, region: 'Europe' });
+  }
   definition.graph.nodes.push({ id: 'spent-media', unit: 'consumable-sink', economics: { disposition: 'disposal', disposalCost: 1 } });
   definition.graph.edges.push({ from: { node: 'dac', port: 'spentMedia' }, to: { node: 'spent-media', port: 'in' } });
   const assumed = 'Assumed accessible quantity; no local supply agreement verified';
@@ -134,7 +141,7 @@ function createCoastalCase(month = 0) {
       database: HOURLY.database,
       url: HOURLY.url,
     } : null,
-    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Alboran multi-ion assay (data/almeria-seawater.json), not a NaCl proxy. MECH11 wires seawater→intake-pump→SWRO and air→gas-blower→DAC on the bus; SWRO SEC is plant-only 3.1 kWh/m³ (intake share moved to the pump at 0.4 kWh/m³). Grid, freshwater, and seawater discharge rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
+    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Alboran multi-ion assay (data/almeria-seawater.json), not a NaCl proxy. MECH11 wires seawater→intake-pump→SWRO and air→gas-blower→DAC on the bus; MECH18 adds screening CAPEX+pad for those lifts; SWRO SEC is plant-only 3.1 kWh/m³ (intake share moved to the pump at 0.4 kWh/m³). Grid, freshwater, and seawater discharge rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
   };
   definition.operation.boundaryLimitedBy = target < 5 ? ['site solar electricity'] : [];
   return definition;

@@ -97,9 +97,9 @@ function createMethanolCase(month = 0) {
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
-        { id: 'air-blower', unit: 'gas-blower', capacity: airBlowerNm3, params: { blowerKWhPerNm3: 0.001 } },
+        { id: 'air-blower', unit: 'gas-blower', capacity: airBlowerNm3, params: { blowerKWhPerNm3: 0.001 }, economics: tea.bindCapexPack('gas-blower', { capacity: airBlowerNm3, region: 'Atacama/Chile' }) },
         { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { ...tea.bindCost('seawater'), unitCost: 0.001 } },
-        { id: 'seawater-pump', unit: 'intake-pump', capacity: seawaterPumpM3, params: { pumpKWhPerM3: 0.4, densityKgM3: FEED_DENSITY_KG_M3 } },
+        { id: 'seawater-pump', unit: 'intake-pump', capacity: seawaterPumpM3, params: { pumpKWhPerM3: 0.4, densityKgM3: FEED_DENSITY_KG_M3 }, economics: tea.bindCapexPack('intake-pump', { capacity: seawaterPumpM3, region: 'Atacama/Chile' }) },
         {
           id: 'electricity',
           unit: 'electricity-source',
@@ -263,7 +263,7 @@ function createMethanolCase(month = 0) {
       brineConcession: right('concession', 'unverified', 'Atacama minerals nearby are not a brine concession for this plant'),
       saltPurchase: right('purchase', 'unverified', 'No salt purchase agreement; the plant does not buy salt'),
     },
-    notes: 'Representative-day methanol plant at the Mejillones industrial bay preset. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Atacama Pacific multi-ion assay (data/atacama-pacific-seawater.json), not a NaCl proxy. Grid, freshwater, and seawater discharge rights are unverified zeros. Methanol synthesis electricity 0.5 kWh/kg and $0.40/kg product price are screening assumptions, not plant quotes. MECH11 wires seawater→intake-pump→SWRO and air→gas-blower→DAC; SWRO SEC is plant-only 3.1 kWh/m³ (intake share on the pump at 0.4 kWh/m³). Annual economics repeat the selected typical day for 365 days.',
+    notes: 'Representative-day methanol plant at the Mejillones industrial bay preset. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Atacama Pacific multi-ion assay (data/atacama-pacific-seawater.json), not a NaCl proxy. Grid, freshwater, and seawater discharge rights are unverified zeros. Methanol synthesis electricity 0.5 kWh/kg and $0.40/kg product price are screening assumptions, not plant quotes. MECH11 wires seawater→intake-pump→SWRO and air→gas-blower→DAC; MECH18 adds screening CAPEX+pad for those lifts; SWRO SEC is plant-only 3.1 kWh/m³ (intake share on the pump at 0.4 kWh/m³). Annual economics repeat the selected typical day for 365 days.',
   };
   return definition;
 }

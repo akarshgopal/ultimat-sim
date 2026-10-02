@@ -87,7 +87,7 @@ function createAbundanceCase(options = {}) {
   const brineKg = streamMassKg(brine);
   const brineDensityKgM3 = (Number(assay.density_kg_per_L) > 0 ? Number(assay.density_kg_per_L) : 1.2) * 1000;
   const brineM3 = brineKg / brineDensityKgM3;
-  // MECH11: lake lift on an intake-pump (0.4 kWh/m³ screening); not folded into minerals SEC.
+  // MECH11: lake lift on an intake-pump (0.4 kWh/m³ screening); not folded into minerals SEC. MECH18: intake-pump screening CAPEX + campus pad.
   const brinePumpKWh = brineM3 * 0.4;
   const powerKWh = brineKg * 0.05 + brinePumpKWh + causticKg * 2.5 + bromineKg * 0.2 + nitrogenKg * 0.25 + ammoniaKg * 0.6 + 10;
   const outputs = ['lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'raffinate'];
@@ -102,7 +102,7 @@ function createAbundanceCase(options = {}) {
     graph: {
       nodes: [
         { id: 'brine', unit: 'material-source', sourcePreset: 'brine', params: { stream: brine }, economics: tea.bindCost('brine', { region }) },
-        { id: 'brine-pump', unit: 'intake-pump', capacity: brineM3, params: { pumpKWhPerM3: 0.4, densityKgM3: brineDensityKgM3 } },
+        { id: 'brine-pump', unit: 'intake-pump', capacity: brineM3, params: { pumpKWhPerM3: 0.4, densityKgM3: brineDensityKgM3 }, economics: tea.bindCapexPack('intake-pump', { capacity: brineM3, region }) },
         { id: 'salt-feed', unit: 'material-source', sourcePreset: 'salt', params: { stream: material('NaCl', causticMol) }, economics: tea.bindCost('salt-feed', { region }) },
         { id: 'water', unit: 'material-source', sourcePreset: 'water', params: { stream: material('H2O', causticMol, 'liquid') }, economics: tea.bindCost('water', { region }) },
         { id: 'air', unit: 'material-source', sourcePreset: 'air', params: { stream: air }, economics: { unitCost: 0 } },

@@ -157,9 +157,9 @@ function createSabatierCase(overrides = {}) {
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
-        { id: 'air-blower', unit: 'gas-blower', capacity: airBlowerNm3, params: { blowerKWhPerNm3: 0.001 } },
+        { id: 'air-blower', unit: 'gas-blower', capacity: airBlowerNm3, params: { blowerKWhPerNm3: 0.001 }, economics: tea.bindCapexPack('gas-blower', { capacity: airBlowerNm3, region: overrides.region }) },
         { id: 'seawater', unit: 'material-source', params: { stream: seawater }, economics: { ...tea.bindCost('seawater'), unitCost: 0.001 } },
-        { id: 'seawater-pump', unit: 'intake-pump', capacity: seawaterPumpM3, params: { pumpKWhPerM3: 0.4, densityKgM3: params.swro.feedDensityKgM3 || 1000 } },
+        { id: 'seawater-pump', unit: 'intake-pump', capacity: seawaterPumpM3, params: { pumpKWhPerM3: 0.4, densityKgM3: params.swro.feedDensityKgM3 || 1000 }, economics: tea.bindCapexPack('intake-pump', { capacity: seawaterPumpM3, region: overrides.region }) },
         {
           id: 'electricity',
           unit: 'electricity-source',

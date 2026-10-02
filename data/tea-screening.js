@@ -299,6 +299,28 @@ const packs = {
       { label: 'IRENA 2021 Innovation Outlook: Renewable Methanol (family cite)', url: IRENA_MEOH },
     ],
   }),
+
+  // MECH18 — utility CAPEX packs (screening). Capacity basis = installed duty (m³/day or Nm³/day).
+  'intake-pump': pack({
+    capexIntensity: 350, intensityUnit: '$/(m³/day)',
+    fixedOmPercent: 3, variableOm: 0, assetLifeYears: 20,
+    quality: 'screening', source: 'open-intake / transfer pump TEA order',
+    note: 'installedCapex = 350 $/ (m³/day) × capacity. Screening mid of open-intake / transfer pump skid ~$150–800/(m³/day) (desal intake + process pump order). Not a vendor quote or head–flow curve. MECH8 energy (kWh/m³) is separate.',
+    evidence: [
+      { label: 'Voutchkov 2018 desalination energy/cost family (DOI) — intake pump CAPEX is screening OOM, not a quote from this paper', url: VOUTCHKOV_2018, doi: '10.1016/j.desal.2017.10.033' },
+      { label: 'Matches process equipment — centrifugal pump cost order', url: 'https://www.matche.com/equipcost/PumpCentr.html' },
+    ],
+  }),
+  'gas-blower': pack({
+    capexIntensity: 1.5, intensityUnit: '$/(Nm³/day)',
+    fixedOmPercent: 3, variableOm: 0, assetLifeYears: 15,
+    quality: 'screening', source: 'process fan / blower TEA order',
+    note: 'installedCapex = 1.5 $/ (Nm³/day) × capacity. Screening process fan/duct+filter band (~$0.5–5/(Nm³/day)); Keith CE contactor fan alone is cheaper. Not a fan curve or vendor quote. MECH10 energy (kWh/Nm³) is separate.',
+    evidence: [
+      { label: 'Keith et al. 2018 Carbon Engineering (contactor fan OOM; plant blower CAPEX is screening uplift)', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
+      { label: 'IEA Direct Air Capture 2022 (family cite)', url: IEA_DAC },
+    ],
+  }),
   'solar-pv': pack({
     capexIntensity: 1000, intensityUnit: '$/kWp',
     fixedOmPerCapacity: 20, assetLifeYears: 25, precompute: true,
@@ -897,6 +919,116 @@ function solarCapexOverlay(region) {
   return solarCapexByRegion[id] || null;
 }
 
+
+// MECH18 — tank CAPEX by fluid class ($/m³ capacity). Region multiplies via CAPEX×.
+// At ρ=1000 kg/m³, generic $500/m³ ≡ MECH17 $0.50/kg fallback.
+const MATCH_TANK = 'https://www.matche.com/equipcost/Tank.html';
+const EPA_USP = 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf';
+const tankByFluid = {
+  freshwater: {
+    id: 'freshwater',
+    label: 'Freshwater',
+    capexPerM3: 400,
+    densityKgM3: 1000,
+    quality: 'screening',
+    source: 'atmospheric CS water tank TEA order',
+    note: 'Screening atmospheric carbon-steel freshwater storage ~$250–600/m³ installed (foundation included). Mid $400/m³. Not a vendor quote.',
+    evidence: [
+      { label: 'Matches process equipment — atmospheric storage tank cost order', url: MATCH_TANK },
+      { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
+    ],
+  },
+  seawater: {
+    id: 'seawater',
+    label: 'Seawater',
+    capexPerM3: 550,
+    densityKgM3: 1025,
+    quality: 'screening',
+    source: 'coated / duplex seawater tank TEA order',
+    note: 'Screening seawater storage with coating / duplex uplift vs freshwater (~$400–800/m³). Mid $550/m³. Not a vendor quote.',
+    evidence: [
+      { label: 'Matches process equipment — atmospheric storage tank cost order (seawater uplift screening)', url: MATCH_TANK },
+      { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
+    ],
+  },
+  brine: {
+    id: 'brine',
+    label: 'Brine',
+    capexPerM3: 750,
+    densityKgM3: 1200,
+    quality: 'screening',
+    source: 'brine / high-TDS tank TEA order',
+    note: 'Screening brine / high-TDS atmospheric storage with corrosion + density uplift (~$500–1200/m³). Mid $750/m³. Default density 1200 kg/m³ when unspecified. Not a vendor quote.',
+    evidence: [
+      { label: 'Matches process equipment — atmospheric storage tank cost order (brine uplift screening)', url: MATCH_TANK },
+      { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
+    ],
+  },
+  generic: {
+    id: 'generic',
+    label: 'Generic liquid',
+    capexPerM3: 500,
+    densityKgM3: 1000,
+    quality: 'screening',
+    source: 'MECH17 $0.50/kg water-eq fallback',
+    note: 'Generic liquid tank screening $500/m³ ≡ MECH17 $0.50/kg at ρ=1000 kg/m³. Use when fluid class is unknown. Not a vendor quote.',
+    evidence: [
+      { label: 'Matches process equipment — atmospheric storage tank cost order', url: MATCH_TANK },
+      { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
+    ],
+  },
+};
+const DEFAULT_TANK_FLUID = 'generic';
+const TANK_FLUID_ALIASES = {
+  water: 'freshwater',
+  freshwater: 'freshwater',
+  seawater: 'seawater',
+  brine: 'brine',
+  generic: 'generic',
+  liquid: 'generic',
+  unknown: 'generic',
+};
+
+function resolveTankFluidClass(raw) {
+  if (raw == null || raw === '') return DEFAULT_TANK_FLUID;
+  const key = String(raw).trim().toLowerCase();
+  return TANK_FLUID_ALIASES[key] || (tankByFluid[key] ? key : DEFAULT_TANK_FLUID);
+}
+
+function getTankFluidSpec(fluidClass) {
+  return tankByFluid[resolveTankFluidClass(fluidClass)];
+}
+
+/** Screening tank CAPEX: (capacityKg / density) × $/m³ × regional CAPEX×. */
+function bindTankCapex(extra = {}) {
+  const fluid = getTankFluidSpec(extra.fluidClass);
+  const density = Number(extra.densityKgM3);
+  const rho = Number.isFinite(density) && density > 0 ? density : fluid.densityKgM3;
+  const regionMul = extra.region != null ? getCapexMultiplierForRegion(extra.region) : 1;
+  const basePerM3 = Number(extra.capexPerM3);
+  const perM3 = (Number.isFinite(basePerM3) && basePerM3 >= 0 ? basePerM3 : fluid.capexPerM3) * regionMul;
+  const kg = Math.max(0, Number(extra.capacityKg) || 0);
+  const m3 = rho > 0 ? kg / rho : 0;
+  const installed = m3 * perM3;
+  return {
+    installedCapex: installed,
+    fixedOMPercent: extra.fixedOMPercent ?? 2,
+    variableOM: extra.variableOM ?? 0,
+    assetLifeYears: extra.assetLifeYears ?? 25,
+    capexPerM3: perM3,
+    capexPerKg: rho > 0 ? perM3 / rho : 0,
+    fluidClass: fluid.id,
+    fluidLabel: fluid.label,
+    densityKgM3: rho,
+    intensityUnit: '$/m³ capacity',
+    quality: fluid.quality,
+    source: fluid.source,
+    note: `${fluid.note} Regional CAPEX× applied when region is set (here ×${regionMul}).`,
+    evidence: fluid.evidence,
+    regionMultiplier: regionMul,
+  };
+}
+
 function bindCapexPack(processKey, extra = {}) {
   const item = must(packs, processKey, 'pack');
   const capacity = extra.capacity;
@@ -1064,6 +1196,8 @@ return {
   capexMultiplierByRegion,
   priceByRegion,
   solarCapexByRegion,
+  tankByFluid,
+  DEFAULT_TANK_FLUID,
   MINERAL_DEMAND_KEYS,
   FUEL_CHEM_DEMAND_KEYS,
   REGION_STRING_TO_ID,
@@ -1078,6 +1212,9 @@ return {
   getCostForRegion,
   getPriceForRegion,
   getCapexMultiplierForRegion,
+  resolveTankFluidClass,
+  getTankFluidSpec,
+  bindTankCapex,
   bindSale,
   bindSaleForRegion,
   bindCost,

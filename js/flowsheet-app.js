@@ -412,12 +412,12 @@
     },
     'material-sink': {
       label: 'Material sink',
-      palette: { section: 'utility', order: 9, glyph: '↓', description: 'Capture, store, sell, or discard — optional offtake cap backpressures upstream' },
+      palette: { section: 'utility', order: 9, glyph: '↓', description: 'Capture, store, sell, or discard — demand or manual offtake cap backpressures upstream' },
       params: {},
       controls: [
         { key: 'acceptKg', label: 'Export / offtake limit', min: 0, max: 1e6, step: 10, unit: 'kg/day', optional: true },
       ],
-      sourceNote: 'MECH5: blank offtake limit = unlimited sink (legacy). Set a kg/day cap to close the offtake — upstream converters throttle and cause chains show export capped.',
+      sourceNote: 'MECH7: blank offtake on a sale sink uses Destination annualDemandLimit ÷ operating days (TEA regional demand); vent/disposal stay unlimited unless you type a cap. A typed kg/day override always wins — upstream converters throttle and cause chains show export capped.',
     },
     'heat-sink': { label: 'Heat sink', palette: { section: 'utility', order: 10, glyph: '↓H', tone: 'carbon', description: 'Reject or recover process heat' } },
     'electricity-sink': { label: 'Electricity sink', palette: { section: 'utility', order: 11, glyph: '↓⚡', description: 'Export or curtail electricity' } },
@@ -2850,7 +2850,7 @@
       if (raw === '' || event.target.dataset.cleared === '1') delete current.params[key];
       else {
         const value = Number(raw);
-        if (!Number.isFinite(value) || value < 0) solveError = 'Offtake limit must be ≥ 0 (blank = unlimited).';
+        if (!Number.isFinite(value) || value < 0) solveError = 'Offtake limit must be ≥ 0 (blank = demand-backed or unlimited).';
         else current.params[key] = value;
       }
     }
@@ -5676,13 +5676,35 @@
       const definition = catalog[current.unit] || {};
       const acceptRaw = current.params?.acceptKg;
       const acceptValue = acceptRaw == null || acceptRaw === '' ? '' : acceptRaw;
-      const acceptOut = acceptValue === '' ? 'Unlimited' : `${formatNumber(acceptValue)} kg/day`;
+      const periodDays = Number(currentEconomics?.periodDays) > 0
+        ? Number(currentEconomics.periodDays)
+        : (Number(projectEconomics.periodDays) > 0 ? Number(projectEconomics.periodDays) : 365);
+      const demandAnnual = Number(current.economics?.annualDemandLimit);
+      const demandEligible = current.economics?.disposition === 'sale'
+        && Number.isFinite(demandAnnual) && demandAnnual >= 0;
+      const demandDaily = demandEligible ? demandAnnual / periodDays : null;
+      const demandBacked = acceptValue === '' && demandDaily != null;
+      const acceptOut = acceptValue !== ''
+        ? `${formatNumber(acceptValue)} kg/day`
+        : demandBacked
+          ? `${formatNumber(demandDaily)} kg/day (demand)`
+          : 'Unlimited';
       const nodeResult = result?.nodes[current.id];
-      const receivedLine = nodeResult?.received
-        ? `<p class="status-meta">Received ${formatStream(nodeResult.received)}${nodeResult.acceptKg != null ? ` / ${formatNumber(nodeResult.acceptKg)} kg cap` : ''}</p>`
+      const capNote = nodeResult?.acceptKg != null
+        ? ` / ${formatNumber(nodeResult.acceptKg)} kg cap${nodeResult.acceptSource === 'demand' ? ' · demand-backed' : nodeResult.acceptSource === 'manual' ? ' · manual' : ''}`
         : '';
-      const acceptControl = `<label>Export / offtake limit <output>${acceptOut}</output></label><input name="sinkParameter" data-param="acceptKg" type="number" min="0" step="any" placeholder="Unlimited" value="${escapeHtml(acceptValue)}" title="Max kg accepted this solve day. Blank = unlimited (legacy infinite sink).">`;
-      return `<fieldset><legend>Offtake</legend>${acceptControl}${receivedLine}<p class="status-meta">${definition.sourceNote || ''}</p></fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete sink</button>`;
+      const receivedLine = nodeResult?.received
+        ? `<p class="status-meta">Received ${formatStream(nodeResult.received)}${capNote}</p>`
+        : '';
+      const demandLine = demandBacked
+        ? `<p class="status-meta">Demand-backed offtake ${formatNumber(demandDaily)} kg/day from annualDemandLimit ${formatNumber(demandAnnual)} kg/y ÷ ${formatNumber(periodDays)} days. Clear Destination demand or type a manual override.</p>`
+        : '';
+      const placeholder = demandDaily != null ? 'Demand-backed' : 'Unlimited';
+      const title = demandDaily != null
+        ? 'Max kg accepted this solve day. Blank = TEA annualDemandLimit ÷ operating days. Type a value to override.'
+        : 'Max kg accepted this solve day. Blank = unlimited (no annualDemandLimit on this sink).';
+      const acceptControl = `<label>Export / offtake limit <output>${acceptOut}</output></label><input name="sinkParameter" data-param="acceptKg" type="number" min="0" step="any" placeholder="${placeholder}" value="${escapeHtml(acceptValue)}" title="${escapeHtml(title)}">`;
+      return `<fieldset><legend>Offtake</legend>${acceptControl}${receivedLine}${demandLine}<p class="status-meta">${definition.sourceNote || ''}</p></fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete sink</button>`;
     }
     return `${kind === 'sink' ? economicsControlsFor(current) : ''}<button class="delete-node" id="deleteNode" type="button">Delete ${kind === 'sink' ? 'sink' : 'junction'}</button>`;
   }

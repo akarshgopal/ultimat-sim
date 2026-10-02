@@ -241,7 +241,7 @@ function windowedCashMineralsPlant() {
           },
           economics: { installedCapex: 8000, fixedOMPercent: 4, variableOM: 0, assetLifeYears: 20 },
         },
-        { id: 'lithium', unit: 'material-sink', economics: { disposition: 'sale', unitPrice: 400, annualDemandLimit: 8 } },
+        { id: 'lithium', unit: 'material-sink', params: { acceptKg: 1e9 }, economics: { disposition: 'sale', unitPrice: 400, annualDemandLimit: 8 } }, // manual accept keeps physics open; demand still caps cash only
         { id: 'bromide', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'magnesium', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'potash', unit: 'material-sink', economics: { disposition: 'vent' } },

@@ -645,7 +645,33 @@ function evaluateBuffer(node, inlets, requestedActivity) {
   };
 }
 
-function finiteSinkAccept(node, setpoint) {
+function sinkPeriodDays(caseDefinition) {
+  const days = Number(caseDefinition?.operation?.periodDays);
+  return Number.isFinite(days) && days > 0 ? days : 365;
+}
+
+function hasManualSinkAccept(node, setpoint) {
+  const params = node.params || {};
+  for (const key of ['acceptKg', 'acceptAmount']) {
+    if (params[key] != null && params[key] !== '') return true;
+  }
+  return setpoint != null && setpoint !== '';
+}
+
+function demandBackedAcceptKg(node, periodDays) {
+  // Offtake honesty is for sale products. Vent/disposal/reinjection keep
+  // EDITOR_DEMAND_DEFAULT on economics for the inspector seed only — not physics.
+  if (node?.economics?.disposition !== 'sale') return null;
+  const annual = Number(node?.economics?.annualDemandLimit);
+  if (!Number.isFinite(annual) || annual < 0) return null;
+  const days = Number(periodDays);
+  const period = Number.isFinite(days) && days > 0 ? days : 365;
+  return annual / period;
+}
+
+// Manual acceptKg / acceptAmount / sink setpoint win. Else TEA
+// economics.annualDemandLimit / periodDays (MECH7). Blank+no demand = unlimited.
+function finiteSinkAccept(node, setpoint, periodDays = 365) {
   const params = node.params || {};
   const candidates = [];
   for (const key of ['acceptKg', 'acceptAmount']) {
@@ -655,8 +681,10 @@ function finiteSinkAccept(node, setpoint) {
   if (setpoint != null && setpoint !== '') {
     candidates.push(nonnegative(Number(setpoint), 'sinkAccept'));
   }
-  if (!candidates.length) return Infinity;
-  return Math.min(...candidates);
+  if (candidates.length) return Math.min(...candidates);
+  const demandDaily = demandBackedAcceptKg(node, periodDays);
+  if (demandDaily != null) return demandDaily;
+  return Infinity;
 }
 
 // Optional offtake / disposal rate. Blank accept = unlimited (legacy infinite sink).
@@ -680,17 +708,22 @@ function safeStreamAmount(stream) {
   return streamAmount(scrubTinyNegativeMols(stream));
 }
 
-function evaluateSink(node, inlet, setpoint) {
+function evaluateSink(node, inlet, setpoint, periodDays = 365) {
   const clean = scrubTinyNegativeMols(inlet);
   const requested = streamAmount(clean);
-  const acceptCap = finiteSinkAccept(node, setpoint);
+  const acceptCap = finiteSinkAccept(node, setpoint, periodDays);
   const acceptedAmt = Math.min(requested, acceptCap);
   const limitedBy = [];
   if (acceptedAmt + Math.max(1, acceptedAmt) * 1e-9 < requested) limitedBy.push('export');
   const accepted = scaleStream(clean, requested === 0 ? 0 : acceptedAmt / requested);
+  let acceptSource = null;
+  if (Number.isFinite(acceptCap)) {
+    acceptSource = hasManualSinkAccept(node, setpoint) ? 'manual' : 'demand';
+  }
   return {
     received: accepted,
     acceptKg: Number.isFinite(acceptCap) ? acceptCap : null,
+    acceptSource,
     requestedInputs: { in: cloneStream(inlet) },
     consumed: { in: accepted },
     limitedBy,
@@ -952,7 +985,7 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), 
       const setpoint = caseDefinition.operation?.setpoints?.[node.id];
       if (incomingStreams.length === 1
         && (incomingStreams[0].kind === 'material' || incomingStreams[0].kind === 'consumable')) {
-        const result = evaluateSink(node, incomingStreams[0], setpoint);
+        const result = evaluateSink(node, incomingStreams[0], setpoint, sinkPeriodDays(caseDefinition));
         nodeResults[node.id] = result;
         for (const edge of incoming) edgeStreams.set(edge, result.consumed[edge.to.port] || result.consumed.in);
       } else {

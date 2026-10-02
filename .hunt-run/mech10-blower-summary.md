@@ -1,6 +1,6 @@
 # MECH10 — Air / flue gas blower
 
-**Tip:** (pending push)
+**Tip:** `87fbccb` on `main`
 **Tests:** 272 pass (+7 MECH10)
 **Pages:** https://akarshgopal.github.io/ultimat-sim/
 

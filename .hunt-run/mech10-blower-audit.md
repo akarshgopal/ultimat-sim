@@ -63,6 +63,6 @@
 
 ## 5. Shipped
 
-- **Tip:** (see summary after push)
+- **Tip:** `87fbccb` on `main`
 - **Pages:** https://akarshgopal.github.io/ultimat-sim/
 - **Tests:** 272 pass (+7 MECH10)

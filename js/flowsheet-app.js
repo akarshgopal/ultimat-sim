@@ -430,12 +430,17 @@
     'material-buffer': {
       label: 'Buffer tank', capacity: 10000, rate: 1000, activityUnit: 'kg/day',
       palette: { section: 'utility', order: 5, glyph: 'T', tone: 'water', description: 'Store mass across hours — fill, hold, discharge' },
-      params: { capacityKg: 10000, initialKg: 0 },
+      params: { capacityKg: 10000, initialKg: 0, capexPerKg: 0.5 },
       controls: [
         { key: 'capacityKg', label: 'Tank capacity', min: 0, max: 1e6, step: 100, unit: 'kg' },
         { key: 'initialKg', label: 'Starting inventory', min: 0, max: 1e6, step: 100, unit: 'kg' },
+        { key: 'capexPerKg', label: 'Installed CAPEX', min: 0.05, max: 5, step: 0.05, unit: '$/kg capacity' },
       ],
-      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream.',
+      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH17 screening CAPEX ~$0.50/kg capacity (atmospheric process tank + foundation band); campus pad ~1 m²/t capacity (pad+dike screening). Not a vendor quote or surveyed plot.',
+      references: [
+        { label: 'EPA USP guide / tank-farm layout screening (pad+dike order)', url: 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf' },
+        { label: 'Matches process equipment — atmospheric storage tank cost order', url: 'https://www.matche.com/equipcost/Tank.html' },
+      ],
     },
     'material-sink': {
       label: 'Material sink',
@@ -759,9 +764,7 @@
     });
   }
   if (typeof document.addEventListener === 'function') {
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && canvasFocused) setCanvasFocus(false);
-    });
+    document.addEventListener('keydown', handleProcessKeydown);
   }
   document.getElementById('zoomOut').addEventListener('click', () => setCanvasZoom(canvasZoom - 0.1));
   document.getElementById('zoomIn').addEventListener('click', () => setCanvasZoom(canvasZoom + 0.1));
@@ -990,9 +993,12 @@
     canvas.classList.remove('is-panning');
   });
   canvas.addEventListener('keydown', event => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    handleCanvasClick(event);
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleCanvasClick(event);
+      return;
+    }
+    handleProcessKeydown(event);
   });
   inspector.addEventListener('input', handleInspectorInput);
   inspector.addEventListener('change', handleInspectorInput);
@@ -2567,6 +2573,110 @@
     };
   }
 
+  function isTypingTarget(el) {
+    if (!el || typeof el !== 'object') return false;
+    const tag = String(el.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+  }
+
+  function deleteSelection() {
+    if (selectedEdgeIndex != null && Number.isFinite(Number(selectedEdgeIndex))
+      && selectedEdgeIndex >= 0 && selectedEdgeIndex < graph.edges.length) {
+      graph.edges.splice(selectedEdgeIndex, 1);
+      selectedEdgeIndex = null;
+      pendingPort = null;
+      solveAndRender();
+      return true;
+    }
+    if (selectedNodeId && node(selectedNodeId)) {
+      const id = selectedNodeId;
+      graph.edges = graph.edges.filter(edge => edge.from.node !== id && edge.to.node !== id);
+      const index = graph.nodes.findIndex(candidate => candidate.id === id);
+      if (index >= 0) graph.nodes.splice(index, 1);
+      delete setpoints[id];
+      selectedNodeId = null;
+      selectedEdgeIndex = null;
+      pendingPort = null;
+      solveAndRender();
+      return true;
+    }
+    return false;
+  }
+
+  function clearCanvasSelection() {
+    const had = selectedNodeId != null || selectedEdgeIndex != null || pendingPort != null;
+    selectedNodeId = null;
+    selectedEdgeIndex = null;
+    pendingPort = null;
+    highlightPort = null;
+    if (had) render();
+    return had;
+  }
+
+  function nudgeSelectedNode(dx, dy) {
+    const current = node(selectedNodeId);
+    if (!current) return false;
+    if (!current.position) current.position = { x: 40, y: 40 };
+    current.position.x = Math.max(10, current.position.x + dx);
+    current.position.y = Math.max(10, current.position.y + dy);
+    renderGraph();
+    persistAutosave();
+    return true;
+  }
+
+  function toggleShortcutsHint(force) {
+    const hint = document.getElementById('processShortcuts');
+    if (!hint) return;
+    if (force === true) hint.open = true;
+    else if (force === false) hint.open = false;
+    else hint.open = !hint.open;
+  }
+
+  function handleProcessKeydown(event) {
+    if (activeTab !== 'process') {
+      if (event.key === 'Escape' && canvasFocused) setCanvasFocus(false);
+      return;
+    }
+    if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) {
+      if (event.key === 'Escape' && canvasFocused) setCanvasFocus(false);
+      return;
+    }
+    const key = event.key;
+    if (key === 'Escape') {
+      event.preventDefault();
+      if (canvasFocused) setCanvasFocus(false);
+      clearCanvasSelection();
+      return;
+    }
+    if (key === 'Delete' || key === 'Backspace') {
+      event.preventDefault();
+      deleteSelection();
+      return;
+    }
+    if (key === '?' || (key === '/' && event.shiftKey)) {
+      event.preventDefault();
+      toggleShortcutsHint();
+      return;
+    }
+    if (key === '+' || key === '=' ) {
+      event.preventDefault();
+      setCanvasZoom(canvasZoom + 0.1);
+      return;
+    }
+    if (key === '-' || key === '_') {
+      event.preventDefault();
+      setCanvasZoom(canvasZoom - 0.1);
+      return;
+    }
+    const step = event.shiftKey ? 40 : 10;
+    if (key === 'ArrowLeft') { event.preventDefault(); nudgeSelectedNode(-step, 0); return; }
+    if (key === 'ArrowRight') { event.preventDefault(); nudgeSelectedNode(step, 0); return; }
+    if (key === 'ArrowUp') { event.preventDefault(); nudgeSelectedNode(0, -step); return; }
+    if (key === 'ArrowDown') { event.preventDefault(); nudgeSelectedNode(0, step); return; }
+  }
+
   function clampZoom(value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return 1;
@@ -2884,6 +2994,12 @@
       current.params[event.target.dataset.param] = Number(event.target.value);
       if (event.target.dataset.param === 'capacityKg') {
         current.capacity = Math.max(current.capacity || 0, Number(event.target.value) || 0);
+      }
+      if (['capacityKg', 'capexPerKg'].includes(event.target.dataset.param)) {
+        current.economics ||= defaultEconomics(current);
+        const kg = Number(current.params.capacityKg) || 0;
+        const rate = Number(current.params.capexPerKg) || 0;
+        current.economics.installedCapex = kg * rate;
       }
     }
     if (event.target.name === 'sinkParameter') {
@@ -5718,7 +5834,7 @@
       const socLine = nodeResult?.inventoryKg != null
         ? `<p class="status-meta">Inventory ${formatNumber(nodeResult.inventoryKg)} kg${nodeResult.capacityKg != null ? ` / ${formatNumber(nodeResult.capacityKg)} kg` : ''}${nodeResult.fill != null ? ` (${formatNumber(nodeResult.fill * 100)}% full)` : ''}</p>`
         : '<p class="status-meta">Inventory updates after solve. Horizon carries SOC hour to hour.</p>';
-      return `<fieldset><legend>Buffer tank</legend><label>Discharge setpoint <output>${formatNumber(setpoints[current.id] ?? 0)} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${Math.max(current.capacity || 0, definition.capacity || 0, setpoints[current.id] || 0, 1)}" step="1" value="${setpoints[current.id] ?? 0}">${parameters}${socLine}<p class="status-meta">${definition.sourceNote || ''}</p></fieldset><button class="delete-node" id="deleteNode" type="button">Delete buffer</button>`;
+      return `<fieldset><legend>Buffer tank</legend><label>Discharge setpoint <output>${formatNumber(setpoints[current.id] ?? 0)} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${Math.max(current.capacity || 0, definition.capacity || 0, setpoints[current.id] || 0, 1)}" step="1" value="${setpoints[current.id] ?? 0}">${parameters}${socLine}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete buffer</button>`;
     }
     if (kind === 'sink' && current.unit === 'material-sink') {
       const definition = catalog[current.unit] || {};
@@ -5799,6 +5915,16 @@
       variableOM: 0,
       assetLifeYears: 20,
     };
+    if (kind === 'buffer') {
+      const kg = Number(current.params?.capacityKg ?? current.capacity) || 0;
+      const rate = Number(current.params?.capexPerKg) || 0.5;
+      return {
+        installedCapex: kg * rate,
+        fixedOMPercent: 2,
+        variableOM: 0,
+        assetLifeYears: 25,
+      };
+    }
     if (kind === 'sink') return { disposition: 'vent', unitPrice: 0, disposalCost: 0, annualDemandLimit: (globalThis.TeaScreening && globalThis.TeaScreening.EDITOR_DEMAND_DEFAULT) || 1e6 };
     return {};
   }
@@ -5814,11 +5940,14 @@
       return `<label>${label}<input name="economics" data-economics="${key}" type="number" min="0" step="${step}" value="${shown}"${title}></label>`;
     };
     if (kind === 'source') return `<fieldset><legend>Economics</legend>${economics.unitCost != null ? field('unitCost', 'Delivered input cost') : `${field('installedCapex', 'Installed CAPEX', '100')}${field('fixedOM', 'Fixed O&M / year', '100')}${field('variableOM', 'Variable cost / output unit')}`}<p class="status-meta">Native unit is kg, kWh, or consumable unit. Zero values explore the physical limit.</p></fieldset>`;
-    if (kind === 'converter') {
+    if (kind === 'converter' || kind === 'buffer') {
       const capexField = economics.capexRate != null && economics.installedCapex == null
         ? field('capexRate', 'CAPEX rate / capacity unit', '1')
         : field('installedCapex', 'Installed CAPEX', '100');
-      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${field('variableOM', 'Variable O&M / activity unit')}${field('assetLifeYears', 'Asset life (years)', '1')}</fieldset>`;
+      const variable = kind === 'buffer'
+        ? ''
+        : field('variableOM', 'Variable O&M / activity unit');
+      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? '<p class="status-meta">Screening tank CAPEX = capacity × $/kg. Capacity or $/kg sliders refresh installed CAPEX.</p>' : ''}</fieldset>`;
     }
     return `<fieldset><legend>Destination economics</legend><label>Disposition<select name="economics" data-economics="disposition">${['sale', 'disposal', 'vent', 'reinjection'].map(value => `<option value="${value}"${economics.disposition === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>${field('unitPrice', 'Sale price / unit')}${field('annualDemandLimit', 'Annual demand limit', '1')}${field('disposalCost', 'Disposal cost / unit')}</fieldset>`;
   }
@@ -6628,6 +6757,14 @@
       ['Installed storage CAPEX', formatUncertainMoney(current.capacity * params.capexPerKWh, moneyQuality), { quality: moneyQuality }],
       ['Conversion loss', `${formatNumber((1 - params.efficiency) * 100)}%`],
     ];
+    if (current.unit === 'material-buffer') {
+      const kg = Number(params.capacityKg ?? current.capacity) || 0;
+      const rate = Number(params.capexPerKg) || 0.5;
+      return [
+        ['Installed tank CAPEX', formatUncertainMoney(kg * rate, moneyQuality), { quality: moneyQuality }],
+        ['CAPEX intensity', `$${formatNumber(rate)}/kg capacity`, { quality: moneyQuality }],
+      ];
+    }
     if (!Number.isFinite(params.capacityKW) || !Number.isFinite(params.capexPerKW)) return [];
     const annualEnergy = current.rate * 365;
     const rate = Number(params.discountRate ?? 0.07);
@@ -6690,6 +6827,13 @@
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
+    deleteSelection, clearCanvasSelection, handleProcessKeydown, nudgeSelectedNode,
+    get selectedNodeId() { return selectedNodeId; },
+    set selectedNodeId(value) { selectedNodeId = value; },
+    get selectedEdgeIndex() { return selectedEdgeIndex; },
+    set selectedEdgeIndex(value) { selectedEdgeIndex = value; },
+    get pendingPort() { return pendingPort; },
+    set pendingPort(value) { pendingPort = value; },
     solve: solveAndRender, fitCanvas, showCause(nodeId) {
       const current = node(nodeId || selectedNodeId);
       if (!current) return null;

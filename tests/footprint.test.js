@@ -29,6 +29,7 @@ const MAIN_UNITS = [
   'asu',
   'ammonia',
   'battery',
+  'material-buffer',
 ];
 
 test('solar land uses panel area / GCR rather than 1.6 ha/MWp', () => {

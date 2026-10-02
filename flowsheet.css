@@ -3054,3 +3054,50 @@ label output + .quality-chip {
 .more-section > summary {
   border-radius: 0;
 }
+
+.process-shortcuts {
+  position: relative;
+  align-self: center;
+}
+.process-shortcuts > summary {
+  list-style: none;
+  cursor: pointer;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border, #3a3f4a);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 0.85rem/1 var(--font-ui, system-ui, sans-serif);
+  color: var(--text-muted, #8a8f98);
+  background: var(--panel, transparent);
+}
+.process-shortcuts > summary::-webkit-details-marker { display: none; }
+.process-shortcuts-body {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 14rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border, #3a3f4a);
+  background: var(--panel-solid, #16181d);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  font-size: 0.78rem;
+  color: var(--text-muted, #8a8f98);
+}
+.process-shortcuts-body p { margin: 0.2rem 0; }
+.process-shortcuts-body kbd {
+  display: inline-block;
+  min-width: 1.1rem;
+  padding: 0.05rem 0.28rem;
+  margin-right: 0.15rem;
+  border-radius: 4px;
+  border: 1px solid var(--border, #3a3f4a);
+  background: var(--surface, #1e2229);
+  font: 600 0.72rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text, #e8eaed);
+  text-align: center;
+}

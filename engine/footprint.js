@@ -51,6 +51,7 @@ const PROCESS_LABELS = Object.freeze({
   'dac-liquid': 'Liquid-solvent DAC',
   'dac-electroswing': 'Electro-swing DAC',
   battery: 'Battery yard',
+  'material-buffer': 'Buffer tank',
   sabatier: 'Methane plant',
   methanol: 'Methanol plant',
   swro: 'SWRO',
@@ -326,6 +327,23 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  'material-buffer': Object.freeze({
+    id: 'material-buffer',
+    label: PROCESS_LABELS['material-buffer'],
+    // Screening pad+dike band ~0.5–2 m²/m³ water-eq; mid 1.0 m²/t capacity.
+    basis: 'capacityTonnes',
+    intensity: 1.0,
+    unitLabel: 'm²/t capacity',
+    range: Object.freeze([0.5, 2.0]),
+    floorM2: 9,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening tank-farm pad+dike ~0.5–2 m²/m³ (API/NFPA spacing order); use 1.0 m²/t capacity — not a surveyed plot',
+        url: 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf',
+      }),
+    ]),
+  }),
 });
 
 function clamp(value, min, max) {
@@ -527,6 +545,13 @@ function padBatteryKWh(batteryKWh) {
   return padAreaFromIntensity(spec, kWh / 1000);
 }
 
+function padBuffer(node) {
+  const spec = intensitySpec('material-buffer');
+  const kg = Math.max(0, finiteNumber(node.params?.capacityKg ?? node.capacity));
+  if (!(kg > 0)) return 0;
+  return padAreaFromIntensity(spec, kg / 1000);
+}
+
 const PROCESS_PADS = Object.freeze({
   electrolyzer: padElectrolyzer,
   dac: padDac,
@@ -542,6 +567,7 @@ const PROCESS_PADS = Object.freeze({
   'brine-minerals': padBrine,
   asu: padAsu,
   ammonia: padAmmonia,
+  'material-buffer': padBuffer,
 });
 
 function processRecord(node, areaM2) {

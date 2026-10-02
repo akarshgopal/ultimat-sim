@@ -253,6 +253,15 @@
                 <button type="button" id="zoomFit" aria-label="Fit graph to canvas">Fit</button>
                 <button type="button" id="zoomReset">Reset</button>
               </div>
+              <details class="process-shortcuts" id="processShortcuts">
+                <summary title="Process canvas shortcuts">?</summary>
+                <div class="process-shortcuts-body">
+                  <p><kbd>Del</kbd> / <kbd>⌫</kbd> delete selection</p>
+                  <p><kbd>Esc</kbd> clear selection / cancel connect</p>
+                  <p><kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> nudge block · <kbd>Shift</kbd> ×4</p>
+                  <p><kbd>+</kbd> / <kbd>−</kbd> zoom</p>
+                </div>
+              </details>
               <button type="button" id="completeBoundaries">Add sources &amp; sinks</button>
               <details class="save-menu canvas-menu">
                 <summary>Canvas</summary>
@@ -267,14 +276,14 @@
           </div>
 
           <div class="canvas-frame">
-            <div class="flowsheet-canvas empty" id="flowsheetCanvas">
+            <div class="flowsheet-canvas empty" id="flowsheetCanvas" tabindex="0" role="application" aria-label="Plant floor canvas">
               <div class="empty-canvas">
                 <span class="eyebrow">Plant floor</span>
                 <strong>No blocks</strong>
                 <p>Add a block or open a case on Overview. Drag empty canvas to pan · Fit frames the plant.</p>
               </div>
             </div>
-            <p class="canvas-pan-hint" id="canvasPanHint" hidden>Drag empty canvas to pan · Fit frames the plant</p>
+            <p class="canvas-pan-hint" id="canvasPanHint" hidden>Drag empty canvas to pan · Fit frames the plant · <kbd>?</kbd> shortcuts</p>
           </div>
           <div class="warning-strip" id="warnings" hidden></div>
           <details class="more-section" id="advancedComparison">

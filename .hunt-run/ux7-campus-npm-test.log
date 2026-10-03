@@ -1,0 +1,1089 @@
+
+> test
+> node --test
+
+TAP version 13
+# Subtest: brine train conserves ions while exposing lithium, bromide, potash, magnesium, gypsum, and salt
+ok 1 - brine train conserves ions while exposing lithium, bromide, potash, magnesium, gypsum, and salt
+  ---
+  duration_ms: 4.131018
+  ...
+# Subtest: abundance hub couples brine bromide to chlor-alkali chlorine and its hydrogen to ammonia
+ok 2 - abundance hub couples brine bromide to chlor-alkali chlorine and its hydrogen to ammonia
+  ---
+  duration_ms: 3.950059
+  ...
+# Subtest: abundance TEA registry exposes cited prices and screening CAPEX intensities
+ok 3 - abundance TEA registry exposes cited prices and screening CAPEX intensities
+  ---
+  duration_ms: 1.097708
+  ...
+# Subtest: abundance case binds TEA prices, capexRate, and evidence onto nodes
+ok 4 - abundance case binds TEA prices, capexRate, and evidence onto nodes
+  ---
+  duration_ms: 4.340267
+  ...
+# Subtest: createAbundanceCase({ assayId }) runs Atacama lithium brine without invented bromide
+ok 5 - createAbundanceCase({ assayId }) runs Atacama lithium brine without invented bromide
+  ---
+  duration_ms: 3.750985
+  ...
+# Subtest: TEA pack CAPEX scales with capacity and is not the old fuel-path toy lump
+ok 6 - TEA pack CAPEX scales with capacity and is not the old fuel-path toy lump
+  ---
+  duration_ms: 0.425076
+  ...
+# Subtest: Dead Sea demo scale is cash-positive at minerals mid intensity; Atacama Li stays cash+
+ok 7 - Dead Sea demo scale is cash-positive at minerals mid intensity; Atacama Li stays cash+
+  ---
+  duration_ms: 28.502811
+  ...
+# Subtest: abundance sale products do not ship annualDemandLimit 1e12
+ok 8 - abundance sale products do not ship annualDemandLimit 1e12
+  ---
+  duration_ms: 0.388832
+  ...
+# Subtest: coastal methane uses solid-sorbent DAC and closes balances
+ok 9 - coastal methane uses solid-sorbent DAC and closes balances
+  ---
+  duration_ms: 9.090341
+  ...
+# Subtest: December PVGIS yield throttles coastal methane below the annual case
+ok 10 - December PVGIS yield throttles coastal methane below the annual case
+  ---
+  duration_ms: 4.126339
+  ...
+# Subtest: requesting more electricity than the site budget cannot raise production
+ok 11 - requesting more electricity than the site budget cannot raise production
+  ---
+  duration_ms: 4.460295
+  ...
+# Subtest: unverified grid imports stay at zero authorized supply
+ok 12 - unverified grid imports stay at zero authorized supply
+  ---
+  duration_ms: 1.305601
+  ...
+# Subtest: an unassigned source on a sited factory is rejected
+ok 13 - an unassigned source on a sited factory is rejected
+  ---
+  duration_ms: 1.110491
+  ...
+# Subtest: hourly typical-day dispatch idles at night and produces in daylight
+ok 14 - hourly typical-day dispatch idles at night and produces in daylight
+  ---
+  duration_ms: 107.713856
+  ...
+# Subtest: electro-swing DAC drops heat ports and requires quinone makeup
+ok 15 - electro-swing DAC drops heat ports and requires quinone makeup
+  ---
+  duration_ms: 0.344421
+  ...
+# Subtest: DAC captures CO2, rejects air, and closes elemental/electric/heat balances
+ok 16 - DAC captures CO2, rejects air, and closes elemental/electric/heat balances
+  ---
+  duration_ms: 6.077584
+  ...
+# Subtest: DAC reports heat quantity or temperature as its active limit
+ok 17 - DAC reports heat quantity or temperature as its active limit
+  ---
+  duration_ms: 2.291955
+  ...
+# Subtest: SWRO to electrolysis closes components and produces H2/O2 at fixed capacities
+ok 18 - SWRO to electrolysis closes components and produces H2/O2 at fixed capacities
+  ---
+  duration_ms: 5.700168
+  ...
+# Subtest: priority electricity allocation serves SWRO before electrolyzer
+ok 19 - priority electricity allocation serves SWRO before electrolyzer
+  ---
+  duration_ms: 2.147079
+  ...
+# Subtest: root chrome exposes four tabs and keeps Network copy without Empire
+ok 20 - root chrome exposes four tabs and keeps Network copy without Empire
+  ---
+  duration_ms: 1.68684
+  ...
+# Subtest: generic methane-like graph folds source, converter, sale, and disposal economics
+ok 21 - generic methane-like graph folds source, converter, sale, and disposal economics
+  ---
+  duration_ms: 1.956953
+  ...
+# Subtest: sale demand cap does not discard the physical delivered amount
+ok 22 - sale demand cap does not discard the physical delivered amount
+  ---
+  duration_ms: 0.23992
+  ...
+# Subtest: NPV and IRR agree on a simple two-year investment
+ok 23 - NPV and IRR agree on a simple two-year investment
+  ---
+  duration_ms: 1.287059
+  ...
+# Subtest: capital-inclusive gate: annualNetCash is R − OPEX − annualizedCapex
+ok 24 - capital-inclusive gate: annualNetCash is R − OPEX − annualizedCapex
+  ---
+  duration_ms: 1.272567
+  ...
+# Subtest: vendor ships Esri Lerc decode assets for GSA tiles
+ok 25 - vendor ships Esri Lerc decode assets for GSA tiles
+  ---
+  duration_ms: 4.714142
+  ...
+# Subtest: factory starts on the Zabuye materials demo and wiring blocks does not rewrite their setpoints
+ok 26 - factory starts on the Zabuye materials demo and wiring blocks does not rewrite their setpoints
+  ---
+  duration_ms: 155.053709
+  ...
+# Subtest: methane recycle example loads a converged circular water exchange
+ok 27 - methane recycle example loads a converged circular water exchange
+  ---
+  duration_ms: 117.749857
+  ...
+# Subtest: baseline comparison preserves real engine economics and renders deltas and synergies
+ok 28 - baseline comparison preserves real engine economics and renders deltas and synergies
+  ---
+  duration_ms: 126.085739
+  ...
+# Subtest: coastal methane loads a sited factory whose winter solar cuts methane
+ok 29 - coastal methane loads a sited factory whose winter solar cuts methane
+  ---
+  duration_ms: 135.624603
+  ...
+# Subtest: switching DAC route drops incompatible heat and reagent connections
+ok 30 - switching DAC route drops incompatible heat and reagent connections
+  ---
+  duration_ms: 109.089823
+  ...
+# Subtest: size to target resizes coastal methane and reports iterations and residual
+ok 31 - size to target resizes coastal methane and reports iterations and residual
+  ---
+  duration_ms: 160.567583
+  ...
+# Subtest: site panel reports location-aware footprint instead of 1.6 ha/MWp
+ok 32 - site panel reports location-aware footprint instead of 1.6 ha/MWp
+  ---
+  duration_ms: 98.496832
+  ...
+# Subtest: fuels plus minerals network rolls up two sited plants
+ok 33 - fuels plus minerals network rolls up two sited plants
+  ---
+  duration_ms: 141.298279
+  ...
+# Subtest: network plants edit in the page and tag the biggest earner
+ok 34 - network plants edit in the page and tag the biggest earner
+  ---
+  duration_ms: 249.673257
+  ...
+# Subtest: Dead Sea brine hub lists sold ammonia and minerals and refreshes land
+ok 35 - Dead Sea brine hub lists sold ammonia and minerals and refreshes land
+  ---
+  duration_ms: 99.112167
+  ...
+# Subtest: Location presets populate by region and applying Almería sets coords, name, and honest rights
+ok 36 - Location presets populate by region and applying Almería sets coords, name, and honest rights
+  ---
+  duration_ms: 69.578744
+  ...
+# Subtest: Overview hero shows screening notice and cited solar yield without screening-chip spam
+ok 37 - Overview hero shows screening notice and cited solar yield without screening-chip spam
+  ---
+  duration_ms: 107.808812
+  ...
+# Subtest: coastal methanol demo loads Mejillones plant and sizes methanol
+ok 38 - coastal methanol demo loads Mejillones plant and sizes methanol
+  ---
+  duration_ms: 84.656698
+  ...
+# Subtest: size product menus list methanol and ammonia
+ok 39 - size product menus list methanol and ammonia
+  ---
+  duration_ms: 0.388139
+  ...
+# Subtest: Zabuye brine hub loads the cited assay, frozen ERA5, and capital-inclusive cash
+ok 40 - Zabuye brine hub loads the cited assay, frozen ERA5, and capital-inclusive cash
+  ---
+  duration_ms: 391.012032
+  ...
+# Subtest: Economics screens purchased-power break-even on the frozen plant without site-search
+ok 41 - Economics screens purchased-power break-even on the frozen plant without site-search
+  ---
+  duration_ms: 149.273187
+  ...
+# Subtest: economics charts stay empty until the graph can support them
+ok 42 - economics charts stay empty until the graph can support them
+  ---
+  duration_ms: 57.634321
+  ...
+# Subtest: economics dashboard groups capital, operations, the cash gate, and screening DCF
+ok 43 - economics dashboard groups capital, operations, the cash gate, and screening DCF
+  ---
+  duration_ms: 134.856356
+  ...
+# Subtest: positive-cashflow status reports heat covered when present
+ok 44 - positive-cashflow status reports heat covered when present
+  ---
+  duration_ms: 104.536657
+  ...
+# Subtest: coastal methane sizeToProduct H2 produces electrolyzer activity and never Limited by Nothing at zero
+ok 45 - coastal methane sizeToProduct H2 produces electrolyzer activity and never Limited by Nothing at zero
+  ---
+  duration_ms: 141.881458
+  ...
+# Subtest: apply location uses frozen or screening solar when live PVGIS fetch fails
+ok 46 - apply location uses frozen or screening solar when live PVGIS fetch fails
+  ---
+  duration_ms: 161.356872
+  ...
+# Subtest: github pages skips live PVGIS when the active site has a freeze
+ok 47 - github pages skips live PVGIS when the active site has a freeze
+  ---
+  duration_ms: 103.745108
+  ...
+# Subtest: process and rights use human labels, and displayed kWp, assay, and CAPEX are rounded
+ok 48 - process and rights use human labels, and displayed kWp, assay, and CAPEX are rounded
+  ---
+  duration_ms: 136.878598
+  ...
+# Subtest: loading a demo or clearing the factory drops a sticky cashflow banner
+ok 49 - loading a demo or clearing the factory drops a sticky cashflow banner
+  ---
+  duration_ms: 185.065994
+  ...
+# Subtest: idle blocks name the cause and can jump to the port or Rights
+ok 50 - idle blocks name the cause and can jump to the port or Rights
+  ---
+  duration_ms: 135.640048
+  ...
+# Subtest: Fit scales the graph to the viewport instead of stopping at 25%
+ok 51 - Fit scales the graph to the viewport instead of stopping at 25%
+  ---
+  duration_ms: 100.637682
+  ...
+# Subtest: process chrome collapses the palette, cites map sources, and searches block copy
+ok 52 - process chrome collapses the palette, cites map sources, and searches block copy
+  ---
+  duration_ms: 2.31705
+  ...
+# Subtest: Overview is a full-width decision board with a slate table, cash gate, and demoted cases
+ok 53 - Overview is a full-width decision board with a slate table, cash gate, and demoted cases
+  ---
+  duration_ms: 101.059571
+  ...
+# Subtest: process chrome reads as a flowsheet, with gallery units behind More units
+ok 54 - process chrome reads as a flowsheet, with gallery units behind More units
+  ---
+  duration_ms: 58.674538
+  ...
+# Subtest: process floor shows solved stream rates and skips gauges without data
+ok 55 - process floor shows solved stream rates and skips gauges without data
+  ---
+  duration_ms: 141.54256
+  ...
+# Subtest: Location footprint is a campus diagram and Overview links to it
+ok 56 - Location footprint is a campus diagram and Overview links to it
+  ---
+  duration_ms: 57.991396
+  ...
+# Subtest: standalone SWRO conserves components and reports its active limit
+ok 57 - standalone SWRO conserves components and reports its active limit
+  ---
+  duration_ms: 7.976084
+  ...
+# Subtest: battery shifts electricity with explicit conversion loss
+ok 58 - battery shifts electricity with explicit conversion loss
+  ---
+  duration_ms: 0.581294
+  ...
+# Subtest: material splitters divide without duplication and mixers recombine
+ok 59 - material splitters divide without duplication and mixers recombine
+  ---
+  duration_ms: 0.510279
+  ...
+# Subtest: solar land uses panel area / GCR rather than 1.6 ha/MWp
+ok 60 - solar land uses panel area / GCR rather than 1.6 ha/MWp
+  ---
+  duration_ms: 1.085544
+  ...
+# Subtest: process intensities are finite with evidence for main units
+ok 61 - process intensities are finite with evidence for main units
+  ---
+  duration_ms: 0.332813
+  ...
+# Subtest: estimateFootprint returns cited/screening process pads from activity
+ok 62 - estimateFootprint returns cited/screening process pads from activity
+  ---
+  duration_ms: 1.005203
+  ...
+# Subtest: network landHa is the sum of plant totalHa from estimateFootprint
+ok 63 - network landHa is the sum of plant totalHa from estimateFootprint
+  ---
+  duration_ms: 56.936933
+  ...
+# Subtest: findFuelBreakEven returns a finite H2 price for a tiny cash-negative plant
+ok 64 - findFuelBreakEven returns a finite H2 price for a tiny cash-negative plant
+  ---
+  duration_ms: 28.186662
+  ...
+# Subtest: CAPEX factor break-even is finite when reducing CAPEX helps, else curve is monotonic
+ok 65 - CAPEX factor break-even is finite when reducing CAPEX helps, else curve is monotonic
+  ---
+  duration_ms: 20.839359
+  ...
+# Subtest: findFuelBreakEven does not mutate the input definition
+ok 66 - findFuelBreakEven does not mutate the input definition
+  ---
+  duration_ms: 17.04687
+  ...
+# Subtest: alias product 'methane' normalizes to CH4
+ok 67 - alias product 'methane' normalizes to CH4
+  ---
+  duration_ms: 7.362567
+  ...
+# Subtest: fuelScreeningBounds uses tea-screening CH4 green-premium and MeOH commodity band
+ok 68 - fuelScreeningBounds uses tea-screening CH4 green-premium and MeOH commodity band
+  ---
+  duration_ms: 1.695606
+  ...
+# Subtest: probeFuelCash documents a CH4 near-miss inside the green-premium × CAPEX band
+ok 69 - probeFuelCash documents a CH4 near-miss inside the green-premium × CAPEX band
+  ---
+  duration_ms: 17.204768
+  ...
+# Subtest: probeFuelCash ranks cash+ only at mid-band, not capexFactor=0.05 alone
+ok 70 - probeFuelCash ranks cash+ only at mid-band, not capexFactor=0.05 alone
+  ---
+  duration_ms: 18.452361
+  ...
+# Subtest: fuel-breakeven hunt proves midCash << 0 and uses frozen PVGIS for overlay coasts
+ok 71 - fuel-breakeven hunt proves midCash << 0 and uses frozen PVGIS for overlay coasts
+  ---
+  duration_ms: 1598.380702
+  ...
+# Subtest: fuel-breakeven overlay claims match frozen PVGIS already in-repo
+ok 72 - fuel-breakeven overlay claims match frozen PVGIS already in-repo
+  ---
+  duration_ms: 0.79227
+  ...
+# Subtest: sizeForPositiveCashflow still scores the tiny H2 plant without sensitivity side effects
+ok 73 - sizeForPositiveCashflow still scores the tiny H2 plant without sensitivity side effects
+  ---
+  duration_ms: 3.395013
+  ...
+# Subtest: cold waste cannot cover a high-minimum-temperature sink
+ok 74 - cold waste cannot cover a high-minimum-temperature sink
+  ---
+  duration_ms: 1.771562
+  ...
+# Subtest: Sabatier waste heat is a cascade source that can cover DAC
+ok 75 - Sabatier waste heat is a cascade source that can cover DAC
+  ---
+  duration_ms: 4.563599
+  ...
+# Subtest: coastal methane keeps heatIntegration and does not drop the heat source
+ok 76 - coastal methane keeps heatIntegration and does not drop the heat source
+  ---
+  duration_ms: 2.704532
+  ...
+# Subtest: waterAvailabilityScreening keeps coastal seawater, Dead Sea brine, and inland arid/fresh bands
+ok 77 - waterAvailabilityScreening keeps coastal seawater, Dead Sea brine, and inland arid/fresh bands
+  ---
+  duration_ms: 1.853522
+  ...
+# Subtest: pvScreeningBand is a latitude screen, not a PVGIS hourly series
+ok 78 - pvScreeningBand is a latitude screen, not a PVGIS hourly series
+  ---
+  duration_ms: 0.369429
+  ...
+# Subtest: landValueScreening remains a non-price helper; land overlay is cited choropleth
+ok 79 - landValueScreening remains a non-price helper; land overlay is cited choropleth
+  ---
+  duration_ms: 0.534796
+  ...
+# Subtest: LAYER_SOURCES describes cited GSA LERC solar and Aqueduct water
+ok 80 - LAYER_SOURCES describes cited GSA LERC solar and Aqueduct water
+  ---
+  duration_ms: 0.887612
+  ...
+# Subtest: GSA annual ramp and geographic tile helpers
+ok 81 - GSA annual ramp and geographic tile helpers
+  ---
+  duration_ms: 0.869941
+  ...
+# Subtest: vendored Lerc decodes a GSA GHI fixture tile
+ok 82 - vendored Lerc decodes a GSA GHI fixture tile
+  ---
+  duration_ms: 31.652171
+  ...
+# Subtest: land USD/ha ramp is yellow→dark green; deep ocean skip still works
+ok 83 - land USD/ha ramp is yellow→dark green; deep ocean skip still works
+  ---
+  duration_ms: 1.001141
+  ...
+# Subtest: bundled land-prices data is finite, unique, and covers US+EU+CA+AU
+ok 84 - bundled land-prices data is finite, unique, and covers US+EU+CA+AU
+  ---
+  duration_ms: 53.882921
+  ...
+# Subtest: layerScoreAt prefers frozen PVGIS yield and completeness-weights missing land $/ha
+ok 85 - layerScoreAt prefers frozen PVGIS yield and completeness-weights missing land $/ha
+  ---
+  duration_ms: 22.497908
+  ...
+# Subtest: landPriceAt returns usdPerHa for Mejillones, Taweelah, Mundra, Tokyo-ish, Cape Town
+ok 86 - landPriceAt returns usdPerHa for Mejillones, Taweelah, Mundra, Tokyo-ish, Cape Town
+  ---
+  duration_ms: 25.100102
+  ...
+# Subtest: web mercator helper and footprint circle stay available
+ok 87 - web mercator helper and footprint circle stay available
+  ---
+  duration_ms: 0.512197
+  ...
+# Subtest: site map solar uses GSA LERC; land uses GeoJSON choropleth, not GridLayer paint
+ok 88 - site map solar uses GSA LERC; land uses GeoJSON choropleth, not GridLayer paint
+  ---
+  duration_ms: 5.210872
+  ...
+# Subtest: layoutFootprintCampus returns solar + pad rings whose areas sum to inputs
+ok 89 - layoutFootprintCampus returns solar + pad rings whose areas sum to inputs
+  ---
+  duration_ms: 1.18172
+  ...
+# Subtest: projectCampusDiagram is north-up and proportional
+ok 90 - projectCampusDiagram is north-up and proportional
+  ---
+  duration_ms: 1.140324
+  ...
+# Subtest: projectCampusDiagramIso extrudes pads, links them, and stays deterministic
+ok 91 - projectCampusDiagramIso extrudes pads, links them, and stays deterministic
+  ---
+  duration_ms: 2.150923
+  ...
+# Subtest: footprint labels appear only when a pad is wide enough on the map
+ok 92 - footprint labels appear only when a pad is wide enough on the map
+  ---
+  duration_ms: 0.170522
+  ...
+# Subtest: extracted helpers screen a two-product plant without site-search
+ok 93 - extracted helpers screen a two-product plant without site-search
+  ---
+  duration_ms: 13.974704
+  ...
+# Subtest: --help documents solo and shared purchased-power modes
+ok 94 - --help documents solo and shared purchased-power modes
+  ---
+  duration_ms: 88.865816
+  ...
+# Subtest: parseArgs defaults to solo and accepts --mode shared / --mode=solo
+ok 95 - parseArgs defaults to solo and accepts --mode shared / --mode=solo
+  ---
+  duration_ms: 56.097802
+  ...
+# Subtest: shared cash keeps co-product revenue and the same plant bill as solo
+ok 96 - shared cash keeps co-product revenue and the same plant bill as solo
+  ---
+  duration_ms: 12.569847
+  ...
+# Subtest: pickHero uses cash+ tonnes, not the largest producer overall
+ok 97 - pickHero uses cash+ tonnes, not the largest producer overall
+  ---
+  duration_ms: 0.455844
+  ...
+# Subtest: methanol plant uses solid-sorbent DAC, cited Mejillones site, and closes balances
+ok 98 - methanol plant uses solid-sorbent DAC, cited Mejillones site, and closes balances
+  ---
+  duration_ms: 6.611533
+  ...
+# Subtest: frozen Mejillones PVGIS monthly matches the methanol case series
+ok 99 - frozen Mejillones PVGIS monthly matches the methanol case series
+  ---
+  duration_ms: 0.6545
+  ...
+# Subtest: sizeToProduct methanol meets a sink target on the Mejillones plant
+ok 100 - sizeToProduct methanol meets a sink target on the Mejillones plant
+  ---
+  duration_ms: 5.278517
+  ...
+# Subtest: Dead Sea brine hub closes balances on assumed solar and brine
+ok 101 - Dead Sea brine hub closes balances on assumed solar and brine
+  ---
+  duration_ms: 11.0527
+  ...
+# Subtest: Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, then sizes cash-positive
+ok 102 - Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, then sizes cash-positive
+  ---
+  duration_ms: 376.105391
+  ...
+# Subtest: fuels plus minerals network rolls up CH4, NH3, and money
+ok 103 - fuels plus minerals network rolls up CH4, NH3, and money
+  ---
+  duration_ms: 51.43501
+  ...
+# Subtest: corridor excludes transferred origin sale from slate and revenue
+ok 104 - corridor excludes transferred origin sale from slate and revenue
+  ---
+  duration_ms: 2.860254
+  ...
+# Subtest: integrated DAC + SWRO/electrolysis + Sabatier closes stoichiometry and balances
+ok 105 - integrated DAC + SWRO/electrolysis + Sabatier closes stoichiometry and balances
+  ---
+  duration_ms: 7.30573
+  ...
+# Subtest: Sabatier product water recycles into electrolysis and reduces desalination demand
+ok 106 - Sabatier product water recycles into electrolysis and reduces desalination demand
+  ---
+  duration_ms: 19.59738
+  ...
+# Subtest: Sabatier reports CO2 as the limiting feed without inventing methane
+ok 107 - Sabatier reports CO2 as the limiting feed without inventing methane
+  ---
+  duration_ms: 0.923642
+  ...
+# Subtest: Sabatier reports hydrogen as the limiting feed when electrolysis is curtailed
+ok 108 - Sabatier reports hydrogen as the limiting feed when electrolysis is curtailed
+  ---
+  duration_ms: 0.775961
+  ...
+# Subtest: assay almeria-seawater parses with finite Millero-scale ions
+ok 109 - assay almeria-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 1.690805
+  ...
+# Subtest: assay persian-gulf-seawater parses with finite Millero-scale ions
+ok 110 - assay persian-gulf-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.565894
+  ...
+# Subtest: assay red-sea-seawater parses with finite Millero-scale ions
+ok 111 - assay red-sea-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.311386
+  ...
+# Subtest: assay texas-gulf-seawater parses with finite Millero-scale ions
+ok 112 - assay texas-gulf-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.19134
+  ...
+# Subtest: assay pilbara-indian-ocean-seawater parses with finite Millero-scale ions
+ok 113 - assay pilbara-indian-ocean-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.232077
+  ...
+# Subtest: assay atacama-pacific-seawater parses with finite Millero-scale ions
+ok 114 - assay atacama-pacific-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.285082
+  ...
+# Subtest: assay morocco-atlantic-seawater parses with finite Millero-scale ions
+ok 115 - assay morocco-atlantic-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.463087
+  ...
+# Subtest: assay arabian-sea-seawater parses with finite Millero-scale ions
+ok 116 - assay arabian-sea-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.261469
+  ...
+# Subtest: assay gulf-of-kutch-seawater parses with finite Millero-scale ions
+ok 117 - assay gulf-of-kutch-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.745264
+  ...
+# Subtest: assay benguela-atlantic-seawater parses with finite Millero-scale ions
+ok 118 - assay benguela-atlantic-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.642149
+  ...
+# Subtest: assay patagonian-atlantic-seawater parses with finite Millero-scale ions
+ok 119 - assay patagonian-atlantic-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.406054
+  ...
+# Subtest: assay levantine-mediterranean-seawater parses with finite Millero-scale ions
+ok 120 - assay levantine-mediterranean-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.178404
+  ...
+# Subtest: assay southern-california-bight-seawater parses with finite Millero-scale ions
+ok 121 - assay southern-california-bight-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 0.118341
+  ...
+# Subtest: assay baja-pacific-seawater parses with finite Millero-scale ions
+ok 122 - assay baja-pacific-seawater parses with finite Millero-scale ions
+  ---
+  duration_ms: 1.725617
+  ...
+# Subtest: Duqm Mundra Walvis assays are cited basin typicals, not intake permits
+ok 123 - Duqm Mundra Walvis assays are cited basin typicals, not intake permits
+  ---
+  duration_ms: 0.33727
+  ...
+# Subtest: presets that claim an assay resolve via registry
+ok 124 - presets that claim an assay resolve via registry
+  ---
+  duration_ms: 0.263192
+  ...
+# Subtest: bindPresetAssay attaches cited seawater resource for Gulf / screening note otherwise
+ok 125 - bindPresetAssay attaches cited seawater resource for Gulf / screening note otherwise
+  ---
+  duration_ms: 0.750763
+  ...
+# Subtest: process brine persian-gulf-sabkha-brine parses with cited ions only
+ok 126 - process brine persian-gulf-sabkha-brine parses with cited ions only
+  ---
+  duration_ms: 0.804888
+  ...
+# Subtest: process brine atacama-lithium-brine parses with cited ions only
+ok 127 - process brine atacama-lithium-brine parses with cited ions only
+  ---
+  duration_ms: 0.182744
+  ...
+# Subtest: process brine lake-mackay-wa-brine parses with cited ions only
+ok 128 - process brine lake-mackay-wa-brine parses with cited ions only
+  ---
+  duration_ms: 0.171718
+  ...
+# Subtest: process brine great-salt-lake-brine parses with cited ions only
+ok 129 - process brine great-salt-lake-brine parses with cited ions only
+  ---
+  duration_ms: 0.127979
+  ...
+# Subtest: process brine salton-sea-brine parses with cited ions only
+ok 130 - process brine salton-sea-brine parses with cited ions only
+  ---
+  duration_ms: 0.384343
+  ...
+# Subtest: process brine uyuni-lithium-brine parses with cited ions only
+ok 131 - process brine uyuni-lithium-brine parses with cited ions only
+  ---
+  duration_ms: 0.227684
+  ...
+# Subtest: process brine qaidam-brine parses with cited ions only
+ok 132 - process brine qaidam-brine parses with cited ions only
+  ---
+  duration_ms: 0.161161
+  ...
+# Subtest: process brine danakil-brine parses with cited ions only
+ok 133 - process brine danakil-brine parses with cited ions only
+  ---
+  duration_ms: 0.193107
+  ...
+# Subtest: process brine searles-lake-brine parses with cited ions only
+ok 134 - process brine searles-lake-brine parses with cited ions only
+  ---
+  duration_ms: 0.252973
+  ...
+# Subtest: process brine red-sea-sabkha-brine parses with cited ions only
+ok 135 - process brine red-sea-sabkha-brine parses with cited ions only
+  ---
+  duration_ms: 0.158493
+  ...
+# Subtest: process brine kutch-subsoil-brine parses with cited ions only
+ok 136 - process brine kutch-subsoil-brine parses with cited ions only
+  ---
+  duration_ms: 0.181163
+  ...
+# Subtest: process brine texas-gulf-desal-brine parses with cited ions only
+ok 137 - process brine texas-gulf-desal-brine parses with cited ions only
+  ---
+  duration_ms: 0.301333
+  ...
+# Subtest: process brine mediterranean-swro-brine parses with cited ions only
+ok 138 - process brine mediterranean-swro-brine parses with cited ions only
+  ---
+  duration_ms: 0.18072
+  ...
+# Subtest: process brine guerrero-negro-brine parses with cited ions only
+ok 139 - process brine guerrero-negro-brine parses with cited ions only
+  ---
+  duration_ms: 0.147149
+  ...
+# Subtest: brineAssayId on presets resolves via PRESET_BRINE_ASSAY_IDS / getAssay
+ok 140 - brineAssayId on presets resolves via PRESET_BRINE_ASSAY_IDS / getAssay
+  ---
+  duration_ms: 0.439935
+  ...
+# Subtest: inland Lake Mackay preset binds only process brine
+ok 141 - inland Lake Mackay preset binds only process brine
+  ---
+  duration_ms: 0.163888
+  ...
+# Subtest: inland Great Salt Lake and Salar de Atacama presets bind only cited process brine
+ok 142 - inland Great Salt Lake and Salar de Atacama presets bind only cited process brine
+  ---
+  duration_ms: 0.16348
+  ...
+# Subtest: inland Salton Sea binds only cited geothermal process brine with lithium
+ok 143 - inland Salton Sea binds only cited geothermal process brine with lithium
+  ---
+  duration_ms: 0.282205
+  ...
+# Subtest: Ras Al-Khair dual-assay binds Gulf seawater and sabkha brine
+ok 144 - Ras Al-Khair dual-assay binds Gulf seawater and sabkha brine
+  ---
+  duration_ms: 0.129442
+  ...
+# Subtest: new catalog basins bind only cited process brine
+ok 145 - new catalog basins bind only cited process brine
+  ---
+  duration_ms: 0.315808
+  ...
+# Subtest: ticket-5 dual-assay coasts bind seawater plus cited process-brine or desal-reject
+ok 146 - ticket-5 dual-assay coasts bind seawater plus cited process-brine or desal-reject
+  ---
+  duration_ms: 0.294926
+  ...
+# Subtest: SITE_PRESETS export unique ids and finite lat/lon on globalThis and module.exports
+ok 147 - SITE_PRESETS export unique ids and finite lat/lon on globalThis and module.exports
+  ---
+  duration_ms: 2.644818
+  ...
+# Subtest: catalog expansion wires GSL inland, Atacama salar screening, and Gulf/Red Sea desal coasts
+ok 148 - catalog expansion wires GSL inland, Atacama salar screening, and Gulf/Red Sea desal coasts
+  ---
+  duration_ms: 0.612292
+  ...
+# Subtest: catalog basins wire Uyuni, Qaidam, Danakil, and Searles as inland brine hubs
+ok 149 - catalog basins wire Uyuni, Qaidam, Danakil, and Searles as inland brine hubs
+  ---
+  duration_ms: 0.501131
+  ...
+# Subtest: catalog growth wires Hombre Muerto, Maricunga, Clayton Valley, Zabuye hubs and Madryn/Ashkelon/Doraleh dual-assay coasts
+ok 150 - catalog growth wires Hombre Muerto, Maricunga, Clayton Valley, Zabuye hubs and Madryn/Ashkelon/Doraleh dual-assay coasts
+  ---
+  duration_ms: 14.224519
+  ...
+# Subtest: default search sites union Dead Sea hub with SITE_PRESETS and do not invent a Dead Sea preset row
+ok 151 - default search sites union Dead Sea hub with SITE_PRESETS and do not invent a Dead Sea preset row
+  ---
+  duration_ms: 5.827352
+  ...
+# Subtest: new catalog presets are searchable: brine hubs abundance-eligible, desal coasts seawater-eligible
+ok 152 - new catalog presets are searchable: brine hubs abundance-eligible, desal coasts seawater-eligible
+  ---
+  duration_ms: 5.352363
+  ...
+# Subtest: catalog basins evaluate on the abundance template with FAST sizing
+ok 153 - catalog basins evaluate on the abundance template with FAST sizing
+  ---
+  duration_ms: 141.400007
+  ...
+# Subtest: catalog-polish 58ca0d7 hubs/coasts and deferred CA/Baja bind frozen PVGIS-ERA5 (not Dead Sea clones)
+ok 154 - catalog-polish 58ca0d7 hubs/coasts and deferred CA/Baja bind frozen PVGIS-ERA5 (not Dead Sea clones)
+  ---
+  duration_ms: 4.623421
+  ...
+# Subtest: post-catalog inland basins bind frozen PVGIS-ERA5 (not Dead Sea / screening band)
+ok 155 - post-catalog inland basins bind frozen PVGIS-ERA5 (not Dead Sea / screening band)
+  ---
+  duration_ms: 3.124492
+  ...
+# Subtest: unfrozen non-Dead-Sea abundance sites use the latitude screening band, not Dead Sea PV
+ok 156 - unfrozen non-Dead-Sea abundance sites use the latitude screening band, not Dead Sea PV
+  ---
+  duration_ms: 3.021887
+  ...
+# Subtest: ticket-5 coasts are dual-assay or explicit permanent-skip, never silent no-brine-assay
+ok 157 - ticket-5 coasts are dual-assay or explicit permanent-skip, never silent no-brine-assay
+  ---
+  duration_ms: 6.931335
+  ...
+# Subtest: when Dead Sea abundance is in the search set, returns a scored candidate under the capital-inclusive gate
+ok 158 - when Dead Sea abundance is in the search set, returns a scored candidate under the capital-inclusive gate
+  ---
+  duration_ms: 13.315827
+  ...
+# Subtest: site-search plants bind regional TEA when site.region is set
+ok 159 - site-search plants bind regional TEA when site.region is set
+  ---
+  duration_ms: 10.941867
+  ...
+# Subtest: buildAbundancePlant uses the site brine assay, not a Dead Sea clone, for Mejillones/Atacama
+ok 160 - buildAbundancePlant uses the site brine assay, not a Dead Sea clone, for Mejillones/Atacama
+  ---
+  duration_ms: 13.534826
+  ...
+# Subtest: ranking is stable: same input yields the same top siteId+template order
+ok 161 - ranking is stable: same input yields the same top siteId+template order
+  ---
+  duration_ms: 144.71223
+  ...
+# Subtest: presets without brine assay do not get an invented feasible abundance plant
+ok 162 - presets without brine assay do not get an invented feasible abundance plant
+  ---
+  duration_ms: 26.252367
+  ...
+# Subtest: coastal/methanol use per-site frozen PVGIS and skip coasts that still lack one
+ok 163 - coastal/methanol use per-site frozen PVGIS and skip coasts that still lack one
+  ---
+  duration_ms: 216.229445
+  ...
+# Subtest: a cheap test-fixture plant can still be cash-positive so ranking logic stays testable
+ok 164 - a cheap test-fixture plant can still be cash-positive so ranking logic stays testable
+  ---
+  duration_ms: 6.030193
+  ...
+# Subtest: ranking prefers higher tonnes among feasible, then sale count, then cash, then ids
+ok 165 - ranking prefers higher tonnes among feasible, then sale count, then cash, then ids
+  ---
+  duration_ms: 7.230028
+  ...
+# Subtest: soft rank breaks equal-primary ties; missing layers do not exclude
+ok 166 - soft rank breaks equal-primary ties; missing layers do not exclude
+  ---
+  duration_ms: 30.534676
+  ...
+# Subtest: soft rank uses frozen PVGIS yield when present and scores filled land $/ha
+ok 167 - soft rank uses frozen PVGIS yield when present and scores filled land $/ha
+  ---
+  duration_ms: 21.021099
+  ...
+# Subtest: Lake Mackay abundance near-miss reports active materials count while cash≤0
+ok 168 - Lake Mackay abundance near-miss reports active materials count while cash≤0
+  ---
+  duration_ms: 20.665575
+  ...
+# Subtest: near-miss ranking prefers operating cash- slates over idle cash≈0
+ok 169 - near-miss ranking prefers operating cash- slates over idle cash≈0
+  ---
+  duration_ms: 8.331672
+  ...
+# Subtest: no-rights makes screening-cash+ Mejillones abundance infeasible/skipped; offtake changes cash
+ok 170 - no-rights makes screening-cash+ Mejillones abundance infeasible/skipped; offtake changes cash
+  ---
+  duration_ms: 135.014131
+  ...
+# Subtest: screening-assumes-intake-only skips abundance (no concession) but keeps fuel intake
+ok 171 - screening-assumes-intake-only skips abundance (no concession) but keeps fuel intake
+  ---
+  duration_ms: 154.540579
+  ...
+# Subtest: no-grid / freshwater-constrained / discharge-limited change cash or feasible set
+ok 172 - no-grid / freshwater-constrained / discharge-limited change cash or feasible set
+  ---
+  duration_ms: 160.543413
+  ...
+# Subtest: offtake-limited haircut applies to regional mineral ceilings, not a shared me-levant table
+ok 173 - offtake-limited haircut applies to regional mineral ceilings, not a shared me-levant table
+  ---
+  duration_ms: 1.593284
+  ...
+# Subtest: SEARCH_RATES is slightly denser than 0/2/5; FAST_RATES stays tiny for CI
+ok 174 - SEARCH_RATES is slightly denser than 0/2/5; FAST_RATES stays tiny for CI
+  ---
+  duration_ms: 0.145563
+  ...
+# Subtest: coastal/methanol get a screening price×CAPEX probe: cash+ only at mid-band, else annotated near-miss
+ok 175 - coastal/methanol get a screening price×CAPEX probe: cash+ only at mid-band, else annotated near-miss
+  ---
+  duration_ms: 89.988726
+  ...
+# Subtest: abundance winners report selected.family abundance, not fuel/ammonia
+ok 176 - abundance winners report selected.family abundance, not fuel/ammonia
+  ---
+  duration_ms: 92.84425
+  ...
+# Subtest: default materials maximizer is abundance-only and does not depend on fuels
+ok 177 - default materials maximizer is abundance-only and does not depend on fuels
+  ---
+  duration_ms: 91.514865
+  ...
+# Subtest: CLI --path fuels searches coastal/methanol, not abundance
+ok 178 - CLI --path fuels searches coastal/methanol, not abundance
+  ---
+  duration_ms: 170.878501
+  ...
+# Subtest: CLI prints JSON and exits 0 with Dead Sea in the default set
+ok 179 - CLI prints JSON and exits 0 with Dead Sea in the default set
+  ---
+  duration_ms: 122.134801
+  ...
+# Subtest: Almería site truth keeps resource streams and cites PV plus Millero-scale seawater
+ok 180 - Almería site truth keeps resource streams and cites PV plus Millero-scale seawater
+  ---
+  duration_ms: 8.880478
+  ...
+# Subtest: Dead Sea site truth cites PVGIS and a literature brine assay with unverified concession
+ok 181 - Dead Sea site truth cites PVGIS and a literature brine assay with unverified concession
+  ---
+  duration_ms: 3.998251
+  ...
+# Subtest: size-to-target cannot assume unverified intake or brine concession
+ok 182 - size-to-target cannot assume unverified intake or brine concession
+  ---
+  duration_ms: 4.397393
+  ...
+# Subtest: scorePositiveCashflow counts sale products only when plant net cash is positive
+ok 183 - scorePositiveCashflow counts sale products only when plant net cash is positive
+  ---
+  duration_ms: 1.203932
+  ...
+# Subtest: sizeForPositiveCashflow on Lake Mackay reports activeSaleCount when cash≤0
+ok 184 - sizeForPositiveCashflow on Lake Mackay reports activeSaleCount when cash≤0
+  ---
+  duration_ms: 23.169147
+  ...
+# Subtest: sizeForPositiveCashflow scores abundance with a capital-inclusive cash gate
+ok 185 - sizeForPositiveCashflow scores abundance with a capital-inclusive cash gate
+  ---
+  duration_ms: 100.488382
+  ...
+# Subtest: unverified brine concession cannot be assumed by abundance cashflow sizing
+ok 186 - unverified brine concession cannot be assumed by abundance cashflow sizing
+  ---
+  duration_ms: 14.669896
+  ...
+# Subtest: sizeForPositiveCashflow on abundance also searches the ammonia fuel family
+ok 187 - sizeForPositiveCashflow on abundance also searches the ammonia fuel family
+  ---
+  duration_ms: 14.656484
+  ...
+# Subtest: sizeToProduct runs on Atacama lithium brine abundance case
+ok 188 - sizeToProduct runs on Atacama lithium brine abundance case
+  ---
+  duration_ms: 2.487864
+  ...
+# Subtest: repeated sizeForPositiveCashflow stays on the pre-sizing seed and caps absolute scale
+ok 189 - repeated sizeForPositiveCashflow stays on the pre-sizing seed and caps absolute scale
+  ---
+  duration_ms: 3.509674
+  ...
+# Subtest: sizeForPositiveCashflow refines a coarse scale grid that can miss cash+
+ok 190 - sizeForPositiveCashflow refines a coarse scale grid that can miss cash+
+  ---
+  duration_ms: 13.566647
+  ...
+# Subtest: abundance cash+ winner reports selected.family abundance, not fuel/ammonia
+ok 191 - abundance cash+ winner reports selected.family abundance, not fuel/ammonia
+  ---
+  duration_ms: 32.017675
+  ...
+# Subtest: sizeForPositiveCashflow on minerals plus hydrogen searches joint candidates
+ok 192 - sizeForPositiveCashflow on minerals plus hydrogen searches joint candidates
+  ---
+  duration_ms: 13.184646
+  ...
+# Subtest: sizeCoastalToMethane meets a methane target by growing PV and converters
+ok 193 - sizeCoastalToMethane meets a methane target by growing PV and converters
+  ---
+  duration_ms: 18.137271
+  ...
+# Subtest: December needs more kWp than June for the same methane target
+ok 194 - December needs more kWp than June for the same methane target
+  ---
+  duration_ms: 4.579406
+  ...
+# Subtest: a solar cap binds and leaves a demand residual
+ok 195 - a solar cap binds and leaves a demand residual
+  ---
+  duration_ms: 6.362771
+  ...
+# Subtest: recycle water reduces sized desalination versus once-through
+ok 196 - recycle water reduces sized desalination versus once-through
+  ---
+  duration_ms: 26.479649
+  ...
+# Subtest: sizeToProduct H2 parks Sabatier and DAC on a coastal methane plant
+ok 197 - sizeToProduct H2 parks Sabatier and DAC on a coastal methane plant
+  ---
+  duration_ms: 14.11083
+  ...
+# Subtest: sizeToProduct lithium scales the abundance brine train
+ok 198 - sizeToProduct lithium scales the abundance brine train
+  ---
+  duration_ms: 4.964153
+  ...
+# Subtest: sizeToProduct salt meets a Dead Sea salt target
+ok 199 - sizeToProduct salt meets a Dead Sea salt target
+  ---
+  duration_ms: 10.619876
+  ...
+# Subtest: CH4 heat credit lowers solar versus heatCredit:false
+ok 200 - CH4 heat credit lowers solar versus heatCredit:false
+  ---
+  duration_ms: 3.732797
+  ...
+# Subtest: Sabatier waste colder than DAC minHeat gets no cascade credit
+ok 201 - Sabatier waste colder than DAC minHeat gets no cascade credit
+  ---
+  duration_ms: 3.619202
+  ...
+# Subtest: H2 sizing does not credit parked Sabatier waste heat
+ok 202 - H2 sizing does not credit parked Sabatier waste heat
+  ---
+  duration_ms: 3.873364
+  ...
+# Subtest: coastal H2 size closes mass balance and horizon produces hydrogen
+ok 203 - coastal H2 size closes mass balance and horizon produces hydrogen
+  ---
+  duration_ms: 73.373116
+  ...
+# Subtest: sizeToProduct methanol meets a sink target on a minimal graph
+ok 204 - sizeToProduct methanol meets a sink target on a minimal graph
+  ---
+  duration_ms: 2.573172
+  ...
+# Subtest: sizeToProduct ammonia on abundance meets the NH3 sink
+ok 205 - sizeToProduct ammonia on abundance meets the NH3 sink
+  ---
+  duration_ms: 3.728945
+  ...
+# Subtest: H2 sizing cascades an explicit hot source onto MED heat
+ok 206 - H2 sizing cascades an explicit hot source onto MED heat
+  ---
+  duration_ms: 1.856271
+  ...
+# Subtest: demandByRegion maps preset.region strings and chile lithium ceiling ≠ me-levant
+ok 207 - demandByRegion maps preset.region strings and chile lithium ceiling ≠ me-levant
+  ---
+  duration_ms: 1.981137
+  ...
+# Subtest: non-ME sites do not silently inherit ME lithium or fuel/chem caps without inherit:me-levant
+ok 208 - non-ME sites do not silently inherit ME lithium or fuel/chem caps without inherit:me-levant
+  ---
+  duration_ms: 0.686979
+  ...
+# Subtest: bindSale / bindCost regional overlays: chile offtake and power ≠ me-levant defaults
+ok 209 - bindSale / bindCost regional overlays: chile offtake and power ≠ me-levant defaults
+  ---
+  duration_ms: 0.491044
+  ...
+# Subtest: capexMultiplierByRegion is a screening labor/construction proxy and bindCapex applies it
+ok 210 - capexMultiplierByRegion is a screening labor/construction proxy and bindCapex applies it
+  ---
+  duration_ms: 0.826811
+  ...
+# Subtest: createAbundanceCase({ region }) is backward compatible and binds chile Li cap
+ok 211 - createAbundanceCase({ region }) is backward compatible and binds chile Li cap
+  ---
+  duration_ms: 1.897726
+  ...
+# Subtest: LCOE is cited for NREL ATB solar PV and assumption otherwise
+ok 212 - LCOE is cited for NREL ATB solar PV and assumption otherwise
+  ---
+  duration_ms: 0.924667
+  ...
+# Subtest: quality chips omit screening noise and cite markup keeps links
+ok 213 - quality chips omit screening noise and cite markup keeps links
+  ---
+  duration_ms: 15.038383
+  ...
+# Subtest: screening money uses fewer significant figures without a tilde
+ok 214 - screening money uses fewer significant figures without a tilde
+  ---
+  duration_ms: 1.108594
+  ...
+# Subtest: rights chips and unverified warnings stay separate from quality classes
+ok 215 - rights chips and unverified warnings stay separate from quality classes
+  ---
+  duration_ms: 1.840403
+  ...
+1..215
+# tests 215
+# suites 0
+# pass 215
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3935.063428

@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "retrieved": "2026-09-20",
+    "id": "lake-mackay-wa-brine",
+    "kind": "brine",
+    "site": {
+      "latitude": -22.5,
+      "longitude": 128.5,
+      "context": "Lake Mackay WA playa brine (East Pilbara–adjacent / Gibson Desert); not Port Hedland seawater; not a mining lease"
+    },
+    "quality": "Agrimin Mackay Potash Project EPA water-chemistry memo median lake groundwater majors (Na, Cl, Mg, K, SO4). Ca/Li/Br not pinned as medians in our sources — omitted. Not a mining-lease sample.",
+    "notes": "Ion masses converted from tabulated mg/L to g/kg with density 1.16 kg/L (screening from ~215 g/L TDS band — not a CTD). mol_per_kg = g_per_kg / molarMassG from engine/model SUBSTANCES. Literature numbers are preferred over forcing charge balance. salinity_g_per_kg is the summed cited median ions, not the TDS headline. Agrimin/Global Resources ASX MRE is K/Mg/SO4 corroboration only. Not Port Hedland seawater; literature assay is not a mineral concession."
+  },
+  "density_kg_per_L": 1.16,
+  "salinity_g_per_kg": 212.1551724137931,
+  "ions_g_per_kg": {
+    "Cl-": 113.78189655172415,
+    "SO4-2": 16.97241379310345,
+    "Na+": 76.5396551724138,
+    "K+": 2.662068965517242,
+    "Mg+2": 2.199137931034483
+  },
+  "mol_per_kg": {
+    "Cl-": 3.2096444725451097,
+    "SO4-2": 0.17668554854365448,
+    "Na+": 3.3292920504078927,
+    "K+": 0.06808656554165378,
+    "Mg+2": 0.0904808858685243
+  },
+  "evidence": [
+    {
+      "label": "Agrimin Mackay Potash Project: EPA PER Appendix I.20 water-chemistry summary memo (median lake groundwater majors)",
+      "url": "https://www.epa.wa.gov.au/sites/default/files/PER_documentation2/Appendix%20I.20%20AMN_Water_Chemistry_Summary_Memo_210819.pdf"
+    },
+    {
+      "label": "Agrimin/Global Resources ASX mineral resource estimate for Mackay Project (K/Mg/SO4 corroboration only)",
+      "url": "https://agrimin.com.au/wp-content/uploads/20141110-1-Mineral-Resource-Estimate-for-Mackay-Project.pdf"
+    }
+  ]
+}

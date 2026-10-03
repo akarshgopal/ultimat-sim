@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "retrieved": "2026-09-21",
+    "id": "red-sea-sabkha-brine",
+    "kind": "brine",
+    "site": {
+      "latitude": 16.89,
+      "longitude": 42.55,
+      "context": "Jizan Red Sea coastal sabkha process brine (Basyoni & Mousa 2016 Table 2 means); Red Sea regional screening, not a Yanbu/Oxagon/Sokhna concession sample, not Red Sea desal feed"
+    },
+    "quality": "Majors cited from Basyoni & Mousa 2016 Environmental Earth Sciences Table 2 Jizan sabkha brine averages (Ca, Mg, Na, K, Cl, SO4). HCO3 103.3 mg/L omitted (not in SUBSTANCES). No Li+ or Br- in that table — omitted. Banat et al. 2005 is Jeddah–Yanbu sabkha geography, not a second ion table. Not a concession sample.",
+    "notes": "Ion masses converted from tabulated mg/L to g/kg with density 1.12 kg/L (screening from ~167 g/L TDS band — not a CTD). mol_per_kg = g_per_kg / molarMassG from engine/model SUBSTANCES. Literature numbers are preferred over forcing charge balance. salinity_g_per_kg is the summed cited ions, not the TDS headline. Not Red Sea seawater desal feed; literature assay is not a mineral concession."
+  },
+  "density_kg_per_L": 1.12,
+  "salinity_g_per_kg": 177.42437499999997,
+  "ions_g_per_kg": {
+    "Cl-": 93.23571428571428,
+    "SO4-2": 3.447767857142857,
+    "Ca+2": 7.603392857142857,
+    "Na+": 62.520535714285714,
+    "K+": 3.220267857142857,
+    "Mg+2": 7.396696428571428
+  },
+  "mol_per_kg": {
+    "Cl-": 2.630062462220431,
+    "SO4-2": 0.035891816126825495,
+    "Ca+2": 0.18971487741760706,
+    "Na+": 2.7194938633043995,
+    "K+": 0.08236337275899097,
+    "Mg+2": 0.30432818056249444
+  },
+  "evidence": [
+    {
+      "label": "Basyoni & Mousa 2016, Environmental Earth Sciences Table 2: Jizan sabkha brine mean majors (DOI)",
+      "url": "https://doi.org/10.1007/s12665-015-4913-6"
+    },
+    {
+      "label": "Banat, Howari & Kadi 2005, Journal of Coastal Research: Jeddah–Yanbu Red Sea coastal sabkha hydrochemistry (geography, not the ion table)",
+      "url": "https://doi.org/10.2112/04-0181.1"
+    }
+  ]
+}

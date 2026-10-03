@@ -1,0 +1,48 @@
+{
+  "meta": {
+    "retrieved": "2026-09-20",
+    "id": "great-salt-lake-brine",
+    "kind": "brine",
+    "site": {
+      "latitude": 41,
+      "longitude": -112.5,
+      "context": "Great Salt Lake process brine (inland); not a concession sample"
+    },
+    "quality": "Compiled majors from Murphy & Haji 2022 Frontiers in Chemical Engineering Table 1. HCO3 omitted (not in SUBSTANCES). No Br in table — omitted. Not a concession sample.",
+    "notes": "Ion masses converted from tabulated g/L (Li from 18 mg/L) to g/kg with density 1.10 kg/L (screening hypersaline density — not a CTD). mol_per_kg = g_per_kg / molarMassG from engine/model SUBSTANCES. Literature numbers are preferred over forcing charge balance. salinity_g_per_kg is the summed ion masses. HCO3 0.47 g/L in Table 1 is omitted because HCO3 is not in SUBSTANCES. Literature assay is not a mineral concession."
+  },
+  "density_kg_per_L": 1.1,
+  "salinity_g_per_kg": 115.47090909090907,
+  "ions_g_per_kg": {
+    "Cl-": 65.45454545454545,
+    "SO4-2": 7.2727272727272725,
+    "Na+": 37.272727272727266,
+    "K+": 1.8181818181818181,
+    "Mg+2": 3.6363636363636362,
+    "Li+": 0.01636363636363636
+  },
+  "lithium": {
+    "g_per_L": 0.018,
+    "mg_per_L": 18,
+    "g_per_kg": 0.01636363636363636,
+    "note": "Murphy & Haji 2022 Table 1 Li 18 mg/L Great Salt Lake. Converted with density 1.10 kg/L (screening)."
+  },
+  "mol_per_kg": {
+    "Cl-": 1.8463905628926784,
+    "SO4-2": 0.07571025684704635,
+    "Na+": 1.6212745448954824,
+    "K+": 0.04650283562665942,
+    "Mg+2": 0.14961380935460342,
+    "Li+": 0.0023578726748755565
+  },
+  "evidence": [
+    {
+      "label": "Murphy & Haji 2022, Frontiers in Chemical Engineering Table 1: Great Salt Lake brine majors (DOI)",
+      "url": "https://doi.org/10.3389/fceng.2022.1008680"
+    },
+    {
+      "label": "Murphy & Haji 2022 full text (same Table 1)",
+      "url": "https://www.frontiersin.org/journals/chemical-engineering/articles/10.3389/fceng.2022.1008680/full"
+    }
+  ]
+}

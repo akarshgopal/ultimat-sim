@@ -1,0 +1,48 @@
+{
+  "meta": {
+    "retrieved": "2026-09-20",
+    "id": "atacama-lithium-brine",
+    "kind": "brine",
+    "site": {
+      "latitude": -23.5,
+      "longitude": -68.25,
+      "context": "Salar de Atacama nucleus brine (inland); not Mejillones seawater; not a concession sample"
+    },
+    "quality": "Compiled majors from Murphy & Haji 2022 Frontiers in Chemical Engineering Table 1. Ca2+/Li+ listed 0 and HCO3 NP — omitted. No Br in table — omitted. Not a concession sample.",
+    "notes": "Ion masses converted from tabulated g/L (Li+ from 2100 mg/L) to g/kg with density 1.23 kg/L (screening hypersaline density — not a CTD). mol_per_kg = g_per_kg / molarMassG from engine/model SUBSTANCES. Literature numbers are preferred over forcing charge balance. salinity_g_per_kg is the summed ion masses. Not Mejillones / Atacama Pacific seawater; literature assay is not a mineral concession."
+  },
+  "density_kg_per_L": 1.23,
+  "salinity_g_per_kg": 200.0813008130081,
+  "ions_g_per_kg": {
+    "Cl-": 96.7479674796748,
+    "SO4-2": 30.89430894308943,
+    "Na+": 41.46341463414634,
+    "K+": 19.51219512195122,
+    "Mg+2": 9.75609756097561,
+    "Li+": 1.707317073170732
+  },
+  "lithium": {
+    "g_per_L": 2.1,
+    "mg_per_L": 2100,
+    "g_per_kg": 1.707317073170732,
+    "note": "Murphy & Haji 2022 Table 1 Li+ 2100 mg/L Salar de Atacama nucleus brine. Converted with density 1.23 kg/L (screening)."
+  },
+  "mol_per_kg": {
+    "Cl-": 2.7291387159287672,
+    "SO4-2": 0.321614708964079,
+    "Na+": 1.8035594282894423,
+    "K+": 0.4990548213592718,
+    "Mg+2": 0.401402903146497,
+    "Li+": 0.24601110564419768
+  },
+  "evidence": [
+    {
+      "label": "Murphy & Haji 2022, Frontiers in Chemical Engineering Table 1: Salar de Atacama brine majors (DOI)",
+      "url": "https://doi.org/10.3389/fceng.2022.1008680"
+    },
+    {
+      "label": "Murphy & Haji 2022 full text (same Table 1)",
+      "url": "https://www.frontiersin.org/journals/chemical-engineering/articles/10.3389/fceng.2022.1008680/full"
+    }
+  ]
+}

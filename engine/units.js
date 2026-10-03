@@ -622,6 +622,42 @@ function energyStorage(kind) {
 
 // Liquid transfer / open-intake pump. Screening SEC is lift only — SWRO plant SEC
 // still includes a literature intake share unless the user lowers it (see MECH8 audit).
+// Screening head → SEC (SI). kWh/m³ = ρ·g·H / (η·3.6e6). Not a vendor curve.
+// headM unset → pumpKWhPerM3 (default 0.4), bit-identical to MECH8.
+// pumpSecOverride keeps an explicit kWh/m³ even when headM is set.
+function resolveLiquidPumpSec(params = {}, densityKgM3 = 1025) {
+  const density = nonnegative(Number(densityKgM3 ?? params.densityKgM3 ?? 1025), 'densityKgM3');
+  if (density === 0) throw new Error('densityKgM3 must be greater than zero');
+  const secKgRaw = params.pumpKWhPerKg;
+  if (secKgRaw != null && secKgRaw !== '') {
+    return {
+      sec: nonnegative(Number(secKgRaw), 'pumpKWhPerKg'),
+      basis: 'kg',
+      source: 'kg',
+      densityKgM3: density,
+    };
+  }
+  const headRaw = params.headM;
+  const headSet = headRaw != null && headRaw !== '';
+  if (headSet && params.pumpSecOverride !== true) {
+    const head = Number(headRaw);
+    if (!Number.isFinite(head) || head < 0) throw new Error('headM must be a non-negative number');
+    const etaRaw = params.pumpEta;
+    const eta = etaRaw == null || etaRaw === '' ? 0.7 : Number(etaRaw);
+    if (!Number.isFinite(eta) || eta <= 0 || eta > 1) {
+      throw new Error('pumpEta must be greater than 0 and at most 1');
+    }
+    const sec = (density * 9.81 * head) / (eta * 3.6e6);
+    return { sec, basis: 'm3', source: 'head', densityKgM3: density, headM: head, pumpEta: eta };
+  }
+  return {
+    sec: nonnegative(Number(params.pumpKWhPerM3 ?? 0.4), 'pumpKWhPerM3'),
+    basis: 'm3',
+    source: params.pumpSecOverride === true ? 'override' : 'kWh/m3',
+    densityKgM3: density,
+  };
+}
+
 function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   const feed = validateStream(inlets.in, 'material');
   const electricity = validateStream(inlets.electricity, 'electricity');
@@ -630,13 +666,10 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   const requested = requestedActivity == null || requestedActivity === ''
     ? installed
     : nonnegative(Number(requestedActivity), 'requestedActivity');
-  const density = nonnegative(Number(params.densityKgM3 ?? 1025), 'densityKgM3');
-  if (density === 0) throw new Error('densityKgM3 must be greater than zero');
-  const secKgRaw = params.pumpKWhPerKg;
-  const useKg = secKgRaw != null && secKgRaw !== '';
-  const sec = useKg
-    ? nonnegative(Number(secKgRaw), 'pumpKWhPerKg')
-    : nonnegative(Number(params.pumpKWhPerM3 ?? 0.4), 'pumpKWhPerM3');
+  const resolved = resolveLiquidPumpSec(params, params.densityKgM3 ?? 1025);
+  const density = resolved.densityKgM3;
+  const useKg = resolved.basis === 'kg';
+  const sec = resolved.sec;
   const feedKg = streamMassKg(feed);
   const feedM3 = feedKg / density;
   const feedAmount = useKg ? feedKg : feedM3;
@@ -670,6 +703,8 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
     pumpBasis: useKg ? 'kg' : 'm3',
     pumpKWhPerUnit: sec,
     densityKgM3: density,
+    pumpSecSource: resolved.source,
+    ...(resolved.headM != null ? { pumpHeadM: resolved.headM, pumpEta: resolved.pumpEta } : {}),
   };
 }
 
@@ -1001,5 +1036,5 @@ const UNITS = Object.freeze({
   },
 });
 
-return { UNITS, DAC_TECHNOLOGIES };
+return { UNITS, DAC_TECHNOLOGIES, resolveLiquidPumpSec };
 });

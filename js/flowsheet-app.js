@@ -48,6 +48,7 @@
   let selectedNodeId = null;
   let selectedEdgeIndex = null;
   let undoStack = [];
+  let undoGesture = null;
   const UNDO_STACK_MAX = 20;
   let pendingPort = null;
   let result = null;
@@ -407,10 +408,12 @@
       palette: { section: 'utility', order: 4, glyph: 'P', tone: 'water', description: 'Liquid lift — needs bus power or the line starves' },
       params: { pumpKWhPerM3: 0.4, densityKgM3: 1025 },
       controls: [
+        { key: 'headM', label: 'Static head', min: 0, max: 200, step: 1, unit: 'm', optional: true },
+        { key: 'pumpEta', label: 'Pump efficiency', min: 0.3, max: 0.95, step: 0.01, optional: true },
         { key: 'pumpKWhPerM3', label: 'Pump energy', min: 0, max: 2, step: 0.05, unit: 'kWh/m³' },
         { key: 'densityKgM3', label: 'Liquid density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
       ],
-      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. MECH18 screening CAPEX ~$350/(m³/day) × regional tea CAPEX×; campus pad ~0.15 m²/(m³/day) (floor 6 m²). SWRO plant SEC should stay plant-only if lift is modeled here. Not a head–flow curve or vendor quote.',
+      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. MECH18 screening CAPEX ~$350/(m³/day) × regional tea CAPEX×; campus pad ~0.15 m²/(m³/day) (floor 6 m²). MECH19: set static head to derive SEC = ρ·g·H / (η·3.6e6) with η default 0.7; moving the kWh/m³ slider overrides head. Head unset keeps the kWh/m³ value (default 0.4). Not a vendor curve or part-load map. SWRO plant SEC should stay plant-only if lift is modeled here.',
       references: [
         { label: 'Voutchkov 2018 desalination energy (DOI 10.1016/j.desal.2017.10.033)', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
         { label: 'Elimelech & Phillip 2011 SWRO plant SEC band', url: 'https://doi.org/10.1126/science.1200488' },
@@ -2542,7 +2545,14 @@
     if (!nodeId) return;
     const point = graphPoint(event);
     const position = node(nodeId).position;
-    dragging = { nodeId, pointerId: event.pointerId, dx: point.x - position.x, dy: point.y - position.y, moved: false };
+    dragging = {
+      nodeId,
+      pointerId: event.pointerId,
+      dx: point.x - position.x,
+      dy: point.y - position.y,
+      moved: false,
+      origin: { x: position.x, y: position.y },
+    };
     selectedNodeId = nodeId;
     canvas.setPointerCapture?.(event.pointerId);
   }
@@ -2560,9 +2570,18 @@
 
   function endDrag(event) {
     if (!dragging || event.pointerId !== dragging.pointerId) return;
-    suppressClick = dragging.moved;
+    const drag = dragging;
+    suppressClick = drag.moved;
     canvas.releasePointerCapture?.(event.pointerId);
     dragging = null;
+    if (drag.moved && drag.origin) {
+      const current = node(drag.nodeId);
+      const same = current && current.position.x === drag.origin.x && current.position.y === drag.origin.y;
+      if (!same) {
+        pushUndo({ type: 'move', nodeId: drag.nodeId, position: { x: drag.origin.x, y: drag.origin.y } });
+        undoGesture = null;
+      }
+    }
     persistAutosave();
     render();
   }
@@ -2587,6 +2606,44 @@
   function pushUndo(entry) {
     undoStack.push(entry);
     if (undoStack.length > UNDO_STACK_MAX) undoStack.shift();
+  }
+
+  function cloneUndo(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function snapshotEntry() {
+    return {
+      type: 'snapshot',
+      graph: { nodes: cloneUndo(graph.nodes), edges: cloneUndo(graph.edges) },
+      setpoints: cloneUndo(setpoints),
+      selectedNodeId,
+      selectedEdgeIndex,
+    };
+  }
+
+  function inspectorUndoKey(target) {
+    if (!target || !target.name) return null;
+    const names = new Set([
+      'requestedRate', 'dacRoute', 'processPreset', 'siteResource', 'chemicalId',
+      'processParameter', 'bufferParameter', 'sinkParameter', 'sourceParameter',
+      'sourceRate', 'sourcePreset', 'heatTemperature', 'branchWeight', 'branchPriority',
+      'edgeCapacity', 'economics',
+    ]);
+    if (!names.has(target.name)) return null;
+    const detail = target.dataset?.param || target.dataset?.economics || target.dataset?.edge || '';
+    return `${target.name}:${detail}:${selectedNodeId || ''}:${selectedEdgeIndex ?? ''}`;
+  }
+
+  function noteInspectorUndo(event) {
+    const key = inspectorUndoKey(event.target);
+    if (!key) return;
+    const same = undoGesture && undoGesture.key === key;
+    if (!same) {
+      pushUndo(snapshotEntry());
+      undoGesture = { key };
+    }
+    if (event.type === 'change') undoGesture = null;
   }
 
   function deleteSelection() {
@@ -2630,9 +2687,33 @@
     return false;
   }
 
-  function undoLastDelete() {
+  function undoLast() {
     const entry = undoStack.pop();
+    undoGesture = null;
     if (!entry) return false;
+    if (entry.type === 'snapshot') {
+      const restored = entry.graph || { nodes: [], edges: [] };
+      graph.nodes.splice(0, graph.nodes.length, ...cloneUndo(restored.nodes || []));
+      graph.edges.splice(0, graph.edges.length, ...cloneUndo(restored.edges || []));
+      for (const key of Object.keys(setpoints)) delete setpoints[key];
+      Object.assign(setpoints, cloneUndo(entry.setpoints || {}));
+      selectedNodeId = entry.selectedNodeId ?? null;
+      selectedEdgeIndex = entry.selectedEdgeIndex ?? null;
+      pendingPort = null;
+      solveAndRender();
+      return true;
+    }
+    if (entry.type === 'move') {
+      const current = node(entry.nodeId);
+      if (!current) return false;
+      current.position = { x: entry.position.x, y: entry.position.y };
+      selectedNodeId = entry.nodeId;
+      selectedEdgeIndex = null;
+      pendingPort = null;
+      render();
+      persistAutosave();
+      return true;
+    }
     if (entry.type === 'edge') {
       const idx = Math.min(Math.max(0, entry.edgeIndex), graph.edges.length);
       graph.edges.splice(idx, 0, entry.edge);
@@ -2675,6 +2756,11 @@
     const current = node(selectedNodeId);
     if (!current) return false;
     if (!current.position) current.position = { x: 40, y: 40 };
+    const key = `nudge:${current.id}`;
+    if (!undoGesture || undoGesture.key !== key) {
+      pushUndo({ type: 'move', nodeId: current.id, position: { x: current.position.x, y: current.position.y } });
+      undoGesture = { key };
+    }
     current.position.x = Math.max(10, current.position.x + dx);
     current.position.y = Math.max(10, current.position.y + dy);
     renderGraph();
@@ -2702,7 +2788,7 @@
     const key = event.key;
     if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'Z') && !event.shiftKey) {
       event.preventDefault();
-      undoLastDelete();
+      undoLast();
       return;
     }
     if (key === 'Escape') {
@@ -3027,6 +3113,7 @@
   function handleInspectorInput(event) {
     const current = node(selectedNodeId);
     if (!current) return;
+    noteInspectorUndo(event);
     if (event.target.name === 'requestedRate') setpoints[current.id] = Number(event.target.value);
     if (event.target.name === 'dacRoute' && event.target.value !== current.unit) {
       replaceUnit(current.id, event.target.value);
@@ -3048,8 +3135,21 @@
     }
     if (event.target.name === 'processParameter') {
       current.processPreset = 'custom';
-      current.params[event.target.dataset.param] = Number(event.target.value);
-      if (['battery', 'thermal-storage'].includes(current.unit) && event.target.dataset.param === 'capexPerKWh') current.economics.installedCapex = current.capacity * current.params.capexPerKWh;
+      const key = event.target.dataset.param;
+      const raw = String(event.target.value ?? '').trim();
+      if (raw === '') {
+        delete current.params[key];
+        if (key === 'headM' || key === 'pumpEta') delete current.params.pumpSecOverride;
+      } else {
+        const value = Number(raw);
+        if (!Number.isFinite(value)) solveError = `${key} must be a number`;
+        else {
+          current.params[key] = value;
+          if (key === 'pumpKWhPerM3' || key === 'pumpKWhPerKg') current.params.pumpSecOverride = true;
+          if (key === 'headM' || key === 'pumpEta') delete current.params.pumpSecOverride;
+        }
+      }
+      if (['battery', 'thermal-storage'].includes(current.unit) && key === 'capexPerKWh') current.economics.installedCapex = current.capacity * current.params.capexPerKWh;
     }
     if (event.target.name === 'bufferParameter') {
       const key = event.target.dataset.param;
@@ -3155,15 +3255,7 @@
       solveAndRender();
       return;
     }
-    if (event.target.closest('#deleteNode')) {
-      const id = selectedNodeId;
-      graph.edges = graph.edges.filter(edge => edge.from.node !== id && edge.to.node !== id);
-      graph.nodes.splice(graph.nodes.findIndex(candidate => candidate.id === id), 1);
-      delete setpoints[id];
-      selectedNodeId = null;
-      pendingPort = null;
-      solveAndRender();
-    }
+    if (event.target.closest('#deleteNode')) deleteSelection();
   }
 
   function suggestedPreset(unit, port) {
@@ -5853,13 +5945,10 @@
         sourceNote: definition.sourceNote,
         references: definition.references,
       });
-      const parameters = (definition.controls || []).map(control => {
-        const energy = /kWh|secKWh/i.test(`${control.key} ${control.unit || ''}`);
-        const chip = energy ? qualityChip(intensityQuality) : '';
-        return `<label>${control.label} <output>${formatNumber(current.params[control.key])}${control.unit ? ` ${control.unit}` : ''}</output>${chip}</label><input name="processParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key]}">`;
-      }).join('');
+      const parameters = (definition.controls || []).map(control => parameterControl(control, current, 'processParameter', intensityQuality)).join('');
+      const headNote = current.unit === 'intake-pump' ? pumpHeadNote(current) : '';
       const hasAssumptions = route || preset || parameters || definition.sourceNote || (definition.references && definition.references.length);
-      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${hasAssumptions ? `<fieldset><legend>Process assumptions</legend>${route}${preset}${parameters}${definition.chemicalId ? `<p class="status-meta">Makeup chemical: ${CONSUMABLE_CHEMICALS[definition.chemicalId] || definition.chemicalId}. Switching routes does not rewrite an existing supply.</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
+      return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${hasAssumptions ? `<fieldset><legend>Process assumptions</legend>${route}${preset}${parameters}${headNote}${definition.chemicalId ? `<p class="status-meta">Makeup chemical: ${CONSUMABLE_CHEMICALS[definition.chemicalId] || definition.chemicalId}. Switching routes does not rewrite an existing supply.</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
     }
     if (kind === 'source') {
       const definition = catalog[current.unit];
@@ -5897,6 +5986,15 @@
       return `<fieldset><legend>${sourceLegend}</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
     }
     if (kind === 'buffer') {
+      if (!current.params?.densityOverride && !current.params?.intensityOverride) {
+        const nextFluid = inferBufferFluidClass(current);
+        const live = liveFluidDensity(nextFluid);
+        const econ = current.economics || {};
+        const densityDrift = live && Math.abs(Number(econ.densityKgM3) - live.densityKgM3) > 0.5;
+        if (econ.fluidClass !== nextFluid || densityDrift || (live && econ.densitySource !== live.source && econ.densitySource !== 'override')) {
+          refreshBufferEconomics(current);
+        }
+      }
       const definition = catalog[current.unit];
       const parameters = (definition.controls || []).map(control => (
         `<label>${control.label} <output>${formatNumber(current.params[control.key] ?? 0)}${control.unit ? ` ${control.unit}` : ''}</output></label><input name="bufferParameter" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${current.params[control.key] ?? 0}">`
@@ -5966,12 +6064,75 @@
   }
 
 
+  function parameterControl(control, current, name, intensityQuality) {
+    const raw = current.params?.[control.key];
+    const missing = raw == null || raw === '';
+    const unit = control.unit ? ` ${control.unit}` : '';
+    const energy = /kWh|secKWh/i.test(`${control.key} ${control.unit || ''}`);
+    const chip = energy && intensityQuality ? qualityChip(intensityQuality) : '';
+    if (control.optional) {
+      const shown = missing ? '—' : formatNumber(raw);
+      const value = missing ? '' : raw;
+      return `<label>${control.label} <output>${shown}${missing ? '' : unit}</output>${chip}</label><input name="${name}" data-param="${control.key}" type="number" min="${control.min}" max="${control.max}" step="${control.step}" placeholder="unset" value="${value}">`;
+    }
+    return `<label>${control.label} <output>${formatNumber(raw)}${unit}</output>${chip}</label><input name="${name}" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${raw}">`;
+  }
+
+  function pumpHeadNote(current) {
+    const params = current.params || {};
+    if (params.pumpSecOverride === true && params.headM != null && params.headM !== '') {
+      return '<p class="status-meta">Pump energy slider overrides head. Set head or efficiency again to use ρ·g·H / (η·3.6e6).</p>';
+    }
+    if (params.headM == null || params.headM === '') {
+      return '<p class="status-meta">Head unset — SEC stays on the kWh/m³ slider. Set head for screening hydraulics (η defaults to 0.7).</p>';
+    }
+    try {
+      const resolved = globalThis.FlowsheetUnits?.resolveLiquidPumpSec?.(params, Number(params.densityKgM3) || 1025);
+      if (!resolved) return '';
+      return `<p class="status-meta">Head ${formatNumber(resolved.headM)} m → ${formatNumber(resolved.sec)} kWh/m³ at η ${formatNumber(resolved.pumpEta)} (screening, not a vendor curve).</p>`;
+    } catch (error) {
+      return `<p class="status-meta">${escapeHtml(error.message || 'Invalid pump head')}</p>`;
+    }
+  }
+
   function teaApi() {
     return globalThis.TeaScreening || null;
   }
 
   function siteRegionForTea() {
     return site?.region || site?.demandRegion || site?.demandRegionId || null;
+  }
+
+  function positiveDensityPerL(value) {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function densityFromAssayBag(bag) {
+    if (!bag || typeof bag !== 'object') return null;
+    const direct = positiveDensityPerL(bag.density_kg_per_L);
+    if (direct) return { densityKgM3: direct * 1000, source: 'site assay' };
+    const id = bag.assayId;
+    const full = id && globalThis.SiteAssays?.getAssay?.(id);
+    const fromLib = positiveDensityPerL(full?.density_kg_per_L);
+    if (fromLib) return { densityKgM3: fromLib * 1000, source: 'site assay' };
+    return null;
+  }
+
+  function liveFluidDensity(fluidClass) {
+    if (fluidClass !== 'brine' && fluidClass !== 'seawater') return null;
+    const bags = [];
+    if (fluidClass === 'brine') {
+      if (site?.brineAssay) bags.push(site.brineAssay);
+      if (site?.assay?.kind === 'brine') bags.push(site.assay);
+    } else if (site?.assay && (site.assay.kind === 'seawater' || site.assay.kind == null)) {
+      bags.push(site.assay);
+    }
+    for (const bag of bags) {
+      const found = densityFromAssayBag(bag);
+      if (found) return found;
+    }
+    return null;
   }
 
   function inferBufferFluidClass(current) {
@@ -6020,10 +6181,11 @@
       const capexPerM3 = Number(current.params.capexPerM3);
       const densityOverride = current.params.densityOverride === true && Number.isFinite(density) && density > 0;
       const intensityOverride = current.params.intensityOverride === true && Number.isFinite(capexPerM3) && capexPerM3 >= 0;
+      const live = densityOverride ? null : liveFluidDensity(fluidClass);
       const bound = tea.bindTankCapex({
         fluidClass,
         capacityKg: kg,
-        densityKgM3: densityOverride ? density : undefined,
+        densityKgM3: densityOverride ? density : live?.densityKgM3,
         capexPerM3: intensityOverride ? capexPerM3 : undefined,
         region: siteRegionForTea(),
       });
@@ -6046,6 +6208,8 @@
         note: bound.note,
         evidence: bound.evidence,
         regionMultiplier: bound.regionMultiplier,
+        densityKgM3: bound.densityKgM3,
+        densitySource: densityOverride ? 'override' : (live ? live.source : 'fluid default'),
       };
       return;
     }
@@ -6133,7 +6297,10 @@
       const variable = kind === 'buffer'
         ? ''
         : field('variableOM', 'Variable O&M / activity unit');
-      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? `<p class="status-meta">Tank CAPEX = (kg ÷ density) × $/m³${economics.fluidLabel ? ` · fluid: <strong>${escapeHtml(economics.fluidLabel)}</strong>` : ''}${economics.capexPerM3 != null ? ` · intensity $${formatNumber(economics.capexPerM3)}/m³` : ''}${economics.regionMultiplier != null && economics.regionMultiplier !== 1 ? ` · region ×${formatNumber(economics.regionMultiplier)}` : ''}. Fluid class follows the upstream intake when unset.</p>` : (current.unit === 'intake-pump' || current.unit === 'gas-blower') ? '<p class="status-meta">Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX.</p>' : ''}</fieldset>`;
+      const densityNote = kind === 'buffer' && economics.densityKgM3
+        ? ` · density ${formatNumber(economics.densityKgM3)} kg/m³${economics.densitySource ? ` (${escapeHtml(economics.densitySource)})` : ''}`
+        : '';
+      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? `<p class="status-meta">Tank CAPEX = (kg ÷ density) × $/m³${economics.fluidLabel ? ` · fluid: <strong>${escapeHtml(economics.fluidLabel)}</strong>` : ''}${economics.capexPerM3 != null ? ` · intensity $${formatNumber(economics.capexPerM3)}/m³` : ''}${densityNote}${economics.regionMultiplier != null && economics.regionMultiplier !== 1 ? ` · region ×${formatNumber(economics.regionMultiplier)}` : ''}. Fluid class follows the upstream intake when unset.</p>` : (current.unit === 'intake-pump' || current.unit === 'gas-blower') ? '<p class="status-meta">Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX. Head, when set, sets electricity — not CAPEX.</p>' : ''}</fieldset>`;
     }
     return `<fieldset><legend>Destination economics</legend><label>Disposition<select name="economics" data-economics="disposition">${['sale', 'disposal', 'vent', 'reinjection'].map(value => `<option value="${value}"${economics.disposition === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>${field('unitPrice', 'Sale price / unit')}${field('annualDemandLimit', 'Annual demand limit', '1')}${field('disposalCost', 'Disposal cost / unit')}</fieldset>`;
   }
@@ -7027,13 +7194,14 @@
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
-    deleteSelection, undoLastDelete, clearCanvasSelection, handleProcessKeydown, nudgeSelectedNode,
+    deleteSelection, undoLast, undoLastDelete: undoLast, clearCanvasSelection, handleProcessKeydown, nudgeSelectedNode,
+    handleInspectorInput,
     get selectedNodeId() { return selectedNodeId; },
     set selectedNodeId(value) { selectedNodeId = value; },
     get selectedEdgeIndex() { return selectedEdgeIndex; },
     set selectedEdgeIndex(value) { selectedEdgeIndex = value; },
     get undoStackLength() { return undoStack.length; },
-    clearUndoStack() { undoStack = []; },
+    clearUndoStack() { undoStack = []; undoGesture = null; },
     inferBufferFluidClass, refreshBufferEconomics,
     get pendingPort() { return pendingPort; },
     set pendingPort(value) { pendingPort = value; },

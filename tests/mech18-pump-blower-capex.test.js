@@ -61,10 +61,11 @@ test('Almería seawater-pump + air-blower raise CAPEX and add pads', () => {
   assert.ok(footprint.processes.some(item => item.id === 'air-blower'));
 });
 
-test('Dead Sea brine-pump CAPEX uses base pack intensity when region omitted', () => {
+test('Dead Sea brine-pump CAPEX uses Levant CAPEX× 0.85', () => {
   const definition = siteDeadSeaAbundance();
   const pump = definition.graph.nodes.find(node => node.id === 'brine-pump');
-  assert.equal(pump.economics.capexRate, 350);
+  assert.equal(definition.site.region, 'Levant');
+  assert.equal(pump.economics.capexRate, 350 * 0.85);
   const solved = solveOperation(definition);
   const beforeNodes = clone(definition.graph.nodes);
   // Strip pump economics → CAPEX drops by rate × capacity
@@ -73,5 +74,5 @@ test('Dead Sea brine-pump CAPEX uses base pack intensity when region omitted', (
   definition.graph.nodes = beforeNodes;
   const withPump = evaluateEconomics(definition, solved);
   const delta = withPump.installedCapex - after.installedCapex;
-  assert.ok(Math.abs(delta - 350 * pump.capacity) < 1e-6);
+  assert.ok(Math.abs(delta - 350 * 0.85 * pump.capacity) < 1e-6);
 });

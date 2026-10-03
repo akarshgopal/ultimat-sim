@@ -179,3 +179,93 @@ test('buffer on brine feed infers brine fluid class and $/m³ intensity', () => 
   assert.ok(tank.economics.capexPerM3 >= 700); // 750 base (no site region)
   assert.ok(tank.economics.installedCapex > 5000);
 });
+
+test('arrow nudge is one undo gesture and Ctrl+Z restores the position', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.activateTab('process');
+  app.clearFactory();
+  app.clearUndoStack();
+  const tank = app.addNode('material-buffer');
+  app.clearUndoStack();
+  app.selectedNodeId = tank.id;
+  const x0 = tank.position.x;
+  const y0 = tank.position.y;
+  app.nudgeSelectedNode(10, 0);
+  app.nudgeSelectedNode(10, 0);
+  assert.equal(tank.position.x, x0 + 20);
+  assert.equal(app.undoStackLength, 1);
+  app.handleProcessKeydown(keyEvent('z', { ctrlKey: true }));
+  const restored = app.graph.nodes.find(node => node.id === tank.id);
+  assert.equal(restored.position.x, x0);
+  assert.equal(restored.position.y, y0);
+});
+
+test('slider ticks share one undo; Ctrl+Z restores the parameter', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.activateTab('process');
+  app.clearFactory();
+  const pump = app.addNode('intake-pump');
+  app.clearUndoStack();
+  app.selectedNodeId = pump.id;
+  const target = { name: 'processParameter', type: 'range', dataset: { param: 'pumpKWhPerM3' }, value: '0.8' };
+  app.handleInspectorInput({ type: 'input', target });
+  target.value = '1.1';
+  app.handleInspectorInput({ type: 'input', target });
+  app.handleInspectorInput({ type: 'change', target });
+  assert.equal(pump.params.pumpKWhPerM3, 1.1);
+  assert.equal(pump.params.pumpSecOverride, true);
+  assert.equal(app.undoStackLength, 1);
+  app.handleProcessKeydown(keyEvent('z', { metaKey: true }));
+  const restored = app.graph.nodes.find(node => node.id === pump.id);
+  assert.equal(restored.params.pumpKWhPerM3, 0.4);
+  assert.equal(restored.params.pumpSecOverride, undefined);
+});
+
+test('Delete still undoes after a parameter edit', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.activateTab('process');
+  app.clearFactory();
+  const tank = app.addNode('material-buffer');
+  app.clearUndoStack();
+  app.selectedNodeId = tank.id;
+  const target = { name: 'bufferParameter', type: 'range', dataset: { param: 'initialKg' }, value: '250' };
+  app.handleInspectorInput({ type: 'change', target });
+  assert.equal(tank.params.initialKg, 250);
+  app.handleProcessKeydown(keyEvent('Delete'));
+  assert.equal(app.graph.nodes.some(node => node.id === tank.id), false);
+  app.handleProcessKeydown(keyEvent('z', { ctrlKey: true }));
+  assert.equal(app.graph.nodes.some(node => node.id === tank.id), true);
+  app.handleProcessKeydown(keyEvent('z', { ctrlKey: true }));
+  const restored = app.graph.nodes.find(node => node.id === tank.id);
+  assert.equal(restored.params.initialKg, 0);
+});
+
+test('Dead Sea brine buffer uses assay density ~1240 unless overridden; freshwater stays 1000', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadAbundanceHub();
+  const tank = app.addNode('material-buffer', { silent: true });
+  tank.params.fluidClass = 'brine';
+  delete tank.params.densityOverride;
+  delete tank.params.densityKgM3;
+  app.refreshBufferEconomics(tank);
+  assert.ok(Math.abs(tank.params.densityKgM3 - 1240) < 0.01);
+  assert.equal(tank.economics.densitySource, 'site assay');
+  assert.equal(tank.params.densityOverride, undefined);
+
+  tank.params.densityKgM3 = 1100;
+  tank.params.densityOverride = true;
+  app.refreshBufferEconomics(tank);
+  assert.equal(tank.params.densityKgM3, 1100);
+  assert.equal(tank.economics.densitySource, 'override');
+
+  tank.params.fluidClass = 'freshwater';
+  delete tank.params.densityKgM3;
+  delete tank.params.densityOverride;
+  app.refreshBufferEconomics(tank);
+  assert.equal(tank.params.densityKgM3, 1000);
+  assert.equal(tank.economics.densitySource, 'fluid default');
+});

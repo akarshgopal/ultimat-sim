@@ -1,7 +1,7 @@
 # MECH19 — Multi-step undo · pump head→SEC · assay tank density · Levant CAPEX×
 
 **Feat tip:** `dc8faae`
-**Pages:** pending
+**Pages:** live
 **Tests:** 341 pass
 **Date:** 2026-10-03 CEST
 **Base:** `4b3bc88` (`docs(mech18): record tip SHA 1cdc770`)

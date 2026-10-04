@@ -1,7 +1,7 @@
 # MECH21 — Redo · one-gesture boundaries · honest part-load SEC · TDS mg/L density
 
 **Feat tip:** `4944d5d`
-**Pages:** pending
+**Pages:** live
 **Tests:** 351 pass
 **Date:** 2026-10-04 CEST
 **Base:** `e4a3a76` (`docs(mech20): mark Pages live`)

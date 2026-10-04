@@ -41,6 +41,23 @@ const SUBSTANCES = Object.freeze({
   KCl: { elements: { K: 1, Cl: 1 }, molarMassG: 74.5483, charge: 0 },
   CaSO4: { elements: { Ca: 1, S: 1, O: 4 }, molarMassG: 136.138, charge: 0 },
   Br2: { elements: { Br: 2 }, molarMassG: 159.808, charge: 0 },
+  NH42SO4: { elements: { N: 2, H: 8, S: 1, O: 4 }, molarMassG: 132.14, charge: 0 },
+  Al2Si2O5OH4: { elements: { Al: 2, Si: 2, O: 9, H: 4 }, molarMassG: 258.16, charge: 0 },
+  La2O3: { elements: { La: 2, O: 3 }, molarMassG: 325.81, charge: 0 },
+  CeO2: { elements: { Ce: 1, O: 2 }, molarMassG: 172.12, charge: 0 },
+  Pr6O11: { elements: { Pr: 6, O: 11 }, molarMassG: 1021.44, charge: 0 },
+  Nd2O3: { elements: { Nd: 2, O: 3 }, molarMassG: 336.48, charge: 0 },
+  Sm2O3: { elements: { Sm: 2, O: 3 }, molarMassG: 348.72, charge: 0 },
+  Eu2O3: { elements: { Eu: 2, O: 3 }, molarMassG: 351.93, charge: 0 },
+  Gd2O3: { elements: { Gd: 2, O: 3 }, molarMassG: 362.50, charge: 0 },
+  Tb4O7: { elements: { Tb: 4, O: 7 }, molarMassG: 747.70, charge: 0 },
+  Dy2O3: { elements: { Dy: 2, O: 3 }, molarMassG: 373.00, charge: 0 },
+  Ho2O3: { elements: { Ho: 2, O: 3 }, molarMassG: 377.86, charge: 0 },
+  Er2O3: { elements: { Er: 2, O: 3 }, molarMassG: 382.52, charge: 0 },
+  Tm2O3: { elements: { Tm: 2, O: 3 }, molarMassG: 385.87, charge: 0 },
+  Yb2O3: { elements: { Yb: 2, O: 3 }, molarMassG: 394.08, charge: 0 },
+  Lu2O3: { elements: { Lu: 2, O: 3 }, molarMassG: 397.94, charge: 0 },
+  Y2O3: { elements: { Y: 2, O: 3 }, molarMassG: 225.81, charge: 0 },
 });
 
 function validateStream(stream, expectedKind) {

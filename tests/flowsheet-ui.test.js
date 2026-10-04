@@ -61,7 +61,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'cases/silicon.js', 'cases/green-ammonia.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/ionic-clay-longnan.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/network.js', 'cases/silicon.js', 'cases/ree.js', 'cases/green-ammonia.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -1063,13 +1063,15 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
   const water = palette.indexOf('>Water<');
   const carbon = palette.indexOf('>Carbon<');
   const crust = palette.indexOf('>Crust<');
+  const ree = palette.indexOf('>REE<');
   const more = palette.indexOf('>More units<');
-  assert.ok(minerals >= 0 && minerals < fuels && fuels < water && water < carbon && carbon < crust && crust < more);
+  assert.ok(minerals >= 0 && minerals < fuels && fuels < water && water < carbon && carbon < crust && crust < ree && ree < more);
   assert.match(palette.slice(Math.max(0, minerals - 40), minerals), /\bopen\b/);
   assert.match(palette.slice(Math.max(0, fuels - 40), fuels), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, crust - 80), crust), /\bopen\b/);
+  assert.doesNotMatch(palette.slice(Math.max(0, ree - 80), ree), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, more - 80), more), /\bopen\b/);
-  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'polysilicon', 'aluminium-smelter']) {
+  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'polysilicon', 'aluminium-smelter', 'iac-leach']) {
     assert.ok(palette.indexOf(`data-unit="${unit}"`) < more, unit);
   }
   for (const unit of ['titanium-kroll', 'hydrogen-dri', 'med', 'msf']) {

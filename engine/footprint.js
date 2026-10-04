@@ -66,6 +66,7 @@ const PROCESS_LABELS = Object.freeze({
   'mg-si': 'MG-Si furnace',
   polysilicon: 'Polysilicon (Siemens)',
   'aluminium-smelter': 'Aluminium smelter',
+  'iac-leach': 'Ionic-clay REE',
 });
 
 const SOLAR_EVIDENCE = Object.freeze([
@@ -363,6 +364,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  'iac-leach': Object.freeze({
+    id: 'iac-leach',
+    label: PROCESS_LABELS['iac-leach'],
+    basis: 'kgPerHour',
+    intensity: 20,
+    unitLabel: 'm²/(kg REO/h)',
+    range: Object.freeze([10, 40]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening ionic-clay leach pad ~20 m²/(kg REO/h) (range 10–40); not a plot survey. Deng & Kendall 2019 is the LCI intensity family, not a measured layout.',
+        url: 'https://doi.org/10.1007/s11367-019-01582-1',
+      }),
+    ]),
+  }),
   battery: Object.freeze({
     id: 'battery',
     label: PROCESS_LABELS.battery,
@@ -645,6 +662,13 @@ function padPolysilicon(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padIacLeach(node, solved) {
+  const spec = intensitySpec('iac-leach');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padBatteryKWh(batteryKWh) {
   const spec = intensitySpec('battery');
   const kWh = Math.max(0, finiteNumber(batteryKWh));
@@ -692,6 +716,7 @@ const PROCESS_PADS = Object.freeze({
   'mg-si': padMgSi,
   polysilicon: padPolysilicon,
   'aluminium-smelter': padAluminiumSmelter,
+  'iac-leach': padIacLeach,
   'material-buffer': padBuffer,
   'intake-pump': padIntakePump,
   'gas-blower': padGasBlower,

@@ -610,6 +610,108 @@ const titaniumKroll = reaction({
   outputs: { titanium: { substance: 'Ti', molPerProductMol: 1, phase: 'solid' }, magnesiumChloride: { substance: 'MgCl2', molPerProductMol: 2, phase: 'solid' } },
 });
 
+// Ionic-clay leach + precip + calcine screening. Feed is mixed clay, not a pure substance.
+// Deng & Kendall 2019 Table 2 southern-China in-situ: 7 kg (NH4)2SO4 / kg recovered REO (4–10 mid)
+// and 8.8 kWh/kg (4.3 injection + 4.5 calcination). No SX. No wasteHeat port.
+const IAC_LISTED_OXIDES = Object.freeze([
+  'Nd2O3', 'Pr6O11', 'La2O3', 'CeO2', 'Sm2O3', 'Eu2O3', 'Gd2O3', 'Tb4O7',
+  'Dy2O3', 'Ho2O3', 'Er2O3', 'Tm2O3', 'Yb2O3', 'Lu2O3', 'Y2O3',
+]);
+const IAC_NDPR_OXIDES = Object.freeze(['Nd2O3', 'Pr6O11']);
+const IAC_KAOLINITE = 'Al2Si2O5OH4';
+const IAC_AMS = 'NH42SO4';
+
+function iacLeach({ inlets, requestedActivity, capacity, params = {} }) {
+  const clay = validateStream(inlets.clay, 'material');
+  const lixiviant = validateStream(inlets.lixiviant, 'material');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const grade = nonnegative(Number(params.gradeKgReoPerKgClay ?? 0.001), 'gradeKgReoPerKgClay');
+  const recovery = Number(params.recovery ?? 0.85);
+  const ams = nonnegative(Number(params.ammoniumSulfateKgPerKgReo ?? 7), 'ammoniumSulfateKgPerKgReo');
+  const sec = nonnegative(Number(params.electricityKWhPerKgReo ?? 8.8), 'electricityKWhPerKgReo');
+  if (!Number.isFinite(recovery) || recovery < 0 || recovery > 1) {
+    throw new Error('recovery must be between 0 and 1');
+  }
+  if (!Object.hasOwn(clay.mol, IAC_KAOLINITE)) {
+    throw new Error('iac-leach clay must contain kaolinite');
+  }
+  for (const oxide of IAC_LISTED_OXIDES) {
+    if (!Object.hasOwn(clay.mol, oxide)) {
+      throw new Error(`iac-leach clay must contain ${oxide}`);
+    }
+  }
+  if (!Object.hasOwn(lixiviant.mol, IAC_AMS)) {
+    throw new Error('iac-leach lixiviant must contain NH42SO4');
+  }
+  if (Object.entries(lixiviant.mol).some(([substance, mol]) => substance !== IAC_AMS && mol > 1e-12)) {
+    throw new Error('iac-leach lixiviant must be pure NH42SO4');
+  }
+
+  const oxideMassKg = oxide => (clay.mol[oxide] || 0) * SUBSTANCES[oxide].molarMassG / 1000;
+  const assayRecovered = IAC_LISTED_OXIDES.reduce((sum, oxide) => sum + oxideMassKg(oxide) * recovery, 0);
+  const gradeRecovered = streamMassKg(clay) * grade * recovery;
+  const clayLimit = Math.min(assayRecovered, gradeRecovered);
+  const lixMass = streamMassKg(lixiviant);
+  const planned = Math.min(requested, installed);
+  const limits = {
+    capacity: installed,
+    clay: clayLimit,
+    lixiviant: ams === 0 ? Infinity : lixMass / ams,
+    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
+  };
+  const activity = Math.min(planned, ...Object.values(limits));
+  const clayFraction = assayRecovered > 0 ? activity / assayRecovered : 0;
+  const consumedClay = scaleStream(clay, clayFraction);
+  const requestedClay = scaleStream(clay, assayRecovered > 0 ? planned / assayRecovered : 0);
+  const lixFraction = lixMass > 0 && ams > 0 ? (activity * ams) / lixMass : 0;
+  const requestedLixFraction = lixMass > 0 && ams > 0 ? (planned * ams) / lixMass : 0;
+  const consumedLix = scaleStream(lixiviant, lixFraction);
+
+  const ndprMol = {};
+  const otherMol = {};
+  const residueMol = { ...consumedClay.mol };
+  for (const oxide of IAC_LISTED_OXIDES) {
+    const available = consumedClay.mol[oxide] || 0;
+    const recovered = available * recovery;
+    residueMol[oxide] = available - recovered;
+    if (IAC_NDPR_OXIDES.includes(oxide)) ndprMol[oxide] = recovered;
+    else otherMol[oxide] = recovered;
+  }
+  const liquorMol = { [IAC_AMS]: consumedLix.mol[IAC_AMS] || 0 };
+  const limitingValue = Math.min(...Object.values(limits));
+
+  return {
+    activity,
+    requestedInputs: {
+      clay: requestedClay,
+      lixiviant: scaleStream(lixiviant, requestedLixFraction),
+      electricity: { kind: 'electricity', kWh: planned * sec },
+    },
+    consumed: {
+      clay: consumedClay,
+      lixiviant: consumedLix,
+      electricity: { kind: 'electricity', kWh: activity * sec },
+    },
+    outlets: {
+      ndpr: { kind: 'material', mol: ndprMol, phase: 'solid', T_C: clay.T_C, P_bar: clay.P_bar },
+      otherReo: { kind: 'material', mol: otherMol, phase: 'solid', T_C: clay.T_C, P_bar: clay.P_bar },
+      residue: { ...cloneStream(consumedClay), mol: residueMol },
+      liquor: {
+        kind: 'material',
+        mol: liquorMol,
+        phase: 'liquid',
+        T_C: lixiviant.T_C,
+        P_bar: lixiviant.P_bar,
+      },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
 function energyStorage(kind) {
   return ({ inlets, requestedActivity, capacity, params = {} }) => {
     const input = validateStream(inlets.in, kind);
@@ -1190,6 +1292,19 @@ const UNITS = Object.freeze({
       titanium: { direction: 'out', kind: 'material', required: true }, magnesiumChloride: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: titaniumKroll,
+  },
+  'iac-leach': {
+    kind: 'converter',
+    ports: {
+      clay: { direction: 'in', kind: 'material', required: true },
+      lixiviant: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      ndpr: { direction: 'out', kind: 'material', required: true },
+      otherReo: { direction: 'out', kind: 'material', required: true },
+      residue: { direction: 'out', kind: 'material', required: true },
+      liquor: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: iacLeach,
   },
 });
 

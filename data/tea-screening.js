@@ -182,6 +182,24 @@ const prices = {
     'Solar-grade polysilicon spot screening, not USGS silicon metal ($3.97/kg) and not a contract. NREL Spring 2025 Solar Industry Update family: global SoG spot rose Q1 2025 from ~$5.54 to ~$6.24/kg; screening mid $6/kg.',
     [{ label: 'NREL Spring 2025 Solar Industry Update — global poly spot ~$5.54→$6.24/kg Q1 2025; screening mid $6/kg', url: NREL_SOLAR_2025 }]
   ),
+  'ndpr-oxide': row(
+    48.30, '$/kg', 'screening', 'USGS MCS 2026 NdPr oxide × 0.70 payability',
+    'USGS MCS 2026 NdPr oxide 99% min 2025e $69/kg × payability 0.70 because SX is not modeled. Screening, not a contract. Meteoric Caldeira 2024 scoping used ~70% of contained oxide value for MREC — company scoping, not a market print.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (NdPr oxide 99% min 2025e $69/kg)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'Meteoric Resources Caldeira scoping — ~70% contained-oxide payability for MREC (company scoping, not a market print)', url: 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf' },
+    ]
+  ),
+  'other-reo': row(
+    33.61, '$/kg', 'screening', 'Longnan other-oxide basket × 0.70 payability',
+    'Weighted Deng & Kendall 2019 Table 1 Longnan other-oxide basket (listed points 91.07; Tm 2025e value 0) at USGS MCS 2026 separated 2025e quotes × payability 0.70 because SX is not modeled. Unrounded (4372.174/91.07)×0.70 = 33.606564…; stored 33.61 $/kg. Screening, not a contract.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (heavy)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths-heavy.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Yttrium', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-yttrium.pdf' },
+      { label: 'Meteoric Resources Caldeira scoping — ~70% contained-oxide payability for MREC (company scoping, not a market print)', url: 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf' },
+    ]
+  ),
 };
 
 const costs = {
@@ -229,6 +247,16 @@ const costs = {
     0.45, '$/kg', 'screening', 'smelter-grade alumina band',
     'Smelter-grade alumina ~$300–600/t mid ($0.45/kg). Screening, not a Bayer quote. Alumina is the Hall–Héroult feed.',
     [{ label: 'USGS MCS 2025 aluminum (alumina is the feed; screening mid $0.45/kg, not a Bayer quote)', url: USGS_AL }]
+  ),
+  'ionic-clay': row(
+    0.005, '$/kg', 'screening', 'soft ionic-clay mining OOM',
+    'Soft ionic-clay mining ~$5/t ($0.005/kg). Quality screening. Deng & Kendall 2019 grade band context; not a contract and not a Serra Verde mining cost.',
+    [{ label: 'Deng & Kendall 2019 ionic-clay LCI (DOI) — grade-band context; mining cost is screening $5/t, not a table quote', url: 'https://doi.org/10.1007/s11367-019-01582-1' }]
+  ),
+  'ammonium-sulfate': row(
+    0.30, '$/kg', 'screening', 'fertilizer-grade ammonium sulfate',
+    'Fertilizer-grade (NH₄)₂SO₄ ~$300/t ($0.30/kg). Quality screening. Not a contract.',
+    [{ label: 'Fertilizer-grade ammonium sulfate screening ~$300/t; not a contract', url: null }]
   ),
 };
 
@@ -371,6 +399,16 @@ const packs = {
       { label: 'Fraunhofer ISE — electricity consumption for electronic-grade polysilicon (SEC family 60–71 kWh/kg SoG)', url: FRAUNHOFER_POLYSI },
     ],
   }),
+  'iac-leach': pack({
+    capexIntensity: 18250, intensityUnit: '$/(kg REO/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'leach+precip+calcine screening OOM, no SX',
+    note: 'installedCapex = 18250 × capacity. ~$50,000 per annual tonne REO × 365/1000 ≈ 18250 $/(kg REO/day). Order-of-magnitude for leach+precip+calcine without SX. Chinese in-situ is lower; a Western greenfield with water treatment is higher. Linear small-plant intensity makes a pilot look cheap — do not retune. Not a Serra Verde financing quote (DFC $565m is not this intensity). Brazil / Goiás is unmapped in capexMultiplierByRegion so CAPEX× stays 1 (do not add a brazil region). Screening, not bankable.',
+    evidence: [
+      { label: 'Deng & Kendall 2019 ionic-clay LCI (DOI) — intensities, not CAPEX', url: 'https://doi.org/10.1007/s11367-019-01582-1' },
+      { label: 'Screening ~$50k per annual tonne REO for leach+precip+calcine without SX → 18250 $/(kg/day)', url: null },
+    ],
+  }),
 
   // MECH18 — utility CAPEX packs (screening). Capacity basis = installed duty (m³/day or Nm³/day).
   'intake-pump': pack({
@@ -497,6 +535,20 @@ const demand = {
     2e6, 'kg/year', 'screening', 'SoG poly regional ceiling; USGS silicon family context',
     `2 kt/y screening offtake ceiling. Tiny slice of the solar-grade polysilicon market; not world production and not a contract. USGS MCS silicon PDF is commodity-family context — this ceiling is screening offtake, not USGS silicon-metal production.`,
     [{ label: 'USGS MCS 2025 silicon (commodity-family context; 2 kt/y poly ceiling is screening offtake, not USGS silicon-metal production)', url: USGS_SI }]
+  ),
+  'ndpr-oxide': row(
+    5e4, 'kg/year', 'screening', 'NdPr oxide screening regional ceiling',
+    `50 t/y screening regional ceiling for the Longnan Nd2O3+Pr6O11 co-product. Not world mine production and not a contract. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2026 rare earths (commodity-family context; 50 t/y NdPr ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+    ]
+  ),
+  'other-reo': row(
+    2e5, 'kg/year', 'screening', 'mixed other-REO screening regional ceiling',
+    `200 t/y screening regional ceiling for the Longnan mixed other-REO basket. Not world mine production and not a contract. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2026 rare earths / heavy / yttrium (commodity-family context; 200 t/y other-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+    ]
   ),
 };
 
@@ -788,6 +840,16 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     2e8, 'kg/year', 'screening', 'SoG poly China/Asia ceiling; USGS silicon family context',
     'Conservative 200 kt/y China/Asia solar-grade poly ceiling (China dominates SoG poly). USGS MCS silicon PDF is commodity-family context — this ceiling is screening offtake, not USGS silicon-metal production and not a contract.',
     [{ label: 'USGS MCS 2025 silicon (commodity-family context; 200 kt/y China poly ceiling is screening offtake, not USGS silicon-metal production)', url: USGS_SI }]
+  ),
+  'ndpr-oxide': row(
+    2e6, 'kg/year', 'screening', 'NdPr oxide China/Asia ceiling; ionic-clay supply',
+    'Conservative 2,000 t/y China/Asia NdPr-oxide ceiling. China dominates ionic-clay supply. Screening offtake, not a production table and not a contract.',
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 2 kt/y China NdPr ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  'other-reo': row(
+    1e7, 'kg/year', 'screening', 'mixed other-REO China/Asia ceiling; ionic-clay supply',
+    'Conservative 10,000 t/y China/Asia mixed other-REO ceiling. China dominates ionic-clay supply. Screening offtake, not a production table and not a contract.',
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 10 kt/y China other-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
   ),
 });
 

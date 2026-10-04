@@ -65,4 +65,4 @@ Installed CAPEX ≈ $57.2 M (poly island ≈ $33.3 M). Screening gate cash is **
 
 ## Tip
 
-Pending feat SHA + Pages publish.
+Feat `c1d0c5c` on `main` (onto PATH-NH3-sun `20172b6` / `8d922d6`). `npm test` 372 pass / 0 fail. Pages published from that SHA: https://akarshgopal.github.io/ultimat-sim/

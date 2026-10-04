@@ -64,4 +64,4 @@ Installed CAPEX ≈ $2.04 M (leach island $1.825 M, solar ≈ $0.212 M). Screeni
 
 ## Tip
 
-Feat on `feat/catalog-ree` (onto catalog-polysi `9d9ae57`). `npm test` 376 pass / 0 fail. Do not push. Do not deploy.
+Feat `5adcb36`, docs `050270c` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `050270c`). `npm test` 376 pass / 0 fail before the docs note.

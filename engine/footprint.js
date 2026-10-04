@@ -64,6 +64,7 @@ const PROCESS_LABELS = Object.freeze({
   asu: 'Air separation',
   ammonia: 'Haber–Bosch',
   'mg-si': 'MG-Si furnace',
+  polysilicon: 'Polysilicon (Siemens)',
   'aluminium-smelter': 'Aluminium smelter',
 });
 
@@ -346,6 +347,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  polysilicon: Object.freeze({
+    id: 'polysilicon',
+    label: PROCESS_LABELS.polysilicon,
+    basis: 'kgPerHour',
+    intensity: 10,
+    unitLabel: 'm²/(kg poly-Si/h)',
+    range: Object.freeze([6, 16]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening Siemens poly pad 10 m²/(kg poly-Si/h) (range 6–16); not a plot survey. Fraunhofer ISE is the 60–71 kWh/kg SEC family, not a measured layout.',
+        url: 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf',
+      }),
+    ]),
+  }),
   battery: Object.freeze({
     id: 'battery',
     label: PROCESS_LABELS.battery,
@@ -621,6 +638,13 @@ function padAluminiumSmelter(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padPolysilicon(node, solved) {
+  const spec = intensitySpec('polysilicon');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padBatteryKWh(batteryKWh) {
   const spec = intensitySpec('battery');
   const kWh = Math.max(0, finiteNumber(batteryKWh));
@@ -666,6 +690,7 @@ const PROCESS_PADS = Object.freeze({
   asu: padAsu,
   ammonia: padAmmonia,
   'mg-si': padMgSi,
+  polysilicon: padPolysilicon,
   'aluminium-smelter': padAluminiumSmelter,
   'material-buffer': padBuffer,
   'intake-pump': padIntakePump,

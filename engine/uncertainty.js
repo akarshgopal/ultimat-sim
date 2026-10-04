@@ -53,6 +53,7 @@ const UNIT_INTENSITY_QUALITY = Object.freeze({
   'bromine-recovery': 'assumption',
   'aluminium-smelter': 'recoverable',
   'mg-si': 'recoverable',
+  polysilicon: 'screening',
   'hydrogen-dri': 'assumption',
   'titanium-kroll': 'assumption',
   'solar-pv': 'cited',

@@ -97,7 +97,7 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Crust: ['mg-si', 'aluminium-smelter'],
+    Crust: ['mg-si', 'polysilicon', 'aluminium-smelter'],
   };
   const PALETTE_MORE_UNITS = [
     'nuclear-electricity', 'solar-thermal', 'thermal-storage',
@@ -316,6 +316,17 @@
         { label: 'USGS MCS 2025 silicon metal', url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-silicon.pdf' },
       ],
     },
+    polysilicon: {
+      label: 'Polysilicon (Siemens)', capacity: 1000, rate: 100, activityUnit: 'kg poly-Si/day',
+      palette: { section: 'building', order: 12, glyph: 'pSi', description: 'MG-Si + power → solar-grade poly-Si' },
+      params: { electricityKWhPerKg: 65 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 40, max: 120, step: 1, unit: 'kWh/kg poly-Si' }],
+      sourceNote: 'Screening Siemens / TCS-route upgrade 65 kWh/kg, mid of the Fraunhofer ISE SoG 2023 band 60–71 kWh/kg. Feed 1.05 mol MG-Si / mol product. Not a full TCS complex, not FBR, not a PV module BOM.',
+      references: [
+        { label: 'Fraunhofer ISE polysilicon electricity (SoG 60–71 kWh/kg family)', url: 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf' },
+        { label: 'NREL Spring 2025 Solar Industry Update (SoG poly spot screening mid $6/kg)', url: 'https://www.nrel.gov/docs/' },
+      ],
+    },
     'hydrogen-dri': {
       label: 'Hydrogen DRI steel', capacity: 1000, rate: 100, activityUnit: 'kg Fe/day',
       palette: { section: 'building', order: 13, glyph: 'Fe', tone: 'carbon', description: 'Iron oxide + H₂ + power → iron + water' },
@@ -515,7 +526,7 @@
     wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'Ammonia', offgas: 'Off-gas',
     lithium: 'Lithium chloride', bromide: 'Sodium bromide', magnesium: 'Magnesium chloride', potash: 'Potash', gypsum: 'Gypsum', salt: 'Salt', raffinate: 'Raffinate',
     caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Aluminium', carbonDioxide: 'Carbon dioxide',
-    quartz: 'Quartzite', silicon: 'MG-Si', carbonMonoxide: 'Carbon monoxide',
+    quartz: 'Quartzite', silicon: 'MG-Si', polysilicon: 'Poly-Si', carbonMonoxide: 'Carbon monoxide',
     ironOre: 'Iron ore', steel: 'Iron / steel', titaniumTetrachloride: 'Titanium tetrachloride', titanium: 'Titanium', magnesiumChloride: 'Magnesium chloride',
   };
   const materialPresets = {
@@ -533,6 +544,7 @@
     alumina: { label: 'Alumina', phase: 'solid', mol: { Al2O3: 1000 } },
     carbon: { label: 'Carbon anode', phase: 'solid', mol: { C: 1000 } },
     quartz: { label: 'Quartzite', phase: 'solid', mol: { SiO2: 1000 } },
+    silicon: { label: 'Metallurgical silicon', phase: 'solid', mol: { Si: 1000 } },
     ironOre: { label: 'Hematite concentrate', phase: 'solid', mol: { Fe2O3: 1000 } },
     titaniumTetrachloride: { label: 'Titanium tetrachloride', phase: 'liquid', mol: { TiCl4: 1000 } },
     magnesium: { label: 'Magnesium', phase: 'solid', mol: { Mg: 1000 } },
@@ -1237,15 +1249,15 @@
   }
 
   function loadSiliconAlumina() {
-    setActiveDemo('silicon-alumina', 'Mejillones MG-Si + Al');
+    setActiveDemo('silicon-alumina', 'Mejillones MG-Si → poly-Si + Al');
     lastSizing = null;
     if (typeof SiliconCase === 'undefined' || !SiliconCase.createSiliconCase) {
       throw new Error('Silicon case is not loaded');
     }
-    loadCase(SiliconCase.createSiliconCase(), 'mg-si');
+    loadCase(SiliconCase.createSiliconCase(), 'polysilicon');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening crustal quartz → MG-Si and purchased alumina → Al on frozen Mejillones PV; not a concession and not polysilicon.';
+      status.textContent = 'Siemens-style poly upgrade on frozen Mejillones PV; quartz → MG-Si → poly-Si (+ Al); screening; may be cash−; not bankable; not PV panel BOM.';
     }
   }
 
@@ -3489,7 +3501,7 @@
       'methanol.co2': 'co2', 'methanol.hydrogen': 'hydrogen',
       'chlor-alkali.salt': 'salt',
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
-      'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
+      'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'titanium-kroll.titaniumTetrachloride': 'titaniumTetrachloride', 'titanium-kroll.magnesium': 'magnesium',
     }[`${unit}.${port}`] || 'water';
   }
@@ -4606,6 +4618,8 @@
     CaSO4: 'Gypsum',
     oxygen: 'Oxygen',
     O2: 'Oxygen',
+    'poly-silicon': 'Poly-Si',
+    polysilicon: 'Poly-Si',
   };
 
   function overviewSaleRecords() {
@@ -5050,7 +5064,7 @@
     if (unit === 'intake-pump' || unit === 'gas-blower') return 'pipe';
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf') return 'pond';
-    if (unit === 'mg-si') return 'furnace';
+    if (unit === 'mg-si' || unit === 'polysilicon') return 'furnace';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'aluminium-smelter') return 'cell';
     if (unit === 'asu' || unit === 'ammonia' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
@@ -6531,7 +6545,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'aluminium-smelter') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'aluminium-smelter') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6657,6 +6671,7 @@
     methanol: 'methanol',
     'solar-pv': 'solar-pv',
     'mg-si': 'mg-si',
+    polysilicon: 'polysilicon',
     'aluminium-smelter': 'aluminium-smelter',
   };
 

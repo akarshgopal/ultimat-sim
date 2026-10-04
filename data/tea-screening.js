@@ -44,6 +44,9 @@ const USGS_AL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-aluminum.pdf'
 const USGS_SILICA = 'https://www.usgs.gov/centers/national-minerals-information-center/silica-statistics-and-information';
 const DOE_AL = 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf';
 const MDPI_MGSI = 'https://www.mdpi.com/1996-1073/19/9/2023';
+const NREL_SOLAR_2025 = 'https://www.nrel.gov/docs/';
+const REW_POLYSI = 'https://www.renewableenergyworld.com/solar/advancements-in-the-commercial-production-of-polysilicon/';
+const FRAUNHOFER_POLYSI = 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf';
 const NREL_DLE = 'https://doi.org/10.2172/1782801';
 const NREL_ATB = 'https://atb.nrel.gov/';
 const NREL_ATB_DOI = 'https://doi.org/10.25984/2377191';
@@ -173,6 +176,11 @@ const prices = {
     2.87, '$/kg', 'cited', 'USGS MCS 2025 aluminum ingot',
     'USGS MCS 2025 U.S. market spot 130 ¢/lb (2024e) × 2.20462 = 2.87 $/kg. Primary aluminium ingot, not a contract.',
     [{ label: 'USGS Mineral Commodity Summaries 2025 — Aluminum (U.S. market spot 130 ¢/lb 2024e → 2.87 $/kg)', url: USGS_AL }]
+  ),
+  polysilicon: row(
+    6, '$/kg', 'screening', 'NREL Spring 2025 Solar Industry Update family',
+    'Solar-grade polysilicon spot screening, not USGS silicon metal ($3.97/kg) and not a contract. NREL Spring 2025 Solar Industry Update family: global SoG spot rose Q1 2025 from ~$5.54 to ~$6.24/kg; screening mid $6/kg.',
+    [{ label: 'NREL Spring 2025 Solar Industry Update — global poly spot ~$5.54→$6.24/kg Q1 2025; screening mid $6/kg', url: NREL_SOLAR_2025 }]
   ),
 };
 
@@ -353,6 +361,16 @@ const packs = {
       { label: 'USGS MCS 2025 aluminum (primary-ingot context; not a smelter contract)', url: USGS_AL },
     ],
   }),
+  polysilicon: pack({
+    capexIntensity: 31755, intensityUnit: '$/(kg poly-Si/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'TCS Siemens plant TEA order',
+    note: 'installedCapex = 31755 × capacity. Derived from ~$87 per annual kg installed for a 6,500 t/y TCS Siemens plant ($565M / 6.5e6 kg-y ≈ $87/kg-y; Renewable Energy World / Ceccaroli–Lohne family) × 365 ≈ 31755 $/(kg/day). Linear small-plant intensity; China nth-of-kind is lower — do not retune to force cash+. Not a vendor quote. Not a full TCS/HCl complex.',
+    evidence: [
+      { label: 'Renewable Energy World — advancements in commercial polysilicon production (TCS Siemens CAPEX family; screening $87/kg-y)', url: REW_POLYSI },
+      { label: 'Fraunhofer ISE — electricity consumption for electronic-grade polysilicon (SEC family 60–71 kWh/kg SoG)', url: FRAUNHOFER_POLYSI },
+    ],
+  }),
 
   // MECH18 — utility CAPEX packs (screening). Capacity basis = installed duty (m³/day or Nm³/day).
   'intake-pump': pack({
@@ -474,6 +492,11 @@ const demand = {
     2e7, 'kg/year', 'screening', 'USGS MCS aluminum; tiny slice of world smelter',
     `20 kt/y screening offtake ceiling. USGS MCS 2025 world smelter production 2024e ~72 Mt and China ~43 Mt — this ceiling is a tiny slice, not production and not a contract.`,
     [{ label: 'USGS MCS 2025 aluminum — world smelter production 2024e ~72 Mt (China ~43 Mt); 20 kt/y ceiling is screening offtake, not production', url: USGS_AL }]
+  ),
+  polysilicon: row(
+    2e6, 'kg/year', 'screening', 'SoG poly regional ceiling; USGS silicon family context',
+    `2 kt/y screening offtake ceiling. Tiny slice of the solar-grade polysilicon market; not world production and not a contract. USGS MCS silicon PDF is commodity-family context — this ceiling is screening offtake, not USGS silicon-metal production.`,
+    [{ label: 'USGS MCS 2025 silicon (commodity-family context; 2 kt/y poly ceiling is screening offtake, not USGS silicon-metal production)', url: USGS_SI }]
   ),
 };
 
@@ -760,6 +783,11 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     2e9, 'kg/year', 'screening', 'USGS MCS aluminum; China regional ceiling',
     'Conservative 2 Mt/y regional primary-aluminium ceiling. USGS MCS 2025 world smelter production 2024e ~72 Mt and China ~43 Mt — this ceiling is a tiny slice of China, not production and not a contract.',
     [{ label: 'USGS MCS 2025 aluminum — world smelter ~72 Mt / China ~43 Mt (2024e); 2 Mt/y China ceiling is screening offtake, not production', url: USGS_AL }]
+  ),
+  polysilicon: row(
+    2e8, 'kg/year', 'screening', 'SoG poly China/Asia ceiling; USGS silicon family context',
+    'Conservative 200 kt/y China/Asia solar-grade poly ceiling (China dominates SoG poly). USGS MCS silicon PDF is commodity-family context — this ceiling is screening offtake, not USGS silicon-metal production and not a contract.',
+    [{ label: 'USGS MCS 2025 silicon (commodity-family context; 200 kt/y China poly ceiling is screening offtake, not USGS silicon-metal production)', url: USGS_SI }]
   ),
 });
 

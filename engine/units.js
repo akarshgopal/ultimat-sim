@@ -589,6 +589,16 @@ const mgSi = reaction({
     carbonMonoxide: { substance: 'CO', molPerProductMol: 2, phase: 'gas' },
   },
 });
+// Siemens / TCS-route screening: MG-Si upgrade to solar-grade poly-Si.
+// SEC 65 kWh/kg = mid of Fraunhofer ISE SoG 2023 band 60–71 kWh/kg (CPIA / Bernreuter family).
+// Feed 1.05 mol Si / mol product ≈ 5% MG-Si loss / recycle bleed. Not a TCS/CVD plant model.
+// Do not set heatKWhPerKg (would emit wasteHeat).
+const polysilicon = reaction({
+  product: 'Si',
+  electricityKWhPerKg: 65,
+  inputs: { silicon: { substance: 'Si', molPerProductMol: 1.05 } },
+  outputs: { polysilicon: { substance: 'Si', molPerProductMol: 1, phase: 'solid' } },
+});
 const hydrogenDri = reaction({
   product: 'Fe', electricityKWhPerKg: 0.7,
   inputs: { ironOre: { substance: 'Fe2O3', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
@@ -1156,6 +1166,14 @@ const UNITS = Object.freeze({
       silicon: { direction: 'out', kind: 'material', required: true }, carbonMonoxide: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: mgSi,
+  },
+  polysilicon: {
+    kind: 'converter',
+    ports: {
+      silicon: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      polysilicon: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: polysilicon,
   },
   'hydrogen-dri': {
     kind: 'converter',

@@ -1069,7 +1069,7 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
   assert.match(palette.slice(Math.max(0, fuels - 40), fuels), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, crust - 80), crust), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, more - 80), more), /\bopen\b/);
-  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'aluminium-smelter']) {
+  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'polysilicon', 'aluminium-smelter']) {
     assert.ok(palette.indexOf(`data-unit="${unit}"`) < more, unit);
   }
   for (const unit of ['titanium-kroll', 'hydrogen-dri', 'med', 'msf']) {

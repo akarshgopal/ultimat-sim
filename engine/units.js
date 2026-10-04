@@ -639,6 +639,7 @@ const IAC_LISTED_OXIDES = Object.freeze([
   'Dy2O3', 'Ho2O3', 'Er2O3', 'Tm2O3', 'Yb2O3', 'Lu2O3', 'Y2O3',
 ]);
 const IAC_NDPR_OXIDES = Object.freeze(['Nd2O3', 'Pr6O11']);
+const IAC_DYTB_OXIDES = Object.freeze(['Dy2O3', 'Tb4O7']);
 const IAC_KAOLINITE = 'Al2Si2O5OH4';
 const IAC_AMS = 'NH42SO4';
 
@@ -726,6 +727,81 @@ function iacLeach({ inlets, requestedActivity, capacity, params = {} }) {
         T_C: lixiviant.T_C,
         P_bar: lixiviant.P_bar,
       },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
+// ARC-1-style REE chromatography screening. Oxide-equivalent mixed concentrate in;
+// NdPr / DyTb / light REO out. Not a solvent-extraction train. No wasteHeat port.
+// 90.25% precip/calcine company figure is NOT multiplied (inspector can lower recovery).
+// Purity is not simulated.
+function reeChromatography({ inlets, requestedActivity, capacity, params = {} }) {
+  const concentrate = validateStream(inlets.concentrate, 'material');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const recovery = Number(params.recovery ?? 0.914);
+  const sec = nonnegative(Number(params.electricityKWhPerKgReo ?? 5), 'electricityKWhPerKgReo');
+  if (!Number.isFinite(recovery) || recovery < 0 || recovery > 1) {
+    throw new Error('recovery must be between 0 and 1');
+  }
+  for (const oxide of IAC_LISTED_OXIDES) {
+    if (!Object.hasOwn(concentrate.mol, oxide)) {
+      throw new Error(`ree-chromatography concentrate must contain ${oxide}`);
+    }
+  }
+  if (Object.entries(concentrate.mol).some(([substance, mol]) => (
+    !IAC_LISTED_OXIDES.includes(substance) && mol > 1e-12
+  ))) {
+    throw new Error('ree-chromatography concentrate must be listed-oxide equivalent (no extra substances)');
+  }
+
+  const oxideMassKg = oxide => (concentrate.mol[oxide] || 0) * SUBSTANCES[oxide].molarMassG / 1000;
+  const listedMass = IAC_LISTED_OXIDES.reduce((sum, oxide) => sum + oxideMassKg(oxide), 0);
+  const concentrateLimit = listedMass * recovery;
+  const planned = Math.min(requested, installed);
+  const limits = {
+    capacity: installed,
+    concentrate: concentrateLimit,
+    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
+  };
+  const activity = Math.min(planned, ...Object.values(limits));
+  const feedFraction = concentrateLimit > 0 ? activity / concentrateLimit : 0;
+  const requestedFraction = concentrateLimit > 0 ? planned / concentrateLimit : 0;
+  const consumedFeed = scaleStream(concentrate, feedFraction);
+
+  const ndprMol = {};
+  const dytbMol = {};
+  const lightMol = {};
+  const raffinateMol = {};
+  for (const oxide of IAC_LISTED_OXIDES) {
+    const available = consumedFeed.mol[oxide] || 0;
+    const recovered = available * recovery;
+    raffinateMol[oxide] = available - recovered;
+    if (IAC_NDPR_OXIDES.includes(oxide)) ndprMol[oxide] = recovered;
+    else if (IAC_DYTB_OXIDES.includes(oxide)) dytbMol[oxide] = recovered;
+    else lightMol[oxide] = recovered;
+  }
+  const limitingValue = Math.min(...Object.values(limits));
+
+  return {
+    activity,
+    requestedInputs: {
+      concentrate: scaleStream(concentrate, requestedFraction),
+      electricity: { kind: 'electricity', kWh: planned * sec },
+    },
+    consumed: {
+      concentrate: consumedFeed,
+      electricity: { kind: 'electricity', kWh: activity * sec },
+    },
+    outlets: {
+      ndpr: { kind: 'material', mol: ndprMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+      dytb: { kind: 'material', mol: dytbMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+      lightReo: { kind: 'material', mol: lightMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+      raffinate: { kind: 'material', mol: raffinateMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
     },
     limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
       .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
@@ -1326,6 +1402,18 @@ const UNITS = Object.freeze({
       liquor: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: iacLeach,
+  },
+  'ree-chromatography': {
+    kind: 'converter',
+    ports: {
+      concentrate: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      ndpr: { direction: 'out', kind: 'material', required: true },
+      dytb: { direction: 'out', kind: 'material', required: true },
+      lightReo: { direction: 'out', kind: 'material', required: true },
+      raffinate: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: reeChromatography,
   },
   bioforge: {
     kind: 'converter',

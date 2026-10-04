@@ -146,7 +146,7 @@ test('Overview option text contains Minaçu and NdPr; palette has REE with iac-l
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'aluminium-smelter'\s*\]/);
-  assert.match(source, /REE:\s*\[\s*'iac-leach'\s*\]/);
+  assert.match(source, /REE:\s*\[\s*'iac-leach',\s*'ree-chromatography'\s*\]/);
   assert.match(html, /id="loadReeIonic"/);
   assert.match(html, /Minaçu ionic clay → NdPr \+ mixed REO/);
   assert.match(html, /cases\/ree\.js/);

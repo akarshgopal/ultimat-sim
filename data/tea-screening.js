@@ -203,6 +203,28 @@ const prices = {
       { label: 'Meteoric Resources Caldeira scoping — ~70% contained-oxide payability for MREC (company scoping, not a market print)', url: 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf' },
     ]
   ),
+  'ndpr-oxide-separated': row(
+    69, '$/kg', 'screening', 'USGS MCS 2026 NdPr oxide 99% min 2025e',
+    'USGS MCS 2026 NdPr oxide 99% min 2025e $69/kg. Separated-oxide screening because this block is the separation, so the 0.70 MREC haircut is NOT applied. Still not a contract and not a purity certificate.',
+    [{ label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (NdPr oxide 99% min 2025e $69/kg)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  'dytb-oxide': row(
+    340.19, '$/kg', 'screening', 'Longnan Tb4O7+Dy2O3 basket at USGS separated quotes',
+    'Unrounded (1.13×1010 + 7.48×239) / 8.61 = 2929.02/8.61. Longnan published points × existing usgsSeparatedUsdPerKg for Tb4O7 and Dy2O3. Screening basket, not a contract.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (heavy)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths-heavy.pdf' },
+    ]
+  ),
+  'light-reo': row(
+    17.50, '$/kg', 'screening', 'Longnan light-REO basket minus Dy/Tb at USGS separated quotes',
+    'Unrounded (4372.174 − 2929.02) / (91.07 − 8.61) = 1443.154/82.46. Same USGS Longnan other-oxide basket minus Dy/Tb. Tm value stays 0. Screening, not a contract.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (heavy)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths-heavy.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Yttrium', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-yttrium.pdf' },
+    ]
+  ),
   gluconic: row(
     0.515, '$/kg', 'screening', 'ChemAnalyst China Q1 2025 gluconic acid',
     'ChemAnalyst China Q1 2025 average USD 515/MT as repeated at OpenPR. Asia spot screening, not a US contract. Keep 0.515; do not round. No regional overlay.',
@@ -270,6 +292,16 @@ const costs = {
     0.30, '$/kg', 'screening', 'fertilizer-grade ammonium sulfate',
     'Fertilizer-grade (NH₄)₂SO₄ ~$300/t ($0.30/kg). Quality screening. Not a contract.',
     [{ label: 'Fertilizer-grade ammonium sulfate screening ~$300/t; not a contract', url: null }]
+  ),
+  'mixed-reo-concentrate': row(
+    34.54, '$/kg', 'screening', 'USGS separated basket × 0.70 payability for mixed concentrate',
+    'Unrounded 0.70 × (6.20×69 + 4372.174) / 97.27. USGS separated basket × Meteoric-style 0.70 payability because the purchase is mixed concentrate, not separated oxides. Not a Maglut toll, not a contract.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (heavy)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths-heavy.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Yttrium', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-yttrium.pdf' },
+      { label: 'Meteoric Resources Caldeira scoping — ~70% contained-oxide payability for MREC (company scoping, not a market print)', url: 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf' },
+    ]
   ),
   dextrose: row(
     0.84, '$/kg', 'screening', 'Tridge US 2024 dextrose export low',
@@ -427,6 +459,20 @@ const packs = {
       { label: 'Screening ~$50k per annual tonne REO for leach+precip+calcine without SX → 18250 $/(kg/day)', url: null },
     ],
   }),
+  'ree-chromatography': pack({
+    capexIntensity: 27375, intensityUnit: '$/(kg separated REO/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'ARC-1-style chromatography screening proxy band',
+    note: 'installedCapex = 27375 × capacity. proxy band · not a Maglut ARC-1 quote · Maglut has not published kWh/kg or CAPEX. Point $75,000 per annual tonne sits between the repo leach-without-separation screening (~$50,000/t-y, pack iac-leach) and the Honaker/NETL 2020 full coal-to-REE plant ($126 million / 825 t/y ≈ $153,000/t-y). Wide peer band about $25,000–$150,000 per annual tonne. Linear small-plant intensity. Not bankable. US West / California aliases to texas so CAPEX× stays 1. SEC is the unit param 5 kWh/kg, not this pack. The 5 kWh/kg point is the Talens Peiró & Villalba JOM 2013 solvent-extraction electricity order (15.6–22.7 GJ/t REM ≈ 4.3–6.3 kWh/kg), used as a peer proxy because chromatography papers do not publish plant kWh/kg. NETL IX LCI pumping is about 4.24 Wh/kg and is a lab pumping floor, not this default. Andersson et al. IECR 2014 MCSGP reports productivity (~0.38 g/L/h at ~90% yield), not electricity.',
+    evidence: [
+      { label: 'Talens Peiró & Villalba JOM 2013 — SX electricity order 15.6–22.7 GJ/t REM (peer proxy, not chromatography kWh/kg)', url: 'https://link.springer.com/article/10.1007/s11837-013-0719-8' },
+      { label: 'Andersson et al. IECR 2014 MCSGP — productivity (~0.38 g/L/h at ~90% yield), not electricity', url: 'https://doi.org/10.1021/ie5023223' },
+      { label: 'NETL IX LCI pumping ~4.24 Wh/kg (lab pumping floor, not this default)', url: 'https://www.osti.gov/servlets/purl/1509123' },
+      { label: 'Honaker / NETL 2020 full coal-to-REE plant ($126 million / 825 t/y ≈ $153,000/t-y)', url: 'https://www.netl.doe.gov/sites/default/files/2020-10/20VPRREE_Honaker_2.pdf' },
+      { label: 'Ferro-Alloy Resources RNS — US strategic rare earths separation company MOU (company-reported pilot, not a CAPEX quote)', url: 'https://www.investegate.co.uk/announcement/rns/ferro-alloy-resources-limited-npv--far/us-strategic-rare-earths-separation-company-mou/9787733' },
+      { label: 'Mining Technology — Maglut chromatography rare-earth processing US (press, not a kWh/kg or CAPEX quote)', url: 'https://www.mining-technology.com/news/maglut-chromatography-rare-earth-processing-us/' },
+    ],
+  }),
   bioforge: pack({
     capexIntensity: 438, intensityUnit: '$/(kg gluconic/day)',
     fixedOmPercent: 4, variableOm: 0, assetLifeYears: 20,
@@ -580,6 +626,21 @@ const demand = {
     [
       { label: 'USGS MCS 2026 rare earths / heavy / yttrium (commodity-family context; 200 t/y other-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
     ]
+  ),
+  'ndpr-oxide-separated': row(
+    5e4, 'kg/year', 'screening', 'separated NdPr oxide screening offtake ceiling',
+    `50 t/y screening offtake ceiling for separated NdPr oxide. Not a contract, not world production. USGS rare-earths PDF is commodity-family context. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 50 t/y separated NdPr ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  'dytb-oxide': row(
+    2e4, 'kg/year', 'screening', 'DyTb oxide screening offtake ceiling',
+    `20 t/y screening offtake ceiling for DyTb oxide. Not a contract, not world production. USGS rare-earths PDF is commodity-family context. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 20 t/y DyTb ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  'light-reo': row(
+    2e5, 'kg/year', 'screening', 'light REO screening offtake ceiling',
+    `200 t/y screening offtake ceiling for light REO (Longnan listed oxides minus NdPr and DyTb). Not a contract, not world production. USGS rare-earths PDF is commodity-family context. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 200 t/y light-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
   ),
   gluconic: row(
     7.5e7, 'kg/year', 'screening', 'DOE EA-2246 Marshall 75 kta gluconic nameplate',

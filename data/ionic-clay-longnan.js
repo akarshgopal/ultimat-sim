@@ -104,6 +104,16 @@ function clayMassFractions() {
   return fractions;
 }
 
+function concentrateMolForKg(kg) {
+  const mass = Number(kg);
+  if (!Number.isFinite(mass) || mass < 0) throw new Error('concentrateMolForKg needs a finite nonnegative kg');
+  const mol = {};
+  for (const ox of listedOxides) {
+    mol[ox] = mass * renormalizedFractions[ox] * 1000 / MOLAR_MASS_G[ox];
+  }
+  return mol;
+}
+
 return {
   publishedPoints,
   publishedSum: PUBLISHED_SUM,
@@ -126,6 +136,7 @@ return {
   electricityKWhPerKgReo: ELECTRICITY_KWH_PER_KG_REO,
   molarMassG: MOLAR_MASS_G,
   clayMolForKg,
+  concentrateMolForKg,
   clayMassFractions,
   note: 'Deng & Kendall 2019 Table 1 Longnan listed oxides sum to 97.27; the unpublished 2.73-point gap is dropped and listed masses are renormalized onto 1.0. Y-rich heavy basket, not an NdPr clay. Literature assay, not a concession.',
 };

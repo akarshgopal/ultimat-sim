@@ -98,7 +98,7 @@
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
     Crust: ['mg-si', 'polysilicon', 'aluminium-smelter'],
-    REE: ['iac-leach'],
+    REE: ['iac-leach', 'ree-chromatography'],
     Bio: ['bioforge'],
   };
   const PALETTE_MORE_UNITS = [
@@ -344,6 +344,24 @@
         { label: 'USGS MCS 2026 rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
       ],
     },
+    'ree-chromatography': {
+      label: 'ARC-1 chromatography', capacity: 10, rate: 10, activityUnit: 'kg REO/day',
+      palette: { section: 'building', order: 13, glyph: 'ARC', description: 'Maglut-style screening · mixed REO → NdPr + DyTb + light REO' },
+      params: { recovery: 0.914, electricityKWhPerKgReo: 5 },
+      controls: [
+        { key: 'recovery', label: 'Recovery', min: 0.5, max: 0.99, step: 0.001 },
+        { key: 'electricityKWhPerKgReo', label: 'Electricity', min: 0.01, max: 30, step: 0.01, unit: 'kWh/kg REO' },
+      ],
+      sourceNote: 'proxy band · not a Maglut ARC-1 quote · Maglut has not published kWh/kg or CAPEX. Company-reported pilot recovery/purity only; mass split is not a purity spec. Oxide-equivalent feed, not a chloride liquor. Screening, not bankable.',
+      references: [
+        { label: 'FAR RNS — US strategic rare earths separation company MOU', url: 'https://www.investegate.co.uk/announcement/rns/ferro-alloy-resources-limited-npv--far/us-strategic-rare-earths-separation-company-mou/9787733' },
+        { label: 'Mining Technology — Maglut chromatography rare-earth processing US', url: 'https://www.mining-technology.com/news/maglut-chromatography-rare-earth-processing-us/' },
+        { label: 'Talens Peiró & Villalba JOM 2013 SX electricity order', url: 'https://link.springer.com/article/10.1007/s11837-013-0719-8' },
+        { label: 'Andersson et al. IECR 2014 MCSGP DOI', url: 'https://doi.org/10.1021/ie5023223' },
+        { label: 'NETL IX LCI OSTI', url: 'https://www.osti.gov/servlets/purl/1509123' },
+        { label: 'Honaker / NETL 2020 coal-to-REE PDF', url: 'https://www.netl.doe.gov/sites/default/files/2020-10/20VPRREE_Honaker_2.pdf' },
+      ],
+    },
     bioforge: {
       label: 'Bioforge', capacity: 1000, rate: 100, activityUnit: 'kg gluconic/day',
       palette: { section: 'building', order: 14, glyph: 'GA', description: 'Dextrose + O₂ + water → gluconic acid + H₂O₂' },
@@ -546,6 +564,7 @@
     seawaterDischarge: 'Seawater discharge',
     brineConcession: 'Brine concession',
     saltPurchase: 'Salt purchase',
+    concentratePurchase: 'Concentrate purchase',
   };
   const portNames = {
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
@@ -558,6 +577,7 @@
     caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Aluminium', carbonDioxide: 'Carbon dioxide',
     quartz: 'Quartzite', silicon: 'MG-Si', polysilicon: 'Poly-Si', carbonMonoxide: 'Carbon monoxide',
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
+    concentrate: 'Concentrate', dytb: 'DyTb', lightReo: 'Light REO',
     dextrose: 'Dextrose', gluconic: 'Gluconic acid', hydrogenPeroxide: 'Hydrogen peroxide',
     ironOre: 'Iron ore', steel: 'Iron / steel', titaniumTetrachloride: 'Titanium tetrachloride', titanium: 'Titanium', magnesiumChloride: 'Magnesium chloride',
   };
@@ -588,6 +608,13 @@
         : { Al2Si2O5OH4: 1000 / 258.16 },
     },
     'ammonium-sulfate': { label: 'Ammonium sulfate', phase: 'solid', mol: { NH42SO4: 1000 } },
+    'mixed-reo': {
+      label: 'Mixed REO concentrate',
+      phase: 'solid',
+      mol: (typeof IonicClayLongnan !== 'undefined' && IonicClayLongnan.concentrateMolForKg)
+        ? IonicClayLongnan.concentrateMolForKg(1)
+        : { Nd2O3: 5.10 / 97.27 * 1000 / 336.48, Y2O3: 62.90 / 97.27 * 1000 / 225.81 },
+    },
     dextrose: { label: 'Dextrose', phase: 'solid', mol: { C6H12O6: 1000 } },
     flueGas: {
       label: 'Flue gas',
@@ -623,6 +650,7 @@
     titaniumTetrachloride: { key: 'titaniumTetrachloride', label: 'Titanium tetrachloride', profile: 'tank', glyph: 'feed' },
     'ionic-clay': { key: 'ionic-clay', label: 'Ionic clay (Longnan basket)', profile: 'silo', glyph: 'silo' },
     'ammonium-sulfate': { key: 'ammonium-sulfate', label: 'Ammonium sulfate', profile: 'silo', glyph: 'silo' },
+    'mixed-reo': { key: 'mixed-reo', label: 'Mixed REO concentrate', profile: 'silo', glyph: 'silo' },
     dextrose: { key: 'dextrose', label: 'Dextrose', profile: 'silo', glyph: 'silo' },
   };
   const PRACTICAL_INTAKE_PALETTE = [
@@ -632,7 +660,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'dextrose'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -885,6 +913,7 @@
     'coastal-methanol': () => loadMethanolPlant(0),
     'silicon-alumina': () => loadSiliconAlumina(),
     'ree-ionic': () => loadReeIonic(),
+    'maglut-long-beach': () => loadMaglutLongBeach(),
     'bioforge-marshall': () => loadBioforgeMarshall(),
     'green-ammonia': () => loadGreenAmmonia(),
     'abundance-hub': () => loadAbundanceHub(),
@@ -1317,6 +1346,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'Longnan literature basket on a Minaçu map point; ionic clay leach+precip+calcine; 70% payability; no SX; screening; not a concession; not bankable.';
+    }
+  }
+
+  function loadMaglutLongBeach() {
+    setActiveDemo('maglut-long-beach', 'Long Beach ARC-1 chromatography → NdPr + DyTb');
+    lastSizing = null;
+    if (typeof MaglutCase === 'undefined' || !MaglutCase.createMaglutCase) {
+      throw new Error('Maglut case is not loaded');
+    }
+    loadCase(MaglutCase.createMaglutCase(), 'chrom');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'Long Beach map point only; ARC-1-style chromatography; proxy SEC/CAPEX; company-reported recovery not a Maglut quote; screening; not bankable.';
     }
   }
 
@@ -3575,6 +3617,7 @@
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
       'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'iac-leach.clay': 'ionic-clay', 'iac-leach.lixiviant': 'ammonium-sulfate',
+      'ree-chromatography.concentrate': 'mixed-reo',
       'bioforge.dextrose': 'dextrose', 'bioforge.oxygen': 'oxygen', 'bioforge.water': 'water',
       'titanium-kroll.titaniumTetrachloride': 'titaniumTetrachloride', 'titanium-kroll.magnesium': 'magnesium',
     }[`${unit}.${port}`] || 'water';
@@ -4696,8 +4739,13 @@
     polysilicon: 'Poly-Si',
     ndpr: 'NdPr oxide',
     'ndpr-oxide': 'NdPr oxide',
+    'ndpr-oxide-separated': 'NdPr oxide',
     otherReo: 'Other REO',
     'other-reo': 'Other REO',
+    dytb: 'DyTb oxide',
+    'dytb-oxide': 'DyTb oxide',
+    lightReo: 'Light REO',
+    'light-reo': 'Light REO',
   };
 
   function overviewSaleRecords() {
@@ -6623,7 +6671,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'aluminium-smelter' || current.unit === 'iac-leach' || current.unit === 'bioforge') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'aluminium-smelter' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'bioforge') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6752,6 +6800,7 @@
     polysilicon: 'polysilicon',
     'aluminium-smelter': 'aluminium-smelter',
     'iac-leach': 'iac-leach',
+    'ree-chromatography': 'ree-chromatography',
     bioforge: 'bioforge',
   };
 
@@ -7563,7 +7612,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadReeIonic, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadReeIonic, loadMaglutLongBeach, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

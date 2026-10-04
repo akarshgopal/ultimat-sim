@@ -67,6 +67,7 @@ const PROCESS_LABELS = Object.freeze({
   polysilicon: 'Polysilicon (Siemens)',
   'aluminium-smelter': 'Aluminium smelter',
   'iac-leach': 'Ionic-clay REE',
+  'ree-chromatography': 'ARC-1 chromatography',
   bioforge: 'Bioforge',
 });
 
@@ -381,6 +382,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  'ree-chromatography': Object.freeze({
+    id: 'ree-chromatography',
+    label: PROCESS_LABELS['ree-chromatography'],
+    basis: 'kgPerHour',
+    intensity: 15,
+    unitLabel: 'm²/(kg REO/h)',
+    range: Object.freeze([8, 30]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening chromatography pad ~15 m²/(kg REO/h) (range 8–30); not a plot survey. Andersson IECR 2014 MCSGP is productivity, not a measured layout.',
+        url: 'https://doi.org/10.1021/ie5023223',
+      }),
+    ]),
+  }),
   bioforge: Object.freeze({
     id: 'bioforge',
     label: PROCESS_LABELS.bioforge,
@@ -690,6 +707,13 @@ function padIacLeach(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padReeChromatography(node, solved) {
+  const spec = intensitySpec('ree-chromatography');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padBioforge(node, solved) {
   const spec = intensitySpec('bioforge');
   const activity = activityOf(solved, node.id);
@@ -745,6 +769,7 @@ const PROCESS_PADS = Object.freeze({
   polysilicon: padPolysilicon,
   'aluminium-smelter': padAluminiumSmelter,
   'iac-leach': padIacLeach,
+  'ree-chromatography': padReeChromatography,
   bioforge: padBioforge,
   'material-buffer': padBuffer,
   'intake-pump': padIntakePump,

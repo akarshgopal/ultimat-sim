@@ -58,6 +58,9 @@ const SUBSTANCES = Object.freeze({
   Yb2O3: { elements: { Yb: 2, O: 3 }, molarMassG: 394.08, charge: 0 },
   Lu2O3: { elements: { Lu: 2, O: 3 }, molarMassG: 397.94, charge: 0 },
   Y2O3: { elements: { Y: 2, O: 3 }, molarMassG: 225.81, charge: 0 },
+  C6H12O6: { elements: { C: 6, H: 12, O: 6 }, molarMassG: 180.156, charge: 0 },
+  H2O2: { elements: { H: 2, O: 2 }, molarMassG: 34.01468, charge: 0 },
+  C6H12O7: { elements: { C: 6, H: 12, O: 7 }, molarMassG: 196.1554, charge: 0 },
 });
 
 function validateStream(stream, expectedKind) {

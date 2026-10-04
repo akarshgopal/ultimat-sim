@@ -609,6 +609,27 @@ const titaniumKroll = reaction({
   inputs: { titaniumTetrachloride: { substance: 'TiCl4', molPerProductMol: 1 }, magnesium: { substance: 'Mg', molPerProductMol: 2 } },
   outputs: { titanium: { substance: 'Ti', molPerProductMol: 1, phase: 'solid' }, magnesiumChloride: { substance: 'MgCl2', molPerProductMol: 2, phase: 'solid' } },
 });
+// Glucose oxidase: C6H12O6 + O2 + H2O → C6H12O7 + H2O2.
+// 0.05 kWh/kg is screening evaporation-order electricity inside the Vogelbusch MVR
+// bioprocess table (glucose pre-concentration 19, citric pre-concentration 24, citric
+// final concentrator 35, citric crystallizer 72 kWh/t → about 0.019–0.072 kWh/kg).
+// Default 0.05 sits in that band. It is NOT a Solugen meter and does NOT include an
+// unpublished enzyme-reactor load.
+// https://www.vogelbusch-biocommodities.com/en/technology/electrification/mvr-evaporation/
+// Glucaric acid is a further metal-catalyst oxidation; no public mol split is available.
+// Do not add a glucaric mode, yield, or substance. Do not set heatKWhPerKg (no wasteHeat port).
+const bioforge = reaction({
+  product: 'C6H12O7', electricityKWhPerKg: 0.05,
+  inputs: {
+    dextrose: { substance: 'C6H12O6', molPerProductMol: 1 },
+    oxygen: { substance: 'O2', molPerProductMol: 1 },
+    water: { substance: 'H2O', molPerProductMol: 1 },
+  },
+  outputs: {
+    gluconic: { substance: 'C6H12O7', molPerProductMol: 1, phase: 'liquid' },
+    hydrogenPeroxide: { substance: 'H2O2', molPerProductMol: 1, phase: 'liquid' },
+  },
+});
 
 // Ionic-clay leach + precip + calcine screening. Feed is mixed clay, not a pure substance.
 // Deng & Kendall 2019 Table 2 southern-China in-situ: 7 kg (NH4)2SO4 / kg recovered REO (4–10 mid)
@@ -1305,6 +1326,18 @@ const UNITS = Object.freeze({
       liquor: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: iacLeach,
+  },
+  bioforge: {
+    kind: 'converter',
+    ports: {
+      dextrose: { direction: 'in', kind: 'material', required: true },
+      oxygen: { direction: 'in', kind: 'material', required: true },
+      water: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      gluconic: { direction: 'out', kind: 'material', required: true },
+      hydrogenPeroxide: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: bioforge,
   },
 });
 

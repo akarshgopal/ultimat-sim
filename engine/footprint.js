@@ -67,6 +67,7 @@ const PROCESS_LABELS = Object.freeze({
   polysilicon: 'Polysilicon (Siemens)',
   'aluminium-smelter': 'Aluminium smelter',
   'iac-leach': 'Ionic-clay REE',
+  bioforge: 'Bioforge',
 });
 
 const SOLAR_EVIDENCE = Object.freeze([
@@ -380,6 +381,26 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  bioforge: Object.freeze({
+    id: 'bioforge',
+    label: PROCESS_LABELS.bioforge,
+    basis: 'kgPerHour',
+    intensity: 5.4,
+    unitLabel: 'm²/(kg gluconic/h)',
+    range: Object.freeze([3, 12]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening Bioforge pad 5.4 m²/(kg gluconic/h) from 500,000 sq ft building / EA 75 kta ≈ 5.4; range 3–12. The 34-acre parcel is not this intensity. Not a plot survey.',
+        url: 'https://www.adm.com/en-us/news/news-releases/2024/4/solugen-breaks-ground-on-bioforge-marshall-facility-bolstering-u-s.--biomanufacturing-capabilities/',
+      }),
+      Object.freeze({
+        label: 'DOE EA-2246 Solugen Inc. Bioforge Marshall Project — 75 kta gluconic nameplate (building area family, not a surveyed layout)',
+        url: 'https://www.energy.gov/nepa/doeea-2246-solugen-inc-bioforge-marshall-project-marshall-minnesota',
+      }),
+    ]),
+  }),
   battery: Object.freeze({
     id: 'battery',
     label: PROCESS_LABELS.battery,
@@ -669,6 +690,13 @@ function padIacLeach(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padBioforge(node, solved) {
+  const spec = intensitySpec('bioforge');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padBatteryKWh(batteryKWh) {
   const spec = intensitySpec('battery');
   const kWh = Math.max(0, finiteNumber(batteryKWh));
@@ -717,6 +745,7 @@ const PROCESS_PADS = Object.freeze({
   polysilicon: padPolysilicon,
   'aluminium-smelter': padAluminiumSmelter,
   'iac-leach': padIacLeach,
+  bioforge: padBioforge,
   'material-buffer': padBuffer,
   'intake-pump': padIntakePump,
   'gas-blower': padGasBlower,

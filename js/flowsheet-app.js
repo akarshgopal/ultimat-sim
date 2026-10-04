@@ -99,6 +99,7 @@
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
     Crust: ['mg-si', 'polysilicon', 'aluminium-smelter'],
     REE: ['iac-leach'],
+    Bio: ['bioforge'],
   };
   const PALETTE_MORE_UNITS = [
     'nuclear-electricity', 'solar-thermal', 'thermal-storage',
@@ -343,6 +344,19 @@
         { label: 'USGS MCS 2026 rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
       ],
     },
+    bioforge: {
+      label: 'Bioforge', capacity: 1000, rate: 100, activityUnit: 'kg gluconic/day',
+      palette: { section: 'building', order: 14, glyph: 'GA', description: 'Dextrose + O₂ + water → gluconic acid + H₂O₂' },
+      params: { electricityKWhPerKg: 0.05 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0.01, max: 0.2, step: 0.01, unit: 'kWh/kg' }],
+      sourceNote: 'GOx stoich C6H12O6 + O2 + H2O → C6H12O7 + H2O2. SEC 0.05 kWh/kg is Vogelbusch MVR-family evaporation-order electricity (0.019–0.072 kWh/kg band), not a Solugen meter and not an unpublished enzyme-reactor load. Glucaric not modeled (no public mol split). Screening, not a plant quote.',
+      references: [
+        { label: 'EPA Green Chemistry Challenge 2023 — Greener Synthetic Pathways Award', url: 'https://www.epa.gov/greenchemistry/green-chemistry-challenge-2023-greener-synthetic-pathways-award' },
+        { label: 'DOE EA-2246 Solugen Inc. Bioforge Marshall Project', url: 'https://www.energy.gov/nepa/doeea-2246-solugen-inc-bioforge-marshall-project-marshall-minnesota' },
+        { label: 'C&EN 8 Nov 2023 — Solugen expand biobased chemical production', url: 'https://cen.acs.org/business/biobased-chemicals/Solugen-expand-biobased-chemical-production/101/web/2023/11' },
+        { label: 'Vogelbusch MVR evaporation (SEC family, not a Solugen meter)', url: 'https://www.vogelbusch-biocommodities.com/en/technology/electrification/mvr-evaporation/' },
+      ],
+    },
     'hydrogen-dri': {
       label: 'Hydrogen DRI steel', capacity: 1000, rate: 100, activityUnit: 'kg Fe/day',
       palette: { section: 'building', order: 13, glyph: 'Fe', tone: 'carbon', description: 'Iron oxide + H₂ + power → iron + water' },
@@ -544,6 +558,7 @@
     caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Aluminium', carbonDioxide: 'Carbon dioxide',
     quartz: 'Quartzite', silicon: 'MG-Si', polysilicon: 'Poly-Si', carbonMonoxide: 'Carbon monoxide',
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
+    dextrose: 'Dextrose', gluconic: 'Gluconic acid', hydrogenPeroxide: 'Hydrogen peroxide',
     ironOre: 'Iron ore', steel: 'Iron / steel', titaniumTetrachloride: 'Titanium tetrachloride', titanium: 'Titanium', magnesiumChloride: 'Magnesium chloride',
   };
   const materialPresets = {
@@ -573,6 +588,7 @@
         : { Al2Si2O5OH4: 1000 / 258.16 },
     },
     'ammonium-sulfate': { label: 'Ammonium sulfate', phase: 'solid', mol: { NH42SO4: 1000 } },
+    dextrose: { label: 'Dextrose', phase: 'solid', mol: { C6H12O6: 1000 } },
     flueGas: {
       label: 'Flue gas',
       phase: 'gas',
@@ -607,6 +623,7 @@
     titaniumTetrachloride: { key: 'titaniumTetrachloride', label: 'Titanium tetrachloride', profile: 'tank', glyph: 'feed' },
     'ionic-clay': { key: 'ionic-clay', label: 'Ionic clay (Longnan basket)', profile: 'silo', glyph: 'silo' },
     'ammonium-sulfate': { key: 'ammonium-sulfate', label: 'Ammonium sulfate', profile: 'silo', glyph: 'silo' },
+    dextrose: { key: 'dextrose', label: 'Dextrose', profile: 'silo', glyph: 'silo' },
   };
   const PRACTICAL_INTAKE_PALETTE = [
     { preset: 'seawater', label: 'Seawater intake', glyph: 'SW', tone: 'water', description: 'Coastal seawater feed' },
@@ -615,7 +632,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'dextrose'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -868,6 +885,7 @@
     'coastal-methanol': () => loadMethanolPlant(0),
     'silicon-alumina': () => loadSiliconAlumina(),
     'ree-ionic': () => loadReeIonic(),
+    'bioforge-marshall': () => loadBioforgeMarshall(),
     'green-ammonia': () => loadGreenAmmonia(),
     'abundance-hub': () => loadAbundanceHub(),
     'zabuye-hub': () => loadZabuyeHub(),
@@ -1299,6 +1317,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'Longnan literature basket on a Minaçu map point; ionic clay leach+precip+calcine; 70% payability; no SX; screening; not a concession; not bankable.';
+    }
+  }
+
+  function loadBioforgeMarshall() {
+    setActiveDemo('bioforge-marshall', 'Marshall Bioforge gluconic + H₂O₂');
+    lastSizing = null;
+    if (typeof BioforgeCase === 'undefined' || !BioforgeCase.createBioforgeCase) {
+      throw new Error('Bioforge case is not loaded');
+    }
+    loadCase(BioforgeCase.createBioforgeCase(), 'bioforge');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'Screening GOx dextrose → gluconic + H₂O₂ at a Marshall map point; may be cash−; not the Solugen plant; not an ADM contract; not bankable.';
     }
   }
 
@@ -3544,6 +3575,7 @@
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
       'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'iac-leach.clay': 'ionic-clay', 'iac-leach.lixiviant': 'ammonium-sulfate',
+      'bioforge.dextrose': 'dextrose', 'bioforge.oxygen': 'oxygen', 'bioforge.water': 'water',
       'titanium-kroll.titaniumTetrachloride': 'titaniumTetrachloride', 'titanium-kroll.magnesium': 'magnesium',
     }[`${unit}.${port}`] || 'water';
   }
@@ -5111,7 +5143,7 @@
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
     if (unit === 'mg-si' || unit === 'polysilicon') return 'furnace';
-    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'aluminium-smelter') return 'cell';
+    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'aluminium-smelter' || unit === 'bioforge') return 'cell';
     if (unit === 'asu' || unit === 'ammonia' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
     return 'shed';
@@ -6591,7 +6623,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'aluminium-smelter' || current.unit === 'iac-leach') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'aluminium-smelter' || current.unit === 'iac-leach' || current.unit === 'bioforge') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6720,6 +6752,7 @@
     polysilicon: 'polysilicon',
     'aluminium-smelter': 'aluminium-smelter',
     'iac-leach': 'iac-leach',
+    bioforge: 'bioforge',
   };
 
   function screeningPackFor(node) {
@@ -7530,7 +7563,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadReeIonic, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadReeIonic, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

@@ -94,6 +94,9 @@ const REGION_STRING_TO_ID = {
   Australia: 'australia',
   India: 'india',
   'Texas/US Gulf': 'texas',
+  // Marshall Bioforge alias: Texas/US industrial power $0.06/kWh and CAPEX× 1.0.
+  // Not an Xcel tariff and not a Minnesota location factor. Do not add a Midwest power row or CAPEX×.
+  'US Midwest': 'texas',
   'US West / California': 'texas',
   'US West / Utah': 'default',
   'US West / Nevada': 'texas',
@@ -200,6 +203,16 @@ const prices = {
       { label: 'Meteoric Resources Caldeira scoping — ~70% contained-oxide payability for MREC (company scoping, not a market print)', url: 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf' },
     ]
   ),
+  gluconic: row(
+    0.515, '$/kg', 'screening', 'ChemAnalyst China Q1 2025 gluconic acid',
+    'ChemAnalyst China Q1 2025 average USD 515/MT as repeated at OpenPR. Asia spot screening, not a US contract. Keep 0.515; do not round. No regional overlay.',
+    [{ label: 'OpenPR / ChemAnalyst China Q1 2025 gluconic acid average USD 515/MT (Asia spot screening, not a US contract)', url: 'https://www.openpr.com/news/4394627/track-gluconic-acid-price-index-historical-and-forecast' }]
+  ),
+  'hydrogen-peroxide': row(
+    0.674, '$/kg', 'screening', 'IndexBox US 2024 average H2O2 export price',
+    'IndexBox US 2024 average export price $674/t. Concentration basis not stated — screening, not the Nov 2024 $950/t 70% Illinois quote, not 100% equivalent. No regional overlay.',
+    [{ label: 'IndexBox hydrogen peroxide United States market overview 2024 — US 2024 average export price $674/t', url: 'https://www.indexbox.io/blog/hydrogen-peroxide-united-states-market-overview-2024-3/' }]
+  ),
 };
 
 const costs = {
@@ -257,6 +270,11 @@ const costs = {
     0.30, '$/kg', 'screening', 'fertilizer-grade ammonium sulfate',
     'Fertilizer-grade (NH₄)₂SO₄ ~$300/t ($0.30/kg). Quality screening. Not a contract.',
     [{ label: 'Fertilizer-grade ammonium sulfate screening ~$300/t; not a contract', url: null }]
+  ),
+  dextrose: row(
+    0.84, '$/kg', 'screening', 'Tridge US 2024 dextrose export low',
+    'Tridge US 2024 export low $0.84/kg. Not an ADM transfer price. Do not invent a Midwest plant-gate price.',
+    [{ label: 'Tridge US dextrose export prices (2024 low $0.84/kg; not an ADM transfer price)', url: 'https://dir.tridge.com/prices/dextrose/US' }]
   ),
 };
 
@@ -409,6 +427,19 @@ const packs = {
       { label: 'Screening ~$50k per annual tonne REO for leach+precip+calcine without SX → 18250 $/(kg/day)', url: null },
     ],
   }),
+  bioforge: pack({
+    capexIntensity: 438, intensityUnit: '$/(kg gluconic/day)',
+    fixedOmPercent: 4, variableOm: 0, assetLifeYears: 20,
+    quality: 'screening', source: 'C&EN 8 Nov 2023 Solugen Marshall investment floor',
+    note: 'installedCapex = 438 × capacity. C&EN 8 Nov 2023 "at least $90 million" for the then-75,000 t/y Marshall facility. $90e6/75e6 kg/y = $1.20/(kg·y) × 365 = $438/(kg/day). Stated investment floor, not a TIC. DOE LPO $213.6M conditional commitment (Jun 2024) is a loan guarantee, NOT installed CAPEX — do not use it as the intensity. ADM Apr 2024 "up to 120 kta" has no new dollar figure — do not recompute. Linear small-plant intensity. Not bankable. US Midwest aliases to texas so CAPEX× stays 1.0 (Texas/US Gulf baseline); not a Minnesota location factor and not an Xcel tariff.',
+    evidence: [
+      { label: 'C&EN 8 Nov 2023 — Solugen expand biobased chemical production; "at least $90 million" for then-75,000 t/y Marshall', url: 'https://cen.acs.org/business/biobased-chemicals/Solugen-expand-biobased-chemical-production/101/web/2023/11' },
+      { label: 'Solugen — $213.6M DOE LPO conditional commitment (Jun 2024); loan guarantee, not installed CAPEX', url: 'https://solugen.com/blog/2024/06/13/solugen-secures-conditional-commitment-for-213-6m-doe-loan-guarantee-bolstering-u-s-leadership-in-green-manufacturing-and-domestic-chemical-production/' },
+      { label: 'DOE EA-2246 Solugen Inc. Bioforge Marshall Project, Marshall, Minnesota', url: 'https://www.energy.gov/nepa/doeea-2246-solugen-inc-bioforge-marshall-project-marshall-minnesota' },
+      { label: 'DOE LPO EA/FONSI PDF — Bioforge Marshall', url: 'https://www.energy.gov/sites/default/files/2024-03/Solugen%20LPO%20EA_FONSI_Signed.pdf' },
+      { label: 'ADM 8 Apr 2024 — Solugen breaks ground on Bioforge Marshall; "up to 120 kta", no new dollar figure', url: 'https://www.adm.com/en-us/news/news-releases/2024/4/solugen-breaks-ground-on-bioforge-marshall-facility-bolstering-u-s.--biomanufacturing-capabilities/' },
+    ],
+  }),
 
   // MECH18 — utility CAPEX packs (screening). Capacity basis = installed duty (m³/day or Nm³/day).
   'intake-pump': pack({
@@ -550,10 +581,24 @@ const demand = {
       { label: 'USGS MCS 2026 rare earths / heavy / yttrium (commodity-family context; 200 t/y other-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
     ]
   ),
+  gluconic: row(
+    7.5e7, 'kg/year', 'screening', 'DOE EA-2246 Marshall 75 kta gluconic nameplate',
+    `75 kt/y screening offtake ceiling. DOE EA-2246 Marshall phased nameplate 75 kta gluconic acid, used as a global screening offtake ceiling because no regional consumption series is published. Not world market and not a contract. ${DEMAND_REGION}`,
+    [
+      { label: 'DOE EA-2246 Solugen Inc. Bioforge Marshall Project — phased nameplate 75 kta gluconic acid (screening offtake ceiling, not a contract)', url: 'https://www.energy.gov/nepa/doeea-2246-solugen-inc-bioforge-marshall-project-marshall-minnesota' },
+    ]
+  ),
+  'hydrogen-peroxide': row(
+    1e8, 'kg/year', 'screening', 'conservative 100 kt/y H2O2 screening ceiling',
+    `100 kt/y screening offtake ceiling, about one tenth of ~1 Mt US 2024 hydrogen peroxide consumption (IndexBox). Not the full market, concentration basis not stated, not a contract. ${DEMAND_REGION}`,
+    [
+      { label: 'IndexBox hydrogen peroxide United States market overview 2024 (~1 Mt US consumption family; 100 kt/y ceiling is screening, not a contract)', url: 'https://www.indexbox.io/blog/hydrogen-peroxide-united-states-market-overview-2024-3/' },
+    ]
+  ),
 };
 
 const MINERAL_DEMAND_KEYS = Object.freeze(['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium']);
-const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water']);
+const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide']);
 
 function cloneDemandRow(item, extraNote, extra = {}) {
   const cloned = {

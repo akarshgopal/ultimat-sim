@@ -55,6 +55,7 @@ const UNIT_INTENSITY_QUALITY = Object.freeze({
   'mg-si': 'recoverable',
   polysilicon: 'screening',
   'iac-leach': 'screening',
+  bioforge: 'screening',
   'hydrogen-dri': 'assumption',
   'titanium-kroll': 'assumption',
   'solar-pv': 'cited',

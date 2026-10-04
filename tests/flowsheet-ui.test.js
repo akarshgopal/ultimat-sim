@@ -1064,14 +1064,16 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
   const carbon = palette.indexOf('>Carbon<');
   const crust = palette.indexOf('>Crust<');
   const ree = palette.indexOf('>REE<');
+  const bio = palette.indexOf('>Bio<');
   const more = palette.indexOf('>More units<');
-  assert.ok(minerals >= 0 && minerals < fuels && fuels < water && water < carbon && carbon < crust && crust < ree && ree < more);
+  assert.ok(minerals >= 0 && minerals < fuels && fuels < water && water < carbon && carbon < crust && crust < ree && ree < bio && bio < more);
   assert.match(palette.slice(Math.max(0, minerals - 40), minerals), /\bopen\b/);
   assert.match(palette.slice(Math.max(0, fuels - 40), fuels), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, crust - 80), crust), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, ree - 80), ree), /\bopen\b/);
+  assert.doesNotMatch(palette.slice(Math.max(0, bio - 80), bio), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, more - 80), more), /\bopen\b/);
-  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'polysilicon', 'aluminium-smelter', 'iac-leach']) {
+  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'polysilicon', 'aluminium-smelter', 'iac-leach', 'bioforge']) {
     assert.ok(palette.indexOf(`data-unit="${unit}"`) < more, unit);
   }
   for (const unit of ['titanium-kroll', 'hydrogen-dri', 'med', 'msf']) {

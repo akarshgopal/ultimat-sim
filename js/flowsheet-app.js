@@ -828,6 +828,7 @@
     'coastal-methane': () => loadCoastalMethane(0),
     'coastal-methanol': () => loadMethanolPlant(0),
     'silicon-alumina': () => loadSiliconAlumina(),
+    'green-ammonia': () => loadGreenAmmonia(),
     'abundance-hub': () => loadAbundanceHub(),
     'zabuye-hub': () => loadZabuyeHub(),
     'demo-network': () => loadDemoNetwork(),
@@ -1245,6 +1246,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening crustal quartz → MG-Si and purchased alumina → Al on frozen Mejillones PV; not a concession and not polysilicon.';
+    }
+  }
+
+  function loadGreenAmmonia() {
+    setActiveDemo('green-ammonia', 'Walvis Bay green NH₃');
+    lastSizing = null;
+    if (typeof GreenAmmoniaCase === 'undefined' || !GreenAmmoniaCase.createGreenAmmoniaCase) {
+      throw new Error('Green ammonia case is not loaded');
+    }
+    loadCase(GreenAmmoniaCase.createGreenAmmoniaCase(), 'ammonia');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening air + seawater + sun → NH₃, not chlor-alkali H₂, not bankable.';
     }
   }
 
@@ -7454,7 +7468,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

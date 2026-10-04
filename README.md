@@ -34,6 +34,10 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 
 Metallurgical-grade silicon is a carbothermic SAF block (`mg-si`): SiO₂ + 2 C → Si + 2 CO at 12 kWh/kg electrical (mid of the 11–13 kWh/kg band). Carbon chemical energy is the C feed; the unit does not emit waste heat. Hall–Héroult aluminium stays 14 kWh/kg. Product prices are USGS MCS 2025 cited rows (MG-Si metal $3.97/kg, primary aluminium ingot $2.87/kg), not contracts. The Mejillones demo buys quartzite, reductant carbon, alumina, and anode carbon on frozen PVGIS-ERA5 5.27 kWh/kWp·day; purchased solids are not a concession. Screening TEA, not bankable. Polysilicon / Siemens is not modeled.
 
+## Green ammonia from sunlight (screening)
+
+Walvis Bay screening plant: air + seawater SWRO + electrolysis + ASU + Haber–Bosch on frozen PVGIS-ERA5 totals.fixed E_d 5.48 kWh/kWp·day (E_y 2000.67), retrieved 2026-09-21. Hydrogen is electrolytic, not Dead Sea chlor-alkali. Product is screening fertilizer NH₃ at $0.45/kg with small-plant Haber/electrolyzer intensities; cash may be negative. Not bankable and not a green premium.
+
 ## Code map
 
 - `index.html`, `flowsheet.css`, and `js/flowsheet-app.js`: editor, inspector, saved factories, and scenario comparison.

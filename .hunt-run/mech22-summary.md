@@ -1,7 +1,7 @@
 # MECH22 — Part-load after a blocked outlet · k clamp · toolbar redo · blower twin · TDS fixed point
 
 **Feat tip:** `01e6ac5`
-**Pages:** deploying
+**Pages:** live (`gh-pages` asset `a815815`; CDN can lag a hard-refresh)
 **Tests:** 356 pass
 **Date:** 2026-10-04 CEST
 **Base:** `8b7f98a` (`docs(mech21): mark Pages live`)

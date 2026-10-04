@@ -1028,11 +1028,23 @@ function readAssaySalinityGPerKg(bag) {
     const n = Number(bag.tds_mg_per_kg);
     if (Number.isFinite(n) && n >= 0) return { S: n / 1000, field: 'tds_mg_per_kg' };
   }
+  // tds_mg_per_L is mass/volume, not g/kg. Proxy: S0 = mg/L ÷ 1000 (1 L ≈ 1 kg),
+  // then one UNESCO pass and S = mg/L ÷ ρ(S0). Not a measured density.
+  if (bag.tds_mg_per_L != null && bag.tds_mg_per_L !== '') {
+    const n = Number(bag.tds_mg_per_L);
+    if (Number.isFinite(n) && n >= 0) {
+      const S0 = n / 1000;
+      const rho0 = estimateDensityKgM3FromSalinity(S0);
+      if (!(rho0 > 0)) return { S: S0, field: 'tds_mg_per_L', proxy: true };
+      return { S: n / rho0, field: 'tds_mg_per_L', proxy: true };
+    }
+  }
   return null;
 }
 
 // Density hint when an assay has salinity/TDS but no density_kg_per_L.
 // In-range → UNESCO 25 °C. Out of range → labeled fluid-class fallback (caller supplies ρ).
+// tds_mg_per_L uses the 1 L ≈ 1 kg proxy above, then S = mg/L ÷ that ρ.
 function densityHintFromAssay(bag) {
   const read = readAssaySalinityGPerKg(bag);
   if (!read) return null;
@@ -1041,12 +1053,16 @@ function densityHintFromAssay(bag) {
     return {
       densityKgM3: null,
       outOfRange: true,
-      source: 'fluid default (assay salinity outside UNESCO 0–42 g/kg fit)',
+      source: read.proxy
+        ? 'fluid default (TDS mg/L proxy outside UNESCO 0–42 g/kg fit)'
+        : 'fluid default (assay salinity outside UNESCO 0–42 g/kg fit)',
     };
   }
   return {
     densityKgM3: rho,
-    source: 'salinity estimate (UNESCO 25 °C)',
+    source: read.proxy
+      ? 'salinity estimate (UNESCO 25 °C, TDS mg/L proxy)'
+      : 'salinity estimate (UNESCO 25 °C)',
   };
 }
 

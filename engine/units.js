@@ -660,6 +660,8 @@ function resolveLiquidPumpSec(params = {}, densityKgM3 = 1025) {
 
 // Mild part-load vs Q/Qrated. SEC × (1 + k(1−q)²), q = min(1, Q/Qrated).
 // partLoadK unset → ×1, bit-identical. Screening, not a vendor curve.
+// MECH21: when k is set, electricity demand uses this shape at the delivered
+// flow (not the setpoint), so a short bus cannot claim the optimistic Q.
 function pumpPartLoad(params = {}, flow, rated) {
   const raw = params.partLoadK;
   if (raw == null || raw === '') return { multiplier: 1 };
@@ -670,6 +672,22 @@ function pumpPartLoad(params = {}, flow, rated) {
   if (!(qRated > 0) || !Number.isFinite(qFlow) || qFlow < 0) return { multiplier: 1, k, q: 1 };
   const q = Math.min(1, qFlow / qRated);
   return { multiplier: 1 + k * (1 - q) ** 2, k, q };
+}
+
+// Largest flow in [0, cap] with flow × shaped SEC ≤ kWh.
+// Energy rises with flow for partLoadK ≤ 3 (slider max is 2).
+function flowWithinShapedSec(sec, params, cap, rated, kWh) {
+  const energy = (flow) => flow * sec * pumpPartLoad(params, flow, rated).multiplier;
+  if (!(sec > 0) || !Number.isFinite(kWh)) return cap;
+  if (energy(cap) <= kWh) return cap;
+  let lo = 0;
+  let hi = cap;
+  for (let i = 0; i < 50; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (energy(mid) <= kWh) lo = mid;
+    else hi = mid;
+  }
+  return lo;
 }
 
 function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
@@ -688,14 +706,36 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   const feedM3 = feedKg / density;
   const feedAmount = useKg ? feedKg : feedM3;
   const planned = Math.min(requested, installed);
-  const part = pumpPartLoad(params, planned, installed);
-  const secEff = sec * part.multiplier;
+  const demandPart = pumpPartLoad(params, planned, installed);
+  const demandSec = sec * demandPart.multiplier;
+  const capFlow = Math.min(planned, feedAmount);
+  const kSet = demandPart.k != null;
+  let activity;
+  let part;
+  let secEff;
+  let electricityBinds = false;
+  if (!kSet) {
+    secEff = sec;
+    const elecLimit = sec === 0 ? Infinity : electricity.kWh / sec;
+    activity = Math.min(capFlow, elecLimit);
+    part = demandPart;
+  } else {
+    const shaped = (flow) => flow * sec * pumpPartLoad(params, flow, installed).multiplier;
+    const powerOk = !(sec > 0) || !Number.isFinite(electricity.kWh) || shaped(capFlow) <= electricity.kWh;
+    if (powerOk) activity = capFlow;
+    else {
+      activity = flowWithinShapedSec(sec, params, capFlow, installed, electricity.kWh);
+      electricityBinds = true;
+    }
+    part = pumpPartLoad(params, activity, installed);
+    secEff = sec * part.multiplier;
+  }
+  const elecLimit = secEff === 0 ? Infinity : electricity.kWh / secEff;
   const limits = {
     capacity: installed,
     in: feedAmount,
-    electricity: secEff === 0 ? Infinity : electricity.kWh / secEff,
+    electricity: electricityBinds ? activity : elecLimit,
   };
-  const activity = Math.min(planned, limits.in, limits.electricity);
   const fraction = feedAmount === 0 ? 0 : activity / feedAmount;
   const consumedFeed = scaleStream(feed, fraction);
   const limitingValue = Math.min(limits.capacity, limits.in, limits.electricity);
@@ -708,7 +748,7 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
     activity,
     requestedInputs: {
       in: scaleStream(feed, feedAmount === 0 ? 0 : planned / feedAmount),
-      electricity: { kind: 'electricity', kWh: planned * secEff },
+      electricity: { kind: 'electricity', kWh: planned * demandSec },
     },
     consumed: {
       in: consumedFeed,

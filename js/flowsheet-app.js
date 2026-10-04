@@ -48,6 +48,7 @@
   let selectedNodeId = null;
   let selectedEdgeIndex = null;
   let undoStack = [];
+  let redoStack = [];
   let undoGesture = null;
   const UNDO_STACK_MAX = 20;
   let pendingPort = null;
@@ -414,7 +415,7 @@
         { key: 'pumpKWhPerM3', label: 'Pump energy', min: 0, max: 2, step: 0.05, unit: 'kWh/m³' },
         { key: 'densityKgM3', label: 'Liquid density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
       ],
-      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. MECH18 screening CAPEX ~$350/(m³/day) × regional tea CAPEX×; campus pad ~0.15 m²/(m³/day) (floor 6 m²). MECH19: set static head to derive SEC = ρ·g·H / (η·3.6e6) with η default 0.7; moving the kWh/m³ slider overrides head. Head unset keeps the kWh/m³ value (default 0.4). MECH20: optional part-load shape k applies SEC × (1 + k(1−Q/Qrated)²) when flow is below rated capacity; k unset is ×1. Not a vendor curve. SWRO plant SEC should stay plant-only if lift is modeled here.',
+      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. MECH18 screening CAPEX ~$350/(m³/day) × regional tea CAPEX×; campus pad ~0.15 m²/(m³/day) (floor 6 m²). MECH19: set static head to derive SEC = ρ·g·H / (η·3.6e6) with η default 0.7; moving the kWh/m³ slider overrides head. Head unset keeps the kWh/m³ value (default 0.4). MECH20: optional part-load shape k applies SEC × (1 + k(1−Q/Qrated)²) when flow is below rated capacity; k unset is ×1. MECH21 uses that shape at the delivered flow, so a short bus limits throughput on the curve instead of the setpoint SEC. Not a vendor curve. SWRO plant SEC should stay plant-only if lift is modeled here.',
       references: [
         { label: 'Voutchkov 2018 desalination energy (DOI 10.1016/j.desal.2017.10.033)', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
         { label: 'Elimelech & Phillip 2011 SWRO plant SEC band', url: 'https://doi.org/10.1126/science.1200488' },
@@ -445,7 +446,7 @@
         { key: 'densityKgM3', label: 'Density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
         { key: 'capexPerM3', label: 'CAPEX intensity', min: 50, max: 2000, step: 25, unit: '$/m³ capacity' },
       ],
-      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH18 tank CAPEX uses fluid-class $/m³ (freshwater/seawater/brine/generic) × regional tea CAPEX×; generic $500/m³ ≡ MECH17 $0.50/kg at ρ=1000. MECH19 uses assay density_kg_per_L for brine/seawater. MECH20: if that field is missing, salinity or TDS in 0–42 g/kg uses a UNESCO 25 °C estimate; salinity outside that fit, or no salinity, stays on the labeled fluid-class density. Campus pad ~1 m²/t capacity. Not a vendor quote or surveyed plot.',
+      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH18 tank CAPEX uses fluid-class $/m³ (freshwater/seawater/brine/generic) × regional tea CAPEX×; generic $500/m³ ≡ MECH17 $0.50/kg at ρ=1000. MECH19 uses assay density_kg_per_L for brine/seawater. MECH20: if that field is missing, salinity or TDS in 0–42 g/kg uses a UNESCO 25 °C estimate; salinity outside that fit, or no salinity, stays on the labeled fluid-class density. MECH21: tds_mg_per_L (no ρ) is a proxy — S0 = mg/L ÷ 1000 (1 L ≈ 1 kg), then S = mg/L ÷ UNESCO ρ(S0). Campus pad ~1 m²/t capacity. Not a vendor quote or surveyed plot.',
       references: [
         { label: 'EPA USP guide / tank-farm layout screening (pad+dike order)', url: 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf' },
         { label: 'Matches process equipment — atmospheric storage tank cost order', url: 'https://www.matche.com/equipcost/Tank.html' },
@@ -1170,6 +1171,7 @@
     Object.keys(setpoints).forEach(key => delete setpoints[key]);
     Object.keys(counts).forEach(key => delete counts[key]);
     undoStack = [];
+    redoStack = [];
     undoGesture = null;
     selectedNodeId = null;
     selectedEdgeIndex = null;
@@ -2317,6 +2319,7 @@
     selectedNodeId = selection;
     pendingPort = null;
     undoStack = [];
+    redoStack = [];
     undoGesture = null;
     autoArrange();
     solveAndRender();
@@ -2612,9 +2615,19 @@
     return false;
   }
 
-  function pushUndo(entry) {
+  function rememberUndo(entry) {
     undoStack.push(entry);
     if (undoStack.length > UNDO_STACK_MAX) undoStack.shift();
+  }
+
+  function pushUndo(entry) {
+    rememberUndo(entry);
+    redoStack = [];
+  }
+
+  function pushRedo(entry) {
+    redoStack.push(entry);
+    if (redoStack.length > UNDO_STACK_MAX) redoStack.shift();
   }
 
   function cloneUndo(value) {
@@ -2696,56 +2709,103 @@
     return false;
   }
 
-  function undoLast() {
-    const entry = undoStack.pop();
-    undoGesture = null;
-    if (!entry) return false;
+  function applyHistorySnapshot(entry) {
+    const restored = entry.graph || { nodes: [], edges: [] };
+    graph.nodes.splice(0, graph.nodes.length, ...cloneUndo(restored.nodes || []));
+    graph.edges.splice(0, graph.edges.length, ...cloneUndo(restored.edges || []));
+    for (const key of Object.keys(setpoints)) delete setpoints[key];
+    Object.assign(setpoints, cloneUndo(entry.setpoints || {}));
+    selectedNodeId = entry.selectedNodeId ?? null;
+    selectedEdgeIndex = entry.selectedEdgeIndex ?? null;
+    pendingPort = null;
+    solveAndRender();
+  }
+
+  function applyMove(entry) {
+    const current = node(entry.nodeId);
+    if (!current) return null;
+    const forward = { type: 'move', nodeId: entry.nodeId, position: { x: current.position.x, y: current.position.y } };
+    current.position = { x: entry.position.x, y: entry.position.y };
+    selectedNodeId = entry.nodeId;
+    selectedEdgeIndex = null;
+    pendingPort = null;
+    render();
+    persistAutosave();
+    return forward;
+  }
+
+  function removeNodeById(id) {
+    const index = graph.nodes.findIndex(candidate => candidate.id === id);
+    if (index < 0) return null;
+    const removedNode = cloneUndo(graph.nodes[index]);
+    const removedEdges = graph.edges
+      .map((edge, edgeIndex) => ({ edgeIndex, edge }))
+      .filter(item => item.edge.from.node === id || item.edge.to.node === id)
+      .map(item => ({ edgeIndex: item.edgeIndex, edge: cloneUndo(item.edge) }));
+    const setpoint = setpoints[id];
+    graph.edges = graph.edges.filter(edge => edge.from.node !== id && edge.to.node !== id);
+    graph.nodes.splice(index, 1);
+    delete setpoints[id];
+    selectedNodeId = null;
+    selectedEdgeIndex = null;
+    pendingPort = null;
+    solveAndRender();
+    return {
+      type: 'restore-node',
+      nodeIndex: index,
+      node: removedNode,
+      edges: removedEdges,
+      setpoint: setpoint === undefined ? undefined : cloneUndo(setpoint),
+    };
+  }
+
+  function restoreNode(entry) {
+    const idx = Math.min(Math.max(0, entry.nodeIndex), graph.nodes.length);
+    graph.nodes.splice(idx, 0, cloneUndo(entry.node));
+    const sorted = [...(entry.edges || [])].sort((a, b) => a.edgeIndex - b.edgeIndex);
+    for (const item of sorted) {
+      const at = Math.min(Math.max(0, item.edgeIndex), graph.edges.length);
+      graph.edges.splice(at, 0, cloneUndo(item.edge));
+    }
+    if (entry.setpoint !== undefined) setpoints[entry.node.id] = cloneUndo(entry.setpoint);
+    selectedNodeId = entry.node.id;
+    selectedEdgeIndex = null;
+    pendingPort = null;
+    solveAndRender();
+    return { type: 'add-node', nodeId: entry.node.id };
+  }
+
+  function removeEdgeObject(edge) {
+    const idx = graph.edges.indexOf(edge);
+    if (idx < 0) return null;
+    graph.edges.splice(idx, 1);
+    selectedEdgeIndex = null;
+    selectedNodeId = edge?.from?.node || selectedNodeId;
+    pendingPort = null;
+    solveAndRender();
+    return { type: 'restore-edge', edgeIndex: idx, edge: cloneUndo(edge) };
+  }
+
+  function restoreEdge(entry) {
+    const idx = Math.min(Math.max(0, entry.edgeIndex), graph.edges.length);
+    const edge = cloneUndo(entry.edge);
+    graph.edges.splice(idx, 0, edge);
+    selectedEdgeIndex = idx;
+    selectedNodeId = null;
+    pendingPort = null;
+    solveAndRender();
+    return { type: 'add-edge', edge };
+  }
+
+  function applyUndo(entry) {
     if (entry.type === 'snapshot') {
-      const restored = entry.graph || { nodes: [], edges: [] };
-      graph.nodes.splice(0, graph.nodes.length, ...cloneUndo(restored.nodes || []));
-      graph.edges.splice(0, graph.edges.length, ...cloneUndo(restored.edges || []));
-      for (const key of Object.keys(setpoints)) delete setpoints[key];
-      Object.assign(setpoints, cloneUndo(entry.setpoints || {}));
-      selectedNodeId = entry.selectedNodeId ?? null;
-      selectedEdgeIndex = entry.selectedEdgeIndex ?? null;
-      pendingPort = null;
-      solveAndRender();
-      return true;
+      const forward = snapshotEntry();
+      applyHistorySnapshot(entry);
+      return forward;
     }
-    if (entry.type === 'move') {
-      const current = node(entry.nodeId);
-      if (!current) return false;
-      current.position = { x: entry.position.x, y: entry.position.y };
-      selectedNodeId = entry.nodeId;
-      selectedEdgeIndex = null;
-      pendingPort = null;
-      render();
-      persistAutosave();
-      return true;
-    }
-    if (entry.type === 'add-node') {
-      const id = entry.nodeId;
-      const index = graph.nodes.findIndex(candidate => candidate.id === id);
-      if (index < 0) return false;
-      graph.edges = graph.edges.filter(edge => edge.from.node !== id && edge.to.node !== id);
-      graph.nodes.splice(index, 1);
-      delete setpoints[id];
-      selectedNodeId = null;
-      selectedEdgeIndex = null;
-      pendingPort = null;
-      solveAndRender();
-      return true;
-    }
-    if (entry.type === 'add-edge') {
-      const idx = graph.edges.indexOf(entry.edge);
-      if (idx < 0) return false;
-      graph.edges.splice(idx, 1);
-      selectedEdgeIndex = null;
-      selectedNodeId = entry.edge?.from?.node || selectedNodeId;
-      pendingPort = null;
-      solveAndRender();
-      return true;
-    }
+    if (entry.type === 'move') return applyMove(entry);
+    if (entry.type === 'add-node') return removeNodeById(entry.nodeId);
+    if (entry.type === 'add-edge') return removeEdgeObject(entry.edge);
     if (entry.type === 'edge') {
       const idx = Math.min(Math.max(0, entry.edgeIndex), graph.edges.length);
       graph.edges.splice(idx, 0, entry.edge);
@@ -2753,25 +2813,66 @@
       selectedNodeId = null;
       pendingPort = null;
       solveAndRender();
-      return true;
+      return { type: 'drop-edge', edge: entry.edge };
     }
     if (entry.type === 'node') {
-      const idx = Math.min(Math.max(0, entry.nodeIndex), graph.nodes.length);
-      graph.nodes.splice(idx, 0, entry.node);
-      // Restore incident edges in original relative order (by recorded edgeIndex).
-      const sorted = [...(entry.edges || [])].sort((a, b) => a.edgeIndex - b.edgeIndex);
-      for (const item of sorted) {
-        const at = Math.min(Math.max(0, item.edgeIndex), graph.edges.length);
-        graph.edges.splice(at, 0, item.edge);
-      }
-      if (entry.setpoint !== undefined) setpoints[entry.node.id] = entry.setpoint;
-      selectedNodeId = entry.node.id;
+      restoreNode(entry);
+      return { type: 'drop-node', nodeId: entry.node.id };
+    }
+    return null;
+  }
+
+  function applyRedo(entry) {
+    if (entry.type === 'snapshot') {
+      const back = snapshotEntry();
+      applyHistorySnapshot(entry);
+      return back;
+    }
+    if (entry.type === 'move') return applyMove(entry);
+    if (entry.type === 'restore-node') return restoreNode(entry);
+    if (entry.type === 'restore-edge') return restoreEdge(entry);
+    if (entry.type === 'drop-edge') {
+      const idx = graph.edges.indexOf(entry.edge);
+      if (idx < 0) return null;
+      const edge = entry.edge;
+      graph.edges.splice(idx, 1);
       selectedEdgeIndex = null;
       pendingPort = null;
       solveAndRender();
-      return true;
+      return { type: 'edge', edgeIndex: idx, edge };
     }
-    return false;
+    if (entry.type === 'drop-node') {
+      const removed = removeNodeById(entry.nodeId);
+      if (!removed) return null;
+      return {
+        type: 'node',
+        nodeIndex: removed.nodeIndex,
+        node: removed.node,
+        edges: removed.edges,
+        setpoint: removed.setpoint,
+      };
+    }
+    return null;
+  }
+
+  function undoLast() {
+    const entry = undoStack.pop();
+    undoGesture = null;
+    if (!entry) return false;
+    const forward = applyUndo(entry);
+    if (!forward) return false;
+    pushRedo(forward);
+    return true;
+  }
+
+  function redoLast() {
+    const entry = redoStack.pop();
+    undoGesture = null;
+    if (!entry) return false;
+    const back = applyRedo(entry);
+    if (!back) return false;
+    rememberUndo(back);
+    return true;
   }
 
   function clearCanvasSelection() {
@@ -2818,9 +2919,15 @@
       return;
     }
     const key = event.key;
-    if ((event.ctrlKey || event.metaKey) && (key === 'z' || key === 'Z') && !event.shiftKey) {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && (key === 'z' || key === 'Z')) {
       event.preventDefault();
-      undoLast();
+      if (event.shiftKey) redoLast();
+      else undoLast();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && (key === 'y' || key === 'Y')) {
+      event.preventDefault();
+      redoLast();
       return;
     }
     if (key === 'Escape') {
@@ -3141,7 +3248,11 @@
           && edgeAt({ node: current.id, port, direction: declaration.direction }) < 0
           && catalog[`${declaration.kind}-${declaration.direction === 'in' ? 'source' : 'sink'}`])
         .map(([port, declaration]) => ({ node: current.id, port, direction: declaration.direction })));
-    targets.forEach(target => addBoundaryNode(target, true));
+    if (targets.length) {
+      pushUndo(snapshotEntry());
+      undoGesture = null;
+      targets.forEach(target => addBoundaryNode(target, true));
+    }
     selectedNodeId = selection;
     pendingPort = null;
     solveAndRender();
@@ -6125,7 +6236,7 @@
     }
     if (params.headM == null || params.headM === '') {
       const part = params.partLoadK != null && params.partLoadK !== ''
-        ? ` Part-load k ${formatNumber(params.partLoadK)} is on: SEC × (1 + k(1−Q/Qrated)²) below rated flow.`
+        ? ` Part-load k ${formatNumber(params.partLoadK)} is on: SEC × (1 + k(1−Q/Qrated)²) at the delivered flow, including when the bus is short.`
         : ' Part-load shape unset — no Q/Qrated multiplier.';
       return `<p class="status-meta">Head unset — SEC stays on the kWh/m³ slider. Set head for screening hydraulics (η defaults to 0.7).${part}</p>`;
     }
@@ -6133,7 +6244,7 @@
       const resolved = globalThis.FlowsheetUnits?.resolveLiquidPumpSec?.(params, Number(params.densityKgM3) || 1025);
       if (!resolved) return '';
       const part = params.partLoadK != null && params.partLoadK !== ''
-        ? ` Part-load k ${formatNumber(params.partLoadK)} multiplies SEC by (1 + k(1−Q/Qrated)²) below rated flow.`
+        ? ` Part-load k ${formatNumber(params.partLoadK)} multiplies SEC by (1 + k(1−Q/Qrated)²) at the delivered flow, including a short bus.`
         : '';
       return `<p class="status-meta">Head ${formatNumber(resolved.headM)} m → ${formatNumber(resolved.sec)} kWh/m³ at η ${formatNumber(resolved.pumpEta)} (screening, not a vendor curve).${part}</p>`;
     } catch (error) {
@@ -6372,11 +6483,11 @@
         ? ` · density ${formatNumber(economics.densityKgM3)} kg/m³${economics.densitySource ? ` (${escapeHtml(economics.densitySource)})` : ''}`
         : '';
       const liftNote = current.unit === 'intake-pump'
-        ? 'Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX. Head and part-load, when set, set electricity — not CAPEX. Part-load k unset leaves SEC unchanged.'
+        ? 'Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX. Head and part-load, when set, set electricity — not CAPEX. Part-load uses the delivered flow, so a short bus starves on the shaped SEC. k unset leaves SEC unchanged.'
         : current.unit === 'gas-blower'
           ? 'Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX. ΔP, when set, sets electricity — not CAPEX. ΔP unset keeps the kWh/Nm³ slider.'
           : '';
-      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? `<p class="status-meta">Tank CAPEX = (kg ÷ density) × $/m³${economics.fluidLabel ? ` · fluid: <strong>${escapeHtml(economics.fluidLabel)}</strong>` : ''}${economics.capexPerM3 != null ? ` · intensity $${formatNumber(economics.capexPerM3)}/m³` : ''}${densityNote}${economics.regionMultiplier != null && economics.regionMultiplier !== 1 ? ` · region ×${formatNumber(economics.regionMultiplier)}` : ''}. Fluid class follows the upstream intake when unset. No assay density → UNESCO salinity (0–42 g/kg) or the labeled fluid-class density.</p>` : liftNote ? `<p class="status-meta">${liftNote}</p>` : ''}</fieldset>`;
+      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? `<p class="status-meta">Tank CAPEX = (kg ÷ density) × $/m³${economics.fluidLabel ? ` · fluid: <strong>${escapeHtml(economics.fluidLabel)}</strong>` : ''}${economics.capexPerM3 != null ? ` · intensity $${formatNumber(economics.capexPerM3)}/m³` : ''}${densityNote}${economics.regionMultiplier != null && economics.regionMultiplier !== 1 ? ` · region ×${formatNumber(economics.regionMultiplier)}` : ''}. Fluid class follows the upstream intake when unset. No assay density → UNESCO salinity (0–42 g/kg), a TDS mg/L proxy (1 L ≈ 1 kg, then S = mg/L ÷ ρ), or the labeled fluid-class density.</p>` : liftNote ? `<p class="status-meta">${liftNote}</p>` : ''}</fieldset>`;
     }
     return `<fieldset><legend>Destination economics</legend><label>Disposition<select name="economics" data-economics="disposition">${['sale', 'disposal', 'vent', 'reinjection'].map(value => `<option value="${value}"${economics.disposition === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>${field('unitPrice', 'Sale price / unit')}${field('annualDemandLimit', 'Annual demand limit', '1')}${field('disposalCost', 'Disposal cost / unit')}</fieldset>`;
   }
@@ -7270,14 +7381,15 @@
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,
     saveNamed, loadNamed, captureBaseline, clearBaseline, activateTab,
-    deleteSelection, undoLast, undoLastDelete: undoLast, clearCanvasSelection, handleProcessKeydown, nudgeSelectedNode,
+    deleteSelection, undoLast, redoLast, undoLastDelete: undoLast, clearCanvasSelection, handleProcessKeydown, nudgeSelectedNode,
     handleInspectorInput,
     get selectedNodeId() { return selectedNodeId; },
     set selectedNodeId(value) { selectedNodeId = value; },
     get selectedEdgeIndex() { return selectedEdgeIndex; },
     set selectedEdgeIndex(value) { selectedEdgeIndex = value; },
     get undoStackLength() { return undoStack.length; },
-    clearUndoStack() { undoStack = []; undoGesture = null; },
+    get redoStackLength() { return redoStack.length; },
+    clearUndoStack() { undoStack = []; redoStack = []; undoGesture = null; },
     inferBufferFluidClass, refreshBufferEconomics,
     get pendingPort() { return pendingPort; },
     set pendingPort(value) { pendingPort = value; },

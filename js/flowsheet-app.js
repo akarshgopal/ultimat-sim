@@ -410,10 +410,11 @@
       controls: [
         { key: 'headM', label: 'Static head', min: 0, max: 200, step: 1, unit: 'm', optional: true },
         { key: 'pumpEta', label: 'Pump efficiency', min: 0.3, max: 0.95, step: 0.01, optional: true },
+        { key: 'partLoadK', label: 'Part-load shape', min: 0, max: 2, step: 0.05, optional: true },
         { key: 'pumpKWhPerM3', label: 'Pump energy', min: 0, max: 2, step: 0.05, unit: 'kWh/m³' },
         { key: 'densityKgM3', label: 'Liquid density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
       ],
-      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. MECH18 screening CAPEX ~$350/(m³/day) × regional tea CAPEX×; campus pad ~0.15 m²/(m³/day) (floor 6 m²). MECH19: set static head to derive SEC = ρ·g·H / (η·3.6e6) with η default 0.7; moving the kWh/m³ slider overrides head. Head unset keeps the kWh/m³ value (default 0.4). Not a vendor curve or part-load map. SWRO plant SEC should stay plant-only if lift is modeled here.',
+      sourceNote: 'MECH8 screening open-intake / transfer pump (~0.2–0.5 kWh/m³ band). Pass-through liquid; electricity from the bus. MECH18 screening CAPEX ~$350/(m³/day) × regional tea CAPEX×; campus pad ~0.15 m²/(m³/day) (floor 6 m²). MECH19: set static head to derive SEC = ρ·g·H / (η·3.6e6) with η default 0.7; moving the kWh/m³ slider overrides head. Head unset keeps the kWh/m³ value (default 0.4). MECH20: optional part-load shape k applies SEC × (1 + k(1−Q/Qrated)²) when flow is below rated capacity; k unset is ×1. Not a vendor curve. SWRO plant SEC should stay plant-only if lift is modeled here.',
       references: [
         { label: 'Voutchkov 2018 desalination energy (DOI 10.1016/j.desal.2017.10.033)', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
         { label: 'Elimelech & Phillip 2011 SWRO plant SEC band', url: 'https://doi.org/10.1126/science.1200488' },
@@ -424,9 +425,11 @@
       palette: { section: 'utility', order: 4.5, glyph: 'F', tone: 'carbon', description: 'Air / flue move — needs bus power or the line starves' },
       params: { blowerKWhPerNm3: 0.001 },
       controls: [
+        { key: 'deltaP_kPa', label: 'Pressure rise', min: 0, max: 20, step: 0.1, unit: 'kPa', optional: true },
+        { key: 'blowerEta', label: 'Blower efficiency', min: 0.3, max: 0.95, step: 0.01, optional: true },
         { key: 'blowerKWhPerNm3', label: 'Blower energy', min: 0, max: 0.02, step: 0.0005, unit: 'kWh/Nm³' },
       ],
-      sourceNote: 'MECH10 screening process fan / duct+filter (~0.5–5 kWh per 1000 Nm³). Default 0.001 kWh/Nm³. Pass-through gas; electricity from the bus. MECH18 screening CAPEX ~$1.5/(Nm³/day) × regional tea CAPEX×; campus pad ~0.002 m²/(Nm³/day) (floor 6 m²). Not a Keith CE contactor fan (~0.00004 kWh/Nm³) — dial down for contactor-only. Not a fan curve or vendor quote.',
+      sourceNote: 'MECH10 screening process fan / duct+filter (~0.5–5 kWh per 1000 Nm³). Default 0.001 kWh/Nm³. Pass-through gas; electricity from the bus. MECH18 screening CAPEX ~$1.5/(Nm³/day) × regional tea CAPEX×; campus pad ~0.002 m²/(Nm³/day) (floor 6 m²). MECH20: optional ΔP derives SEC = ΔP_kPa / (η·3600) with η default 0.7; moving the kWh/Nm³ slider overrides ΔP. ΔP unset keeps 0.001 kWh/Nm³. Not a Keith CE contactor fan (~0.00004 kWh/Nm³) — dial down for contactor-only. Not a fan curve or vendor quote.',
       references: [
         { label: 'Keith et al. 2018 Carbon Engineering (contactor fan order-of-magnitude)', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
         { label: 'IEA Direct Air Capture 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
@@ -442,7 +445,7 @@
         { key: 'densityKgM3', label: 'Density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
         { key: 'capexPerM3', label: 'CAPEX intensity', min: 50, max: 2000, step: 25, unit: '$/m³ capacity' },
       ],
-      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH18 tank CAPEX uses fluid-class $/m³ (freshwater/seawater/brine/generic) × regional tea CAPEX×; generic $500/m³ ≡ MECH17 $0.50/kg at ρ=1000. Campus pad ~1 m²/t capacity. Not a vendor quote or surveyed plot.',
+      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH18 tank CAPEX uses fluid-class $/m³ (freshwater/seawater/brine/generic) × regional tea CAPEX×; generic $500/m³ ≡ MECH17 $0.50/kg at ρ=1000. MECH19 uses assay density_kg_per_L for brine/seawater. MECH20: if that field is missing, salinity or TDS in 0–42 g/kg uses a UNESCO 25 °C estimate; salinity outside that fit, or no salinity, stays on the labeled fluid-class density. Campus pad ~1 m²/t capacity. Not a vendor quote or surveyed plot.',
       references: [
         { label: 'EPA USP guide / tank-farm layout screening (pad+dike order)', url: 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf' },
         { label: 'Matches process equipment — atmospheric storage tank cost order', url: 'https://www.matche.com/equipcost/Tank.html' },
@@ -1042,6 +1045,8 @@
     current.economics = defaultEconomics(current);
     graph.nodes.push(current);
     if (!options.silent) {
+      pushUndo({ type: 'add-node', nodeId: id });
+      undoGesture = null;
       selectedNodeId = id;
       pendingPort = null;
       solveAndRender();
@@ -1164,6 +1169,8 @@
     graph.edges.length = 0;
     Object.keys(setpoints).forEach(key => delete setpoints[key]);
     Object.keys(counts).forEach(key => delete counts[key]);
+    undoStack = [];
+    undoGesture = null;
     selectedNodeId = null;
     selectedEdgeIndex = null;
     pendingPort = null;
@@ -2309,6 +2316,8 @@
     Object.assign(setpoints, definition.operation.setpoints);
     selectedNodeId = selection;
     pendingPort = null;
+    undoStack = [];
+    undoGesture = null;
     autoArrange();
     solveAndRender();
     const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
@@ -2714,6 +2723,29 @@
       persistAutosave();
       return true;
     }
+    if (entry.type === 'add-node') {
+      const id = entry.nodeId;
+      const index = graph.nodes.findIndex(candidate => candidate.id === id);
+      if (index < 0) return false;
+      graph.edges = graph.edges.filter(edge => edge.from.node !== id && edge.to.node !== id);
+      graph.nodes.splice(index, 1);
+      delete setpoints[id];
+      selectedNodeId = null;
+      selectedEdgeIndex = null;
+      pendingPort = null;
+      solveAndRender();
+      return true;
+    }
+    if (entry.type === 'add-edge') {
+      const idx = graph.edges.indexOf(entry.edge);
+      if (idx < 0) return false;
+      graph.edges.splice(idx, 1);
+      selectedEdgeIndex = null;
+      selectedNodeId = entry.edge?.from?.node || selectedNodeId;
+      pendingPort = null;
+      solveAndRender();
+      return true;
+    }
     if (entry.type === 'edge') {
       const idx = Math.min(Math.max(0, entry.edgeIndex), graph.edges.length);
       graph.edges.splice(idx, 0, entry.edge);
@@ -3072,7 +3104,12 @@
     else if (fromDeclaration.kind !== toDeclaration.kind) solveError = `Cannot connect ${fromDeclaration.kind} to ${toDeclaration.kind}.`;
     else if ((edgeAt(from) >= 0 && !['junction', 'splitter'].includes(units[node(from.node).unit].kind))
       || (edgeAt(to) >= 0 && units[node(to.node).unit].kind !== 'mixer' && node(to.node).unit !== 'heat-sink')) solveError = 'That port is already connected. Disconnect it first.';
-    else graph.edges.push({ from: { node: from.node, port: from.port }, to: { node: to.node, port: to.port }, ...(units[node(from.node).unit].kind === 'splitter' ? { weight: 1 } : {}) });
+    else {
+      const edge = { from: { node: from.node, port: from.port }, to: { node: to.node, port: to.port }, ...(units[node(from.node).unit].kind === 'splitter' ? { weight: 1 } : {}) };
+      graph.edges.push(edge);
+      pushUndo({ type: 'add-edge', edge });
+      undoGesture = null;
+    }
     pendingPort = null;
     solveAndRender();
   }
@@ -3140,6 +3177,7 @@
       if (raw === '') {
         delete current.params[key];
         if (key === 'headM' || key === 'pumpEta') delete current.params.pumpSecOverride;
+        if (key === 'deltaP_kPa' || key === 'blowerEta') delete current.params.blowerSecOverride;
       } else {
         const value = Number(raw);
         if (!Number.isFinite(value)) solveError = `${key} must be a number`;
@@ -3147,6 +3185,8 @@
           current.params[key] = value;
           if (key === 'pumpKWhPerM3' || key === 'pumpKWhPerKg') current.params.pumpSecOverride = true;
           if (key === 'headM' || key === 'pumpEta') delete current.params.pumpSecOverride;
+          if (key === 'blowerKWhPerNm3' || key === 'blowerKWhPerKg') current.params.blowerSecOverride = true;
+          if (key === 'deltaP_kPa' || key === 'blowerEta') delete current.params.blowerSecOverride;
         }
       }
       if (['battery', 'thermal-storage'].includes(current.unit) && key === 'capexPerKWh') current.economics.installedCapex = current.capacity * current.params.capexPerKWh;
@@ -5946,7 +5986,7 @@
         references: definition.references,
       });
       const parameters = (definition.controls || []).map(control => parameterControl(control, current, 'processParameter', intensityQuality)).join('');
-      const headNote = current.unit === 'intake-pump' ? pumpHeadNote(current) : '';
+      const headNote = current.unit === 'intake-pump' ? pumpHeadNote(current) : current.unit === 'gas-blower' ? blowerPressureNote(current) : '';
       const hasAssumptions = route || preset || parameters || definition.sourceNote || (definition.references && definition.references.length);
       return `<fieldset><legend>Independent setpoint</legend><label>Requested rate <output>${formatNumber(setpoints[current.id])} ${definition.activityUnit}</output></label><input name="requestedRate" type="range" min="0" max="${current.capacity}" step="1" value="${setpoints[current.id]}"></fieldset>${hasAssumptions ? `<fieldset><legend>Process assumptions</legend>${route}${preset}${parameters}${headNote}${definition.chemicalId ? `<p class="status-meta">Makeup chemical: ${CONSUMABLE_CHEMICALS[definition.chemicalId] || definition.chemicalId}. Switching routes does not rewrite an existing supply.</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>` : ''}${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete block</button>`;
     }
@@ -6084,14 +6124,37 @@
       return '<p class="status-meta">Pump energy slider overrides head. Set head or efficiency again to use ρ·g·H / (η·3.6e6).</p>';
     }
     if (params.headM == null || params.headM === '') {
-      return '<p class="status-meta">Head unset — SEC stays on the kWh/m³ slider. Set head for screening hydraulics (η defaults to 0.7).</p>';
+      const part = params.partLoadK != null && params.partLoadK !== ''
+        ? ` Part-load k ${formatNumber(params.partLoadK)} is on: SEC × (1 + k(1−Q/Qrated)²) below rated flow.`
+        : ' Part-load shape unset — no Q/Qrated multiplier.';
+      return `<p class="status-meta">Head unset — SEC stays on the kWh/m³ slider. Set head for screening hydraulics (η defaults to 0.7).${part}</p>`;
     }
     try {
       const resolved = globalThis.FlowsheetUnits?.resolveLiquidPumpSec?.(params, Number(params.densityKgM3) || 1025);
       if (!resolved) return '';
-      return `<p class="status-meta">Head ${formatNumber(resolved.headM)} m → ${formatNumber(resolved.sec)} kWh/m³ at η ${formatNumber(resolved.pumpEta)} (screening, not a vendor curve).</p>`;
+      const part = params.partLoadK != null && params.partLoadK !== ''
+        ? ` Part-load k ${formatNumber(params.partLoadK)} multiplies SEC by (1 + k(1−Q/Qrated)²) below rated flow.`
+        : '';
+      return `<p class="status-meta">Head ${formatNumber(resolved.headM)} m → ${formatNumber(resolved.sec)} kWh/m³ at η ${formatNumber(resolved.pumpEta)} (screening, not a vendor curve).${part}</p>`;
     } catch (error) {
       return `<p class="status-meta">${escapeHtml(error.message || 'Invalid pump head')}</p>`;
+    }
+  }
+
+  function blowerPressureNote(current) {
+    const params = current.params || {};
+    if (params.blowerSecOverride === true && params.deltaP_kPa != null && params.deltaP_kPa !== '') {
+      return '<p class="status-meta">Blower energy slider overrides ΔP. Set pressure or efficiency again to use ΔP_kPa / (η·3600).</p>';
+    }
+    if (params.deltaP_kPa == null || params.deltaP_kPa === '') {
+      return '<p class="status-meta">ΔP unset — SEC stays on the kWh/Nm³ slider (default 0.001). Set pressure rise for screening fan work (η defaults to 0.7).</p>';
+    }
+    try {
+      const resolved = globalThis.FlowsheetUnits?.resolveGasBlowerSec?.(params);
+      if (!resolved) return '';
+      return `<p class="status-meta">ΔP ${formatNumber(resolved.deltaP_kPa)} kPa → ${formatNumber(resolved.sec)} kWh/Nm³ at η ${formatNumber(resolved.blowerEta)} (screening, not a fan curve).</p>`;
+    } catch (error) {
+      return `<p class="status-meta">${escapeHtml(error.message || 'Invalid blower ΔP')}</p>`;
     }
   }
 
@@ -6116,6 +6179,12 @@
     const full = id && globalThis.SiteAssays?.getAssay?.(id);
     const fromLib = positiveDensityPerL(full?.density_kg_per_L);
     if (fromLib) return { densityKgM3: fromLib * 1000, source: 'site assay' };
+    const hint = teaApi()?.densityHintFromAssay?.(bag);
+    if (hint?.densityKgM3) return { densityKgM3: hint.densityKgM3, source: hint.source };
+    if (hint?.outOfRange) return { densityKgM3: null, source: hint.source, rejectEstimate: true };
+    const fromFull = full && full !== bag ? teaApi()?.densityHintFromAssay?.(full) : null;
+    if (fromFull?.densityKgM3) return { densityKgM3: fromFull.densityKgM3, source: fromFull.source };
+    if (fromFull?.outOfRange) return { densityKgM3: null, source: fromFull.source, rejectEstimate: true };
     return null;
   }
 
@@ -6128,11 +6197,13 @@
     } else if (site?.assay && (site.assay.kind === 'seawater' || site.assay.kind == null)) {
       bags.push(site.assay);
     }
+    let rejected = null;
     for (const bag of bags) {
       const found = densityFromAssayBag(bag);
-      if (found) return found;
+      if (found?.densityKgM3) return found;
+      if (found?.rejectEstimate) rejected = found;
     }
-    return null;
+    return rejected;
   }
 
   function inferBufferFluidClass(current) {
@@ -6185,7 +6256,7 @@
       const bound = tea.bindTankCapex({
         fluidClass,
         capacityKg: kg,
-        densityKgM3: densityOverride ? density : live?.densityKgM3,
+        densityKgM3: densityOverride ? density : (live?.densityKgM3 || undefined),
         capexPerM3: intensityOverride ? capexPerM3 : undefined,
         region: siteRegionForTea(),
       });
@@ -6209,7 +6280,7 @@
         evidence: bound.evidence,
         regionMultiplier: bound.regionMultiplier,
         densityKgM3: bound.densityKgM3,
-        densitySource: densityOverride ? 'override' : (live ? live.source : 'fluid default'),
+        densitySource: densityOverride ? 'override' : (live?.densityKgM3 ? live.source : (live?.source || 'fluid default')),
       };
       return;
     }
@@ -6300,7 +6371,12 @@
       const densityNote = kind === 'buffer' && economics.densityKgM3
         ? ` · density ${formatNumber(economics.densityKgM3)} kg/m³${economics.densitySource ? ` (${escapeHtml(economics.densitySource)})` : ''}`
         : '';
-      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? `<p class="status-meta">Tank CAPEX = (kg ÷ density) × $/m³${economics.fluidLabel ? ` · fluid: <strong>${escapeHtml(economics.fluidLabel)}</strong>` : ''}${economics.capexPerM3 != null ? ` · intensity $${formatNumber(economics.capexPerM3)}/m³` : ''}${densityNote}${economics.regionMultiplier != null && economics.regionMultiplier !== 1 ? ` · region ×${formatNumber(economics.regionMultiplier)}` : ''}. Fluid class follows the upstream intake when unset.</p>` : (current.unit === 'intake-pump' || current.unit === 'gas-blower') ? '<p class="status-meta">Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX. Head, when set, sets electricity — not CAPEX.</p>' : ''}</fieldset>`;
+      const liftNote = current.unit === 'intake-pump'
+        ? 'Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX. Head and part-load, when set, set electricity — not CAPEX. Part-load k unset leaves SEC unchanged.'
+        : current.unit === 'gas-blower'
+          ? 'Screening lift CAPEX = duty capacity × tea pack intensity × regional CAPEX×. Capacity changes refresh CAPEX. ΔP, when set, sets electricity — not CAPEX. ΔP unset keeps the kWh/Nm³ slider.'
+          : '';
+      return `<fieldset><legend>Economics</legend>${capexField}${field('fixedOMPercent', 'Fixed O&M (% CAPEX)')}${variable}${field('assetLifeYears', 'Asset life (years)', '1')}${kind === 'buffer' ? `<p class="status-meta">Tank CAPEX = (kg ÷ density) × $/m³${economics.fluidLabel ? ` · fluid: <strong>${escapeHtml(economics.fluidLabel)}</strong>` : ''}${economics.capexPerM3 != null ? ` · intensity $${formatNumber(economics.capexPerM3)}/m³` : ''}${densityNote}${economics.regionMultiplier != null && economics.regionMultiplier !== 1 ? ` · region ×${formatNumber(economics.regionMultiplier)}` : ''}. Fluid class follows the upstream intake when unset. No assay density → UNESCO salinity (0–42 g/kg) or the labeled fluid-class density.</p>` : liftNote ? `<p class="status-meta">${liftNote}</p>` : ''}</fieldset>`;
     }
     return `<fieldset><legend>Destination economics</legend><label>Disposition<select name="economics" data-economics="disposition">${['sale', 'disposal', 'vent', 'reinjection'].map(value => `<option value="${value}"${economics.disposition === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>${field('unitPrice', 'Sale price / unit')}${field('annualDemandLimit', 'Annual demand limit', '1')}${field('disposalCost', 'Disposal cost / unit')}</fieldset>`;
   }

@@ -114,6 +114,7 @@ test('Ctrl/Cmd+Z undoes Delete of a Process node and its edges', () => {
   app.choosePort({ node: sink.id, port: 'in', direction: 'in' });
   assert.equal(app.graph.edges.length, 1);
   assert.equal(app.graph.nodes.length, 2);
+  app.clearUndoStack();
 
   app.selectedNodeId = tank.id;
   app.handleProcessKeydown(keyEvent('Delete'));
@@ -154,6 +155,7 @@ test('Ctrl+Z ignored while typing in inputs', () => {
   app.clearFactory();
   app.clearUndoStack();
   const tank = app.addNode('material-buffer');
+  app.clearUndoStack();
   app.selectedNodeId = tank.id;
   app.handleProcessKeydown(keyEvent('Delete'));
   assert.equal(app.graph.nodes.length, 0);

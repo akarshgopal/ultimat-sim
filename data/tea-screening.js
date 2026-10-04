@@ -999,6 +999,58 @@ function getTankFluidSpec(fluidClass) {
   return tankByFluid[resolveTankFluidClass(fluidClass)];
 }
 
+// UNESCO EOS-80 practical density at 25 °C, 1 atm. S in g/kg.
+// The published fit is about 0–42 g/kg; outside that, return null (no extrapolated ρ).
+function estimateDensityKgM3FromSalinity(salinityGPerKg) {
+  const S = Number(salinityGPerKg);
+  if (!Number.isFinite(S) || S < 0 || S > 42) return null;
+  const t = 25;
+  const rhoW = 999.842594
+    + 6.793952e-2 * t
+    - 9.095290e-3 * t * t
+    + 1.001685e-4 * t ** 3
+    - 1.120083e-6 * t ** 4
+    + 6.536332e-9 * t ** 5;
+  const A = 8.24493e-1 - 4.0899e-3 * t + 7.6438e-5 * t * t - 8.2467e-7 * t ** 3 + 5.3875e-9 * t ** 4;
+  const B = -5.72466e-3 + 1.0227e-4 * t - 1.6546e-6 * t * t;
+  const C = 4.8314e-4;
+  return rhoW + A * S + B * S ** 1.5 + C * S * S;
+}
+
+function readAssaySalinityGPerKg(bag) {
+  if (!bag || typeof bag !== 'object') return null;
+  for (const field of ['salinity_g_per_kg', 'salinity_psu', 'tds_g_per_kg']) {
+    if (bag[field] == null || bag[field] === '') continue;
+    const n = Number(bag[field]);
+    if (Number.isFinite(n) && n >= 0) return { S: n, field };
+  }
+  if (bag.tds_mg_per_kg != null && bag.tds_mg_per_kg !== '') {
+    const n = Number(bag.tds_mg_per_kg);
+    if (Number.isFinite(n) && n >= 0) return { S: n / 1000, field: 'tds_mg_per_kg' };
+  }
+  return null;
+}
+
+// Density hint when an assay has salinity/TDS but no density_kg_per_L.
+// In-range → UNESCO 25 °C. Out of range → labeled fluid-class fallback (caller supplies ρ).
+function densityHintFromAssay(bag) {
+  const read = readAssaySalinityGPerKg(bag);
+  if (!read) return null;
+  const rho = estimateDensityKgM3FromSalinity(read.S);
+  if (rho == null) {
+    return {
+      densityKgM3: null,
+      outOfRange: true,
+      source: 'fluid default (assay salinity outside UNESCO 0–42 g/kg fit)',
+    };
+  }
+  return {
+    densityKgM3: rho,
+    source: 'salinity estimate (UNESCO 25 °C)',
+  };
+}
+
+
 /** Screening tank CAPEX: (capacityKg / density) × $/m³ × regional CAPEX×. */
 function bindTankCapex(extra = {}) {
   const fluid = getTankFluidSpec(extra.fluidClass);
@@ -1214,6 +1266,8 @@ return {
   getCapexMultiplierForRegion,
   resolveTankFluidClass,
   getTankFluidSpec,
+  estimateDensityKgM3FromSalinity,
+  densityHintFromAssay,
   bindTankCapex,
   bindSale,
   bindSaleForRegion,

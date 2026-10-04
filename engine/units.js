@@ -658,6 +658,20 @@ function resolveLiquidPumpSec(params = {}, densityKgM3 = 1025) {
   };
 }
 
+// Mild part-load vs Q/Qrated. SEC × (1 + k(1−q)²), q = min(1, Q/Qrated).
+// partLoadK unset → ×1, bit-identical. Screening, not a vendor curve.
+function pumpPartLoad(params = {}, flow, rated) {
+  const raw = params.partLoadK;
+  if (raw == null || raw === '') return { multiplier: 1 };
+  const k = Number(raw);
+  if (!Number.isFinite(k) || k < 0) throw new Error('partLoadK must be a non-negative number');
+  const qRated = Number(rated);
+  const qFlow = Number(flow);
+  if (!(qRated > 0) || !Number.isFinite(qFlow) || qFlow < 0) return { multiplier: 1, k, q: 1 };
+  const q = Math.min(1, qFlow / qRated);
+  return { multiplier: 1 + k * (1 - q) ** 2, k, q };
+}
+
 function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   const feed = validateStream(inlets.in, 'material');
   const electricity = validateStream(inlets.electricity, 'electricity');
@@ -674,10 +688,12 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   const feedM3 = feedKg / density;
   const feedAmount = useKg ? feedKg : feedM3;
   const planned = Math.min(requested, installed);
+  const part = pumpPartLoad(params, planned, installed);
+  const secEff = sec * part.multiplier;
   const limits = {
     capacity: installed,
     in: feedAmount,
-    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
+    electricity: secEff === 0 ? Infinity : electricity.kWh / secEff,
   };
   const activity = Math.min(planned, limits.in, limits.electricity);
   const fraction = feedAmount === 0 ? 0 : activity / feedAmount;
@@ -692,19 +708,52 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
     activity,
     requestedInputs: {
       in: scaleStream(feed, feedAmount === 0 ? 0 : planned / feedAmount),
-      electricity: { kind: 'electricity', kWh: planned * sec },
+      electricity: { kind: 'electricity', kWh: planned * secEff },
     },
     consumed: {
       in: consumedFeed,
-      electricity: { kind: 'electricity', kWh: activity * sec },
+      electricity: { kind: 'electricity', kWh: activity * secEff },
     },
     outlets: { out: cloneStream(consumedFeed) },
     limitedBy,
     pumpBasis: useKg ? 'kg' : 'm3',
-    pumpKWhPerUnit: sec,
+    pumpKWhPerUnit: secEff,
     densityKgM3: density,
     pumpSecSource: resolved.source,
     ...(resolved.headM != null ? { pumpHeadM: resolved.headM, pumpEta: resolved.pumpEta } : {}),
+    ...(part.k != null ? { pumpPartLoadK: part.k, pumpPartLoadQ: part.q, pumpPartLoadMultiplier: part.multiplier } : {}),
+  };
+}
+
+// Gas ΔP → SEC (SI screening). kWh/Nm³ = ΔP_kPa / (η·3600) because 1 kPa·m³ = 1 kJ.
+// deltaP_kPa unset → blowerKWhPerNm3 (default 0.001). blowerSecOverride keeps the slider.
+// Twin of liquid head → SEC. Not a fan curve.
+function resolveGasBlowerSec(params = {}) {
+  const secKgRaw = params.blowerKWhPerKg;
+  if (secKgRaw != null && secKgRaw !== '') {
+    return {
+      sec: nonnegative(Number(secKgRaw), 'blowerKWhPerKg'),
+      basis: 'kg',
+      source: 'kg',
+    };
+  }
+  const dpRaw = params.deltaP_kPa;
+  const dpSet = dpRaw != null && dpRaw !== '';
+  if (dpSet && params.blowerSecOverride !== true) {
+    const dp = Number(dpRaw);
+    if (!Number.isFinite(dp) || dp < 0) throw new Error('deltaP_kPa must be a non-negative number');
+    const etaRaw = params.blowerEta;
+    const eta = etaRaw == null || etaRaw === '' ? 0.7 : Number(etaRaw);
+    if (!Number.isFinite(eta) || eta <= 0 || eta > 1) {
+      throw new Error('blowerEta must be greater than 0 and at most 1');
+    }
+    const sec = dp / (eta * 3600);
+    return { sec, basis: 'nm3', source: 'deltaP', deltaP_kPa: dp, blowerEta: eta };
+  }
+  return {
+    sec: nonnegative(Number(params.blowerKWhPerNm3 ?? 0.001), 'blowerKWhPerNm3'),
+    basis: 'nm3',
+    source: params.blowerSecOverride === true ? 'override' : 'kWh/Nm3',
   };
 }
 
@@ -721,11 +770,9 @@ function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
     : nonnegative(Number(requestedActivity), 'requestedActivity');
   const nm3PerKmol = nonnegative(Number(params.nm3PerKmol ?? 22.414), 'nm3PerKmol');
   if (nm3PerKmol === 0) throw new Error('nm3PerKmol must be greater than zero');
-  const secKgRaw = params.blowerKWhPerKg;
-  const useKg = secKgRaw != null && secKgRaw !== '';
-  const sec = useKg
-    ? nonnegative(Number(secKgRaw), 'blowerKWhPerKg')
-    : nonnegative(Number(params.blowerKWhPerNm3 ?? 0.001), 'blowerKWhPerNm3');
+  const resolved = resolveGasBlowerSec(params);
+  const useKg = resolved.basis === 'kg';
+  const sec = resolved.sec;
   const feedKg = streamMassKg(feed);
   const totalMol = Object.values(feed.mol).reduce((sum, amount) => sum + amount, 0);
   const feedNm3 = totalMol * nm3PerKmol / 1000;
@@ -759,7 +806,9 @@ function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
     limitedBy,
     blowerBasis: useKg ? 'kg' : 'nm3',
     blowerKWhPerUnit: sec,
+    blowerSecSource: resolved.source,
     nm3PerKmol,
+    ...(resolved.deltaP_kPa != null ? { blowerDeltaP_kPa: resolved.deltaP_kPa, blowerEta: resolved.blowerEta } : {}),
   };
 }
 
@@ -1036,5 +1085,5 @@ const UNITS = Object.freeze({
   },
 });
 
-return { UNITS, DAC_TECHNOLOGIES, resolveLiquidPumpSec };
+return { UNITS, DAC_TECHNOLOGIES, resolveLiquidPumpSec, resolveGasBlowerSec };
 });

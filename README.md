@@ -38,6 +38,8 @@ Metallurgical-grade silicon is a carbothermic SAF block (`mg-si`): SiO₂ + 2 C 
 
 Ionic-clay REE (`iac-leach`) is one leach+precip+calcine screening block on the Deng & Kendall 2019 Longnan (Jiangxi) listed-oxide basket, placed on a Minaçu, Goiás map point. Nd+Pr are a co-product; the rest is one mixed-REO sale. Separated USGS quotes are discounted by payability 0.70 because SX is not in the model. Tm is unpriced. Not a mineral concession and not Serra Verde.
 
+Maglut ARC-1 (water-based chromatography) is a real alternative to SX, but public data are purity and recovery only (no kWh/kg or CAPEX intensity), so it is not a unit here. Solugen is a bio-chemical route, not REE — later tranche.
+
 ## Green ammonia from sunlight (screening)
 
 Walvis Bay screening plant: air + seawater SWRO + electrolysis + ASU + Haber–Bosch on frozen PVGIS-ERA5 totals.fixed E_d 5.48 kWh/kWp·day (E_y 2000.67), retrieved 2026-09-21. Hydrogen is electrolytic, not Dead Sea chlor-alkali. Product is screening fertilizer NH₃ at $0.45/kg with small-plant Haber/electrolyzer intensities; cash may be negative. Not bankable and not a green premium.

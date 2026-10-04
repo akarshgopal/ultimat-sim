@@ -59,6 +59,8 @@ Installed CAPEX ≈ $2.04 M (leach island $1.825 M, solar ≈ $0.212 M). Screeni
 - Offtake / freight not modeled.
 - Brazil CAPEX× not added (unmapped multiplier stays 1).
 - `sizeToProduct` has no REO product.
+- **Maglut ARC-1** (chromatography separation, Long Beach) is REE-related but not modeled. Public evidence is pilot purity and a Ferro-Alloy Resources RNS (23 Sep 2026): ~91.4% separation recovery, ~90.25% oxalate+calcine recovery, >99% Nd/Pr/Dy/Tb/Y in two stages, >95% reagent recycle claimed. No public kWh/kg, resin life, or $/kg CAPEX — relative “10× / 20× vs SX” claims are not an absolute intensity. Do not invent a block. Next innovative REE tranche only when those intensities exist.
+- **Solugen** is not an REE route (enzymatic / bio oxidation to H2O2 and organic acids). Next catalog tranche: bio-chemical / alternative process, not this REE file.
 
 ## Tip
 

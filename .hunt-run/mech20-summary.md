@@ -1,7 +1,7 @@
 # MECH20 — Undo place/connect · pump part-load · blower ΔP · assay density fallback
 
 **Feat tip:** `1b74f65`
-**Pages:** deploy after this note
+**Pages:** live
 **Tests:** 347 pass
 **Date:** 2026-10-04 CEST
 **Base:** `3e67381` (`docs(mech19): mark Pages live`)

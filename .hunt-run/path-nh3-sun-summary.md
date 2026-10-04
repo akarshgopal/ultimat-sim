@@ -66,4 +66,4 @@ Screening gate cash, cash-negative at fertilizer $0.45/kg and small-plant Haber/
 
 ## Tip
 
-Pending Pages publish.
+Feat `8d922d6` on `main`. `npm test` 368 pass / 0 fail. Pages published from that SHA: https://akarshgopal.github.io/ultimat-sim/

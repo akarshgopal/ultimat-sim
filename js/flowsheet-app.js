@@ -428,9 +428,10 @@
       controls: [
         { key: 'deltaP_kPa', label: 'Pressure rise', min: 0, max: 20, step: 0.1, unit: 'kPa', optional: true },
         { key: 'blowerEta', label: 'Blower efficiency', min: 0.3, max: 0.95, step: 0.01, optional: true },
+        { key: 'partLoadK', label: 'Part-load shape', min: 0, max: 2, step: 0.05, optional: true },
         { key: 'blowerKWhPerNm3', label: 'Blower energy', min: 0, max: 0.02, step: 0.0005, unit: 'kWh/Nm³' },
       ],
-      sourceNote: 'MECH10 screening process fan / duct+filter (~0.5–5 kWh per 1000 Nm³). Default 0.001 kWh/Nm³. Pass-through gas; electricity from the bus. MECH18 screening CAPEX ~$1.5/(Nm³/day) × regional tea CAPEX×; campus pad ~0.002 m²/(Nm³/day) (floor 6 m²). MECH20: optional ΔP derives SEC = ΔP_kPa / (η·3600) with η default 0.7; moving the kWh/Nm³ slider overrides ΔP. ΔP unset keeps 0.001 kWh/Nm³. Not a Keith CE contactor fan (~0.00004 kWh/Nm³) — dial down for contactor-only. Not a fan curve or vendor quote.',
+      sourceNote: 'MECH10 screening process fan / duct+filter (~0.5–5 kWh per 1000 Nm³). Default 0.001 kWh/Nm³. Pass-through gas; electricity from the bus. MECH18 screening CAPEX ~$1.5/(Nm³/day) × regional tea CAPEX×; campus pad ~0.002 m²/(Nm³/day) (floor 6 m²). MECH20: optional ΔP derives SEC = ΔP_kPa / (η·3600) with η default 0.7; moving the kWh/Nm³ slider overrides ΔP. ΔP unset keeps 0.001 kWh/Nm³. Not a Keith CE contactor fan (~0.00004 kWh/Nm³) — dial down for contactor-only. Not a fan curve or vendor quote. MECH22 part-load matches the pump and is not a fan curve.',
       references: [
         { label: 'Keith et al. 2018 Carbon Engineering (contactor fan order-of-magnitude)', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
         { label: 'IEA Direct Air Capture 2022', url: 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary' },
@@ -446,7 +447,7 @@
         { key: 'densityKgM3', label: 'Density', min: 800, max: 1400, step: 5, unit: 'kg/m³' },
         { key: 'capexPerM3', label: 'CAPEX intensity', min: 50, max: 2000, step: 25, unit: '$/m³ capacity' },
       ],
-      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH18 tank CAPEX uses fluid-class $/m³ (freshwater/seawater/brine/generic) × regional tea CAPEX×; generic $500/m³ ≡ MECH17 $0.50/kg at ρ=1000. MECH19 uses assay density_kg_per_L for brine/seawater. MECH20: if that field is missing, salinity or TDS in 0–42 g/kg uses a UNESCO 25 °C estimate; salinity outside that fit, or no salinity, stays on the labeled fluid-class density. MECH21: tds_mg_per_L (no ρ) is a proxy — S0 = mg/L ÷ 1000 (1 L ≈ 1 kg), then S = mg/L ÷ UNESCO ρ(S0). Campus pad ~1 m²/t capacity. Not a vendor quote or surveyed plot.',
+      sourceNote: 'MECH3 inventory SOC across the typical-day horizon. Discharge setpoint is kg/day out of the tank; with no setpoint the tank drains whatever it holds each hour (pass-through). Full tanks backpressure upstream; empty tanks starve downstream. MECH18 tank CAPEX uses fluid-class $/m³ (freshwater/seawater/brine/generic) × regional tea CAPEX×; generic $500/m³ ≡ MECH17 $0.50/kg at ρ=1000. MECH19 uses assay density_kg_per_L for brine/seawater. MECH20: if that field is missing, salinity or TDS in 0–42 g/kg uses a UNESCO 25 °C estimate; salinity outside that fit, or no salinity, stays on the labeled fluid-class density. MECH22: tds_mg_per_L (no ρ) is a fixed-point proxy, not a lab density — S = mg/L ÷ UNESCO ρ(S) at 25 °C. Campus pad ~1 m²/t capacity. Not a vendor quote or surveyed plot.',
       references: [
         { label: 'EPA USP guide / tank-farm layout screening (pad+dike order)', url: 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf' },
         { label: 'Matches process equipment — atmospheric storage tank cost order', url: 'https://www.matche.com/equipcost/Tank.html' },
@@ -805,6 +806,8 @@
   document.getElementById('projectLifeYears').addEventListener('input', handleProjectEconomics);
   document.getElementById('discountRate').addEventListener('input', handleProjectEconomics);
   document.getElementById('completeBoundaries').addEventListener('click', completeBoundaries);
+  document.getElementById('redoCanvas')?.addEventListener('click', () => redoLast());
+  syncRedoButton();
   const OVERVIEW_CASES = {
     'methane-recycle': () => loadMethaneRecycle(),
     'coastal-methane': () => loadCoastalMethane(0),
@@ -1173,6 +1176,7 @@
     undoStack = [];
     redoStack = [];
     undoGesture = null;
+    syncRedoButton();
     selectedNodeId = null;
     selectedEdgeIndex = null;
     pendingPort = null;
@@ -2321,6 +2325,7 @@
     undoStack = [];
     redoStack = [];
     undoGesture = null;
+    syncRedoButton();
     autoArrange();
     solveAndRender();
     const schedule = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => fn();
@@ -2620,14 +2625,24 @@
     if (undoStack.length > UNDO_STACK_MAX) undoStack.shift();
   }
 
+  function syncRedoButton() {
+    const button = document.getElementById('redoCanvas');
+    if (!button) return;
+    const empty = redoStack.length === 0;
+    button.disabled = empty;
+    if (typeof button.setAttribute === 'function') button.setAttribute('aria-disabled', empty ? 'true' : 'false');
+  }
+
   function pushUndo(entry) {
     rememberUndo(entry);
     redoStack = [];
+    syncRedoButton();
   }
 
   function pushRedo(entry) {
     redoStack.push(entry);
     if (redoStack.length > UNDO_STACK_MAX) redoStack.shift();
+    syncRedoButton();
   }
 
   function cloneUndo(value) {
@@ -2858,9 +2873,15 @@
   function undoLast() {
     const entry = undoStack.pop();
     undoGesture = null;
-    if (!entry) return false;
+    if (!entry) {
+      syncRedoButton();
+      return false;
+    }
     const forward = applyUndo(entry);
-    if (!forward) return false;
+    if (!forward) {
+      syncRedoButton();
+      return false;
+    }
     pushRedo(forward);
     return true;
   }
@@ -2868,10 +2889,17 @@
   function redoLast() {
     const entry = redoStack.pop();
     undoGesture = null;
-    if (!entry) return false;
+    if (!entry) {
+      syncRedoButton();
+      return false;
+    }
     const back = applyRedo(entry);
-    if (!back) return false;
+    if (!back) {
+      syncRedoButton();
+      return false;
+    }
     rememberUndo(back);
+    syncRedoButton();
     return true;
   }
 
@@ -6229,24 +6257,36 @@
     return `<label>${control.label} <output>${formatNumber(raw)}${unit}</output>${chip}</label><input name="${name}" data-param="${control.key}" type="range" min="${control.min}" max="${control.max}" step="${control.step}" value="${raw}">`;
   }
 
+  function partLoadClampNote(params) {
+    const k = Number(params?.partLoadK);
+    if (!Number.isFinite(k) || k <= 3) return '';
+    return ' Shape was clamped to 3 because the screening fit is monotone only for k≤3.';
+  }
+
+  function partLoadPhrase(params, withHead) {
+    const raw = params?.partLoadK;
+    const clamp = partLoadClampNote(params);
+    if (raw == null || raw === '') {
+      return withHead ? '' : ' Part-load shape unset — no Q/Qrated multiplier.';
+    }
+    if (withHead) {
+      return ` Part-load k ${formatNumber(raw)} multiplies SEC by (1 + k(1−Q/Qrated)²) at the delivered flow, including a short bus.${clamp}`;
+    }
+    return ` Part-load k ${formatNumber(raw)} is on: SEC × (1 + k(1−Q/Qrated)²) at the delivered flow, including when the bus is short.${clamp}`;
+  }
+
   function pumpHeadNote(current) {
     const params = current.params || {};
     if (params.pumpSecOverride === true && params.headM != null && params.headM !== '') {
       return '<p class="status-meta">Pump energy slider overrides head. Set head or efficiency again to use ρ·g·H / (η·3.6e6).</p>';
     }
     if (params.headM == null || params.headM === '') {
-      const part = params.partLoadK != null && params.partLoadK !== ''
-        ? ` Part-load k ${formatNumber(params.partLoadK)} is on: SEC × (1 + k(1−Q/Qrated)²) at the delivered flow, including when the bus is short.`
-        : ' Part-load shape unset — no Q/Qrated multiplier.';
-      return `<p class="status-meta">Head unset — SEC stays on the kWh/m³ slider. Set head for screening hydraulics (η defaults to 0.7).${part}</p>`;
+      return `<p class="status-meta">Head unset — SEC stays on the kWh/m³ slider. Set head for screening hydraulics (η defaults to 0.7).${partLoadPhrase(params, false)}</p>`;
     }
     try {
       const resolved = globalThis.FlowsheetUnits?.resolveLiquidPumpSec?.(params, Number(params.densityKgM3) || 1025);
       if (!resolved) return '';
-      const part = params.partLoadK != null && params.partLoadK !== ''
-        ? ` Part-load k ${formatNumber(params.partLoadK)} multiplies SEC by (1 + k(1−Q/Qrated)²) at the delivered flow, including a short bus.`
-        : '';
-      return `<p class="status-meta">Head ${formatNumber(resolved.headM)} m → ${formatNumber(resolved.sec)} kWh/m³ at η ${formatNumber(resolved.pumpEta)} (screening, not a vendor curve).${part}</p>`;
+      return `<p class="status-meta">Head ${formatNumber(resolved.headM)} m → ${formatNumber(resolved.sec)} kWh/m³ at η ${formatNumber(resolved.pumpEta)} (screening, not a vendor curve).${partLoadPhrase(params, true)}</p>`;
     } catch (error) {
       return `<p class="status-meta">${escapeHtml(error.message || 'Invalid pump head')}</p>`;
     }
@@ -6258,12 +6298,12 @@
       return '<p class="status-meta">Blower energy slider overrides ΔP. Set pressure or efficiency again to use ΔP_kPa / (η·3600).</p>';
     }
     if (params.deltaP_kPa == null || params.deltaP_kPa === '') {
-      return '<p class="status-meta">ΔP unset — SEC stays on the kWh/Nm³ slider (default 0.001). Set pressure rise for screening fan work (η defaults to 0.7).</p>';
+      return `<p class="status-meta">ΔP unset — SEC stays on the kWh/Nm³ slider (default 0.001). Set pressure rise for screening fan work (η defaults to 0.7).${partLoadPhrase(params, false)}</p>`;
     }
     try {
       const resolved = globalThis.FlowsheetUnits?.resolveGasBlowerSec?.(params);
       if (!resolved) return '';
-      return `<p class="status-meta">ΔP ${formatNumber(resolved.deltaP_kPa)} kPa → ${formatNumber(resolved.sec)} kWh/Nm³ at η ${formatNumber(resolved.blowerEta)} (screening, not a fan curve).</p>`;
+      return `<p class="status-meta">ΔP ${formatNumber(resolved.deltaP_kPa)} kPa → ${formatNumber(resolved.sec)} kWh/Nm³ at η ${formatNumber(resolved.blowerEta)} (screening, not a fan curve).${partLoadPhrase(params, true)}</p>`;
     } catch (error) {
       return `<p class="status-meta">${escapeHtml(error.message || 'Invalid blower ΔP')}</p>`;
     }
@@ -7389,7 +7429,7 @@
     set selectedEdgeIndex(value) { selectedEdgeIndex = value; },
     get undoStackLength() { return undoStack.length; },
     get redoStackLength() { return redoStack.length; },
-    clearUndoStack() { undoStack = []; redoStack = []; undoGesture = null; },
+    clearUndoStack() { undoStack = []; redoStack = []; undoGesture = null; syncRedoButton(); },
     inferBufferFluidClass, refreshBufferEconomics,
     get pendingPort() { return pendingPort; },
     set pendingPort(value) { pendingPort = value; },

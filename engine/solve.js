@@ -17,7 +17,7 @@ const {
   streamMassKg,
   validateStream,
 } = model;
-const { UNITS } = units;
+const { UNITS, pumpPartLoad, flowWithinShapedSec } = units;
 const { cascadeHeat } = heat;
 
 function solveOperation(caseDefinition) {
@@ -1047,6 +1047,84 @@ function applyBufferOverflowIntake(
   return safeStreamAmount(result.consumed?.in);
 }
 
+// Part-load k on a lift block. Captured before scaleNodeStreams so the electricity
+// edge is still this pass's pre-scale allocation (consumed, not yet scaled).
+function liftPartLoadSnapshot(node, result, incoming, edgeStreams) {
+  const pump = node.unit === 'intake-pump';
+  const blower = node.unit === 'gas-blower';
+  if (!pump && !blower) return null;
+  const k = pump ? result.pumpPartLoadK : result.blowerPartLoadK;
+  if (!Number.isFinite(k)) return null;
+  const multiplier = pump ? result.pumpPartLoadMultiplier : result.blowerPartLoadMultiplier;
+  const secEff = pump ? result.pumpKWhPerUnit : result.blowerKWhPerUnit;
+  if (!Number.isFinite(multiplier) || !(multiplier > 0) || !Number.isFinite(secEff)) return null;
+  const elecEdge = incoming.find(edge => edge.to.port === 'electricity');
+  const stream = elecEdge ? edgeStreams.get(elecEdge) : null;
+  const availableKWh = stream && Number.isFinite(Number(stream.kWh)) ? Number(stream.kWh) : Infinity;
+  const ratedRaw = node.capacity == null || node.capacity === '' ? 0 : Number(node.capacity);
+  return {
+    pump,
+    baseSec: secEff / multiplier,
+    rated: Number.isFinite(ratedRaw) ? ratedRaw : 0,
+    params: { ...(node.params || {}) },
+    availableKWh,
+  };
+}
+
+function scaleLiftMaterial(result, factor) {
+  if (!(factor >= 0) || !(factor < 1 - 1e-15)) return;
+  if (result.activity != null) result.activity *= factor;
+  for (const group of ['consumed', 'outlets']) {
+    const bag = result[group];
+    if (!bag) continue;
+    for (const [port, stream] of Object.entries(bag)) {
+      if (!stream || stream.kind === 'electricity' || stream.kind === 'heat') continue;
+      bag[port] = scaleStream(stream, factor);
+    }
+  }
+}
+
+// Mass already scaled linearly. Re-fit shaped SEC at the delivered Q. If that
+// kWh no longer fits the pre-scale bus, bisect Q down — no second graph pass.
+function applyLiftPartLoadAfterScale(result, snap) {
+  let Q = Number(result.activity);
+  if (!Number.isFinite(Q) || Q < 0) Q = 0;
+  let shaped = pumpPartLoad(snap.params, Q, snap.rated);
+  let kWh = Q * snap.baseSec * shaped.multiplier;
+  const available = snap.availableKWh;
+  if (Number.isFinite(available) && kWh > available) {
+    const fitted = flowWithinShapedSec(snap.baseSec, snap.params, Q, snap.rated, available);
+    if (Q > 0 && fitted < Q) {
+      scaleLiftMaterial(result, fitted / Q);
+      Q = Number(result.activity);
+      if (!Number.isFinite(Q) || Q < 0) Q = 0;
+      shaped = pumpPartLoad(snap.params, Q, snap.rated);
+      kWh = Q * snap.baseSec * shaped.multiplier;
+    }
+  }
+  if (!result.consumed) result.consumed = {};
+  result.consumed.electricity = { ...(result.consumed.electricity || {}), kind: 'electricity', kWh };
+  const prefix = snap.pump ? 'pump' : 'blower';
+  result[`${prefix}KWhPerUnit`] = snap.baseSec * shaped.multiplier;
+  if (shaped.k == null) return;
+  result[`${prefix}PartLoadK`] = shaped.k;
+  result[`${prefix}PartLoadQ`] = shaped.q;
+  result[`${prefix}PartLoadMultiplier`] = shaped.multiplier;
+  if (shaped.clamped) result[`${prefix}PartLoadClamped`] = true;
+}
+
+function syncLiftElectricityTag(result, availableKWh) {
+  const kWh = Number(result.consumed?.electricity?.kWh);
+  if (!Number.isFinite(kWh)) return;
+  const tol = Math.max(1, kWh) * 1e-9;
+  const under = !Number.isFinite(availableKWh) || kWh + tol < availableKWh;
+  if (under) {
+    if (result.limitedBy) result.limitedBy = result.limitedBy.filter(item => item !== 'electricity');
+  } else {
+    result.limitedBy = [...new Set([...(result.limitedBy || []), 'electricity'])];
+  }
+}
+
 // After sinks/buffers rewrite inlets, scale upstream producers so mass/energy close
 // and converters actually throttle (Factorio full-belt / closed offtake).
 function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits = null, setpoints = null) {
@@ -1119,8 +1197,11 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
         }
       }
       if (scale < 1 - 1e-12) {
+        const lift = liftPartLoadSnapshot(node, result, incoming, edgeStreams);
         scaleNodeStreams(result, scale);
+        if (lift) applyLiftPartLoadAfterScale(result, lift);
         if (reason) result.limitedBy = [...new Set([...(result.limitedBy || []), reason])];
+        if (lift) syncLiftElectricityTag(result, lift.availableKWh);
         for (const edge of incoming) {
           const consumed = result.consumed?.[edge.to.port];
           if (consumed) edgeStreams.set(edge, cloneStream(consumed));

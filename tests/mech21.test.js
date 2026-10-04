@@ -225,10 +225,13 @@ test('part-load shape tightens the electricity limit below the setpoint SEC', ()
 
 test('tds_mg_per_L is a labeled UNESCO proxy, not a measured density', () => {
   const rho0 = tea.estimateDensityKgM3FromSalinity(35);
-  const refined = tea.estimateDensityKgM3FromSalinity(35000 / rho0);
+  const onePass = tea.estimateDensityKgM3FromSalinity(35000 / rho0);
   const hint = tea.densityHintFromAssay({ tds_mg_per_L: 35000 });
   assert.equal(hint.source, 'salinity estimate (UNESCO 25 °C, TDS mg/L proxy)');
-  assert.ok(Math.abs(hint.densityKgM3 - refined) < 1e-6);
+  const refined = hint.densityKgM3;
+  assert.ok(Math.abs(refined - tea.estimateDensityKgM3FromSalinity(35000 / refined)) < 1e-4);
+  assert.ok(Math.abs(refined - 1022.755) < 0.001, refined);
+  assert.ok(Math.abs(refined - onePass) > 0.005);
   assert.ok(hint.densityKgM3 < rho0);
   assert.equal(
     tea.densityHintFromAssay({ salinity_g_per_kg: 35, tds_mg_per_L: 10000 }).source,

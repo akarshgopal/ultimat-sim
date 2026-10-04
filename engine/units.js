@@ -660,22 +660,25 @@ function resolveLiquidPumpSec(params = {}, densityKgM3 = 1025) {
 
 // Mild part-load vs Q/Qrated. SEC × (1 + k(1−q)²), q = min(1, Q/Qrated).
 // partLoadK unset → ×1, bit-identical. Screening, not a vendor curve.
-// MECH21: when k is set, electricity demand uses this shape at the delivered
-// flow (not the setpoint), so a short bus cannot claim the optimistic Q.
+// k > 3 is clamped to 3 so energy stays monotone in flow; negative k still throws.
+// MECH21: when k is set, electricity uses this shape at the delivered flow.
 function pumpPartLoad(params = {}, flow, rated) {
   const raw = params.partLoadK;
   if (raw == null || raw === '') return { multiplier: 1 };
-  const k = Number(raw);
-  if (!Number.isFinite(k) || k < 0) throw new Error('partLoadK must be a non-negative number');
+  const kRaw = Number(raw);
+  if (!Number.isFinite(kRaw) || kRaw < 0) throw new Error('partLoadK must be a non-negative number');
+  const clamped = kRaw > 3;
+  const k = clamped ? 3 : kRaw;
+  const flag = clamped ? { clamped: true } : {};
   const qRated = Number(rated);
   const qFlow = Number(flow);
-  if (!(qRated > 0) || !Number.isFinite(qFlow) || qFlow < 0) return { multiplier: 1, k, q: 1 };
+  if (!(qRated > 0) || !Number.isFinite(qFlow) || qFlow < 0) return { multiplier: 1, k, q: 1, ...flag };
   const q = Math.min(1, qFlow / qRated);
-  return { multiplier: 1 + k * (1 - q) ** 2, k, q };
+  return { multiplier: 1 + k * (1 - q) ** 2, k, q, ...flag };
 }
 
 // Largest flow in [0, cap] with flow × shaped SEC ≤ kWh.
-// Energy rises with flow for partLoadK ≤ 3 (slider max is 2).
+// Energy rises with flow for k ≤ 3 (slider max is 2). k > 3 is clamped to 3.
 function flowWithinShapedSec(sec, params, cap, rated, kWh) {
   const energy = (flow) => flow * sec * pumpPartLoad(params, flow, rated).multiplier;
   if (!(sec > 0) || !Number.isFinite(kWh)) return cap;
@@ -688,6 +691,42 @@ function flowWithinShapedSec(sec, params, cap, rated, kWh) {
     else hi = mid;
   }
   return lo;
+}
+
+// Shared by the intake pump and gas blower. k unset keeps SEC ×1.
+function shapedDelivery(sec, params, planned, feedAmount, installed, electricityKWh) {
+  const demandPart = pumpPartLoad(params, planned, installed);
+  const demandSec = sec * demandPart.multiplier;
+  const capFlow = Math.min(planned, feedAmount);
+  const kSet = demandPart.k != null;
+  let activity;
+  let part;
+  let secEff;
+  let electricityBinds = false;
+  if (!kSet) {
+    secEff = sec;
+    const elecLimit = sec === 0 ? Infinity : electricityKWh / sec;
+    activity = Math.min(capFlow, elecLimit);
+    part = demandPart;
+  } else {
+    const shaped = (flow) => flow * sec * pumpPartLoad(params, flow, installed).multiplier;
+    const powerOk = !(sec > 0) || !Number.isFinite(electricityKWh) || shaped(capFlow) <= electricityKWh;
+    if (powerOk) activity = capFlow;
+    else {
+      activity = flowWithinShapedSec(sec, params, capFlow, installed, electricityKWh);
+      electricityBinds = true;
+    }
+    part = pumpPartLoad(params, activity, installed);
+    secEff = sec * part.multiplier;
+  }
+  const elecLimit = secEff === 0 ? Infinity : electricityKWh / secEff;
+  return {
+    activity,
+    part,
+    secEff,
+    demandSec,
+    electricityLimit: electricityBinds ? activity : elecLimit,
+  };
 }
 
 function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
@@ -706,35 +745,12 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   const feedM3 = feedKg / density;
   const feedAmount = useKg ? feedKg : feedM3;
   const planned = Math.min(requested, installed);
-  const demandPart = pumpPartLoad(params, planned, installed);
-  const demandSec = sec * demandPart.multiplier;
-  const capFlow = Math.min(planned, feedAmount);
-  const kSet = demandPart.k != null;
-  let activity;
-  let part;
-  let secEff;
-  let electricityBinds = false;
-  if (!kSet) {
-    secEff = sec;
-    const elecLimit = sec === 0 ? Infinity : electricity.kWh / sec;
-    activity = Math.min(capFlow, elecLimit);
-    part = demandPart;
-  } else {
-    const shaped = (flow) => flow * sec * pumpPartLoad(params, flow, installed).multiplier;
-    const powerOk = !(sec > 0) || !Number.isFinite(electricity.kWh) || shaped(capFlow) <= electricity.kWh;
-    if (powerOk) activity = capFlow;
-    else {
-      activity = flowWithinShapedSec(sec, params, capFlow, installed, electricity.kWh);
-      electricityBinds = true;
-    }
-    part = pumpPartLoad(params, activity, installed);
-    secEff = sec * part.multiplier;
-  }
-  const elecLimit = secEff === 0 ? Infinity : electricity.kWh / secEff;
+  const delivery = shapedDelivery(sec, params, planned, feedAmount, installed, electricity.kWh);
+  const { activity, part, secEff, demandSec } = delivery;
   const limits = {
     capacity: installed,
     in: feedAmount,
-    electricity: electricityBinds ? activity : elecLimit,
+    electricity: delivery.electricityLimit,
   };
   const fraction = feedAmount === 0 ? 0 : activity / feedAmount;
   const consumedFeed = scaleStream(feed, fraction);
@@ -761,7 +777,12 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
     densityKgM3: density,
     pumpSecSource: resolved.source,
     ...(resolved.headM != null ? { pumpHeadM: resolved.headM, pumpEta: resolved.pumpEta } : {}),
-    ...(part.k != null ? { pumpPartLoadK: part.k, pumpPartLoadQ: part.q, pumpPartLoadMultiplier: part.multiplier } : {}),
+    ...(part.k != null ? {
+      pumpPartLoadK: part.k,
+      pumpPartLoadQ: part.q,
+      pumpPartLoadMultiplier: part.multiplier,
+      ...(part.clamped ? { pumpPartLoadClamped: true } : {}),
+    } : {}),
   };
 }
 
@@ -800,6 +821,7 @@ function resolveGasBlowerSec(params = {}) {
 // Gas transfer / intake blower (air, flue). Screening fan SEC is duct move only —
 // DAC/ASU plant electricity still excludes or folds BOP unless the user lowers it
 // (see MECH10 audit). Twin of intake-pump for gas phase.
+// MECH22 part-load matches the pump (same k·(1−Q/Qrated)²). Not a fan curve.
 function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
   const feed = validateStream(inlets.in, 'material');
   const electricity = validateStream(inlets.electricity, 'electricity');
@@ -818,12 +840,13 @@ function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
   const feedNm3 = totalMol * nm3PerKmol / 1000;
   const feedAmount = useKg ? feedKg : feedNm3;
   const planned = Math.min(requested, installed);
+  const delivery = shapedDelivery(sec, params, planned, feedAmount, installed, electricity.kWh);
+  const { activity, part, secEff, demandSec } = delivery;
   const limits = {
     capacity: installed,
     in: feedAmount,
-    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
+    electricity: delivery.electricityLimit,
   };
-  const activity = Math.min(planned, limits.in, limits.electricity);
   const fraction = feedAmount === 0 ? 0 : activity / feedAmount;
   const consumedFeed = scaleStream(feed, fraction);
   const limitingValue = Math.min(limits.capacity, limits.in, limits.electricity);
@@ -832,23 +855,32 @@ function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
     : Object.entries(limits)
       .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
       .map(([name]) => name);
+  // k unset: multiply by the slider SEC directly so the default path stays bit-identical.
+  const demandSecUsed = part.k == null ? sec : demandSec;
+  const usedSec = part.k == null ? sec : secEff;
   return {
     activity,
     requestedInputs: {
       in: scaleStream(feed, feedAmount === 0 ? 0 : planned / feedAmount),
-      electricity: { kind: 'electricity', kWh: planned * sec },
+      electricity: { kind: 'electricity', kWh: planned * demandSecUsed },
     },
     consumed: {
       in: consumedFeed,
-      electricity: { kind: 'electricity', kWh: activity * sec },
+      electricity: { kind: 'electricity', kWh: activity * usedSec },
     },
     outlets: { out: cloneStream(consumedFeed) },
     limitedBy,
     blowerBasis: useKg ? 'kg' : 'nm3',
-    blowerKWhPerUnit: sec,
+    blowerKWhPerUnit: usedSec,
     blowerSecSource: resolved.source,
     nm3PerKmol,
     ...(resolved.deltaP_kPa != null ? { blowerDeltaP_kPa: resolved.deltaP_kPa, blowerEta: resolved.blowerEta } : {}),
+    ...(part.k != null ? {
+      blowerPartLoadK: part.k,
+      blowerPartLoadQ: part.q,
+      blowerPartLoadMultiplier: part.multiplier,
+      ...(part.clamped ? { blowerPartLoadClamped: true } : {}),
+    } : {}),
   };
 }
 
@@ -1125,5 +1157,12 @@ const UNITS = Object.freeze({
   },
 });
 
-return { UNITS, DAC_TECHNOLOGIES, resolveLiquidPumpSec, resolveGasBlowerSec };
+return {
+  UNITS,
+  DAC_TECHNOLOGIES,
+  resolveLiquidPumpSec,
+  resolveGasBlowerSec,
+  pumpPartLoad,
+  flowWithinShapedSec,
+};
 });

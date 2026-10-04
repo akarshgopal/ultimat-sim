@@ -63,3 +63,7 @@ Screening gate cash, not a bankable offtake.
 - Titanium Kroll, H₂-DRI, MED, MSF still in engine/catalog, hidden from the palette.
 - Offtake/freight and green-NH₃ not added.
 - Pump/undo/blower part-load untouched; abundance/zabuye/fuels cash not retuned.
+
+## Tip
+
+Feat `11a5709` on `main` (rebased onto MECH22 `5772acc` / `01e6ac5`). `npm test` 361 pass / 0 fail. Pages published from that SHA: https://akarshgopal.github.io/ultimat-sim/

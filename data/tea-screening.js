@@ -39,6 +39,11 @@ const USGS_GYP = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-gypsum.pdf';
 const USGS_GYP_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-gypsum.pdf';
 const USGS_MG = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-compounds.pdf';
 const USGS_MG_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-magnesium-compounds.pdf';
+const USGS_SI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-silicon.pdf';
+const USGS_AL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-aluminum.pdf';
+const USGS_SILICA = 'https://www.usgs.gov/centers/national-minerals-information-center/silica-statistics-and-information';
+const DOE_AL = 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf';
+const MDPI_MGSI = 'https://www.mdpi.com/1996-1073/19/9/2023';
 const NREL_DLE = 'https://doi.org/10.2172/1782801';
 const NREL_ATB = 'https://atb.nrel.gov/';
 const NREL_ATB_DOI = 'https://doi.org/10.25984/2377191';
@@ -159,6 +164,16 @@ const prices = {
     'Process-water sale screening $0.001/kg. Not a municipal or concession tariff.',
     [{ label: 'Process water screening $0.001/kg', url: null }]
   ),
+  silicon: row(
+    3.97, '$/kg', 'cited', 'USGS MCS 2025 silicon metal',
+    'USGS MCS 2025 silicon metal 180 ¢/lb (2024e) × 2.20462 lb/kg = 3.97 $/kg. Metallurgical-grade silicon metal, not polysilicon and not a contract.',
+    [{ label: 'USGS Mineral Commodity Summaries 2025 — Silicon (silicon metal 180 ¢/lb 2024e → 3.97 $/kg)', url: USGS_SI }]
+  ),
+  aluminium: row(
+    2.87, '$/kg', 'cited', 'USGS MCS 2025 aluminum ingot',
+    'USGS MCS 2025 U.S. market spot 130 ¢/lb (2024e) × 2.20462 = 2.87 $/kg. Primary aluminium ingot, not a contract.',
+    [{ label: 'USGS Mineral Commodity Summaries 2025 — Aluminum (U.S. market spot 130 ¢/lb 2024e → 2.87 $/kg)', url: USGS_AL }]
+  ),
 };
 
 const costs = {
@@ -186,6 +201,26 @@ const costs = {
     0.06, '$/kg', 'screening', 'industrial NaCl band',
     'Purchased salt-feed aligned with salt product band (~$0.06/kg). Screening, not a local quote.',
     [{ label: 'Salt-feed screening $0.06/kg, aligned with industrial NaCl product band', url: USGS_SALT }]
+  ),
+  quartz: row(
+    0.08, '$/kg', 'screening', 'silicon-grade quartzite lump',
+    'Silicon-grade quartzite lump screening (~$80/t), above construction sand. Not a quarry quote.',
+    [{ label: 'USGS silica / industrial sand statistics (family cite; screening $0.08/kg quartzite lump, not a quarry quote)', url: USGS_SILICA }]
+  ),
+  'carbon-reductant': row(
+    0.25, '$/kg', 'screening', 'SAF coal/coke/charcoal mix',
+    'Coal/coke/charcoal mix for a submerged-arc MG-Si furnace. Screening, not an anode quote.',
+    [{ label: 'USGS MCS 2025 silicon (family; SAF reductant screening $0.25/kg, not an anode quote)', url: USGS_SI }]
+  ),
+  'carbon-anode': row(
+    0.50, '$/kg', 'screening', 'Hall–Héroult anode carbon',
+    'Hall–Héroult anode carbon screening $0.50/kg. Not a calcined-coke contract.',
+    [{ label: 'DOE aluminium industry roadmap (family; anode-carbon screening $0.50/kg, not a calcined-coke contract)', url: DOE_AL }]
+  ),
+  alumina: row(
+    0.45, '$/kg', 'screening', 'smelter-grade alumina band',
+    'Smelter-grade alumina ~$300–600/t mid ($0.45/kg). Screening, not a Bayer quote. Alumina is the Hall–Héroult feed.',
+    [{ label: 'USGS MCS 2025 aluminum (alumina is the feed; screening mid $0.45/kg, not a Bayer quote)', url: USGS_AL }]
   ),
 };
 
@@ -299,6 +334,25 @@ const packs = {
       { label: 'IRENA 2021 Innovation Outlook: Renewable Methanol (family cite)', url: IRENA_MEOH },
     ],
   }),
+  'mg-si': pack({
+    capexIntensity: 3000, intensityUnit: '$/(kg Si/day)',
+    fixedOmPercent: 4, variableOm: 0.02, assetLifeYears: 20,
+    quality: 'screening', source: 'MG-Si SAF TEA order',
+    note: 'installedCapex = 3000 × capacity. ~$8/kg-year world-scale SAF order × 365 ≈ $3000/(kg/day); linear intensity makes a small pilot look cheap; not a vendor quote; electrical SEC is separate (12 kWh/kg). CAPEX is screening OOM, not from the MDPI 2026 TEA comparison tables (that paper is the 11–13 kWh/kg SAF electrical band; they use 12).',
+    evidence: [
+      { label: 'MDPI Energies 2026 MG-Si TEA comparison (11–13 kWh/kg SAF electrical; they use 12). CAPEX intensity is screening OOM, not a table quote from this paper', url: MDPI_MGSI },
+    ],
+  }),
+  'aluminium-smelter': pack({
+    capexIntensity: 1800, intensityUnit: '$/(kg Al/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'Hall–Héroult greenfield TEA order',
+    note: 'installedCapex = 1800 × capacity. ~$5000 per annual tonne greenfield order → 5000/1000*365 ≈ 1800 $/(kg/day). Hall–Héroult SEC stays 14 kWh/kg on the unit (IAI-class 13–15). Not a vendor quote. Not Bayer refining.',
+    evidence: [
+      { label: 'DOE aluminium industry roadmap (family; screening CAPEX intensity, not a vendor quote)', url: DOE_AL },
+      { label: 'USGS MCS 2025 aluminum (primary-ingot context; not a smelter contract)', url: USGS_AL },
+    ],
+  }),
 
   // MECH18 — utility CAPEX packs (screening). Capacity basis = installed duty (m³/day or Nm³/day).
   'intake-pump': pack({
@@ -410,6 +464,16 @@ const demand = {
     1e8, 'kg/year', 'screening', 'local process water',
     `100,000 m³/y local process-water offtake screening. Not a municipal tariff or concession.`,
     [{ label: 'Process-water offtake screening 1e8 kg/y; not a municipal tariff', url: null }]
+  ),
+  silicon: row(
+    5e6, 'kg/year', 'screening', 'USGS MCS silicon metal; small regional ceiling',
+    `5 kt/y screening offtake ceiling. USGS MCS 2025 prices metallurgical-grade silicon metal; this is a small regional ceiling, not world production and not a contract.`,
+    [{ label: 'USGS MCS 2025 silicon metal (price series; 5 kt/y ceiling is screening offtake, not production)', url: USGS_SI }]
+  ),
+  aluminium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS aluminum; tiny slice of world smelter',
+    `20 kt/y screening offtake ceiling. USGS MCS 2025 world smelter production 2024e ~72 Mt and China ~43 Mt — this ceiling is a tiny slice, not production and not a contract.`,
+    [{ label: 'USGS MCS 2025 aluminum — world smelter production 2024e ~72 Mt (China ~43 Mt); 20 kt/y ceiling is screening offtake, not production', url: USGS_AL }]
   ),
 };
 
@@ -686,6 +750,16 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     1e8, 'kg/year', 'screening', 'USGS MCS China magnesite; brine compound',
     'Conservative 100 kt/y brine-Mg-compound ceiling, not Mg-metal and not magnesite offtake. USGS MCS 2026 China magnesite 2025e ~12.7 Mt gross. Screening, not a plant contract.',
     [{ label: 'USGS MCS 2026 magnesium compounds — China magnesite 2025e ~12.7 Mt gross; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+  silicon: row(
+    5e8, 'kg/year', 'screening', 'USGS MCS silicon metal; China regional ceiling',
+    'Conservative 500 kt/y regional MG-Si ceiling. USGS MCS prices metallurgical-grade silicon metal; this is a screening offtake slice, not China production and not a contract.',
+    [{ label: 'USGS MCS 2025 silicon metal (price series; 500 kt/y China ceiling is screening offtake, not production)', url: USGS_SI }]
+  ),
+  aluminium: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS aluminum; China regional ceiling',
+    'Conservative 2 Mt/y regional primary-aluminium ceiling. USGS MCS 2025 world smelter production 2024e ~72 Mt and China ~43 Mt — this ceiling is a tiny slice of China, not production and not a contract.',
+    [{ label: 'USGS MCS 2025 aluminum — world smelter ~72 Mt / China ~43 Mt (2024e); 2 Mt/y China ceiling is screening offtake, not production', url: USGS_AL }]
   ),
 });
 

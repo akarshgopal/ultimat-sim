@@ -63,6 +63,8 @@ const PROCESS_LABELS = Object.freeze({
   'brine-minerals': 'Brine minerals',
   asu: 'Air separation',
   ammonia: 'Haber–Bosch',
+  'mg-si': 'MG-Si furnace',
+  'aluminium-smelter': 'Aluminium smelter',
 });
 
 const SOLAR_EVIDENCE = Object.freeze([
@@ -309,6 +311,38 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Coega Green Ammonia EIA: HB loop ~1.4 ha for 1.2 Mt NH₃/y → 4.3 m²/(t/d); loop+storage 3.0 ha → 9.1',
         url: 'https://cdn.sanity.io/files/b0ecix6u/production/c87656422bca19568b505b0fe25d4c51130a197f.pdf',
+      }),
+    ]),
+  }),
+  'mg-si': Object.freeze({
+    id: 'mg-si',
+    label: PROCESS_LABELS['mg-si'],
+    basis: 'kgPerHour',
+    intensity: 8,
+    unitLabel: 'm²/(kg Si/h)',
+    range: Object.freeze([4, 12]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening MG-Si SAF pad 8 m²/(kg Si/h) (range 4–12); not a plot survey. MDPI 2026 TEA comparison is the 11–13 kWh/kg electrical family, not a measured layout.',
+        url: 'https://www.mdpi.com/1996-1073/19/9/2023',
+      }),
+    ]),
+  }),
+  'aluminium-smelter': Object.freeze({
+    id: 'aluminium-smelter',
+    label: PROCESS_LABELS['aluminium-smelter'],
+    basis: 'kgPerHour',
+    intensity: 6,
+    unitLabel: 'm²/(kg Al/h)',
+    range: Object.freeze([3, 10]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening Hall–Héroult pad 6 m²/(kg Al/h) (range 3–10); not a measured plot. USGS MCS aluminum is commodity context, not a surveyed smelter layout.',
+        url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-aluminum.pdf',
       }),
     ]),
   }),
@@ -573,6 +607,20 @@ function padAmmonia(node, solved) {
   return padAreaFromIntensity(spec, activity / 1000);
 }
 
+function padMgSi(node, solved) {
+  const spec = intensitySpec('mg-si');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
+function padAluminiumSmelter(node, solved) {
+  const spec = intensitySpec('aluminium-smelter');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padBatteryKWh(batteryKWh) {
   const spec = intensitySpec('battery');
   const kWh = Math.max(0, finiteNumber(batteryKWh));
@@ -617,6 +665,8 @@ const PROCESS_PADS = Object.freeze({
   'brine-minerals': padBrine,
   asu: padAsu,
   ammonia: padAmmonia,
+  'mg-si': padMgSi,
+  'aluminium-smelter': padAluminiumSmelter,
   'material-buffer': padBuffer,
   'intake-pump': padIntakePump,
   'gas-blower': padGasBlower,

@@ -579,6 +579,16 @@ const aluminiumSmelter = reaction({
   inputs: { alumina: { substance: 'Al2O3', molPerProductMol: 0.5 }, carbon: { substance: 'C', molPerProductMol: 0.75 } },
   outputs: { aluminium: { substance: 'Al', molPerProductMol: 1, phase: 'solid' }, carbonDioxide: { substance: 'CO2', molPerProductMol: 0.75, phase: 'gas' } },
 });
+// SiO2 + 2 C → Si + 2 CO. 12 kWh/kg is screening SAF electrical SEC (11–13 kWh/kg band mid).
+// Carbon chemical energy is the C feed — do not set heatKWhPerKg (that would emit wasteHeat).
+const mgSi = reaction({
+  product: 'Si', electricityKWhPerKg: 12,
+  inputs: { quartz: { substance: 'SiO2', molPerProductMol: 1 }, carbon: { substance: 'C', molPerProductMol: 2 } },
+  outputs: {
+    silicon: { substance: 'Si', molPerProductMol: 1, phase: 'solid' },
+    carbonMonoxide: { substance: 'CO', molPerProductMol: 2, phase: 'gas' },
+  },
+});
 const hydrogenDri = reaction({
   product: 'Fe', electricityKWhPerKg: 0.7,
   inputs: { ironOre: { substance: 'Fe2O3', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
@@ -1138,6 +1148,14 @@ const UNITS = Object.freeze({
       aluminium: { direction: 'out', kind: 'material', required: true }, carbonDioxide: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: aluminiumSmelter,
+  },
+  'mg-si': {
+    kind: 'converter',
+    ports: {
+      quartz: { direction: 'in', kind: 'material', required: true }, carbon: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      silicon: { direction: 'out', kind: 'material', required: true }, carbonMonoxide: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: mgSi,
   },
   'hydrogen-dri': {
     kind: 'converter',

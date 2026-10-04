@@ -97,10 +97,10 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
+    Crust: ['mg-si', 'aluminium-smelter'],
   };
   const PALETTE_MORE_UNITS = [
-    'titanium-kroll', 'aluminium-smelter', 'hydrogen-dri', 'nuclear-electricity',
-    'solar-thermal', 'thermal-storage', 'med', 'msf',
+    'nuclear-electricity', 'solar-thermal', 'thermal-storage',
   ];
   const PALETTE_DEFAULT_OPEN = new Set(['Minerals', 'Fuels']);
   const MapSite = typeof FlowsheetMapSite !== 'undefined' ? FlowsheetMapSite : null;
@@ -302,7 +302,19 @@
       palette: { section: 'building', order: 12, glyph: 'Al', description: 'Alumina + carbon + power → aluminium' },
       params: { electricityKWhPerKg: 14 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Smelting electricity', min: 8, max: 25, step: 0.1, unit: 'kWh/kg Al' }],
+      sourceNote: '14 kWh/kg is Hall–Héroult screening inside ~13–15 kWh/kg (IAI-class). CAPEX comes from the tea-screening aluminium-smelter pack (~$5000/t-y → 1800 $/(kg/day)), not a dead $0 block. Not Bayer refining and not a vendor quote.',
       references: [{ label: 'DOE aluminium roadmap', url: 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf' }],
+    },
+    'mg-si': {
+      label: 'MG-Si furnace', capacity: 1000, rate: 100, activityUnit: 'kg Si/day',
+      palette: { section: 'building', order: 12, glyph: 'Si', description: 'Quartz + carbon + power → MG-Si' },
+      params: { electricityKWhPerKg: 12 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 8, max: 20, step: 0.1, unit: 'kWh/kg Si' }],
+      sourceNote: 'Screening SAF electrical SEC 12 kWh/kg inside the 11–13 kWh/kg band (Saevarsdottir-class / MDPI 2026 TEA comparison uses 12); SiO2+2C→Si+2CO; not Siemens/poly-Si and not a furnace quote.',
+      references: [
+        { label: 'MDPI Energies 2026 MG-Si TEA comparison (11–13 kWh/kg SAF; they use 12)', url: 'https://www.mdpi.com/1996-1073/19/9/2023' },
+        { label: 'USGS MCS 2025 silicon metal', url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-silicon.pdf' },
+      ],
     },
     'hydrogen-dri': {
       label: 'Hydrogen DRI steel', capacity: 1000, rate: 100, activityUnit: 'kg Fe/day',
@@ -503,6 +515,7 @@
     wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'Ammonia', offgas: 'Off-gas',
     lithium: 'Lithium chloride', bromide: 'Sodium bromide', magnesium: 'Magnesium chloride', potash: 'Potash', gypsum: 'Gypsum', salt: 'Salt', raffinate: 'Raffinate',
     caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Aluminium', carbonDioxide: 'Carbon dioxide',
+    quartz: 'Quartzite', silicon: 'MG-Si', carbonMonoxide: 'Carbon monoxide',
     ironOre: 'Iron ore', steel: 'Iron / steel', titaniumTetrachloride: 'Titanium tetrachloride', titanium: 'Titanium', magnesiumChloride: 'Magnesium chloride',
   };
   const materialPresets = {
@@ -519,6 +532,7 @@
     chlorine: { label: 'Chlorine', phase: 'gas', mol: { Cl2: 1000 } },
     alumina: { label: 'Alumina', phase: 'solid', mol: { Al2O3: 1000 } },
     carbon: { label: 'Carbon anode', phase: 'solid', mol: { C: 1000 } },
+    quartz: { label: 'Quartzite', phase: 'solid', mol: { SiO2: 1000 } },
     ironOre: { label: 'Hematite concentrate', phase: 'solid', mol: { Fe2O3: 1000 } },
     titaniumTetrachloride: { label: 'Titanium tetrachloride', phase: 'liquid', mol: { TiCl4: 1000 } },
     magnesium: { label: 'Magnesium', phase: 'solid', mol: { Mg: 1000 } },
@@ -545,6 +559,7 @@
     bromide: { key: 'bromide', label: 'Sodium bromide', profile: 'silo', glyph: 'silo' },
     alumina: { key: 'alumina', label: 'Alumina', profile: 'silo', glyph: 'silo' },
     carbon: { key: 'carbon', label: 'Carbon anode', profile: 'silo', glyph: 'silo' },
+    quartz: { key: 'quartz', label: 'Quartzite', profile: 'silo', glyph: 'silo' },
     ironOre: { key: 'ironOre', label: 'Hematite concentrate', profile: 'silo', glyph: 'silo' },
     magnesium: { key: 'magnesium', label: 'Magnesium', profile: 'silo', glyph: 'silo' },
     co2: { key: 'co2', label: 'Carbon dioxide', profile: 'stack', glyph: 'CO₂' },
@@ -561,7 +576,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'ironOre', 'magnesium', 'titaniumTetrachloride'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -812,6 +827,7 @@
     'methane-recycle': () => loadMethaneRecycle(),
     'coastal-methane': () => loadCoastalMethane(0),
     'coastal-methanol': () => loadMethanolPlant(0),
+    'silicon-alumina': () => loadSiliconAlumina(),
     'abundance-hub': () => loadAbundanceHub(),
     'zabuye-hub': () => loadZabuyeHub(),
     'demo-network': () => loadDemoNetwork(),
@@ -1216,6 +1232,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'Coastal methanol loaded. Size-to-target methanol sizes DAC, SWRO, electrolyzer, and PV; cashflow stays screening.';
+    }
+  }
+
+  function loadSiliconAlumina() {
+    setActiveDemo('silicon-alumina', 'Mejillones MG-Si + Al');
+    lastSizing = null;
+    if (typeof SiliconCase === 'undefined' || !SiliconCase.createSiliconCase) {
+      throw new Error('Silicon case is not loaded');
+    }
+    loadCase(SiliconCase.createSiliconCase(), 'mg-si');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening crustal quartz → MG-Si and purchased alumina → Al on frozen Mejillones PV; not a concession and not polysilicon.';
     }
   }
 
@@ -3446,7 +3475,7 @@
       'methanol.co2': 'co2', 'methanol.hydrogen': 'hydrogen',
       'chlor-alkali.salt': 'salt',
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
-      'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
+      'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'titanium-kroll.titaniumTetrachloride': 'titaniumTetrachloride', 'titanium-kroll.magnesium': 'magnesium',
     }[`${unit}.${port}`] || 'water';
   }
@@ -5007,7 +5036,8 @@
     if (unit === 'intake-pump' || unit === 'gas-blower') return 'pipe';
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf') return 'pond';
-    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery') return 'cell';
+    if (unit === 'mg-si') return 'furnace';
+    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'aluminium-smelter') return 'cell';
     if (unit === 'asu' || unit === 'ammonia' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
     return 'shed';
@@ -6487,6 +6517,12 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
+    if (current.unit === 'mg-si' || current.unit === 'aluminium-smelter') {
+      const tea = teaApi();
+      if (tea?.bindCapexPack) {
+        return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
+      }
+    }
     if (kind === 'converter') return {
       installedCapex: ['battery', 'thermal-storage'].includes(current.unit) ? current.capacity * current.params.capexPerKWh : 0,
       fixedOMPercent: 3,
@@ -6606,6 +6642,8 @@
     sabatier: 'sabatier',
     methanol: 'methanol',
     'solar-pv': 'solar-pv',
+    'mg-si': 'mg-si',
+    'aluminium-smelter': 'aluminium-smelter',
   };
 
   function screeningPackFor(node) {
@@ -7416,7 +7454,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

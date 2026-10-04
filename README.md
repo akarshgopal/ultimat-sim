@@ -30,6 +30,10 @@ The root app now provides:
 
 The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`, `index.html`, and `flowsheet.css`.
 
+## Crustal silicon and aluminium (screening)
+
+Metallurgical-grade silicon is a carbothermic SAF block (`mg-si`): SiO₂ + 2 C → Si + 2 CO at 12 kWh/kg electrical (mid of the 11–13 kWh/kg band). Carbon chemical energy is the C feed; the unit does not emit waste heat. Hall–Héroult aluminium stays 14 kWh/kg. Product prices are USGS MCS 2025 cited rows (MG-Si metal $3.97/kg, primary aluminium ingot $2.87/kg), not contracts. The Mejillones demo buys quartzite, reductant carbon, alumina, and anode carbon on frozen PVGIS-ERA5 5.27 kWh/kWp·day; purchased solids are not a concession. Screening TEA, not bankable. Polysilicon / Siemens is not modeled.
+
 ## Code map
 
 - `index.html`, `flowsheet.css`, and `js/flowsheet-app.js`: editor, inspector, saved factories, and scenario comparison.

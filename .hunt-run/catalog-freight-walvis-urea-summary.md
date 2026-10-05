@@ -78,4 +78,4 @@ No change to `data/tea-screening.js`, `engine/economics.js`, `js/flowsheet-app.j
 
 ## Tip
 
-Feat pending on `main`. Pages pending. Prior checkout tip `9b89454`.
+Feat `b145bdf` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `b145bdf`). `npm test` 522 pass / 0 fail. Prior checkout tip `9b89454`.

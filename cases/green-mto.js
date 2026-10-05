@@ -226,7 +226,7 @@ function createGreenMtoCase() {
       { label: 'IEA Global Hydrogen Review 2024 (electrolytic H₂ family context; this demo is on-site PEM, not a purchased grey/blue H₂ contract)', url: IEA_H2 },
       { label: 'DOE hydrogen production electrolysis (PEM/alkaline family; screening 52 kWh/kg H₂, not a vendor meter)', url: DOE_H2 },
     ],
-    notes: 'On-site SWRO + PEM H₂ + purchased industrial CO₂ → methanol → screening ethylene proxy at Mejillones. Not purchased MeOH (that remains cases/mto.js). Not DAC (coastal methanol.js remains the DAC demo). Stoich CO₂ + 3 H₂ → CH₃OH + H₂O then 2 CH₃OH → C₂H₄ + 2 H₂O. SEC 4 kWh/kg is MTO electricity-as-total-energy; electrolyzer 52 kWh/kg H₂ dominates energy. Cash sign whatever falls out. Not bankable. Not UOP. Not a green-ethylene premium. Not FT. Chile CAPEX× 1.05. Sell O₂ at screening $0.05/kg.',
+    notes: 'On-site SWRO + PEM H₂ + purchased industrial CO₂ → methanol → screening ethylene proxy at Mejillones. Not purchased MeOH (that remains cases/mto.js). Not DAC (coastal methanol.js remains the DAC demo). Stoich CO₂ + 3 H₂ → CH₃OH + H₂O then 2 CH₃OH → C₂H₄ + 2 H₂O. SEC 4 kWh/kg is MTO electricity-as-total-energy; electrolyzer 52 kWh/kg H₂ dominates energy. Cash sign whatever falls out. Not bankable. Not UOP. Not a green-ethylene premium. Not FT. Chile CAPEX× 1.05. Sell O₂ at screening $0.05/kg. O₂ stays plant-gate because volume is above the Linde 15–200 t/y tanker tariff band (not a tariff for that scale).',
   };
   return definition;
 }

@@ -115,6 +115,7 @@ const IRENA_COSTS_2024 = 'https://www.irena.org/Publications/2025/Jun/Renewable-
 const WB_ICP = 'https://www.worldbank.org/en/programs/icp/brief/ICP2021';
 const UNCTAD_TRANSPORT = 'https://unctad.org/publication/trade-and-transport-dataset';
 const WB_FREIGHT_LOGISTICS = 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf';
+const LINDE_LOX_TANKER = 'https://static.prd.echannel.linde.com/wcsstore/SE_REN_Industrial_Gas_Store/pdf/Prislista_Flytande_gaser_Industri_2024_01.pdf';
 const DEFAULT_DEMAND_REGION_ID = 'me-levant';
 const DEMAND_REGION_LABELS = {
   'me-levant': 'Dead Sea / Levant screening offtake (Red Sea and Arabian Sea inherit). Not a plant offtake contract.',
@@ -556,6 +557,13 @@ const freightBands = {
     'Short-haul inland truck screening OOM (~$10/t; ~50–100 km gravel/bulk). Not a carrier contract, not a voyage quote, and not a distance/GIS model. Distinct from bulk-dry-shortsea (ocean).',
     [
       { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (cumulative CAD $/t by distance; screening ~$10/t ≈ $0.01/kg USD OOM for ~50–100 km)', url: 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf' },
+    ]
+  ),
+  'cryo-tanker-short': row(
+    0.08, '$/kg', 'screening', 'Linde Sweden 2024 liquid-gas price list (cryogenic tanker transport)',
+    'Cryogenic liquid-bulk tanker (LOX/LIN class) 0–100 km bracket 0.86 SEK/kg ≈ $0.082/kg at ~10.5 SEK/USD (Jan 2024), rounded to screening $0.08/kg; tariff band 15–200 t/y; not a pipeline, not tube-trailer, not a carrier contract, not a Chile quote, not a distance/GIS model; liquefaction of gaseous electrolyzer O₂ is NOT modeled (freight-only disclosure — real LOX offtake also needs a liquefier, so this understates cost). Distinct from inland-truck-short (bulk solids).',
+    [
+      { label: 'Linde Gas AB (Sweden), Flytande gaser, industri price list valid 1 Jan 2024 (cryogenic tanker transport 0–100 km 0.86 SEK/kg; screening $0.08/kg; 15–200 t/y band; not a pipeline)', url: LINDE_LOX_TANKER },
     ]
   ),
   none: row(

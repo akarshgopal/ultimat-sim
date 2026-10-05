@@ -223,7 +223,7 @@ function createGreenAmmoniaCase() {
       { label: 'NOAA NCEI World Ocean Atlas 2023 Volume 2: Salinity (DOI)', url: WOA_URL },
       { label: 'IEA Ammonia Technology Roadmap (fertilizer-market order; screening mid $0.45/kg)', url: IEA_NH3 },
     ],
-    notes: 'Screening air + seawater SWRO + electrolysis + ASU + Haber–Bosch on frozen Walvis PV (totals.fixed E_d 5.48 / E_y 2000.67). Not Dead Sea chlor-alkali hydrogen. Screening fertilizer price $0.45/kg with small-plant Haber/electrolyzer intensities so cash may be negative. Not bankable. Not a green premium. Southern Africa CAPEX× 0.95.',
+    notes: 'Screening air + seawater SWRO + electrolysis + ASU + Haber–Bosch on frozen Walvis PV (totals.fixed E_d 5.48 / E_y 2000.67). Not Dead Sea chlor-alkali hydrogen. Screening fertilizer price $0.45/kg with small-plant Haber/electrolyzer intensities so cash may be negative. Not bankable. Not a green premium. Southern Africa CAPEX× 0.95. O₂ stays plant-gate because volume is above the Linde 15–200 t/y tanker tariff band (not a tariff for that scale).',
   };
   return definition;
 }

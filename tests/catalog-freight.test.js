@@ -18,7 +18,9 @@ const { createCuEwCase } = require('../cases/cu-ew');
 const { createFloatGlassCase } = require('../cases/float-glass');
 const { createFtLiquidsCase } = require('../cases/ft-liquids');
 const { createGreenFtCase } = require('../cases/green-ft');
+const { createGreenMtoCase } = require('../cases/green-mto');
 const { createGreenUreaCase } = require('../cases/green-urea');
+const { createGreenAmmoniaCase } = require('../cases/green-ammonia');
 const { createGreenH2DriCase } = require('../cases/green-h2-dri');
 const { createH2DriCase } = require('../cases/h2-dri');
 const { createFuelsAndMineralsNetwork } = require('../cases/network');
@@ -42,6 +44,9 @@ const PRIOR_H2_DRI_INSTALLED_CAPEX = 982258;
 // Iron-ore inland-truck-only freight recorded tip 4b2e3c7 (this leftover adds H2 container + steel shortsea).
 const PRIOR_H2_DRI_BREAKDOWN_FREIGHT = 5218.53;
 const PRIOR_GREEN_H2_DRI_BREAKDOWN_FREIGHT = 5218.53;
+// Ore inland-truck + steel bulk-dry-shortsea, recorded catalog-dri-freight-leftovers (tip 4b2e3c7 leftover).
+const PRIOR_GREEN_H2_DRI_STEEL_FREIGHT = 16168.529411764706;
+const LINDE_LOX_TANKER = 'https://static.prd.echannel.linde.com/wcsstore/SE_REN_Industrial_Gas_Store/pdf/Prislista_Flytande_gaser_Industri_2024_01.pdf';
 
 function kgStream(kg) {
   return {
@@ -160,7 +165,7 @@ test('Mejillones QCC freight: quartz/carbon 0.03, caustic 0.08; BOM/module uncha
   assert.equal(caustic.economics.unitCost, tea.costs['caustic-makeup'].value);
   assert.deepEqual(
     Object.keys(tea.freightBands).sort(),
-    ['bulk-dry-shortsea', 'chile-coast-container', 'inland-truck-short', 'none'],
+    ['bulk-dry-shortsea', 'chile-coast-container', 'cryo-tanker-short', 'inland-truck-short', 'none'],
   );
   const solved = solveOperation(definition);
   assert.equal(solved.convergence.converged, true);
@@ -429,8 +434,8 @@ test('inland-truck-short band is $0.01/kg; green-H2-DRI and purchased-H2 DRI iro
   assert.equal(seawater.freightId, undefined);
   assert.equal(steel.freightId, 'bulk-dry-shortsea');
   assert.equal(steel.freightUsdPerKg, 0.03);
-  assert.equal(oxygen.freightUsdPerKg, undefined);
-  assert.equal(oxygen.freightId, undefined);
+  assert.equal(oxygen.freightId, 'cryo-tanker-short');
+  assert.equal(oxygen.freightUsdPerKg, 0.08);
   assert.ok(cash.breakdown.freight > PRIOR_GREEN_H2_DRI_BREAKDOWN_FREIGHT, `green-H2-DRI freight ${cash.breakdown.freight}`);
   assert.ok(Math.abs(cash.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `green-H2-DRI CAPEX ${cash.installedCapex}`);
   assert.ok(Number.isFinite(cash.annualNetCash), `green-H2-DRI annualNetCash ${cash.annualNetCash}`);
@@ -498,7 +503,7 @@ test('Mejillones purchased-H2 DRI iron-ore inland-truck-short 0.01; H2 chile-coa
   assert.equal(nodeEcon(cement, 'cement-product').freightId, 'bulk-dry-shortsea');
 });
 
-test('Mejillones DRI leftover freight: purchased H2 chile-coast-container 0.08; steel sale bulk-dry-shortsea 0.03; green O2/seawater plant-gate', () => {
+test('Mejillones DRI leftover freight: purchased H2 chile-coast-container 0.08; steel sale bulk-dry-shortsea 0.03; green O2 cryo-tanker-short; seawater plant-gate', () => {
   const h2 = solvedCash(createH2DriCase);
   const hydrogen = nodeEcon(h2.definition, 'hydrogen-feed');
   const h2Ore = nodeEcon(h2.definition, 'iron-ore');
@@ -520,8 +525,8 @@ test('Mejillones DRI leftover freight: purchased H2 chile-coast-container 0.08; 
   const greenOre = nodeEcon(green.definition, 'iron-ore');
   assert.equal(greenSteel.freightId, 'bulk-dry-shortsea');
   assert.equal(greenSteel.freightUsdPerKg, 0.03);
-  assert.equal(oxygen.freightId, undefined);
-  assert.equal(oxygen.freightUsdPerKg, undefined);
+  assert.equal(oxygen.freightId, 'cryo-tanker-short');
+  assert.equal(oxygen.freightUsdPerKg, 0.08);
   assert.equal(seawater.freightId, undefined);
   assert.equal(seawater.freightUsdPerKg, undefined);
   assert.equal(greenOre.freightId, 'inland-truck-short');
@@ -532,4 +537,51 @@ test('Mejillones DRI leftover freight: purchased H2 chile-coast-container 0.08; 
   const maglutCash = evaluateEconomics(createMaglutCase(), solveOperation(createMaglutCase()));
   assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
   assert.equal(maglutCash.breakdown.freight, 0);
+});
+
+test('cryo-tanker-short band is $0.08/kg from Linde Sweden 2024; green-H2-DRI O2 in-band', () => {
+  const band = tea.freightBands['cryo-tanker-short'];
+  assert.equal(band.value, 0.08);
+  assert.equal(band.unit, '$/kg');
+  assert.equal(band.quality, 'screening');
+  assert.equal(tea.getFreight('cryo-tanker-short').value, 0.08);
+  assert.equal(band.evidence[0].url, LINDE_LOX_TANKER);
+  assert.match(band.note, /not a pipeline/i);
+  assert.match(band.note, /liquefaction/i);
+
+  const { definition, cash } = solvedCash(createGreenH2DriCase);
+  const oxygen = nodeEcon(definition, 'electrolyzer-oxygen');
+  assert.equal(oxygen.freightId, 'cryo-tanker-short');
+  assert.equal(oxygen.freightUsdPerKg, 0.08);
+  assert.equal(oxygen.gateUnitPrice, 0.05);
+  // Honest net is 0.05 − 0.08. attachFreight already clamps sale unitPrice at 0 (Math.max); do not add more clamping.
+  assert.ok(Math.abs((oxygen.gateUnitPrice - oxygen.freightUsdPerKg) - (0.05 - 0.08)) < 1e-12);
+  assert.equal(oxygen.unitPrice, 0);
+  assert.ok(oxygen.evidence.some(item => item.url === LINDE_LOX_TANKER));
+
+  assert.ok(Math.abs(cash.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `green-H2-DRI CAPEX ${cash.installedCapex}`);
+  assert.ok(cash.breakdown.freight > 16169, `green-H2-DRI freight ${cash.breakdown.freight} vs prior ${PRIOR_GREEN_H2_DRI_STEEL_FREIGHT}`);
+  assert.ok(Number.isFinite(cash.annualNetCash), `green-H2-DRI annualNetCash ${cash.annualNetCash}`);
+  assert.ok(true, `green-H2-DRI cash lines R=${cash.annualRevenue} OPEX=${cash.annualOperatingCost} freight=${cash.breakdown.freight} net=${cash.annualNetCash} installed=${cash.installedCapex}`);
+
+  const maglutCash = evaluateEconomics(createMaglutCase(), solveOperation(createMaglutCase()));
+  assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
+  assert.equal(maglutCash.breakdown.freight, 0);
+
+  const ftOxygen = nodeEcon(createGreenFtCase(), 'electrolyzer-oxygen');
+  assert.equal(ftOxygen.freightId, undefined);
+  assert.equal(ftOxygen.freightUsdPerKg, undefined);
+  const mtoOxygen = nodeEcon(createGreenMtoCase(), 'electrolyzer-oxygen');
+  assert.equal(mtoOxygen.freightId, undefined);
+  assert.equal(mtoOxygen.freightUsdPerKg, undefined);
+  const ureaOxygen = nodeEcon(createGreenUreaCase(), 'electrolyzer-oxygen');
+  assert.equal(ureaOxygen.freightId, undefined);
+  assert.equal(ureaOxygen.freightUsdPerKg, undefined);
+  const ureaAsu = nodeEcon(createGreenUreaCase(), 'asu-oxygen');
+  assert.equal(ureaAsu.freightId, undefined);
+  const ammoniaOxygen = nodeEcon(createGreenAmmoniaCase(), 'electrolyzer-oxygen');
+  assert.equal(ammoniaOxygen.freightId, undefined);
+  assert.equal(ammoniaOxygen.freightUsdPerKg, undefined);
+  const ammoniaAsu = nodeEcon(createGreenAmmoniaCase(), 'asu-oxygen');
+  assert.equal(ammoniaAsu.freightId, undefined);
 });

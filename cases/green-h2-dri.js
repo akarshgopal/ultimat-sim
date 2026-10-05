@@ -29,6 +29,7 @@ const MILLERO_URL = 'https://doi.org/10.1016/j.dsr.2007.10.001';
 const WOA_URL = 'https://doi.org/10.25923/70qt-9574';
 const UNCTAD_TRANSPORT = 'https://unctad.org/publication/trade-and-transport-dataset';
 const WB_FREIGHT_LOGISTICS = 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf';
+const LINDE_LOX_TANKER = 'https://static.prd.echannel.linde.com/wcsstore/SE_REN_Industrial_Gas_Store/pdf/Prislista_Flytande_gaser_Industri_2024_01.pdf';
 
 function right(kind, status, note, evidence) {
   return {
@@ -107,7 +108,7 @@ function createGreenH2DriCase() {
           economics: tea.bindCapexPack('hydrogen-dri', { capacity: FE_KG_PER_DAY, region: REGION }),
         },
         { id: 'steel', unit: 'material-sink', economics: tea.bindSale('steel', { region: REGION, freight: 'bulk-dry-shortsea' }) },
-        { id: 'electrolyzer-oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen', { region: REGION }) },
+        { id: 'electrolyzer-oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen', { region: REGION, freight: 'cryo-tanker-short' }) },
         { id: 'brine', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'waterReject', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'process-water', unit: 'material-sink', economics: { disposition: 'vent' } },
@@ -207,12 +208,13 @@ function createGreenH2DriCase() {
       { label: 'World Bank commodity markets / pink sheet (metals family; screening HBI/DRI mid, not a Platts contract)', url: WB_PINK },
       { label: 'UNCTAD Trade-and-Transport Dataset (bulk/short-sea family; screening ~$30/t, not a voyage quote)', url: UNCTAD_TRANSPORT },
       { label: 'World Bank freight logistics (family cite; screening, not a carrier contract)', url: WB_FREIGHT_LOGISTICS },
+      { label: 'Linde Gas AB (Sweden), Flytande gaser, industri price list valid 1 Jan 2024 (cryogenic tanker 0–100 km 0.86 SEK/kg; screening cryo-tanker-short $0.08/kg on electrolyzer O₂; not a pipeline)', url: LINDE_LOX_TANKER },
       { label: 'Millero et al. 2008, Deep-Sea Research I: reference composition of seawater at S=35 (DOI)', url: MILLERO_URL },
       { label: 'NOAA NCEI World Ocean Atlas 2023 Volume 2: Salinity (DOI)', url: WOA_URL },
       { label: 'IEA Global Hydrogen Review 2024 (electrolytic H₂ family context; this demo is on-site PEM, not a purchased grey/blue H₂ contract)', url: IEA_H2 },
       { label: 'DOE hydrogen production electrolysis (PEM/alkaline family; screening 52 kWh/kg H₂, not a vendor meter)', url: DOE_H2 },
     ],
-    notes: 'On-site SWRO + PEM H₂ → screening DRI Fe at Mejillones. Not purchased grey/blue H₂ (that remains cases/h2-dri.js). Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O, same as hydrogen-dri. SEC 0.7 kWh/kg is shaft electricity only; electrolyzer 52 kWh/kg H₂ dominates energy. Purchased iron-ore carries screening inland-truck-short freight $0.01/kg (~$10/t short-haul gravel/bulk family; not a mine-haul quote, not a carrier contract, and not a distance/GIS model). Sale is screening HBI/DRI $0.40/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (UNCTAD/WB bulk short-sea family; DRI/HBI ships as dry bulk, same band as cement/urea/float-glass offtake; not a voyage quote; screening FOB vs landed). Seawater intake stays plant-gate (local intake). Electrolyzer-oxygen sale stays plant-gate (gas over-the-fence; no existing gas/pipeline/cylinder band — container would be dishonest). Not a logistics model. Chile CAPEX× 1.05 unchanged. Cash sign whatever falls out. Not Midrex. Not EAF. Not bankable. Sell O₂ at screening $0.05/kg. No green-steel premium.',
+    notes: 'On-site SWRO + PEM H₂ → screening DRI Fe at Mejillones. Not purchased grey/blue H₂ (that remains cases/h2-dri.js). Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O, same as hydrogen-dri. SEC 0.7 kWh/kg is shaft electricity only; electrolyzer 52 kWh/kg H₂ dominates energy. Purchased iron-ore carries screening inland-truck-short freight $0.01/kg (~$10/t short-haul gravel/bulk family; not a mine-haul quote, not a carrier contract, and not a distance/GIS model). Sale is screening HBI/DRI $0.40/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (UNCTAD/WB bulk short-sea family; DRI/HBI ships as dry bulk, same band as cement/urea/float-glass offtake; not a voyage quote; screening FOB vs landed). Seawater intake stays plant-gate (local intake). Electrolyzer O₂ sale nets plant-gate $0.05/kg minus screening cryo-tanker-short $0.08/kg (Linde Sweden 2024 0–100 km 0.86 SEK/kg; ~157 t/y sits in the 15–200 t/y band). Honesty: freight exceeds the plant-gate O₂ price so O₂ offtake nets ≈ −$0.03/kg (a real operator would likely vent or find an over-the-fence buyer); liquefaction not modeled; not a pipeline. Not a logistics model. Chile CAPEX× 1.05 unchanged. Cash sign whatever falls out. Not Midrex. Not EAF. Not bankable. Sell O₂ at screening $0.05/kg. No green-steel premium.',
   };
   return definition;
 }

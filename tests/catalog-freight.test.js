@@ -11,10 +11,11 @@ const { createMaglutCase } = require('../cases/maglut');
 const { createAbundanceCase } = require('../cases/abundance');
 const { createReeSxCase } = require('../cases/ree-sx');
 const { createReeCase } = require('../cases/ree');
+const { createUreaCase } = require('../cases/urea');
 
-// Prior CATALOG-FREIGHT tip (module sale + bauxite only), solved createSiliconCase.
-const PRIOR_FREIGHT_TIP_INSTALLED_CAPEX = 3076388.8084867904;
-const PRIOR_FREIGHT_TIP_BREAKDOWN_FREIGHT = 34468;
+// Prior CATALOG-FREIGHT-BOM tip (module + bauxite + Ag/glass/EVA), solved createSiliconCase.
+const PRIOR_FREIGHT_BOM_TIP_INSTALLED_CAPEX = 3076388.8084867904;
+const PRIOR_FREIGHT_BOM_TIP_BREAKDOWN_FREIGHT = 43815.53;
 
 function kgStream(kg) {
   return {
@@ -92,7 +93,7 @@ test('bindSale freight nets gate − 0.08; Maglut and Dead Sea stay plant-gate',
   assert.equal(deadSeaCash.breakdown.freight, 0);
 });
 
-test('Mejillones module freight 0.08 and bauxite 0.03; annualNetCash finite', () => {
+test('Mejillones QCC freight: quartz/carbon 0.03, caustic 0.08; BOM/module unchanged', () => {
   const definition = createSiliconCase();
   const moduleSink = definition.graph.nodes.find(node => node.id === 'module');
   const bauxite = definition.graph.nodes.find(node => node.id === 'bauxite');
@@ -119,14 +120,18 @@ test('Mejillones module freight 0.08 and bauxite 0.03; annualNetCash finite', ()
   assert.equal(glass.economics.freightId, 'bulk-dry-shortsea');
   assert.equal(glass.economics.freightUsdPerKg, 0.03);
   assert.equal(glass.economics.unitCost, tea.costs['float-glass'].value);
-  assert.ok(!(quartz.economics.freightUsdPerKg > 0));
-  assert.equal(quartz.economics.freightId, undefined);
-  assert.ok(!(reductant.economics.freightUsdPerKg > 0));
-  assert.equal(reductant.economics.freightId, undefined);
-  assert.ok(!(anode.economics.freightUsdPerKg > 0));
-  assert.equal(anode.economics.freightId, undefined);
-  assert.ok(!(caustic.economics.freightUsdPerKg > 0));
-  assert.equal(caustic.economics.freightId, undefined);
+  assert.equal(quartz.economics.freightId, 'bulk-dry-shortsea');
+  assert.equal(quartz.economics.freightUsdPerKg, 0.03);
+  assert.equal(quartz.economics.unitCost, tea.costs.quartz.value);
+  assert.equal(reductant.economics.freightId, 'bulk-dry-shortsea');
+  assert.equal(reductant.economics.freightUsdPerKg, 0.03);
+  assert.equal(reductant.economics.unitCost, tea.costs['carbon-reductant'].value);
+  assert.equal(anode.economics.freightId, 'bulk-dry-shortsea');
+  assert.equal(anode.economics.freightUsdPerKg, 0.03);
+  assert.equal(anode.economics.unitCost, tea.costs['carbon-anode'].value);
+  assert.equal(caustic.economics.freightId, 'chile-coast-container');
+  assert.equal(caustic.economics.freightUsdPerKg, 0.08);
+  assert.equal(caustic.economics.unitCost, tea.costs['caustic-makeup'].value);
   assert.deepEqual(
     Object.keys(tea.freightBands).sort(),
     ['bulk-dry-shortsea', 'chile-coast-container', 'none'],
@@ -136,7 +141,7 @@ test('Mejillones module freight 0.08 and bauxite 0.03; annualNetCash finite', ()
   const cash = evaluateEconomics(definition, solved);
   assert.ok(Number.isFinite(cash.annualNetCash));
   assert.ok(Number.isFinite(cash.annualRevenue));
-  assert.ok(cash.breakdown.freight > PRIOR_FREIGHT_TIP_BREAKDOWN_FREIGHT);
+  assert.ok(cash.breakdown.freight > PRIOR_FREIGHT_BOM_TIP_BREAKDOWN_FREIGHT);
   const moduleFreight = cash.sinks.find(sink => sink.id === 'module');
   assert.ok(moduleFreight.annualFreight > 0);
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
@@ -144,14 +149,13 @@ test('Mejillones module freight 0.08 and bauxite 0.03; annualNetCash finite', ()
   assert.match(source, /breakdown\?\.freight/);
 });
 
-test('Mejillones BOM freight: CAPEX matches prior tip, cash finite, Maglut/SX/Minaçu unchanged', () => {
+test('Mejillones QCC freight: CAPEX matches BOM tip, cash finite, Maglut/SX/Minaçu/urea unchanged', () => {
   const definition = createSiliconCase();
   const solved = solveOperation(definition);
   const cash = evaluateEconomics(definition, solved);
-  assert.ok(Math.abs(cash.installedCapex - PRIOR_FREIGHT_TIP_INSTALLED_CAPEX) <= 1);
-  assert.ok(cash.breakdown.freight > PRIOR_FREIGHT_TIP_BREAKDOWN_FREIGHT);
-  // Recorded screening disclosure after Ag/glass/EVA inbound freight (not a cash-sign gate).
-  assert.ok(Math.abs(cash.breakdown.freight - 43815.532421766) < 1, `freight ${cash.breakdown.freight}`);
+  assert.ok(Math.abs(cash.installedCapex - PRIOR_FREIGHT_BOM_TIP_INSTALLED_CAPEX) <= 1);
+  assert.ok(cash.breakdown.freight > PRIOR_FREIGHT_BOM_TIP_BREAKDOWN_FREIGHT, `freight ${cash.breakdown.freight}`);
+  // Recorded screening disclosure after quartz/carbon/caustic inbound freight (not a cash-sign gate).
   assert.ok(Number.isFinite(cash.annualNetCash), `annualNetCash ${cash.annualNetCash}`);
   assert.ok(Number.isFinite(cash.annualRevenue));
   assert.ok(Number.isFinite(cash.annualizedCapex));
@@ -168,4 +172,9 @@ test('Mejillones BOM freight: CAPEX matches prior tip, cash finite, Maglut/SX/Mi
   assert.ok(Number.isFinite(sxCash.annualNetCash));
   const minacuCash = evaluateEconomics(createReeCase(), solveOperation(createReeCase()));
   assert.ok(Number.isFinite(minacuCash.annualNetCash));
+
+  const ureaDef = createUreaCase();
+  const ureaCash = evaluateEconomics(ureaDef, solveOperation(ureaDef));
+  assert.ok(Number.isFinite(ureaCash.annualNetCash), `urea annualNetCash ${ureaCash.annualNetCash}`);
+  assert.equal(ureaCash.breakdown.freight, 0);
 });

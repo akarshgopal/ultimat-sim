@@ -76,11 +76,11 @@ function createSiliconCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'quartz', unit: 'material-source', sourcePreset: 'quartz', params: { stream: quartz }, economics: tea.bindCost('quartz') },
-        { id: 'reductant', unit: 'material-source', sourcePreset: 'carbon', params: { stream: reductant }, economics: tea.bindCost('carbon-reductant') },
+        { id: 'quartz', unit: 'material-source', sourcePreset: 'quartz', params: { stream: quartz }, economics: tea.bindCost('quartz', { freight: 'bulk-dry-shortsea' }) },
+        { id: 'reductant', unit: 'material-source', sourcePreset: 'carbon', params: { stream: reductant }, economics: tea.bindCost('carbon-reductant', { freight: 'bulk-dry-shortsea' }) },
         { id: 'bauxite', unit: 'material-source', sourcePreset: 'bauxite', params: { stream: bauxite }, economics: tea.bindCost('bauxite', { freight: 'bulk-dry-shortsea' }) },
-        { id: 'caustic', unit: 'material-source', sourcePreset: 'caustic', params: { stream: caustic }, economics: tea.bindCost('caustic-makeup') },
-        { id: 'anode', unit: 'material-source', sourcePreset: 'carbon', params: { stream: anode }, economics: tea.bindCost('carbon-anode') },
+        { id: 'caustic', unit: 'material-source', sourcePreset: 'caustic', params: { stream: caustic }, economics: tea.bindCost('caustic-makeup', { freight: 'chile-coast-container' }) },
+        { id: 'anode', unit: 'material-source', sourcePreset: 'carbon', params: { stream: anode }, economics: tea.bindCost('carbon-anode', { freight: 'bulk-dry-shortsea' }) },
         { id: 'silver', unit: 'material-source', sourcePreset: 'silver', params: { stream: silver }, economics: tea.bindCost('silver', { freight: 'chile-coast-container' }) },
         { id: 'glass', unit: 'material-source', sourcePreset: 'float-glass', params: { stream: glass }, economics: tea.bindCost('float-glass', { freight: 'bulk-dry-shortsea' }) },
         { id: 'eva', unit: 'material-source', sourcePreset: 'eva', params: { stream: eva }, economics: tea.bindCost('eva-encapsulant', { freight: 'chile-coast-container' }) },
@@ -160,12 +160,12 @@ function createSiliconCase() {
       quartz: {
         stream: clone(node('quartz').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased quartzite assumed available at screening $0.08/kg; not a concession or port lease.',
+        evidence: 'Purchased quartzite assumed available at screening $0.08/kg plant-gate plus screening bulk-dry-shortsea freight $0.03/kg (~$30/t; not a voyage quote). Not a concession or port lease.',
       },
       reductant: {
         stream: clone(node('reductant').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased carbon reductant (coal/coke/charcoal mix) assumed available; not a concession or port lease.',
+        evidence: 'Purchased carbon reductant (coal/coke/charcoal mix) assumed available at screening $0.25/kg plant-gate plus screening bulk-dry-shortsea freight $0.03/kg (~$30/t; not a voyage quote). Not a concession or port lease.',
       },
       bauxite: {
         stream: clone(node('bauxite').params.stream),
@@ -175,12 +175,12 @@ function createSiliconCase() {
       caustic: {
         stream: clone(node('caustic').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased NaOH makeup assumed available at the existing caustic commodity band; not a concession or port lease.',
+        evidence: 'Purchased NaOH makeup assumed available at the existing caustic commodity band $0.45/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; not a Maersk quote). Not a concession or port lease.',
       },
       anode: {
         stream: clone(node('anode').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased Hall–Héroult anode carbon assumed available; not a concession or port lease.',
+        evidence: 'Purchased Hall–Héroult anode carbon assumed available at screening $0.50/kg plant-gate plus screening bulk-dry-shortsea freight $0.03/kg (~$30/t; not a voyage quote). Not a concession or port lease.',
       },
       silver: {
         stream: clone(node('silver').params.stream),
@@ -249,7 +249,7 @@ function createSiliconCase() {
       { label: 'IAI metallurgical alumina refining energy intensity (~10–12 GJ/t family; screening 3.5 kWh/kg total-energy-as-electricity proxy)', url: IAI_ALUMINA_ENERGY },
       { label: 'DOE aluminium industry roadmap', url: DOE_AL },
     ],
-    notes: 'Screening crustal quartz → MG-Si (SiO2+2C→Si+2CO, 12 kWh/kg) → Siemens-style poly-Si (65 kWh/kg, Fraunhofer SoG 60–71 band mid; 1.05 mol MG-Si / mol product) + purchased Ag/glass/EVA + crustal bauxite → Bayer screening alumina (2.0 kg ore + 0.08 kg NaOH makeup + 3.5 kWh/kg total-energy-as-electricity proxy; not a full Bayer train) → Hall–Héroult Al (14 kWh/kg) → screening module assembly (Fraunhofer 2021 mass shares on 11.6 kg/m²; remaining ~10% backsheet/J-box/cables omitted). Sale is finished module at screening $2.85/kg ($0.15/W) plant-gate, net of screening Chile-coast container freight $0.08/kg to ocean offtake (not a Maersk quote; screening FOB vs landed). Purchased bauxite and float glass carry screening short-sea/bulk freight $0.03/kg; Ag paste and EVA carry screening Chile-coast container freight $0.08/kg; quartz, carbon, and caustic stay plant-gate. Not a logistics model. Not USGS silicon metal and not a poly/Al/alumina offtake. Not a cell fab, not TOPCon, not a TCS/HCl plant model, not FBR, not bankable. Purchased quartzite, bauxite, caustic makeup, carbon, Ag, glass, and EVA are not a concession or port lease. Chile CAPEX× 1.05 applies to furnaces, Bayer island, poly island, module line, and solar (unchanged). Screening, not bankable.',
+    notes: 'Screening crustal quartz → MG-Si (SiO2+2C→Si+2CO, 12 kWh/kg) → Siemens-style poly-Si (65 kWh/kg, Fraunhofer SoG 60–71 band mid; 1.05 mol MG-Si / mol product) + purchased Ag/glass/EVA + crustal bauxite → Bayer screening alumina (2.0 kg ore + 0.08 kg NaOH makeup + 3.5 kWh/kg total-energy-as-electricity proxy; not a full Bayer train) → Hall–Héroult Al (14 kWh/kg) → screening module assembly (Fraunhofer 2021 mass shares on 11.6 kg/m²; remaining ~10% backsheet/J-box/cables omitted). Sale is finished module at screening $2.85/kg ($0.15/W) plant-gate, net of screening Chile-coast container freight $0.08/kg to ocean offtake (not a Maersk quote; screening FOB vs landed). Purchased bauxite, float glass, quartz, and carbon (reductant and anode) carry screening short-sea/bulk freight $0.03/kg; Ag paste, EVA, and caustic makeup carry screening Chile-coast container freight $0.08/kg. All eight purchased plus the module sale now carry a screening freight band. Not a logistics model. Not USGS silicon metal and not a poly/Al/alumina offtake. Not a cell fab, not TOPCon, not a TCS/HCl plant model, not FBR, not bankable. Purchased quartzite, bauxite, caustic makeup, carbon, Ag, glass, and EVA are not a concession or port lease. Chile CAPEX× 1.05 applies to furnaces, Bayer island, poly island, module line, and solar (unchanged). Screening, not bankable.',
   };
   return definition;
 }

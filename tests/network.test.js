@@ -203,9 +203,9 @@ test('Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, the
   assert.ok(footprint.totalHa > 0);
 });
 
-test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea, Long Beach Maglut, cement, Cu, glass, green FT, green MTO, and money', () => {
+test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea, Long Beach Maglut, cement, Cu, glass, green FT, green MTO, green H2-DRI, and money', () => {
   const definition = createFuelsAndMineralsNetwork(6);
-  assert.equal(definition.plants.length, 10);
+  assert.equal(definition.plants.length, 11);
   assert.equal(definition.plants[0].id, 'dead-sea-minerals');
   assert.equal(definition.plants[1].id, 'almeria-fuels');
   assert.equal(definition.plants[2].id, 'mejillones-silicon');
@@ -224,8 +224,10 @@ test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea,
   assert.equal(definition.plants[8].definition.site.id, 'chile-mejillones-green-ft');
   assert.equal(definition.plants[9].id, 'mejillones-green-mto');
   assert.equal(definition.plants[9].definition.site.id, 'chile-mejillones-green-mto');
+  assert.equal(definition.plants[10].id, 'mejillones-green-h2-dri');
+  assert.equal(definition.plants[10].definition.site.id, 'chile-mejillones-green-h2-dri');
   const result = evaluateNetwork(definition);
-  assert.equal(result.plants.length, 10);
+  assert.equal(result.plants.length, 11);
   assert.ok(result.slate.CH4 > 0);
   assert.ok(result.slate.NH3 > 0);
   assert.ok(result.slate.Br2 > 0);
@@ -236,6 +238,7 @@ test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea,
   assert.ok(result.slate.FloatGlass > 0);
   assert.ok(result.slate.C12H26 > 0);
   assert.ok(result.slate.C2H4 > 0);
+  assert.ok(result.slate.Fe > 0);
   assert.ok(result.landHa > 0);
   const rolledLand = result.plants.reduce((sum, plant) => sum + plant.footprint.totalHa, 0);
   assert.ok(Math.abs(result.landHa - rolledLand) < 1e-12);
@@ -278,6 +281,10 @@ test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea,
   assert.ok(greenMtoPlant);
   assert.equal(greenMtoPlant.definition.site.id, 'chile-mejillones-green-mto');
   assert.ok(Number.isFinite(greenMtoPlant.economics.annualNetCash));
+  const greenH2DriPlant = result.plants.find(plant => plant.id === 'mejillones-green-h2-dri');
+  assert.ok(greenH2DriPlant);
+  assert.equal(greenH2DriPlant.definition.site.id, 'chile-mejillones-green-h2-dri');
+  assert.ok(Number.isFinite(greenH2DriPlant.economics.annualNetCash));
 });
 
 test('corridor excludes transferred origin sale from slate and revenue', () => {

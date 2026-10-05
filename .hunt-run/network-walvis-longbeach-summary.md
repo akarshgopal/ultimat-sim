@@ -60,4 +60,4 @@ Not edited: `cases/green-urea.js`, `cases/maglut.js`, `cases/silicon.js`, `cases
 
 ## Tip
 
-Feat pending on `main`. Pages pending. Prior checkout tip `fb70c9c`.
+Feat `81bf5be` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `81bf5be`). `npm test` 494 pass / 0 fail. Prior checkout tip `fb70c9c`.

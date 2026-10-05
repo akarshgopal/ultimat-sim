@@ -89,7 +89,7 @@
   let siteMapTilesFailed = false;
   let siteMapLayersReady = false;
   const SIZE_PRODUCT_LABELS = {
-    CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
+    CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt', module: 'PV module',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -1411,7 +1411,7 @@
     loadCase(SiliconCase.createSiliconCase(), 'pv-module');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening module assembly on frozen Mejillones PV; may be cash±; not bankable; not a cell fab.';
+      status.textContent = 'screening module assembly on frozen Mejillones PV; Size-to-target → PV module; may be cash±; not bankable; not a cell fab.';
     }
   }
 
@@ -1538,6 +1538,7 @@
     if (product === 'methanol') return nodes.find(node => node.unit === 'methanol')?.id;
     if (product === 'ammonia') return nodes.find(node => node.unit === 'ammonia')?.id;
     if (product === 'lithium' || product === 'salt') return nodes.find(node => node.unit === 'brine-minerals')?.id;
+    if (product === 'module') return nodes.find(node => node.unit === 'pv-module')?.id;
     return nodes[0]?.id;
   }
 

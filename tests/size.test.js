@@ -282,6 +282,14 @@ test('sizeToProduct ammonia on abundance meets the NH3 sink', () => {
   assertClosed(sized.solved);
 });
 
+test('sizeToProduct aliases PV module on the Mejillones chain', () => {
+  const { createSiliconCase } = require('../cases/silicon');
+  const sized = sizeToProduct({ product: 'pv-module', rate: 500, caseOrBuilder: createSiliconCase });
+  assert.equal(sized.product, 'module');
+  assert.ok(Math.abs(sized.achieved - 500) / 500 < 0.05);
+  assert.ok(sized.definition.graph.nodes.find(node => node.unit === 'pv-module').capacity > 0);
+});
+
 test('H2 sizing cascades an explicit hot source onto MED heat', () => {
   const withCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant() });
   const withoutCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant(), heatCredit: false });

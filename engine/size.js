@@ -16,7 +16,7 @@ const { cascadeHeat } = heat;
 // Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
 // this module is the separate design calculation that chooses those capacities.
 //
-// product kg/day (CH4, H2, methanol, ammonia, lithium, salt)
+// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module)
 //   -> strategy estimates converter duties and source budgets
 //   -> T-feasible cascade before purchasing heat on every path with
 //      sinks/sources; residual heat is electric resistance COP=1 for PV;
@@ -54,7 +54,22 @@ const PRODUCT_ALIASES = {
   methanol: 'methanol',
   nh3: 'ammonia',
   ammonia: 'ammonia',
+  // Canonical crustal PV-module product is `module` (Mejillones BOM chain).
+  module: 'module',
+  'pv-module': 'module',
+  pvmodule: 'module',
+  pv: 'module',
 };
+const PV_MODULE_CHAIN_UNITS = Object.freeze([
+  'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module',
+]);
+const PV_MODULE_SEC_DEFAULTS = Object.freeze({
+  'mg-si': 12,
+  polysilicon: 65,
+  'bayer-alumina': 3.5,
+  'aluminium-smelter': 14,
+  'pv-module': 0.05,
+});
 const RESOURCE_RIGHT_KEY = Object.freeze({
   grid: 'gridImport',
   freshwater: 'freshwater',
@@ -1554,6 +1569,168 @@ function sizeAmmonia(definition, target, opts) {
   return sizeDedicatedAmmonia(definition, target, opts);
 }
 
+function pvModuleSink(definition, pvModule) {
+  return reactionProductSink(definition, pvModule, 'module')
+    || nodeBy(definition, node => node.id === 'module' && String(node.unit).includes('sink'));
+}
+
+function pvModuleChain(definition) {
+  const pvModule = converter(definition, 'pv-module');
+  if (!pvModule) throw new Error('sizeToProduct needs a pv-module block to size module demand');
+  const sink = pvModuleSink(definition, pvModule);
+  if (!sink) throw new Error('sizeToProduct needs a module sink');
+  const converters = definition.graph.nodes.filter(node => PV_MODULE_CHAIN_UNITS.includes(node.unit));
+  const converterIds = new Set(converters.map(node => node.id));
+  const sources = [];
+  const seen = new Set();
+  for (const edge of definition.graph.edges || []) {
+    if (!converterIds.has(edge.to?.node)) continue;
+    const upstream = nodeBy(definition, node => node.id === edge.from.node);
+    if (!upstream || seen.has(upstream.id)) continue;
+    if (upstream.unit === 'material-source' && upstream.params?.stream?.kind === 'material') {
+      seen.add(upstream.id);
+      sources.push(upstream);
+    }
+  }
+  return { pvModule, sink, converters, sources };
+}
+
+function converterDutyKg(definition, node) {
+  const cap = Number(node.capacity);
+  const sp = Number(definition.operation?.setpoints?.[node.id]);
+  const fromCap = Number.isFinite(cap) && cap > 0 ? cap : 0;
+  const fromSp = Number.isFinite(sp) && sp > 0 ? sp : 0;
+  return Math.max(fromCap, fromSp);
+}
+
+function baselinePvModuleDuties(definition) {
+  const chain = pvModuleChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    moduleKg: converterDuties[chain.pvModule.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function converterSecKWhPerKg(node) {
+  const listed = Number(node.params?.electricityKWhPerKg);
+  if (Number.isFinite(listed) && listed >= 0) return listed;
+  return PV_MODULE_SEC_DEFAULTS[node.unit] ?? 0;
+}
+
+function pvModuleProcessElectricityKWh(definition, baseline, scale) {
+  let kWh = 0;
+  for (const node of definition.graph.nodes) {
+    const baseDuty = baseline.converterDuties[node.id];
+    if (!(baseDuty > 0)) continue;
+    kWh += baseDuty * scale * converterSecKWhPerKg(node);
+  }
+  return kWh;
+}
+
+function applyPvModuleScale(definition, baseline, duties) {
+  const ratio = Number(duties.scale) || 0;
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  for (const [id, base] of Object.entries(baseline.converterDuties)) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node) continue;
+    const next = base * ratio;
+    node.capacity = next;
+    setpoints[id] = next;
+  }
+  for (const [id, stream] of Object.entries(baseline.streams)) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node?.params) continue;
+    node.params.stream = JSON.parse(JSON.stringify(stream));
+    scaleMaterialStream(node.params.stream, ratio);
+    syncSiteResource(definition, node);
+  }
+}
+
+function sizePvModule(definition, target, opts) {
+  const chain = pvModuleChain(definition);
+  const baseline = baselinePvModuleDuties(definition);
+  if (!(baseline.moduleKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size module: pv-module has no baseline capacity');
+  }
+  let yieldPerScale = baseline.moduleKg > 0 ? baseline.moduleKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'module',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const moduleKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? moduleKg / yieldPerScale : 0;
+        const processElectricityKWh = pvModuleProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          module: moduleKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: moduleKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['module', 'module'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyPvModuleScale(current, baseline, duties);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.module),
+        relativeGap(activity(solved, chain.pvModule), duties.module),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          module: duties.module,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
 function sizeMinerals(definition, product, target, opts) {
   const minerals = converter(definition, 'brine-minerals');
   if (!minerals) throw new Error('sizeToProduct needs a brine-minerals block to size lithium or salt demand');
@@ -1650,7 +1827,7 @@ function sizeMinerals(definition, product, target, opts) {
 function normalizeProduct(product) {
   const key = String(product ?? '').trim().toLowerCase();
   const normalized = PRODUCT_ALIASES[key];
-  if (!normalized) throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, or salt');
+  if (!normalized) throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, or module');
   return normalized;
 }
 
@@ -1669,6 +1846,7 @@ function sizeToProduct(opts = {}) {
   if (product === 'H2') return sizeHydrogen(definition, rate, loopOpts);
   if (product === 'methanol') return sizeMethanol(definition, rate, loopOpts);
   if (product === 'ammonia') return sizeAmmonia(definition, rate, loopOpts);
+  if (product === 'module') return sizePvModule(definition, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 

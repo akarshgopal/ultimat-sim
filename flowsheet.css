@@ -2657,7 +2657,6 @@ label output + .quality-chip {
     box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.4);
   }
   .flowsheet-canvas { overflow: auto; min-height: 52vh; max-width: 100%; }
-  .stage-actions { flex-wrap: wrap; justify-content: flex-start; }
   .canvas-zoom {
     flex-wrap: wrap;
     max-width: 100%;

@@ -12,7 +12,6 @@
   --text-muted: #9aa8b8;
   --accent: #e8a317;
   --accent-hover: #f0b42e;
-  --accent-muted: rgba(232, 163, 23, 0.18);
   --electric: #e8a317;
   --solar: #e8a317;
   --h2: #2bb5a0;
@@ -28,7 +27,6 @@
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   --shadow-soft: 0 2px 10px rgba(0, 0, 0, 0.22);
   --focus-ring: 0 0 0 3px rgba(232, 163, 23, 0.22);
-  --focus-ring-teal: 0 0 0 3px rgba(43, 181, 160, 0.22);
   --transition: 0.16s ease;
 }
 

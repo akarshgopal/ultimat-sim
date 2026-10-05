@@ -677,7 +677,6 @@
     saltPurchase: 'Salt purchase',
     concentratePurchase: 'Concentrate purchase',
     quartzPurchase: 'Quartz purchase',
-    aluminaPurchase: 'Alumina purchase',
     bauxitePurchase: 'Bauxite purchase',
     causticPurchase: 'Caustic purchase',
     silverPurchase: 'Silver purchase',
@@ -2018,7 +2017,7 @@
     const presets = sitePresets();
     const named = site?.id ? presets.find(preset => preset.id === site.id) : null;
     if (named && Number.isFinite(lat) && Number.isFinite(lon) && presetNear(named, lat, lon)) return named.id;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return named ? '' : '';
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return '';
     const match = presets.find(preset => presetNear(preset, lat, lon));
     return match?.id || '';
   }
@@ -5083,7 +5082,6 @@
     dri: 'Fe / Iron',
     lithium: 'Lithium',
     LiCl: 'Lithium',
-    Li2CO3: 'Lithium',
     salt: 'Salt',
     'recovered-salt': 'Salt',
     'sabatier-water': 'Sabatier water',
@@ -5526,7 +5524,7 @@
   function buildingProfile(unit, kind, current) {
     if (kind === 'source') {
       if (unit === 'solar-pv' || unit === 'electricity-source') return 'solar';
-      if (unit === 'solar-thermal' || unit === 'heat-source' || unit === 'combustion-heat') return 'furnace';
+      if (unit === 'solar-thermal' || unit === 'heat-source') return 'furnace';
       if (unit === 'material-source') {
         const intake = intakeKind(current);
         return intake?.profile || 'intake';
@@ -6654,11 +6652,7 @@
         : `<label>Available rate <output>${formatNumber(current.rate)} ${unit}</output></label><input name="sourceRate" type="range" min="0" max="${max}" step="${max / 100 || 0.01}" value="${current.rate}">`;
       const resourceEvidence = site?.resources?.[current.siteResource]?.evidence;
       const capNote = budget != null ? `<p class="status-meta"${resourceEvidence ? ` title="${escapeHtml(resourceEvidence)}"` : ''}>${escapeHtml(roundTaggedQuantities(resourceEvidence || 'Capped by the named site resource. A second block sharing this resource cannot duplicate it.'))}</p>` : (site && !current.siteResource ? '<p class="status-meta">Unassigned sources are unverified. They do not become unlimited supply.</p>' : '');
-      const sourceLegend = current.unit === 'material-source' && intakeKind(current)?.key !== 'unknown'
-        ? 'Intake settings'
-        : current.unit === 'material-source'
-          ? 'Intake settings'
-          : 'Source settings';
+      const sourceLegend = current.unit === 'material-source' ? 'Intake settings' : 'Source settings';
       return `<fieldset><legend>${sourceLegend}</legend>${siteResource}${preset}${chemical}${processPreset}${rate}${temperature}${parameters}${capNote}${definition.economicsNote ? `<p class="status-meta">${definition.economicsNote}</p>` : ''}${literatureMarkup(definition, current.unit)}</fieldset>${economicsControlsFor(current)}<button class="delete-node" id="deleteNode" type="button">Delete source</button>`;
     }
     if (kind === 'buffer') {

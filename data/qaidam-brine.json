@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "retrieved": "2026-09-21",
+    "id": "qaidam-brine",
+    "kind": "brine",
+    "site": {
+      "latitude": 38.15,
+      "longitude": 90.87,
+      "context": "Kunteyi/Dayantan intercrystalline process brine (northern Qaidam Basin, Qinghai); not East Taijinar table brine; not a concession sample"
+    },
+    "quality": "Majors from Ren, Li, Zhang & Wu 2023 Frontiers in Environmental Science Table 1 sample 5 (Kunteyi intercrystalline brine). HCO3 0.15 g/L omitted (not in SUBSTANCES). B omitted (not in SUBSTANCES). Li+ not in that table — omitted (East Taijinar/Dongtai Li 141 mg/L in Murphy & Haji 2022 Table 1 is a different Qaidam lake, not this assay). Not a concession sample.",
+    "notes": "Ion masses converted from tabulated g/L (Br− from 16.98 mg/L) to g/kg with density 1.22 kg/L (screening hypersaline density — not a CTD; ISL East Taijinar table-brine density 1.21 is a different lake). mol_per_kg = g_per_kg / molarMassG from engine/model SUBSTANCES. Literature numbers are preferred over forcing charge balance. salinity_g_per_kg is the summed cited SUBSTANCES ions, not the 332.75 g/L TDS headline. Literature assay is not a mineral concession."
+  },
+  "density_kg_per_L": 1.22,
+  "salinity_g_per_kg": 272.4073606557377,
+  "ions_g_per_kg": {
+    "Cl-": 155.4016393442623,
+    "SO4-2": 12.819672131147541,
+    "Ca+2": 0.29508196721311475,
+    "Na+": 95.44262295081967,
+    "K+": 3.721311475409836,
+    "Mg+2": 4.713114754098361,
+    "Br-": 0.013918032786885245
+  },
+  "mol_per_kg": {
+    "Cl-": 4.383685171911488,
+    "SO4-2": 0.1334548420898141,
+    "Ca+2": 0.007362691931062297,
+    "Na+": 4.1515259657815475,
+    "K+": 0.09517834472112179,
+    "Mg+2": 0.1939154393786612,
+    "Br-": 0.00017418443115344972
+  },
+  "evidence": [
+    {
+      "label": "Ren et al. 2023, Frontiers in Environmental Science Table 1 sample 5: Kunteyi intercrystalline brine majors (DOI)",
+      "url": "https://doi.org/10.3389/fenvs.2023.1106181"
+    },
+    {
+      "label": "Ren et al. 2023 full text (same Table 1)",
+      "url": "https://www.frontiersin.org/journals/environmental-science/articles/10.3389/fenvs.2023.1106181/full"
+    }
+  ]
+}

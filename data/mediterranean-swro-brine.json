@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "retrieved": "2026-09-21",
+    "id": "mediterranean-swro-brine",
+    "kind": "brine",
+    "site": {
+      "latitude": 36.834,
+      "longitude": -2.463,
+      "context": "Spanish Mediterranean SWRO reject (Villar et al. 2023 Table 2 Mediterranean Sea column); Almería / Carboneras-coast regional screening, not an Almería intake sample, not Alboran seawater feed"
+    },
+    "quality": "Majors cited from Villar et al. 2023 Desalination Table 2 Mediterranean Sea reject column (Cl, Na, SO4, Mg, Ca, K, Li) as kg/m³. HCO3 0.273 kg/m³ omitted (not in SUBSTANCES). Br not pinned in the extracted table — omitted. Not a Carboneras plant sample.",
+    "notes": "Ion masses converted from tabulated kg/m³ (= g/L) to g/kg with density 1.054 kg/L (screening from ~72 g/L ion-sum band — not a CTD). mol_per_kg = g_per_kg / molarMassG from engine/model SUBSTANCES. Literature numbers are preferred over forcing charge balance. salinity_g_per_kg is the summed cited majors. Spanish Mediterranean SWRO reject is not a mineral concession and is not Alboran Millero seawater."
+  },
+  "density_kg_per_L": 1.054,
+  "salinity_g_per_kg": 68.54392789373814,
+  "ions_g_per_kg": {
+    "Cl-": 34.217267552182165,
+    "SO4-2": 4.088235294117647,
+    "Na+": 26.22390891840607,
+    "Mg+2": 2.1546489563567364,
+    "Ca+2": 0.7836812144212524,
+    "K+": 1.0749525616698292,
+    "Li+": 0.0012333965844402277
+  },
+  "lithium": {
+    "g_per_L": 0.0013,
+    "mg_per_L": 1.3,
+    "g_per_kg": 0.0012333965844402277,
+    "note": "Villar et al. 2023 Table 2 Mediterranean Sea Li 0.0013 kg/m³. Converted with density 1.054 kg/L (screening)."
+  },
+  "mol_per_kg": {
+    "Cl-": 0.9652261650827126,
+    "SO4-2": 0.04255918482321098,
+    "Na+": 1.140677356018935,
+    "Mg+2": 0.0886504405001743,
+    "Ca+2": 0.019553900255033993,
+    "K+": 0.0274935882549837,
+    "Li+": 0.00017772285078389446
+  },
+  "evidence": [
+    {
+      "label": "Villar et al. 2023, Desalination Table 2: composition of Spanish desalination-plant reject water, Mediterranean Sea column (DOI)",
+      "url": "https://doi.org/10.1016/j.desal.2023.116510"
+    },
+    {
+      "label": "Villar et al. 2023 full text (same Table 2)",
+      "url": "https://www.sciencedirect.com/science/article/pii/S0011916423003107"
+    }
+  ]
+}

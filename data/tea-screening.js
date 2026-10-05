@@ -1,0 +1,2123 @@
+(function exposeTeaScreening(root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.TeaScreening = api;
+})(globalThis, () => {
+// Screening TEA intensities, offtake caps, and price bands for Foundry cash gates.
+// Mid of a cited band + note. Never bankable quotes; do not invent contracts.
+//
+// CAPEX formula (packs): installedCapex = capexIntensity × capacity
+//   × (capacity / refCapacity)^(scaleExponent − 1)  when scaleExponent and refCapacity are set;
+//   otherwise installedCapex = capexIntensity × capacity (exponent omitted).
+// Regional CAPEX× (capexMultiplierByRegion): screening labor/construction/EPC location
+// factor vs US Gulf-ish 1.0. bindCapexPack({ region }) uses
+//   capexIntensity_region = pack.capexIntensity × multiplier[region]
+//   (unmapped `default` omitted → 1). solar-pv may instead use a cited regional TIC
+// overlay in solarCapexByRegion (IRENA solar module/BOS spread is wider than process-plant
+// labor — do not stack that overlay with the damped multiplier).
+// Binders expose intensity as capexRate so evaluateEconomics uses rate × node.capacity,
+// except solar-pv which precomputes installedCapex because kWp is not electricity-source capacity.
+// Demand caps are regional offtake ceilings keyed by demandByRegion (me-levant default),
+// not plant contracts. Fuels/chemicals outside a cited regional series copy me-levant
+// only with inherit:'me-levant' plus a note — never a silent copy. bindSale(key, { region })
+// / getDemandForRegion(region) map SITE_PRESETS.region strings onto those tables.
+// Optional screening freight $/kg (`freightBands` / `getFreight(id)`): bindSale / bindCost
+// extra.freight attaches a cited transport adder. Default binds stay plant-gate
+// (freightUsdPerKg absent). bindCost keeps unitCost as material; economics adds
+// freightUsdPerKg into purchases and breakdown.freight. bindSale nets seller-paid
+// freight from unitPrice (gateUnitPrice keeps the plant-gate). Screening FOB vs
+// landed — not a routing/GIS model and not a carrier contract.
+// Screening, not bankable quotes.
+
+function row(value, unit, quality, source, note, evidence) {
+  return { value, unit, quality, source, note, evidence };
+}
+
+const USGS_LI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-lithium.pdf';
+const USGS_LI_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-lithium.pdf';
+const USGS_BR = 'https://pubs.usgs.gov/periodicals/mcs2024/mcs2024-bromine.pdf';
+const USGS_BR_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-bromine.pdf';
+const USGS_K = 'https://pubs.usgs.gov/periodicals/mcs2024/mcs2024-potash.pdf';
+const USGS_K_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-potash.pdf';
+const USGS_SALT = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-salt.pdf';
+const USGS_SALT_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-salt.pdf';
+const USGS_GYP = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-gypsum.pdf';
+const USGS_GYP_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-gypsum.pdf';
+const USGS_MG = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-compounds.pdf';
+const USGS_MG_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-magnesium-compounds.pdf';
+const USGS_SI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-silicon.pdf';
+const USGS_AL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-aluminum.pdf';
+const USGS_BAUXITE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-bauxite-alumina.pdf';
+const IAI_ALUMINA_ENERGY = 'https://international-aluminium.org/statistics/metallurgical-alumina-refining-energy-intensity/';
+const USGS_SILICA = 'https://www.usgs.gov/centers/national-minerals-information-center/silica-statistics-and-information';
+const USGS_SODA_ASH = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-soda-ash.pdf';
+const USGS_SAND_IND = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-sand-industrial.pdf';
+const USGS_STONE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-stone-crushed.pdf';
+const USGS_CEMENT = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-cement.pdf';
+const USGS_COPPER = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-copper.pdf';
+const SANTA_CRUZ_PFS_2026 = 'https://www.sec.gov/Archives/edgar/data/1879016/000110465926109810/tm2625798d1_ex99-1.htm';
+const MARIMACA_DFS_2025 = 'https://marimaca.com/wp-content/uploads/2026/07/25-10-09-Marimaca-Oxide-Deposit-NI-43-101-Technical-Report-Feasibility-Study_FINAL.pdf';
+const EL_PILAR_FS_2022 = 'https://www.sec.gov/Archives/edgar/data/1001838/000155837022002995/scco-20211231ex9692df9bd.pdf';
+const GUNNISON_PEA_2024 = 'https://minedocs.com/27/Gunnison-PEA-11012024.pdf';
+const CU_EW_SEC_PRACTICE = 'https://pressbooks.bccampus.ca/hydrometallurgy/chapter/copper-electrowinning-practice/';
+const IPCC_CEMENT_CO2 = 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/3_Volume3/V3_2_Ch2_Mineral_Industry.pdf';
+const IEA_CEMENT_ARCHIVE = 'https://web.archive.org/web/20230528230323/https://www.iea.org/reports/cement';
+const ECRA_CEMENT_2022 = 'https://api.ecra-online.org/fileadmin/files/tp/ECRA_Technology_Papers_2022.pdf';
+const IEA_ETSAP_CEMENT = 'https://iea-etsap.org/E-TechDS/PDF/I03_cement_June_2010_GS-gct.pdf';
+const CEMENT_CAPEX_BENCH = 'https://www.cementequipment.org/cement-technical-package/package-tools/76038938-capex-of-cement-companies/';
+const CEMEX_SOLID_TIC = 'https://mb.com.ph/2022/02/12/solid-cement-to-pursue-323-m-expansion/';
+const SAMARKAND_CEMENT_TIC = 'https://www.globalcement.com/news/item/16382-china-energy-international-group-samarkand-cement-installs-kiln-at-upcoming-samarkand-cement-plant';
+const DUGONG_CEMENT_TIC = 'https://www.globalcement.com/news/11756-dugong-cimentos-announces-upcoming-1-8mt-yr-integrated-cement-plant-in-mozambique';
+const GFE_FLOAT_LCA = 'https://glassforeurope.com/wp-content/uploads/2018/04/Life-Cycle-Assessment.pdf';
+const BURROWS_PV_GLASS = 'https://doi.org/10.1016/j.solmat.2014.09.028';
+const DOE_AL = 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf';
+const MDPI_MGSI = 'https://www.mdpi.com/1996-1073/19/9/2023';
+const NREL_SOLAR_2025 = 'https://www.nrel.gov/docs/';
+const REW_POLYSI = 'https://www.renewableenergyworld.com/solar/advancements-in-the-commercial-production-of-polysilicon/';
+const FRAUNHOFER_POLYSI = 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf';
+const FRAUNHOFER_PV_REPORT = 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf';
+const USGS_AG = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-silver.pdf';
+const USGS_IRON_ORE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf';
+const USGS_STEEL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf';
+const USGS_TI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-titanium.pdf';
+const USGS_TI_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-titanium.pdf';
+const USGS_MG_METAL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-metal.pdf';
+const USGS_MG_METAL_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-magnesium-metal.pdf';
+const NREL_DLE = 'https://doi.org/10.2172/1782801';
+const NREL_ATB = 'https://atb.nrel.gov/';
+const NREL_ATB_DOI = 'https://doi.org/10.25984/2377191';
+const DOE_H2 = 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electrolysis';
+const NREL_PEM = 'https://www.nrel.gov/docs/fy24osti/87625.pdf';
+const IEA_NH3 = 'https://www.iea.org/reports/ammonia-technology-roadmap';
+const USGS_N = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-nitrogen.pdf';
+const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
+const IEA_H2 = 'https://www.iea.org/reports/global-hydrogen-review-2024';
+const IEA_DAC = 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary';
+const NASEM_DAC = 'https://doi.org/10.17226/25259';
+const EIA_HH = 'https://www.eia.gov/dnav/ng/hist/rngwhhdm.htm';
+const GHAFFOUR_2013 = 'https://doi.org/10.1016/j.desal.2013.08.011';
+const VOUTCHKOV_2018 = 'https://doi.org/10.1016/j.desal.2017.10.033';
+const THEMA_2019 = 'https://doi.org/10.1016/j.rser.2019.06.030';
+const IRENA_MEOH = 'https://www.irena.org/publications/2021/Jan/Innovation-Outlook-Renewable-Methanol';
+const CHEN_MTO_2022 = 'https://doi.org/10.1016/j.jtice.2021.07.039';
+const ARGUS_ETHYLENE = 'https://www.argusmedia.com/-/media/project/argusmedia/mainsite/english/documents-and-files/sample-reports/argus-ethylene-and-derivatives.pdf';
+const IEA_ETHYLENE = 'https://www.iea.org/data-and-statistics/charts/annual-ethylene-capacitydemand-growth-and-regional-price-developments-2015-2020';
+const SINOPEC_MTO_YOKOGAWA = 'https://www.yokogawa.com/library/resources/references/stable-operation-and-proactive-maintenance-realized-at-new-coal-chemical-plant-in-china/';
+const IEA_H2_FUTURE = 'https://www.iea.org/reports/the-future-of-hydrogen';
+const IEA_H2_FUTURE_ANNEX = 'https://iea.blob.core.windows.net/assets/29b027e5-fefc-47df-aed0-456b1bb38844/IEA-The-Future-of-Hydrogen-Assumptions-Annex_CORR.pdf';
+const EIA_DIESEL = 'https://www.eia.gov/petroleum/gasdiesel/';
+const IPCC_FUEL_NCV = 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/2_Volume2/V2_1_Ch1_Introduction.pdf';
+const IEA_ELEC = 'https://www.iea.org/reports/electricity-2024';
+const IEA_ELEC_2026 = 'https://www.iea.org/reports/electricity-2026';
+const EIA_EPA = 'https://www.eia.gov/electricity/annual/';
+const TT_GCMI = 'https://publications.turnerandtownsend.com/global-construction-market-intelligence-2026/methodology';
+const IRENA_COSTS_2024 = 'https://www.irena.org/Publications/2025/Jun/Renewable-Power-Generation-Costs-in-2024';
+const WB_ICP = 'https://www.worldbank.org/en/programs/icp/brief/ICP2021';
+const UNCTAD_TRANSPORT = 'https://unctad.org/publication/trade-and-transport-dataset';
+const WB_FREIGHT_LOGISTICS = 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf';
+const LINDE_LOX_TANKER = 'https://static.prd.echannel.linde.com/wcsstore/SE_REN_Industrial_Gas_Store/pdf/Prislista_Flytande_gaser_Industri_2024_01.pdf';
+const DEFAULT_DEMAND_REGION_ID = 'me-levant';
+const DEMAND_REGION_LABELS = {
+  'me-levant': 'Dead Sea / Levant screening offtake (Red Sea and Arabian Sea inherit). Not a plant offtake contract.',
+  gulf: 'Gulf screening offtake. Mineral ceilings use USGS MCS Gulf/Oman/Saudi production or non-producer proxies, not Dead Sea tables. Fuels/chemicals without a cited Gulf series inherit me-levant (inherit:me-levant on those rows). Not a DEWA/EWEC/KAHRAMAA contract.',
+  'chile-atacama': 'Atacama / Chile screening offtake. Lithium ceiling reflects USGS Chile mine-production order (supply-side, not a contract) — not a silent ME Li cap. Other minerals and fuels/chemicals inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  australia: 'Australia screening offtake. Mineral ceilings use USGS MCS Australia production/trade proxies (Li is hard-rock spodumene, not a Lake Mackay brine offtake). Fuels/chemicals without a cited Australia series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  europe: 'Europe screening offtake. Mineral ceilings use USGS MCS Europe production/trade proxies (Portugal Li, Germany/Spain potash, etc.). Fuels/chemicals without a cited Europe series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  india: 'India screening offtake. Mineral ceilings use USGS MCS India production/trade proxies. Fuels/chemicals without a cited India series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  texas: 'Texas / US Gulf screening offtake. US West / California (Imperial Valley geothermal) inherits this US table. Mineral ceilings use USGS MCS US production/trade proxies (Arkansas Br, US salt/gypsum; US Li withheld). Fuels/chemicals without a cited US series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  'southern-africa': 'Southern Africa screening offtake. Mineral ceilings use USGS MCS non-producer / Namibia-removed Li proxies, not Dead Sea tables. Fuels/chemicals without a cited regional series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract.',
+  'asia-china': 'China / Asia screening offtake (Tibet / Zabuye and Qinghai / Qaidam). Mineral ceilings use USGS MCS China production proxies, not Dead Sea tables. Fuels/chemicals without a cited China series inherit me-levant (inherit:me-levant on those rows). Not a plant offtake contract and not a silent ME-Levant inherit.',
+  default: 'Default screening offtake for unmapped site.region. Copies Dead Sea / Middle East tables with inherit:me-levant on every row. Not a plant offtake contract.',
+};
+const DEMAND_REGION = DEMAND_REGION_LABELS[DEFAULT_DEMAND_REGION_ID];
+const EDITOR_DEMAND_DEFAULT = 1e6; // kg/y screening editor seed; not unlimited offtake
+// SITE_PRESETS.region / site-search Dead Sea 'Levant' → demandByRegion id. Unknown → default.
+const REGION_STRING_TO_ID = {
+  Levant: 'me-levant',
+  Gulf: 'gulf',
+  'Red Sea': 'me-levant',
+  'Arabian Sea': 'me-levant',
+  'Atacama/Chile': 'chile-atacama',
+  'Bolivia / Uyuni': 'chile-atacama',
+  'China / Qaidam': 'asia-china',
+  Australia: 'australia',
+  India: 'india',
+  'Texas/US Gulf': 'texas',
+  // Marshall Bioforge alias: Texas/US industrial power $0.06/kWh and CAPEX× 1.0.
+  // Not an Xcel tariff and not a Minnesota location factor. Do not add a Midwest power row or CAPEX×.
+  'US Midwest': 'texas',
+  'US West / California': 'texas',
+  'US West / Utah': 'default',
+  'US West / Nevada': 'texas',
+  'Argentina / Puna': 'chile-atacama',
+  'Argentina / Patagonia': 'chile-atacama',
+  'China / Tibet': 'asia-china',
+  'Mexico / Baja': 'default',
+  'North Africa': 'default',
+  'Southern Africa': 'southern-africa',
+  Europe: 'europe',
+};
+
+const prices = {
+  lithium: row(
+    14, '$/kg', 'cited', 'USGS MCS 2025 lithium',
+    'USGS MCS 2025 battery-grade Li₂CO₃ annual avg ~$14,000/t (2024e). Model product is Li salt / LiCl-like — LCE proxy for screening, not a LiCl contract.',
+    [{ label: 'USGS Mineral Commodity Summaries 2025 — Lithium (battery-grade Li₂CO₃ ~$14,000/t 2024e)', url: USGS_LI }]
+  ),
+  bromine: row(
+    3.1, '$/kg', 'cited', 'USGS MCS 2024 bromine',
+    'USGS MCS 2024 bromine import unit value ~$3.10/kg (2023). Screening offtake, not a Br₂ contract.',
+    [{ label: 'USGS Mineral Commodity Summaries 2024 — Bromine (import unit value ~$3.10/kg, 2023)', url: USGS_BR }]
+  ),
+  potash: row(
+    0.35, '$/kg', 'cited', 'USGS MCS 2024 potash',
+    'USGS MCS potash ~$300–400/t muriate order; mid ~$0.35/kg screening of that band. Not a KCl contract.',
+    [{ label: 'USGS Mineral Commodity Summaries 2024 — Potash (~$300–400/t muriate order)', url: USGS_K }]
+  ),
+  salt: row(
+    0.06, '$/kg', 'screening', 'industrial NaCl band',
+    'Industrial NaCl ~$40–80/t band; mid ~$0.06/kg. Screening — no single USGS $/kg row pinned.',
+    [{ label: 'Industrial NaCl ~$40–80/t commodity band (screening mid $0.06/kg)', url: USGS_SALT }]
+  ),
+  gypsum: row(
+    0.02, '$/kg', 'screening', 'bulk gypsum band',
+    'Bulk gypsum ~$10–30/t; mid ~$0.02/kg screening. Not a wallboard quote.',
+    [{ label: 'Bulk gypsum ~$10–30/t commodity band (screening mid $0.02/kg)', url: USGS_GYP }]
+  ),
+  magnesium: row(
+    0.08, '$/kg', 'screening', 'brine Mg compound band',
+    'Brine Mg compound / MgCl₂·hexahydrate commodity band far below Mg metal; do not use Mg-metal prices. Mid ~$0.08/kg screening.',
+    [{ label: 'USGS MCS magnesium compounds (family; brine compound screening mid $0.08/kg — not Mg-metal)', url: USGS_MG }]
+  ),
+  caustic: row(
+    0.45, '$/kg', 'screening', 'NaOH commodity band',
+    'NaOH ~$300–600/t commodity band; mid $0.45/kg screening. Not a caustic contract.',
+    [{ label: 'NaOH ~$300–600/t commodity band (screening mid $0.45/kg)', url: null }]
+  ),
+  ammonia: row(
+    0.45, '$/kg', 'screening', 'NH3 fertilizer band',
+    'NH₃ ~$300–600/t; mid $0.45/kg screening (IEA/fertilizer market order). Not an offtake quote.',
+    [{ label: 'IEA Ammonia Technology Roadmap (fertilizer-market order; screening mid $0.45/kg)', url: IEA_NH3 }]
+  ),
+  oxygen: row(
+    0.05, '$/kg', 'screening', 'industrial O2',
+    'Industrial O₂ screening ~$0.05/kg. Not a merchant-gas contract.',
+    [{ label: 'Industrial oxygen screening $0.05/kg', url: null }]
+  ),
+  methane: row(
+    1, '$/kg', 'screening', 'green-premium screening',
+    'Screening green-premium offtake (~$28/MMBtu order), not Henry Hub fossil gas. EIA/Henry Hub is contrast only — not this $1/kg value.',
+    [{ label: 'EIA Henry Hub (fossil-gas contrast only; not the model $1/kg CH₄)', url: EIA_HH }]
+  ),
+  methanol: row(
+    0.4, '$/kg', 'screening', 'commodity MeOH band',
+    'Screening mid of commodity methanol ~$250–500/t band ($0.40/kg). Not a plant quote.',
+    [{ label: 'Commodity methanol ~$250–500/t band (screening mid $0.40/kg); not a plant quote', url: IRENA_MEOH }]
+  ),
+  ethylene: row(
+    0.8, '$/kg', 'screening', 'commodity ethylene band',
+    'Screening mid of recent commodity ethylene ~$0.50–1.10/kg (USGC often lower, Asia/Europe contract higher). Not a contract.',
+    [
+      { label: 'Argus Ethylene and Derivatives sample (USGC/Asia/Europe prints; screening mid $0.80/kg, not a contract)', url: ARGUS_ETHYLENE },
+      { label: 'IEA ethylene regional price family (2015–2020 chart; screening mid, not a contract)', url: IEA_ETHYLENE },
+    ]
+  ),
+  diesel: row(
+    0.90, '$/kg', 'screening', 'commodity diesel/gasoil band',
+    'Screening mid of commodity diesel/gasoil ~$0.70–1.10/kg (EIA ULSD wholesale / World Bank pink-sheet gasoil family; ~$2.20–3.50/gal at ~3.2 kg/gal). Not a green e-diesel premium and not a contract.',
+    [
+      { label: 'EIA gasoline and diesel fuel update (ULSD wholesale family; screening mid $0.90/kg of ~$0.70–1.10/kg, not a contract)', url: EIA_DIESEL },
+      { label: 'World Bank commodity markets / pink sheet (gasoil family context; screening mid, not a contract)', url: WB_PINK },
+    ]
+  ),
+  urea: row(
+    0.4, '$/kg', 'screening', 'fertilizer urea band',
+    'Fertilizer urea mid of recent ~$350–450/t bands ($0.40/kg). Screening, not a Black Sea / Middle East contract.',
+    [
+      { label: 'IEA Ammonia Technology Roadmap (ammonia/fertilizer family; screening urea mid $0.40/kg, not a contract)', url: IEA_NH3 },
+      { label: 'USGS MCS 2025 nitrogen (fixed) — ammonia/fertilizer family context; urea offtake is screening', url: USGS_N },
+      { label: 'World Bank commodity markets / pink sheet (urea family context; screening mid of ~$350–450/t, not a Black Sea contract)', url: WB_PINK },
+    ]
+  ),
+  water: row(
+    0.001, '$/kg', 'screening', 'process water',
+    'Process-water sale screening $0.001/kg. Not a municipal or concession tariff.',
+    [{ label: 'Process water screening $0.001/kg', url: null }]
+  ),
+  silicon: row(
+    3.97, '$/kg', 'cited', 'USGS MCS 2025 silicon metal',
+    'USGS MCS 2025 silicon metal 180 ¢/lb (2024e) × 2.20462 lb/kg = 3.97 $/kg. Metallurgical-grade silicon metal, not polysilicon and not a contract.',
+    [{ label: 'USGS Mineral Commodity Summaries 2025 — Silicon (silicon metal 180 ¢/lb 2024e → 3.97 $/kg)', url: USGS_SI }]
+  ),
+  aluminium: row(
+    2.87, '$/kg', 'cited', 'USGS MCS 2025 aluminum ingot',
+    'USGS MCS 2025 U.S. market spot 130 ¢/lb (2024e) × 2.20462 = 2.87 $/kg. Primary aluminium ingot, not a contract.',
+    [{ label: 'USGS Mineral Commodity Summaries 2025 — Aluminum (U.S. market spot 130 ¢/lb 2024e → 2.87 $/kg)', url: USGS_AL }]
+  ),
+  polysilicon: row(
+    6, '$/kg', 'screening', 'NREL Spring 2025 Solar Industry Update family',
+    'Solar-grade polysilicon spot screening, not USGS silicon metal ($3.97/kg) and not a contract. NREL Spring 2025 Solar Industry Update family: global SoG spot rose Q1 2025 from ~$5.54 to ~$6.24/kg; screening mid $6/kg.',
+    [{ label: 'NREL Spring 2025 Solar Industry Update — global poly spot ~$5.54→$6.24/kg Q1 2025; screening mid $6/kg', url: NREL_SOLAR_2025 }]
+  ),
+  'ndpr-oxide': row(
+    48.30, '$/kg', 'screening', 'USGS MCS 2026 NdPr oxide × 0.70 payability',
+    'USGS MCS 2026 NdPr oxide 99% min 2025e $69/kg × payability 0.70 because SX is not modeled. Screening, not a contract. Meteoric Caldeira 2024 scoping used ~70% of contained oxide value for MREC — company scoping, not a market print.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (NdPr oxide 99% min 2025e $69/kg)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'Meteoric Resources Caldeira scoping — ~70% contained-oxide payability for MREC (company scoping, not a market print)', url: 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf' },
+    ]
+  ),
+  'other-reo': row(
+    33.61, '$/kg', 'screening', 'Longnan other-oxide basket × 0.70 payability',
+    'Weighted Deng & Kendall 2019 Table 1 Longnan other-oxide basket (listed points 91.07; Tm 2025e value 0) at USGS MCS 2026 separated 2025e quotes × payability 0.70 because SX is not modeled. Unrounded (4372.174/91.07)×0.70 = 33.606564…; stored 33.61 $/kg. Screening, not a contract.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (heavy)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths-heavy.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Yttrium', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-yttrium.pdf' },
+      { label: 'Meteoric Resources Caldeira scoping — ~70% contained-oxide payability for MREC (company scoping, not a market print)', url: 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf' },
+    ]
+  ),
+  'ndpr-oxide-separated': row(
+    69, '$/kg', 'screening', 'USGS MCS 2026 NdPr oxide 99% min 2025e',
+    'USGS MCS 2026 NdPr oxide 99% min 2025e $69/kg. Separated-oxide screening because this block is the separation, so the 0.70 MREC haircut is NOT applied. Still not a contract and not a purity certificate.',
+    [{ label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (NdPr oxide 99% min 2025e $69/kg)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  'dytb-oxide': row(
+    340.19, '$/kg', 'screening', 'Longnan Tb4O7+Dy2O3 basket at USGS separated quotes',
+    'Unrounded (1.13×1010 + 7.48×239) / 8.61 = 2929.02/8.61. Longnan published points × existing usgsSeparatedUsdPerKg for Tb4O7 and Dy2O3. Screening basket, not a contract.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (heavy)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths-heavy.pdf' },
+    ]
+  ),
+  'light-reo': row(
+    17.50, '$/kg', 'screening', 'Longnan light-REO basket minus Dy/Tb at USGS separated quotes',
+    'Unrounded (4372.174 − 2929.02) / (91.07 − 8.61) = 1443.154/82.46. Same USGS Longnan other-oxide basket minus Dy/Tb. Tm value stays 0. Screening, not a contract.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (heavy)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths-heavy.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Yttrium', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-yttrium.pdf' },
+    ]
+  ),
+  gluconic: row(
+    0.515, '$/kg', 'screening', 'ChemAnalyst China Q1 2025 gluconic acid',
+    'ChemAnalyst China Q1 2025 average USD 515/MT as repeated at OpenPR. Asia spot screening, not a US contract. Keep 0.515; do not round. No regional overlay.',
+    [{ label: 'OpenPR / ChemAnalyst China Q1 2025 gluconic acid average USD 515/MT (Asia spot screening, not a US contract)', url: 'https://www.openpr.com/news/4394627/track-gluconic-acid-price-index-historical-and-forecast' }]
+  ),
+  'hydrogen-peroxide': row(
+    0.674, '$/kg', 'screening', 'IndexBox US 2024 average H2O2 export price',
+    'IndexBox US 2024 average export price $674/t. Concentration basis not stated — screening, not the Nov 2024 $950/t 70% Illinois quote, not 100% equivalent. No regional overlay.',
+    [{ label: 'IndexBox hydrogen peroxide United States market overview 2024 — US 2024 average export price $674/t', url: 'https://www.indexbox.io/blog/hydrogen-peroxide-united-states-market-overview-2024-3/' }]
+  ),
+  'pv-module': row(
+    2.85, '$/kg', 'screening', 'module ASP $0.15/W × 1000 / 52.7 kg/kWp',
+    'Screening module ASP mid of recent utility bands (~$0.10–0.20/W) at $0.15/W × (1000 W/kWp) / 52.7 kg/kWp = $2.85/kg, where 52.7 = 11.6 kg/m² ÷ 0.220 kW/m² (Fraunhofer 2021 module mass + ~220 W/m² modern module power-density screening). Not a Tier-1 contract and not China spot.',
+    [
+      { label: 'Fraunhofer ISE Photovoltaics Report (module mass 11.6 kg/m² family; screening ASP derivation)', url: FRAUNHOFER_PV_REPORT },
+      { label: 'NREL Solar Industry Update family (module ASP context ~$0.10–0.20/W; screening mid $0.15/W)', url: NREL_SOLAR_2025 },
+    ]
+  ),
+  steel: row(
+    0.40, '$/kg', 'screening', 'HBI / DRI iron band',
+    'Hot-briquetted / DRI iron mid of recent ~$350–450/t bands ($0.40/kg). Screening, not a Platts HBI contract and not an EAF melt-shop quote.',
+    [
+      { label: 'USGS MCS 2025 iron and steel (commodity-family context; screening HBI/DRI mid $0.40/kg of ~$350–450/t, not a Platts contract)', url: USGS_STEEL },
+      { label: 'USGS MCS 2025 iron ore (feed-family context; DRI product price is screening, not a mine quote)', url: USGS_IRON_ORE },
+      { label: 'World Bank commodity markets / pink sheet (metals family context; screening HBI/DRI mid of ~$350–450/t, not a contract)', url: WB_PINK },
+    ]
+  ),
+  titanium: row(
+    8.00, '$/kg', 'screening', 'Ti sponge band',
+    'Titanium sponge mid of recent ~$6–12/kg bands ($8.00/kg). Screening, not a TIMET sponge contract. USGS MCS titanium sponge US import unit values recently ~$11–13/kg sit at the high end of that family.',
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; screening sponge mid $8.00/kg of ~$6–12/kg, not a TIMET contract)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (sponge US import unit-value family recently ~$11–13/kg; screening mid sits in the wider ~$6–12/kg band)', url: USGS_TI_2026 },
+    ]
+  ),
+  'float-glass': row(
+    0.45, '$/kg', 'screening', 'solar float/AR glass band',
+    'Solar float/AR glass ~$2.50–4.00/m² mid $3.25 / 7.8242 kg glass per m² (0.6745×11.6 Fraunhofer mass share) ≈ $0.42/kg → round $0.45/kg. Same screening band as the existing purchased-glass cost; this is the manufactured-glass sale, not a retune of that purchase. Not a Guardian/Xinyi quote and not a green premium.',
+    [
+      { label: 'Fraunhofer ISE Photovoltaics Report (glass mass share 0.6745 of 11.6 kg/m²; $/m² band is screening)', url: FRAUNHOFER_PV_REPORT },
+      { label: 'Glass for Europe LCA of float glass (commodity float family; sale uses the existing solar-glass screening band)', url: GFE_FLOAT_LCA },
+    ]
+  ),
+  cement: row(
+    0.16, '$/kg', 'screening', 'USGS MCS 2026 cement mill unit value 2025e',
+    'USGS MCS 2026 cement average mill unit value 2025e $160/t → $0.16/kg. Portland, blended, and masonry mill value f.o.b. plant; 2021–24 prints $127 / $139 / $152 / $160. Screening grey cement sale, not a bagged retail quote and not a clinker export contract. Gypsum ~5% is omitted from the unit so this mill value is a CEM I / portland proxy on a clinker island.',
+    [
+      { label: 'USGS MCS 2026 cement — average mill unit value 2025e $160/t; screening $0.16/kg, not a bagged retail quote', url: USGS_CEMENT },
+    ]
+  ),
+  'copper-cathode': row(
+    9.70, '$/kg', 'screening', 'USGS MCS 2026 LME grade A cash 2025e',
+    'USGS MCS 2026 copper LME grade A cash annual average 2025e 440 ¢/lb → $4.40/lb → $9.70/kg. Chile/LME cathode, not the US producer COMEX+premium 2025e 490 ¢/lb ($10.80/kg) and not a COMEX spot. Screening LME-grade SX-EW cathode sale, not a brand premium and not a 2026 spot print.',
+    [
+      { label: 'USGS MCS 2026 copper — LME grade A cash 2025e 440 ¢/lb; screening $9.70/kg, not a COMEX+premium contract', url: USGS_COPPER },
+    ]
+  ),
+};
+
+const costs = {
+  power: row(
+    0.04, '$/kWh', 'screening', 'industrial power band',
+    'Utility / industrial power screening mid (~$30–50/MWh band). Not a PPA.',
+    [{ label: 'Industrial power ~$30–50/MWh screening mid ($0.04/kWh); not a PPA', url: null }]
+  ),
+  brine: row(
+    0.0005, '$/kg', 'screening', 'concession/pumping OOM',
+    'Concession / pumping order-of-magnitude. Not a lease quote.',
+    [{ label: 'Brine concession/pumping screening $0.0005/kg; not a lease quote', url: null }]
+  ),
+  water: row(
+    0.001, '$/kg', 'screening', 'process water',
+    'Process water screening. Not a municipal or concession tariff.',
+    [{ label: 'Process water screening $0.001/kg', url: null }]
+  ),
+  seawater: row(
+    0.001, '$/kg', 'screening', 'seawater intake',
+    'Seawater intake screening (aligned with process-water OOM). Not an intake tariff.',
+    [{ label: 'Seawater intake screening $0.001/kg; not an intake tariff', url: null }]
+  ),
+  'salt-feed': row(
+    0.06, '$/kg', 'screening', 'industrial NaCl band',
+    'Purchased salt-feed aligned with salt product band (~$0.06/kg). Screening, not a local quote.',
+    [{ label: 'Salt-feed screening $0.06/kg, aligned with industrial NaCl product band', url: USGS_SALT }]
+  ),
+  'ammonia-feed': row(
+    0.45, '$/kg', 'screening', 'purchase at fertilizer NH3 screening',
+    'Purchase at fertilizer NH₃ screening, mirroring the ammonia sale price ($0.45/kg). Screening, not a fertilizer NH₃ contract.',
+    [{ label: 'IEA Ammonia Technology Roadmap (fertilizer-market order; purchase at screening mid $0.45/kg)', url: IEA_NH3 }]
+  ),
+  'methanol-feed': row(
+    0.4, '$/kg', 'screening', 'purchase at screening MeOH',
+    'Purchase at screening methanol, mirroring the methanol sale price ($0.40/kg). Screening, not a methanol contract. Does not change the methanol sale price.',
+    [{ label: 'Commodity methanol ~$250–500/t band (purchase at screening mid $0.40/kg); not a plant quote', url: IRENA_MEOH }]
+  ),
+  'co2-feed': row(
+    0.05, '$/kg', 'screening', 'industrial CO2 purchase',
+    'Screening industrial CO₂ purchase $0.05/kg (~$50/t). Not DAC full chain and not a merchant-gas contract.',
+    [{ label: 'Industrial CO₂ purchase screening $0.05/kg; not DAC full chain', url: IEA_DAC }]
+  ),
+  quartz: row(
+    0.08, '$/kg', 'screening', 'silicon-grade quartzite lump',
+    'Silicon-grade quartzite lump screening (~$80/t), above construction sand. Not a quarry quote.',
+    [{ label: 'USGS silica / industrial sand statistics (family cite; screening $0.08/kg quartzite lump, not a quarry quote)', url: USGS_SILICA }]
+  ),
+  'silica-sand': row(
+    0.04, '$/kg', 'screening', 'USGS industrial sand 2025e',
+    'USGS MCS 2026 industrial sand and gravel average unit value 2025e $36/t → round $0.04/kg. Frac-sand-weighted industrial average, not a glass-sand contract and not the silicon-grade quartzite lump at $0.08/kg.',
+    [{ label: 'USGS MCS 2026 sand and gravel (industrial) — 2025e average unit value $36/t; screening glass-sand $0.04/kg, not a quarry quote', url: USGS_SAND_IND }]
+  ),
+  'soda-ash': row(
+    0.15, '$/kg', 'screening', 'USGS soda ash 2025e',
+    'USGS MCS 2026 soda ash average unit value of sales (natural source, f.o.b. mine or plant) 2025e $150/t → $0.15/kg. Not a Solvay/trona contract.',
+    [{ label: 'USGS MCS 2026 soda ash — 2025e f.o.b. mine/plant $150/t; screening $0.15/kg, not a contract', url: USGS_SODA_ASH }]
+  ),
+  limestone: row(
+    0.02, '$/kg', 'screening', 'USGS crushed stone 2025e',
+    'USGS MCS 2026 crushed stone average unit value 2025e $18.50/t → round $0.02/kg. Carbonate-stone proxy for GfE limestone+dolomite; not a chemical-lime contract and not USGS lime ~$260/t quicklime.',
+    [{ label: 'USGS MCS 2026 stone (crushed) — 2025e average unit value $18.50/t; screening limestone $0.02/kg, not a quarry quote', url: USGS_STONE }]
+  ),
+  'kiln-clay': row(
+    0.02, '$/kg', 'screening', 'USGS crushed stone / common clay family',
+    'Kiln clay/shale/silica corrective screening $0.02/kg, same bulk-quarry family as crushed stone 2025e $18.50/t. Not kaolin, not glass-sand ($0.04), and not a retune of limestone.',
+    [{ label: 'USGS MCS 2026 stone (crushed) — 2025e $18.50/t; screening kiln-clay/shale $0.02/kg, not a clay-pit contract', url: USGS_STONE }]
+  ),
+  'pls-copper': row(
+    9.36, '$/kg', 'screening', 'contained Cu in PLS at 96.5% of USGS LME 2025e',
+    'Purchased contained copper in pregnant leach solution at 96.5% of USGS MCS 2026 LME grade A cash 2025e $9.70/kg → $9.36/kg. Standard copper contained-metal payable (96.5%, 1% min deduction) applied as ore/PLS payable basis — PLS is not seaborne concentrate and this is not a TC/RC smelter ticket (2025 benchmark TC $21.25/t is the smelter path). Not a heap-ore FOB and not a retune of the cathode sale.',
+    [
+      { label: 'USGS MCS 2026 copper — LME grade A cash 2025e 440 ¢/lb; 96.5% payable on contained Cu in PLS → screening $9.36/kg', url: USGS_COPPER },
+    ]
+  ),
+  'carbon-reductant': row(
+    0.25, '$/kg', 'screening', 'SAF coal/coke/charcoal mix',
+    'Coal/coke/charcoal mix for a submerged-arc MG-Si furnace. Screening, not an anode quote.',
+    [{ label: 'USGS MCS 2025 silicon (family; SAF reductant screening $0.25/kg, not an anode quote)', url: USGS_SI }]
+  ),
+  'carbon-anode': row(
+    0.50, '$/kg', 'screening', 'Hall–Héroult anode carbon',
+    'Hall–Héroult anode carbon screening $0.50/kg. Not a calcined-coke contract.',
+    [{ label: 'DOE aluminium industry roadmap (family; anode-carbon screening $0.50/kg, not a calcined-coke contract)', url: DOE_AL }]
+  ),
+  alumina: row(
+    0.45, '$/kg', 'screening', 'smelter-grade alumina band',
+    'Smelter-grade alumina ~$300–600/t mid ($0.45/kg). Screening, not a Bayer quote. Alumina is the Hall–Héroult feed.',
+    [{ label: 'USGS MCS 2025 aluminum (alumina is the feed; screening mid $0.45/kg, not a Bayer quote)', url: USGS_AL }]
+  ),
+  bauxite: row(
+    0.04, '$/kg', 'screening', 'USGS MCS bauxite import-unit family',
+    'USGS MCS bauxite-and-alumina crude dry bauxite import unit value ~$31–32/t (2024–2025e) inside a screening $30–50/t band; mid $0.04/kg. Not a mine contract and not a concession.',
+    [{ label: 'USGS MCS 2025 bauxite and alumina (crude dry bauxite import unit value ~$31–32/t; screening mid $0.04/kg of $30–50/t, not a mine contract)', url: USGS_BAUXITE }]
+  ),
+  'caustic-makeup': row(
+    0.45, '$/kg', 'screening', 'NaOH commodity band',
+    'Same $/kg as the existing caustic product price (NaOH ~$300–600/t mid $0.45/kg). Bayer makeup purchase, not a second invented price and not a caustic contract.',
+    [{ label: 'NaOH ~$300–600/t commodity band (screening mid $0.45/kg); same row as caustic product price', url: null }]
+  ),
+  'ionic-clay': row(
+    0.005, '$/kg', 'screening', 'soft ionic-clay mining OOM',
+    'Soft ionic-clay mining ~$5/t ($0.005/kg). Quality screening. Deng & Kendall 2019 grade band context; not a contract and not a Serra Verde mining cost.',
+    [{ label: 'Deng & Kendall 2019 ionic-clay LCI (DOI) — grade-band context; mining cost is screening $5/t, not a table quote', url: 'https://doi.org/10.1007/s11367-019-01582-1' }]
+  ),
+  'ammonium-sulfate': row(
+    0.30, '$/kg', 'screening', 'fertilizer-grade ammonium sulfate',
+    'Fertilizer-grade (NH₄)₂SO₄ ~$300/t ($0.30/kg). Quality screening. Not a contract.',
+    [{ label: 'Fertilizer-grade ammonium sulfate screening ~$300/t; not a contract', url: null }]
+  ),
+  'mixed-reo-concentrate': row(
+    34.54, '$/kg', 'screening', 'USGS separated basket × 0.70 payability for mixed concentrate',
+    'Unrounded 0.70 × (6.20×69 + 4372.174) / 97.27. USGS separated basket × Meteoric-style 0.70 payability because the purchase is mixed concentrate, not separated oxides. Not a Maglut toll, not a contract.',
+    [
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (heavy)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths-heavy.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Yttrium', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-yttrium.pdf' },
+      { label: 'Meteoric Resources Caldeira scoping — ~70% contained-oxide payability for MREC (company scoping, not a market print)', url: 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf' },
+    ]
+  ),
+  dextrose: row(
+    0.84, '$/kg', 'screening', 'Tridge US 2024 dextrose export low',
+    'Tridge US 2024 export low $0.84/kg. Not an ADM transfer price. Do not invent a Midwest plant-gate price.',
+    [{ label: 'Tridge US dextrose export prices (2024 low $0.84/kg; not an ADM transfer price)', url: 'https://dir.tridge.com/prices/dextrose/US' }]
+  ),
+  silver: row(
+    1221.73, '$/kg', 'cited', 'USGS MCS 2026 silver bullion 2025e',
+    'USGS MCS 2026 silver bullion 2025e average $38/troy oz × (1/0.0311034768 kg/troy oz) = 1221.73 $/kg. Cited bullion, not a paste contract and not a fabricator quote.',
+    [{ label: 'USGS Mineral Commodity Summaries 2026 — Silver (bullion 2025e average $38/troy oz → 1221.73 $/kg)', url: USGS_AG }]
+  ),
+  'float-glass': row(
+    0.45, '$/kg', 'screening', 'solar float/AR glass band',
+    'Solar float/AR glass ~$2.50–4.00/m² mid $3.25 / 7.8242 kg glass per m² (0.6745×11.6 Fraunhofer mass share) ≈ $0.42/kg → round $0.45/kg. Screening, not a Guardian/Xinyi quote.',
+    [{ label: 'Fraunhofer ISE Photovoltaics Report (glass mass share 0.6745 of 11.6 kg/m²; $/m² band is screening)', url: FRAUNHOFER_PV_REPORT }]
+  ),
+  'eva-encapsulant': row(
+    2.00, '$/kg', 'screening', 'solar EVA film band',
+    'Solar EVA film ~$1.8–2.5/kg mid $2.00/kg. Screening, not a STR/Mitsui contract.',
+    [{ label: 'Solar EVA encapsulant film screening mid $2.00/kg of ~$1.8–2.5/kg; not a STR/Mitsui contract', url: FRAUNHOFER_PV_REPORT }]
+  ),
+  'iron-ore': row(
+    0.10, '$/kg', 'screening', 'USGS MCS iron ore band',
+    'Hematite / Fe₂O₃ feed screening. USGS MCS iron ore ~$80–120/t mid → $0.10/kg (US mine unit values recently ~$89–115/t; 62% fines global spot ~$99–112/t sit in that band). Not a mine contract.',
+    [{ label: 'USGS MCS 2025 iron ore (US mine unit value / global fines family; screening mid $0.10/kg of ~$80–120/t, not a mine contract)', url: USGS_IRON_ORE }]
+  ),
+  'hydrogen-feed': row(
+    2.00, '$/kg', 'screening', 'industrial/grey–blue H2 purchase',
+    'Purchase at screening industrial/grey–blue blend H₂ ($2.00/kg). Not a DOE $1/kg goal, not full green electrolyzer LCOH, and not an electrolyzer demo.',
+    [
+      { label: 'IEA Global Hydrogen Review 2024 (industrial/grey–blue H₂ family; screening purchase $2.00/kg, not green LCOH and not a DOE $1/kg goal)', url: IEA_H2 },
+      { label: 'DOE hydrogen production electrolysis (family contrast only; this purchase is not an electrolyzer path)', url: DOE_H2 },
+    ]
+  ),
+  'titanium-tetrachloride': row(
+    1.50, '$/kg', 'screening', 'purchased TiCl4 intermediate',
+    'Screening TiCl₄ purchase $1.50/kg. Not a chloride-process plant from rutile and not a TIMET/VSMPO quote. USGS titanium family is commodity context for the metal, not a TiCl₄ contract.',
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; screening TiCl₄ purchase, not a chloride-process plant)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; TiCl₄ is a purchased intermediate in this demo)', url: USGS_TI_2026 },
+    ]
+  ),
+  'ticl4-feed': row(
+    1.50, '$/kg', 'screening', 'purchased TiCl4 intermediate',
+    'Alias of titanium-tetrachloride. Screening TiCl₄ purchase $1.50/kg. Not a chloride-process plant from rutile and not a TIMET/VSMPO quote. USGS titanium family is commodity context for the metal, not a TiCl₄ contract.',
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; screening TiCl₄ purchase, not a chloride-process plant)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; TiCl₄ is a purchased intermediate in this demo)', url: USGS_TI_2026 },
+    ]
+  ),
+  'magnesium-metal': row(
+    2.50, '$/kg', 'screening', 'USGS MCS magnesium metal',
+    'Screening Mg metal reductant $2.50/kg. USGS MCS magnesium metal European free market 2025e ~$2,500/t. NOT the brine magnesium-compound sale at $0.08/kg — do not reuse that row for Kroll. US spot Western is higher. Not a US Magnesium contract.',
+    [
+      { label: 'USGS MCS 2026 magnesium metal (European free market 2025e ~$2,500/t → $2.50/kg; Kroll reductant, not brine Mg-compound)', url: USGS_MG_METAL_2026 },
+      { label: 'USGS MCS 2025 magnesium metal (family; screening metal purchase, not the brine compound sale)', url: USGS_MG_METAL },
+    ]
+  ),
+};
+
+const freightBands = {
+  'chile-coast-container': row(
+    0.08, '$/kg', 'screening', 'UNCTAD / World Bank maritime freight family',
+    'Chile coastal plant → Pacific container offtake OOM (~$80/t). Screening, not a Maersk quote and not inland truck.',
+    [
+      { label: 'UNCTAD Trade-and-Transport Dataset (maritime freight family; screening container OOM $80/t, not a voyage quote)', url: UNCTAD_TRANSPORT },
+      { label: 'World Bank freight logistics (family cite; screening, not a carrier contract)', url: WB_FREIGHT_LOGISTICS },
+    ]
+  ),
+  'bulk-dry-shortsea': row(
+    0.03, '$/kg', 'screening', 'UNCTAD / World Bank bulk short-sea family',
+    'Short-sea / dry-bulk screening OOM (~$30/t). Not a voyage quote and not inland truck.',
+    [
+      { label: 'UNCTAD Trade-and-Transport Dataset (bulk/short-sea family; screening ~$30/t, not a voyage quote)', url: UNCTAD_TRANSPORT },
+      { label: 'World Bank freight logistics (family cite; screening, not a carrier contract)', url: WB_FREIGHT_LOGISTICS },
+    ]
+  ),
+  'inland-truck-short': row(
+    0.01, '$/kg', 'screening', 'Nova Scotia Public Works bulk gravel short-haul family',
+    'Short-haul inland truck screening OOM (~$10/t; ~50–100 km gravel/bulk). Not a carrier contract, not a voyage quote, and not a distance/GIS model. Distinct from bulk-dry-shortsea (ocean).',
+    [
+      { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (cumulative CAD $/t by distance; screening ~$10/t ≈ $0.01/kg USD OOM for ~50–100 km)', url: 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf' },
+    ]
+  ),
+  'cryo-tanker-short': row(
+    0.08, '$/kg', 'screening', 'Linde Sweden 2024 liquid-gas price list (cryogenic tanker transport)',
+    'Cryogenic liquid-bulk tanker (LOX/LIN class) 0–100 km bracket 0.86 SEK/kg ≈ $0.082/kg at ~10.5 SEK/USD (Jan 2024), rounded to screening $0.08/kg; tariff band 15–200 t/y; not a pipeline, not tube-trailer, not a carrier contract, not a Chile quote, not a distance/GIS model; liquefaction of gaseous electrolyzer O₂ is NOT modeled (freight-only disclosure — real LOX offtake also needs a liquefier, so this understates cost). Distinct from inland-truck-short (bulk solids).',
+    [
+      { label: 'Linde Gas AB (Sweden), Flytande gaser, industri price list valid 1 Jan 2024 (cryogenic tanker transport 0–100 km 0.86 SEK/kg; screening $0.08/kg; 15–200 t/y band; not a pipeline)', url: LINDE_LOX_TANKER },
+    ]
+  ),
+  none: row(
+    0, '$/kg', 'cited', 'plant-gate',
+    'Plant-gate: no screening freight adder. Cited as $0/kg transport.',
+    [{ label: 'Plant-gate prices; freight adder none ($0/kg)', url: null }]
+  ),
+};
+
+function pack({
+  capexIntensity, capexIntensityBand, intensityUnit, scaleExponent, refCapacity, precompute,
+  fixedOmPercent, variableOm, assetLifeYears, fixedOmPerCapacity,
+  quality, source, note, evidence,
+}) {
+  return {
+    capexIntensity,
+    capexIntensityBand: capexIntensityBand ?? null,
+    intensityUnit,
+    scaleExponent: scaleExponent ?? null,
+    refCapacity: refCapacity ?? null,
+    precompute: Boolean(precompute),
+    fixedOmPercent: fixedOmPercent ?? 4,
+    variableOm: variableOm ?? 0,
+    assetLifeYears: assetLifeYears ?? 20,
+    fixedOmPerCapacity: fixedOmPerCapacity ?? null,
+    quality,
+    source,
+    note,
+    evidence,
+  };
+}
+
+const packs = {
+  minerals: pack({
+    capexIntensity: 12, intensityUnit: '$/(kg brine/day)',
+    capexIntensityBand: { low: 3, mid: 12, high: 40 },
+    fixedOmPercent: 4, variableOm: 0.01, assetLifeYears: 20,
+    quality: 'screening', source: 'NREL DLE TEA Table 3 brine-throughput conversion (OSTI 1782801)',
+    note: 'installedCapex = 12 $/ (kg brine/day) × capacity (scale exponent omitted). Screening brine-throughput intensity so CAPEX grows with size. Derived from NREL TEA lithium-from-geothermal-brines (OSTI 1782801 / NREL/TP-5700-79178, doi:10.2172/1782801) Table 3 / Ventura modeled Salton Sea IX: ~$52.3M CAPEX, 20,000 t/y LCE, Li ~400 mg/L, recovery ~90%. LCE/Li ≈ 5.323 → Li mass ≈ 3.76e6 kg/y → brine ≈ 1.04e7 m³/y ≈ 2.86e7 kg brine/day (ρ≈1) → ≈ $1.83 /(kg brine/day) (optimistic modeled). Same NREL table peer PEAs, converted the same way (screening arithmetic, not independent bankable quotes): EnergySource ~$15, Standard Lithium ~$6, Vulcan ~$10, Lake Resources Kachi ~$11, E3 Metals ~$4 /(kg brine/day). Literature DLE brine-throughput band ≈ $2–15 /(kg brine/day). Multi-product Dead Sea minerals hub ≠ Salton Sea Li-only DLE. Screening mid $12 is peer-PEA central (~$10–15); band low $3 / mid $12 / high $40 (conservative FOAK / multi-product uplift; still below the old unsupported $80 OOM, which was ~5–40× above the cited conversion). Dead Sea demo scale (1e5 kg brine/day) is cash-positive at this mid because 4% fixed O&M tracks installed CAPEX — the old ~+$80k operating margin / −$801k gate cash was an artifact of the $80 OOM, not a reason to keep $80 or to drop to NREL $1.83. Even mid=20 stays cash+; high=40 is cash−. Screening OOM, not bankable.',
+    evidence: [
+      { label: 'NREL TEA: lithium from geothermal brines (OSTI 1782801 / NREL/TP-5700-79178); Table 3 Ventura IX + same-table peer PEAs (not independent bankable quotes)', url: NREL_DLE, doi: '10.2172/1782801' },
+    ],
+  }),
+  'chlor-alkali': pack({
+    capexIntensity: 1500, intensityUnit: '$/(kg NaOH/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'chlor-alkali TEA order',
+    note: 'installedCapex = 1500 $/ (kg NaOH/day) × capacity (scale exponent omitted). Chlor-alkali plant TEA order (~$1k/(kg/day) is world-scale OOM; this screening intensity is conservative for small plants). Not a vendor quote.',
+    evidence: [{ label: 'Chlor-alkali CAPEX intensity screening ~$1500/(kg NaOH/day); not a vendor quote', url: null }],
+  }),
+  'bromine-recovery': pack({
+    capexIntensity: 800, intensityUnit: '$/(kg Br2/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'bromine recovery TEA order',
+    note: 'installedCapex = 800 $/ (kg Br₂/day) × capacity (scale exponent omitted). Bromine-recovery CAPEX intensity screening. Not a vendor quote.',
+    evidence: [{ label: 'Bromine-recovery CAPEX intensity screening ~$800/(kg Br₂/day)', url: null }],
+  }),
+  asu: pack({
+    capexIntensity: 400, intensityUnit: '$/(kg N2/day)',
+    fixedOmPercent: 4, variableOm: 0.02, assetLifeYears: 20,
+    quality: 'screening', source: 'ASU TEA order',
+    note: 'installedCapex = 400 $/ (kg N₂/day) × capacity (scale exponent omitted). Air-separation CAPEX intensity screening. Not a vendor quote.',
+    evidence: [{ label: 'ASU CAPEX intensity screening ~$400/(kg N₂/day)', url: null }],
+  }),
+  ammonia: pack({
+    capexIntensity: 2000, intensityUnit: '$/(kg NH3/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'Haber–Bosch / e-ammonia OOM',
+    note: 'installedCapex = 2000 $/ (kg NH₃/day) × capacity (scale exponent omitted). Haber–Bosch / e-ammonia CAPEX intensity screening OOM (world-scale is cheaper per kg; small e-NH₃ is not). Not a plant quote.',
+    evidence: [{ label: 'IEA Ammonia Technology Roadmap (family cite; screening CAPEX intensity)', url: IEA_NH3 }],
+  }),
+  urea: pack({
+    capexIntensity: 1200, intensityUnit: '$/(kg urea/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'small-plant urea island OOM',
+    note: 'installedCapex = 1200 $/ (kg urea/day) × capacity (scale exponent omitted). ≈ $330k per annual tonne × 365/1000 rounded. Small-plant urea island OOM; world-scale is cheaper; not a Stamicarbon/Saipem quote. Linear intensity.',
+    evidence: [
+      { label: 'IEA Ammonia Technology Roadmap (fertilizer-family cite; screening urea-island CAPEX intensity, not a Stamicarbon quote)', url: IEA_NH3 },
+      { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context; CAPEX intensity is screening OOM', url: USGS_N },
+    ],
+  }),
+  mto: pack({
+    capexIntensity: 183, intensityUnit: '$/(kg olefin/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'Chen 2022 MTO TCI / olefin capacity',
+    note: 'installedCapex = 183 $/ (kg olefin/day) × capacity (scale exponent omitted). Chen, Hsieh, Chang, Ho 2022 J. Taiwan Inst. Chem. Eng. 130 103893 Table 11 TCI $371.35 MM for 0.367 MM MTPA ethylene + 0.373 MM MTPA propylene. $371.35e6 / 740e6 kg/y × 365 = $183/(kg olefin/day). Linear small-plant OOM applied to the ethylene-proxy activity; propylene/C4 omitted. Not a UOP/Honeywell quote.',
+    evidence: [
+      { label: 'Chen et al. 2022 industrial-scale MTO TEA — TCI $371.35 MM for 0.367+0.373 MM MTPA olefins → $183/(kg olefin/day); not a UOP quote', url: CHEN_MTO_2022, doi: '10.1016/j.jtice.2021.07.039' },
+      { label: 'Yokogawa — Sinopec Zhongyuan S-MTO 600 kt/y olefins (capacity-family context; CAPEX intensity is the Chen 2022 conversion)', url: SINOPEC_MTO_YOKOGAWA },
+    ],
+  }),
+  'ft-liquids': pack({
+    capexIntensity: 443, intensityUnit: '$/(kg liquid/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'IEA Future of Hydrogen FT 890 USD/kWliquid',
+    note: 'installedCapex = 443 $/ (kg liquid/day) × capacity (scale exponent omitted). IEA G20 Hydrogen assumptions annex (2019, corr. 2020) Fischer-Tropsch CAPEX 890 USD2017/kW_liquid (today). Converted with IPCC/IEA diesel NCV 43.0 MJ/kg: 890 / (86400/43000) = $443/(kg liquid/day). Synthesis island including RWGS-in-island, not electrolyzer. IEA annual OPEX 4% of CAPEX (house fixedOm); IEA lifetime 30 y, house pack 20. Linear small-plant OOM. Not a Sasol/Shell quote and not a green-premium pack.',
+    evidence: [
+      { label: 'IEA The Future of Hydrogen (2019) — FT synthesis family; CAPEX 890 USD/kW_liquid in the assumptions annex', url: IEA_H2_FUTURE },
+      { label: 'IEA G20 Hydrogen assumptions annex (corr. Dec 2020) — FT CAPEX 890 USD2017/kW_liquid, electricity 0.018 GJe/GJliquid, OPEX 4%/y', url: IEA_H2_FUTURE_ANNEX },
+      { label: 'IPCC 2006 Guidelines Vol. 2 Table 1.2 — gas/diesel oil NCV 43.0 TJ/Gg used to convert $/kW_liquid → $/(kg/day)', url: IPCC_FUEL_NCV },
+    ],
+  }),
+  swro: pack({
+    capexIntensity: 1500, intensityUnit: '$/(m³/day)',
+    fixedOmPercent: 3, variableOm: 0, assetLifeYears: 20,
+    quality: 'screening', source: 'SWRO TEA $/m³-d band',
+    note: 'installedCapex = 1500 $/ (m³/day) × capacity (scale exponent omitted). Screening mid of large-plant SWRO CAPEX ~$1,000–2,500 per m³/day (Ghaffour 2013; Voutchkov 2018; NREL WaterTAP plant examples e.g. Ashkelon ~$1,400/(m³/d)). Not a vendor quote. Model SWRO capacity is m³/day.',
+    evidence: [
+      { label: 'Ghaffour et al. 2013 desalination cost review (DOI)', url: GHAFFOUR_2013, doi: '10.1016/j.desal.2013.08.011' },
+      { label: 'Voutchkov 2018 SWRO energy/cost family (DOI)', url: VOUTCHKOV_2018, doi: '10.1016/j.desal.2017.10.033' },
+    ],
+  }),
+  electrolyzer: pack({
+    capexIntensity: 3250, intensityUnit: '$/(kg H2/day)',
+    fixedOmPercent: 3, variableOm: 0.03, assetLifeYears: 10,
+    quality: 'screening', source: 'DOE/NREL electrolyzer $/kW band',
+    note: 'installedCapex = 3250 $/ (kg H₂/day) × capacity (scale exponent omitted). Derived from DOE/NREL installed PEM band ~$1,500/kW × 52 kWh/kg / 24 h (NREL FY24 PEM manufacturing: installed ~$1,300–1,700/kW). Capacity basis is kg H₂/day (the unit capacity), not kW. PEM 55 kWh/kg is the same OOM. Not a vendor quote.',
+    evidence: [
+      { label: 'NREL PEM electrolyzer manufacturing cost (FY24; installed ~$1,300–1,700/kW family)', url: NREL_PEM },
+      { label: 'DOE hydrogen production: electrolysis (family cite)', url: DOE_H2 },
+    ],
+  }),
+  dac: pack({
+    capexIntensity: 800, intensityUnit: '$/(kg CO2/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'IEA DAC / NASEM family',
+    note: 'installedCapex = 800 $/ (kg CO₂/day) × capacity (scale exponent omitted). Screening from ~$2,200 per t-y CO₂ (800 ≈ 2200 × 365/1000). IEA DAC 2022 and NASEM 2019 are the family; first-of-kind is higher, nth-of-kind lower. Not a plant quote.',
+    evidence: [
+      { label: 'IEA Direct Air Capture 2022 (family cite; not a plant quote)', url: IEA_DAC },
+      { label: 'NASEM 2019 Negative Emissions Technologies — DAC (DOI)', url: NASEM_DAC, doi: '10.17226/25259' },
+    ],
+  }),
+  sabatier: pack({
+    capexIntensity: 300, intensityUnit: '$/(kg CH4/day)',
+    fixedOmPercent: 3, variableOm: 0.02, assetLifeYears: 20,
+    quality: 'screening', source: 'PtG methanation TEA order',
+    note: 'installedCapex = 300 $/ (kg CH₄/day) × capacity (scale exponent omitted). Screening from methanation ~$500/kW × CH₄ LHV ~13.9 kWh/kg / 24 h (Thema et al. 2019 PtG review, 300–500 €/kW family). Synthesis island only — not electrolyzer. Not a vendor quote.',
+    evidence: [
+      { label: 'Thema, Bauer & Sterner 2019 Power-to-Gas status review (DOI)', url: THEMA_2019, doi: '10.1016/j.rser.2019.06.030' },
+    ],
+  }),
+  methanol: pack({
+    capexIntensity: 200, intensityUnit: '$/(kg MeOH/day)',
+    fixedOmPercent: 3, variableOm: 0.02, assetLifeYears: 20,
+    quality: 'screening', source: 'e-methanol synthesis TEA order',
+    note: 'installedCapex = 200 $/ (kg MeOH/day) × capacity (scale exponent omitted). Screening synthesis-island intensity (IRENA renewable methanol / CO₂-to-MeOH TEA family, order $100–400/(kg/day) depending on scale). Excludes electrolyzer and DAC. Not a plant quote.',
+    evidence: [
+      { label: 'IRENA 2021 Innovation Outlook: Renewable Methanol (family cite)', url: IRENA_MEOH },
+    ],
+  }),
+  'mg-si': pack({
+    capexIntensity: 3000, intensityUnit: '$/(kg Si/day)',
+    fixedOmPercent: 4, variableOm: 0.02, assetLifeYears: 20,
+    quality: 'screening', source: 'MG-Si SAF TEA order',
+    note: 'installedCapex = 3000 × capacity. ~$8/kg-year world-scale SAF order × 365 ≈ $3000/(kg/day); linear intensity makes a small pilot look cheap; not a vendor quote; electrical SEC is separate (12 kWh/kg). CAPEX is screening OOM, not from the MDPI 2026 TEA comparison tables (that paper is the 11–13 kWh/kg SAF electrical band; they use 12).',
+    evidence: [
+      { label: 'MDPI Energies 2026 MG-Si TEA comparison (11–13 kWh/kg SAF electrical; they use 12). CAPEX intensity is screening OOM, not a table quote from this paper', url: MDPI_MGSI },
+    ],
+  }),
+  'aluminium-smelter': pack({
+    capexIntensity: 1800, intensityUnit: '$/(kg Al/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'Hall–Héroult greenfield TEA order',
+    note: 'installedCapex = 1800 × capacity. ~$5000 per annual tonne greenfield order → 5000/1000*365 ≈ 1800 $/(kg/day). Hall–Héroult SEC stays 14 kWh/kg on the unit (IAI-class 13–15). Not a vendor quote. Not Bayer refining.',
+    evidence: [
+      { label: 'DOE aluminium industry roadmap (family; screening CAPEX intensity, not a vendor quote)', url: DOE_AL },
+      { label: 'USGS MCS 2025 aluminum (primary-ingot context; not a smelter contract)', url: USGS_AL },
+    ],
+  }),
+  'bayer-alumina': pack({
+    capexIntensity: 500, intensityUnit: '$/(kg Al2O3/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'greenfield alumina refinery OOM',
+    note: 'installedCapex = 500 × capacity. ~$1370 per annual tonne × 365/1000 ≈ 500 $/(kg Al₂O₃/day). Greenfield alumina-refinery order-of-magnitude; linear small-plant intensity. Not a Hydro/Alcoa quote and not a full Bayer train. SEC is the unit param 3.5 kWh/kg (IAI total-energy-as-electricity proxy), not this pack.',
+    evidence: [
+      { label: 'IAI metallurgical alumina refining energy intensity (family ~10–12 GJ/t; CAPEX intensity is screening OOM, not an IAI CAPEX quote)', url: IAI_ALUMINA_ENERGY },
+      { label: 'USGS MCS 2025 bauxite and alumina (commodity context; screening CAPEX ~$1370/t-y → 500 $/(kg/day), not a refinery quote)', url: USGS_BAUXITE },
+    ],
+  }),
+  polysilicon: pack({
+    capexIntensity: 31755, intensityUnit: '$/(kg poly-Si/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'TCS Siemens plant TEA order',
+    note: 'installedCapex = 31755 × capacity. Derived from ~$87 per annual kg installed for a 6,500 t/y TCS Siemens plant ($565M / 6.5e6 kg-y ≈ $87/kg-y; Renewable Energy World / Ceccaroli–Lohne family) × 365 ≈ 31755 $/(kg/day). Linear small-plant intensity; China nth-of-kind is lower — do not retune to force cash+. Not a vendor quote. Not a full TCS/HCl complex.',
+    evidence: [
+      { label: 'Renewable Energy World — advancements in commercial polysilicon production (TCS Siemens CAPEX family; screening $87/kg-y)', url: REW_POLYSI },
+      { label: 'Fraunhofer ISE — electricity consumption for electronic-grade polysilicon (SEC family 60–71 kWh/kg SoG)', url: FRAUNHOFER_POLYSI },
+    ],
+  }),
+  'pv-module': pack({
+    capexIntensity: 700, intensityUnit: '$/(kg module/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'module-line CAPEX OOM / NREL manufacturing cost family',
+    note: 'installedCapex = 700 × capacity. ~$0.10/W module-line CAPEX × 1000 / 52.7 kg/kWp ≈ $1.90/kg-y × 365 ≈ 693 → 700 $/(kg module/day). Linear small-plant intensity; not a GW fab quote. Assembly/laminator island only — not a cell fab. Screening, not bankable.',
+    evidence: [
+      { label: 'Fraunhofer ISE Photovoltaics Report (module mass 11.6 kg/m² → 52.7 kg/kWp with ~220 W/m²; CAPEX intensity is screening OOM)', url: FRAUNHOFER_PV_REPORT },
+      { label: 'NREL manufacturing cost / solar industry update family (module-fab CAPEX OOM; screening $0.10/W → 700 $/(kg/day))', url: NREL_SOLAR_2025 },
+    ],
+  }),
+  'hydrogen-dri': pack({
+    capexIntensity: 800, intensityUnit: '$/(kg Fe/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'small shaft/DRI island OOM',
+    note: 'installedCapex = 800 × capacity. ≈ $220k per annual tonne × 365/1000 rounded. Small shaft/DRI island OOM; world-scale Midrex cheaper; linear intensity; not a Midrex/HYBRIT/Tenova quote. SEC is the unit param 0.7 kWh/kg shaft electricity with purchased H₂, not this pack.',
+    evidence: [
+      { label: 'USGS MCS 2025 iron and steel (commodity-family context; screening DRI-island CAPEX intensity, not a Midrex quote)', url: USGS_STEEL },
+      { label: 'IEA Global Hydrogen Review 2024 (H₂-DRI family context; CAPEX intensity is screening OOM, not a plant quote)', url: IEA_H2 },
+      { label: 'DOE hydrogen for industry / electrolysis family (contrast only; this pack is a shaft island with purchased H₂, not an electrolyzer)', url: DOE_H2 },
+    ],
+  }),
+  'titanium-kroll': pack({
+    capexIntensity: 8000, intensityUnit: '$/(kg Ti/day)',
+    fixedOmPercent: 4, variableOm: 0.04, assetLifeYears: 20,
+    quality: 'screening', source: 'small Kroll island OOM',
+    note: 'installedCapex = 8000 × capacity. ≈ $2.2M per annual tonne × 365/1000 rounded. Small Kroll island OOM; world-scale cheaper; linear intensity; not a TIMET/VSMPO quote. SEC is the unit param 8 kWh/kg with purchased TiCl₄ + Mg metal, not this pack. Not chloride process from rutile and not Mg recycle electrolysis.',
+    evidence: [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; screening Kroll-island CAPEX intensity, not a TIMET quote)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; CAPEX intensity is screening OOM, not a plant quote)', url: USGS_TI_2026 },
+    ],
+  }),
+  'float-glass': pack({
+    capexIntensity: 300, intensityUnit: '$/(kg glass/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'float-line TIC / capacity peer band',
+    note: 'installedCapex = 300 × capacity. Burrows & Fthenakis 2015: new Europe/NA float plant typically $150–200M for a 500–700 t/day line → $214–400/(kg/day); mid ~$300. World-scale 1000 t/day is cheaper (~$141–188/(kg/day) from their 192×1000 tpd / $27–36B doubling band). Linear small-plant intensity; not a Guardian/Xinyi quote and not a tin-bath detail. SEC is the unit param 2.5 kWh/kg (GfE 9.0 MJ/kg total-energy-as-electricity), not this pack.',
+    evidence: [
+      { label: 'Burrows & Fthenakis 2015 Solar Energy Materials & Solar Cells — new float plant $150–200M, typical line 500–700 t/day (DOI 10.1016/j.solmat.2014.09.028)', url: BURROWS_PV_GLASS, doi: '10.1016/j.solmat.2014.09.028' },
+      { label: 'Glass for Europe LCA of float glass (gate-to-gate SEC family; CAPEX intensity is the Burrows conversion, not a GfE CAPEX quote)', url: GFE_FLOAT_LCA },
+    ],
+  }),
+  cement: pack({
+    capexIntensity: 60, intensityUnit: '$/(kg cement/day)',
+    capexIntensityBand: { low: 35, mid: 60, high: 90 },
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'dry-process grey cement / clinker plant TIC peer band',
+    note: 'installedCapex = 60 × capacity. $/(kg/day) = 0.365 × TIC $M / Mtpa. Published dry-process grey integrated/clinker plants cluster ~$32–79: Dugongo Nacala $192M/2.2 Mtpa cement $32; Samarkand $313M/3 Mtpa $38; PPC Riebeeck $159M/1.5 Mtpa $39 (brownfield); Bamburi Matuga $250M/1.6 Mtpa clinker $57; Cemex Solid original $235M/1.5 Mtpa $57 (2nd line); Dugong Matutuíne $330M/1.8 Mtpa $67; Cemex Solid revised $323M/1.5 $79. Independent industry greenfield $120–250/t-y clinker → $44–91/(kg/day). Screening mid $60. India+40 MW CPP plants and EPC-only equipment contracts excluded. Linear small-plant intensity; 1000 kg/day is not a 5,000 tpd line. SEC is the unit param 1.05 kWh/kg (electricity-as-total-energy), not this pack. Not a quarry concession and not CCUS.',
+    evidence: [
+      { label: 'Industry greenfield dry-process $120–250 per tonne of annual clinker capacity (quarry-to-pack) → $44–91/(kg/day)', url: CEMENT_CAPEX_BENCH },
+      { label: 'Cemex Solid Cement (Antipolo) integrated line 1.5 Mtpa cement; project cost revised $235M → $323M (PSE disclosure) → $57–79/(kg/day)', url: CEMEX_SOLID_TIC },
+      { label: 'Samarkand Cement 3 Mt/yr kiln, plant US$313m → $38/(kg/day); OPC M-400/M-500', url: SAMARKAND_CEMENT_TIC },
+      { label: 'Dugong Cimentos Matutuíne 1.8 Mt/yr integrated, US$330m → $67/(kg/day)', url: DUGONG_CEMENT_TIC },
+      { label: 'IEA-ETSAP cement brief — dry 5-stage preheater/precalciner 1 Mtpa ~€263/t-y (2010 €) as a Western-Europe supporting point, not the pack mid', url: IEA_ETSAP_CEMENT },
+      { label: 'IPCC 2006 Vol. 3 Ch. 2 — default 0.52 t process CO2 / t clinker (mass-close family; not a CAPEX quote)', url: IPCC_CEMENT_CO2 },
+      { label: 'IEA Cement (archived) — thermal ~3.4–3.5 GJ/t clinker; electricity ~105 kWh/t cement (SEC family; CAPEX is the TIC peer band)', url: IEA_CEMENT_ARCHIVE },
+      { label: 'ECRA Technology Papers 2022 — GCCA GNR 2019 grey clinker 3,460 MJ/t; cement electricity ~102 kWh/t (SEC family)', url: ECRA_CEMENT_2022 },
+    ],
+  }),
+  'copper-ew': pack({
+    capexIntensity: 750, intensityUnit: '$/(kg Cu/day)',
+    capexIntensityBand: { low: 600, mid: 750, high: 900 },
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'SX-EW plant line-item TIC / cathode capacity peer band',
+    note: 'installedCapex = 750 × capacity. $/(kg/day) = TIC / (tpy × 1000/365). Published SX-EW plant line items with t/y cathode cluster ~$630–880: Ivanhoe Santa Cruz 2026 PFS SX/EW $132M / 76 kt/y design $634; Gunnison 2024 PEA SX-EW plant $145M / 175 Mlb/y $667; Gunnison 2026 PEA SX+TF+EW $170M / 175 Mlb/y $782; Southern Copper El Pilar 2022 FS SX+TF+EW $75.6M / 31,752 t/y $869; Marimaca 2025 DFS SX/TF/EW $121M / 50 kt/y $883. Screening mid $750. Direct SX-EW area costs, not mine/heap/crushing and not allocated project-wide EPCM. Florence remaining $67M excluded (sunk equipment). Whole-project TICs excluded. Linear small-plant intensity; 1000 kg/day is not a 50 kt/y tankhouse. SEC is the unit param 2.2 kWh/kg, not this pack. Not a smelter and not a heap pad.',
+    evidence: [
+      { label: 'Ivanhoe Electric Santa Cruz S-K 1300 PFS 2026 — SX/EW $132M initial, design 76 kt/y cathode → $634/(kg/day)', url: SANTA_CRUZ_PFS_2026 },
+      { label: 'Marimaca Oxide Deposit NI 43-101 DFS 2025 — SX/TF/EW $121M, 50 kt/y cathode → $883/(kg/day)', url: MARIMACA_DFS_2025 },
+      { label: 'Southern Copper El Pilar S-K 1300 FS 2022 — SX $24.2M + tank farm $11.7M + EW $39.8M = $75.6M, EW design 31,752 t/y → $869/(kg/day)', url: EL_PILAR_FS_2022 },
+      { label: 'Gunnison Open Pit PEA 2024 (M3) — SX-EW plant $145M (SX + tank farm + EW + reagents), 175 Mlb/y → $667/(kg/day)', url: GUNNISON_PEA_2024 },
+      { label: 'USGS MCS 2026 copper — LME grade A cash 2025e 440 ¢/lb (sale family; CAPEX is the SX-EW line-item band)', url: USGS_COPPER },
+      { label: 'Copper electrowinning practice — typical 1900–2000 kWh/t Cu (SEC family; CAPEX is the TIC peer band)', url: CU_EW_SEC_PRACTICE },
+    ],
+  }),
+  'iac-leach': pack({
+    capexIntensity: 18250, intensityUnit: '$/(kg REO/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'leach+precip+calcine screening OOM, no SX',
+    note: 'installedCapex = 18250 × capacity. ~$50,000 per annual tonne REO × 365/1000 ≈ 18250 $/(kg REO/day). Order-of-magnitude for leach+precip+calcine without SX. Chinese in-situ is lower; a Western greenfield with water treatment is higher. Linear small-plant intensity makes a pilot look cheap — do not retune. Not a Serra Verde financing quote (DFC $565m is not this intensity). Brazil / Goiás is unmapped in capexMultiplierByRegion so CAPEX× stays 1 (do not add a brazil region). Screening, not bankable.',
+    evidence: [
+      { label: 'Deng & Kendall 2019 ionic-clay LCI (DOI) — intensities, not CAPEX', url: 'https://doi.org/10.1007/s11367-019-01582-1' },
+      { label: 'Screening ~$50k per annual tonne REO for leach+precip+calcine without SX → 18250 $/(kg/day)', url: null },
+    ],
+  }),
+  'ree-chromatography': pack({
+    capexIntensity: 27375, intensityUnit: '$/(kg separated REO/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'ARC-1-style chromatography screening proxy band',
+    note: 'installedCapex = 27375 × capacity. proxy band · not a Maglut ARC-1 quote · Maglut has not published kWh/kg or CAPEX. Point $75,000 per annual tonne sits between the repo leach-without-separation screening (~$50,000/t-y, pack iac-leach) and the Honaker/NETL 2020 full coal-to-REE plant ($126 million / 825 t/y ≈ $153,000/t-y). Wide peer band about $25,000–$150,000 per annual tonne. Linear small-plant intensity. Not bankable. US West / California aliases to texas so CAPEX× stays 1. SEC is the unit param 5 kWh/kg, not this pack. The 5 kWh/kg point is the Talens Peiró & Villalba JOM 2013 solvent-extraction electricity order (15.6–22.7 GJ/t REM ≈ 4.3–6.3 kWh/kg), used as a peer proxy because chromatography papers do not publish plant kWh/kg. NETL IX LCI pumping is about 4.24 Wh/kg and is a lab pumping floor, not this default. Andersson et al. IECR 2014 MCSGP reports productivity (~0.38 g/L/h at ~90% yield), not electricity.',
+    evidence: [
+      { label: 'Talens Peiró & Villalba JOM 2013 — SX electricity order 15.6–22.7 GJ/t REM (peer proxy, not chromatography kWh/kg)', url: 'https://link.springer.com/article/10.1007/s11837-013-0719-8' },
+      { label: 'Andersson et al. IECR 2014 MCSGP — productivity (~0.38 g/L/h at ~90% yield), not electricity', url: 'https://doi.org/10.1021/ie5023223' },
+      { label: 'NETL IX LCI pumping ~4.24 Wh/kg (lab pumping floor, not this default)', url: 'https://www.osti.gov/servlets/purl/1509123' },
+      { label: 'Honaker / NETL 2020 full coal-to-REE plant ($126 million / 825 t/y ≈ $153,000/t-y)', url: 'https://www.netl.doe.gov/sites/default/files/2020-10/20VPRREE_Honaker_2.pdf' },
+      { label: 'Ferro-Alloy Resources RNS — US strategic rare earths separation company MOU (company-reported pilot, not a CAPEX quote)', url: 'https://www.investegate.co.uk/announcement/rns/ferro-alloy-resources-limited-npv--far/us-strategic-rare-earths-separation-company-mou/9787733' },
+      { label: 'Mining Technology — Maglut chromatography rare-earth processing US (press, not a kWh/kg or CAPEX quote)', url: 'https://www.mining-technology.com/news/maglut-chromatography-rare-earth-processing-us/' },
+    ],
+  }),
+  'ree-sx': pack({
+    capexIntensity: 43800, intensityUnit: '$/(kg separated REO/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'peer SX separation-island screening',
+    note: 'installedCapex = 43800 × capacity. Peer SX separation-island screening. $120,000 per annual tonne × 365/1000 = 43800 $/(kg separated REO/day). Point $120,000/t-y sits above the Maglut chromatography proxy ($75,000/t-y, pack ree-chromatography) and below the Honaker/NETL 2020 full coal-to-REE plant (~$153,000/t-y). Maglut press claims a relative cost advantage versus SX — this pack is the more expensive peer, not a Maglut undercut. Linear small-plant intensity. Not a Lynas/MP Materials/Mountain Pass quote. Not bankable. SEC is the unit param 5.3 kWh/kg (Talens Peiró & Villalba JOM 2013 SX electricity mid of 15.6–22.7 GJ/t REM = 4.33–6.31 kWh/kg → 5.3), not this pack. US West / California aliases to texas so CAPEX× stays 1.',
+    evidence: [
+      { label: 'Talens Peiró & Villalba JOM 2013 — SX electricity 15.6–22.7 GJ/t REM (native SEC mid 5.3 kWh/kg, not this CAPEX)', url: 'https://link.springer.com/article/10.1007/s11837-013-0719-8' },
+      { label: 'Honaker / NETL 2020 full coal-to-REE plant (~$153,000/t-y upper peer; this pack is $120,000/t-y separation-island screening)', url: 'https://www.netl.doe.gov/sites/default/files/2020-10/20VPRREE_Honaker_2.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (separated-oxide price context, not a plant quote)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'ORNL MSX — membrane solvent extraction scale context only; not this CAPEX', url: 'https://www.ornl.gov/publication/process-scale-energy-efficient-membrane-solvent-extraction-process-rare-earth-recycling' },
+    ],
+  }),
+  bioforge: pack({
+    capexIntensity: 438, intensityUnit: '$/(kg gluconic/day)',
+    fixedOmPercent: 4, variableOm: 0, assetLifeYears: 20,
+    quality: 'screening', source: 'C&EN 8 Nov 2023 Solugen Marshall investment floor',
+    note: 'installedCapex = 438 × capacity. C&EN 8 Nov 2023 "at least $90 million" for the then-75,000 t/y Marshall facility. $90e6/75e6 kg/y = $1.20/(kg·y) × 365 = $438/(kg/day). Stated investment floor, not a TIC. DOE LPO $213.6M conditional commitment (Jun 2024) is a loan guarantee, NOT installed CAPEX — do not use it as the intensity. ADM Apr 2024 "up to 120 kta" has no new dollar figure — do not recompute. Linear small-plant intensity. Not bankable. US Midwest aliases to texas so CAPEX× stays 1.0 (Texas/US Gulf baseline); not a Minnesota location factor and not an Xcel tariff.',
+    evidence: [
+      { label: 'C&EN 8 Nov 2023 — Solugen expand biobased chemical production; "at least $90 million" for then-75,000 t/y Marshall', url: 'https://cen.acs.org/business/biobased-chemicals/Solugen-expand-biobased-chemical-production/101/web/2023/11' },
+      { label: 'Solugen — $213.6M DOE LPO conditional commitment (Jun 2024); loan guarantee, not installed CAPEX', url: 'https://solugen.com/blog/2024/06/13/solugen-secures-conditional-commitment-for-213-6m-doe-loan-guarantee-bolstering-u-s-leadership-in-green-manufacturing-and-domestic-chemical-production/' },
+      { label: 'DOE EA-2246 Solugen Inc. Bioforge Marshall Project, Marshall, Minnesota', url: 'https://www.energy.gov/nepa/doeea-2246-solugen-inc-bioforge-marshall-project-marshall-minnesota' },
+      { label: 'DOE LPO EA/FONSI PDF — Bioforge Marshall', url: 'https://www.energy.gov/sites/default/files/2024-03/Solugen%20LPO%20EA_FONSI_Signed.pdf' },
+      { label: 'ADM 8 Apr 2024 — Solugen breaks ground on Bioforge Marshall; "up to 120 kta", no new dollar figure', url: 'https://www.adm.com/en-us/news/news-releases/2024/4/solugen-breaks-ground-on-bioforge-marshall-facility-bolstering-u-s.--biomanufacturing-capabilities/' },
+    ],
+  }),
+
+  // MECH18 — utility CAPEX packs (screening). Capacity basis = installed duty (m³/day or Nm³/day).
+  'intake-pump': pack({
+    capexIntensity: 350, intensityUnit: '$/(m³/day)',
+    fixedOmPercent: 3, variableOm: 0, assetLifeYears: 20,
+    quality: 'screening', source: 'open-intake / transfer pump TEA order',
+    note: 'installedCapex = 350 $/ (m³/day) × capacity. Screening mid of open-intake / transfer pump skid ~$150–800/(m³/day) (desal intake + process pump order). Not a vendor quote or head–flow curve. MECH8 energy (kWh/m³) is separate.',
+    evidence: [
+      { label: 'Voutchkov 2018 desalination energy/cost family (DOI) — intake pump CAPEX is screening OOM, not a quote from this paper', url: VOUTCHKOV_2018, doi: '10.1016/j.desal.2017.10.033' },
+      { label: 'Matches process equipment — centrifugal pump cost order', url: 'https://www.matche.com/equipcost/PumpCentr.html' },
+    ],
+  }),
+  'gas-blower': pack({
+    capexIntensity: 1.5, intensityUnit: '$/(Nm³/day)',
+    fixedOmPercent: 3, variableOm: 0, assetLifeYears: 15,
+    quality: 'screening', source: 'process fan / blower TEA order',
+    note: 'installedCapex = 1.5 $/ (Nm³/day) × capacity. Screening process fan/duct+filter band (~$0.5–5/(Nm³/day)); Keith CE contactor fan alone is cheaper. Not a fan curve or vendor quote. MECH10 energy (kWh/Nm³) is separate.',
+    evidence: [
+      { label: 'Keith et al. 2018 Carbon Engineering (contactor fan OOM; plant blower CAPEX is screening uplift)', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
+      { label: 'IEA Direct Air Capture 2022 (family cite)', url: IEA_DAC },
+    ],
+  }),
+  'solar-pv': pack({
+    capexIntensity: 1000, intensityUnit: '$/kWp',
+    fixedOmPerCapacity: 20, assetLifeYears: 25, precompute: true,
+    quality: 'screening', source: 'NREL ATB PV family',
+    note: 'installedCapex = 1000 $/kWp × kWp; fixedOM = 20 $/kWp·y × kWp (scale exponent omitted). Round $1000/kWp screening, NREL ATB utility-PV order (~$1/W). Not NREL ATB site-adjusted and not a vendor quote.',
+    evidence: [
+      { label: 'NREL Annual Technology Baseline (family cite; not a plant quote)', url: NREL_ATB },
+      { label: 'NREL ATB 2024 cost and performance data (DOI)', url: NREL_ATB_DOI, doi: '10.25984/2377191' },
+    ],
+  }),
+};
+
+const capex = Object.fromEntries(
+  ['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia'].map(key => {
+    const item = packs[key];
+    const snapshot = row(item.capexIntensity, item.intensityUnit, item.quality, item.source, item.note, item.evidence);
+    if (item.capexIntensityBand) snapshot.capexIntensityBand = item.capexIntensityBand;
+    return [key, snapshot];
+  })
+);
+
+const demand = {
+  lithium: row(
+    1e6, 'kg/year', 'screening', 'USGS MCS world Li; ME tiny',
+    `Conservative 1,000 t/y LCE-proxy ceiling. USGS MCS 2025 world mine production 2024e ~240,000 t lithium content; Middle East is not a listed producer. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2025 lithium — world mine production 2024e ~240,000 t Li content; ME not listed', url: USGS_LI }]
+  ),
+  bromine: row(
+    2e8, 'kg/year', 'screening', 'USGS Dead Sea Br production order',
+    `200,000 t/y regional ceiling. USGS MCS world Br ~400 kt; Israel + Jordan Dead Sea are the large regional producers (order 100+ kt each). ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2024 bromine (world production order)', url: USGS_BR },
+      { label: 'USGS MCS 2026 bromine — Israel/Jordan Dead Sea production order', url: USGS_BR_2026 },
+    ]
+  ),
+  potash: row(
+    2e9, 'kg/year', 'screening', 'USGS Israel/Jordan potash',
+    `2 Mt/y regional ceiling. USGS MCS 2026: Israel ~2.26 Mt and Jordan ~1.73 Mt K₂O (2024). Ceiling is below combined Dead Sea production. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2026 potash — Israel ~2.26 Mt and Jordan ~1.73 Mt K₂O (2024)', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    5e9, 'kg/year', 'screening', 'USGS salt; regional industrial',
+    `5 Mt/y regional industrial/agricultural ceiling. USGS salt world production is hundreds of Mt; Dead Sea / ME industrial salt is smaller. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2025 salt (world industrial salt family; regional ceiling is screening)', url: USGS_SALT }]
+  ),
+  gypsum: row(
+    1e9, 'kg/year', 'screening', 'USGS gypsum; regional construction',
+    `1 Mt/y regional construction/ag ceiling. USGS gypsum world production is ~150 Mt order. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2025 gypsum (world production family; regional ceiling is screening)', url: USGS_GYP }]
+  ),
+  magnesium: row(
+    2e8, 'kg/year', 'screening', 'USGS Mg compounds; brine product',
+    `200 kt/y regional brine-Mg-compound ceiling, not Mg-metal. USGS magnesium-compounds family; Dead Sea brine Mg compounds exist. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2025 magnesium compounds (family; brine-compound ceiling, not metal)', url: USGS_MG }]
+  ),
+  caustic: row(
+    1e9, 'kg/year', 'screening', 'regional chlor-alkali offtake',
+    `1 Mt/y regional NaOH chemical offtake screening. World chlor-alkali is tens of Mt; this is a ME regional ceiling, not a contract.`,
+    [{ label: 'NaOH regional chemical offtake screening 1 Mt/y; not a caustic contract', url: null }]
+  ),
+  ammonia: row(
+    2e9, 'kg/year', 'screening', 'IEA NH3; ME producer region',
+    `2 Mt/y regional ceiling. IEA ammonia world ~180 Mt; the Middle East is a large producer/exporter. ${DEMAND_REGION}`,
+    [{ label: 'IEA Ammonia Technology Roadmap (world ~180 Mt family; regional ceiling is screening)', url: IEA_NH3 }]
+  ),
+  urea: row(
+    5e7, 'kg/year', 'screening', 'IEA/USGS fertilizer urea; regional ceiling',
+    `50 kt/y screening regional ceiling. Fertilizer urea is the main ammonia upgrade; IEA ammonia world ~180 Mt and USGS nitrogen (fixed) are family context. Not a Black Sea / Middle East contract. ${DEMAND_REGION}`,
+    [
+      { label: 'IEA Ammonia Technology Roadmap (ammonia/fertilizer family; 50 kt/y urea ceiling is screening offtake, not a contract)', url: IEA_NH3 },
+      { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context; 50 kt/y ceiling is screening offtake, not production', url: USGS_N },
+    ]
+  ),
+  oxygen: row(
+    1e8, 'kg/year', 'screening', 'merchant O2 ceiling',
+    `100 kt/y merchant-O₂ screening ceiling. No USGS industrial-gas series pinned — conservative screening, not a contract.`,
+    [{ label: 'Industrial oxygen offtake screening 100 kt/y; not a merchant-gas contract', url: null }]
+  ),
+  methane: row(
+    1e8, 'kg/year', 'screening', 'green CH4 offtake',
+    `100 kt/y regional green-methane fuel/chemical ceiling. Not EIA fossil-gas demand and not a pipeline offtake.`,
+    [{ label: 'EIA Henry Hub (fossil-gas contrast only; green-CH₄ cap is screening)', url: EIA_HH }]
+  ),
+  methanol: row(
+    5e8, 'kg/year', 'screening', 'regional MeOH chemical/fuel',
+    `500 kt/y regional methanol chemical/fuel ceiling. World MeOH is ~100 Mt; ME conventional capacity is large. This is a screening offtake cap, not a contract.`,
+    [{ label: 'IRENA renewable methanol outlook (family; regional offtake cap is screening)', url: IRENA_MEOH }]
+  ),
+  ethylene: row(
+    5e7, 'kg/year', 'screening', 'regional ethylene chemical ceiling',
+    `50 kt/y screening regional ceiling. World ethylene is ~180 Mt; this is a tiny offtake slice, not a cracker contract. ${DEMAND_REGION}`,
+    [
+      { label: 'IEA ethylene capacity/demand family (world-scale context; 50 kt/y ceiling is screening offtake, not a contract)', url: IEA_ETHYLENE },
+      { label: 'Argus ethylene family (price context; offtake cap is screening, not a contract)', url: ARGUS_ETHYLENE },
+    ]
+  ),
+  diesel: row(
+    1e8, 'kg/year', 'screening', 'regional diesel/gasoil fuel ceiling',
+    `100 kt/y screening regional ceiling. World diesel/gasoil is ~1 Gt-class; this is a tiny offtake slice, not a rack contract. ${DEMAND_REGION}`,
+    [
+      { label: 'EIA gasoline and diesel fuel update (commodity-family context; 100 kt/y ceiling is screening offtake, not a contract)', url: EIA_DIESEL },
+      { label: 'World Bank commodity markets / pink sheet (gasoil family; offtake cap is screening, not a contract)', url: WB_PINK },
+    ]
+  ),
+  hydrogen: row(
+    1e8, 'kg/year', 'screening', 'IEA H2; green offtake',
+    `100 kt/y regional green-H₂ ceiling. IEA global H₂ is ~95 Mt, mostly grey. Not a offtake contract.`,
+    [{ label: 'IEA Global Hydrogen Review 2024 (world ~95 Mt family; green offtake cap is screening)', url: IEA_H2 }]
+  ),
+  water: row(
+    1e8, 'kg/year', 'screening', 'local process water',
+    `100,000 m³/y local process-water offtake screening. Not a municipal tariff or concession.`,
+    [{ label: 'Process-water offtake screening 1e8 kg/y; not a municipal tariff', url: null }]
+  ),
+  silicon: row(
+    5e6, 'kg/year', 'screening', 'USGS MCS silicon metal; small regional ceiling',
+    `5 kt/y screening offtake ceiling. USGS MCS 2025 prices metallurgical-grade silicon metal; this is a small regional ceiling, not world production and not a contract.`,
+    [{ label: 'USGS MCS 2025 silicon metal (price series; 5 kt/y ceiling is screening offtake, not production)', url: USGS_SI }]
+  ),
+  aluminium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS aluminum; tiny slice of world smelter',
+    `20 kt/y screening offtake ceiling. USGS MCS 2025 world smelter production 2024e ~72 Mt and China ~43 Mt — this ceiling is a tiny slice, not production and not a contract.`,
+    [{ label: 'USGS MCS 2025 aluminum — world smelter production 2024e ~72 Mt (China ~43 Mt); 20 kt/y ceiling is screening offtake, not production', url: USGS_AL }]
+  ),
+  polysilicon: row(
+    2e6, 'kg/year', 'screening', 'SoG poly regional ceiling; USGS silicon family context',
+    `2 kt/y screening offtake ceiling. Tiny slice of the solar-grade polysilicon market; not world production and not a contract. USGS MCS silicon PDF is commodity-family context — this ceiling is screening offtake, not USGS silicon-metal production.`,
+    [{ label: 'USGS MCS 2025 silicon (commodity-family context; 2 kt/y poly ceiling is screening offtake, not USGS silicon-metal production)', url: USGS_SI }]
+  ),
+  'ndpr-oxide': row(
+    5e4, 'kg/year', 'screening', 'NdPr oxide screening regional ceiling',
+    `50 t/y screening regional ceiling for the Longnan Nd2O3+Pr6O11 co-product. Not world mine production and not a contract. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2026 rare earths (commodity-family context; 50 t/y NdPr ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+    ]
+  ),
+  'other-reo': row(
+    2e5, 'kg/year', 'screening', 'mixed other-REO screening regional ceiling',
+    `200 t/y screening regional ceiling for the Longnan mixed other-REO basket. Not world mine production and not a contract. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2026 rare earths / heavy / yttrium (commodity-family context; 200 t/y other-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+    ]
+  ),
+  'ndpr-oxide-separated': row(
+    5e4, 'kg/year', 'screening', 'separated NdPr oxide screening offtake ceiling',
+    `50 t/y screening offtake ceiling for separated NdPr oxide. Not a contract, not world production. USGS rare-earths PDF is commodity-family context. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 50 t/y separated NdPr ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  'dytb-oxide': row(
+    2e4, 'kg/year', 'screening', 'DyTb oxide screening offtake ceiling',
+    `20 t/y screening offtake ceiling for DyTb oxide. Not a contract, not world production. USGS rare-earths PDF is commodity-family context. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 20 t/y DyTb ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  'light-reo': row(
+    2e5, 'kg/year', 'screening', 'light REO screening offtake ceiling',
+    `200 t/y screening offtake ceiling for light REO (Longnan listed oxides minus NdPr and DyTb). Not a contract, not world production. USGS rare-earths PDF is commodity-family context. ${DEMAND_REGION}`,
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 200 t/y light-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  gluconic: row(
+    7.5e7, 'kg/year', 'screening', 'DOE EA-2246 Marshall 75 kta gluconic nameplate',
+    `75 kt/y screening offtake ceiling. DOE EA-2246 Marshall phased nameplate 75 kta gluconic acid, used as a global screening offtake ceiling because no regional consumption series is published. Not world market and not a contract. ${DEMAND_REGION}`,
+    [
+      { label: 'DOE EA-2246 Solugen Inc. Bioforge Marshall Project — phased nameplate 75 kta gluconic acid (screening offtake ceiling, not a contract)', url: 'https://www.energy.gov/nepa/doeea-2246-solugen-inc-bioforge-marshall-project-marshall-minnesota' },
+    ]
+  ),
+  'hydrogen-peroxide': row(
+    1e8, 'kg/year', 'screening', 'conservative 100 kt/y H2O2 screening ceiling',
+    `100 kt/y screening offtake ceiling, about one tenth of ~1 Mt US 2024 hydrogen peroxide consumption (IndexBox). Not the full market, concentration basis not stated, not a contract. ${DEMAND_REGION}`,
+    [
+      { label: 'IndexBox hydrogen peroxide United States market overview 2024 (~1 Mt US consumption family; 100 kt/y ceiling is screening, not a contract)', url: 'https://www.indexbox.io/blog/hydrogen-peroxide-united-states-market-overview-2024-3/' },
+    ]
+  ),
+  'pv-module': row(
+    5e6, 'kg/year', 'screening', 'PV module screening regional ceiling',
+    `5 kt/y screening offtake ceiling (~95 MWp/y at 52.7 kg/kWp). Tiny slice of the module market; not world production and not a contract. Fraunhofer module-mass family is BOM context — this ceiling is screening offtake. ${DEMAND_REGION}`,
+    [{ label: 'Fraunhofer ISE Photovoltaics Report (module mass family; 5 kt/y ceiling is screening offtake, not production)', url: FRAUNHOFER_PV_REPORT }]
+  ),
+  steel: row(
+    5e8, 'kg/year', 'screening', 'HBI / DRI iron screening regional ceiling',
+    `500 kt/y screening offtake ceiling. Tiny slice of regional DRI/HBI iron; not world steel production and not a Platts HBI contract. USGS iron-ore / iron-and-steel PDFs are commodity-family context — this ceiling is screening offtake. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2025 iron and steel (commodity-family context; 500 kt/y DRI/HBI ceiling is screening offtake, not production)', url: USGS_STEEL },
+      { label: 'World Bank commodity markets / pink sheet (metals family context; offtake cap is screening)', url: WB_PINK },
+    ]
+  ),
+  titanium: row(
+    2e7, 'kg/year', 'screening', 'Ti sponge screening regional ceiling',
+    `20 kt/y screening offtake ceiling. Tiny slice of titanium sponge; not world sponge production and not a TIMET contract. USGS titanium PDF is commodity-family context — this ceiling is screening offtake. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; 20 kt/y sponge ceiling is screening offtake, not production)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; offtake cap is screening, not a TIMET contract)', url: USGS_TI_2026 },
+    ]
+  ),
+  'float-glass': row(
+    5e7, 'kg/year', 'screening', 'float / solar glass screening regional ceiling',
+    `50 kt/y screening offtake ceiling. Tiny slice of flat glass; a typical 500–700 t/day float line is ~180–255 kt/y. Not world production and not a Guardian/Xinyi contract. Glass for Europe / Burrows family is commodity context — this ceiling is screening offtake. ${DEMAND_REGION}`,
+    [
+      { label: 'Burrows & Fthenakis 2015 (float-line capacity family; 50 kt/y ceiling is screening offtake, not production)', url: BURROWS_PV_GLASS, doi: '10.1016/j.solmat.2014.09.028' },
+      { label: 'Glass for Europe LCA of float glass (commodity-family context; offtake cap is screening)', url: GFE_FLOAT_LCA },
+    ]
+  ),
+  cement: row(
+    5e8, 'kg/year', 'screening', 'USGS cement screening regional ceiling',
+    `500 kt/y screening offtake ceiling. Tiny slice of grey cement; a typical 1.5 Mtpa dry line is ~1.5 Mt/y. USGS MCS 2026 US portland/blended/masonry 2025e ~84 Mt and world ~4 Gt are commodity context — this ceiling is screening offtake, not a mill contract. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2026 cement (commodity-family context; 500 kt/y ceiling is screening offtake, not production)', url: USGS_CEMENT },
+    ]
+  ),
+  'copper-cathode': row(
+    5e7, 'kg/year', 'screening', 'SX-EW cathode screening regional ceiling',
+    `50 kt/y screening offtake ceiling. One Marimaca-class SX-EW nameplate; USGS MCS 2026 Chile refined copper 2025e ~1.7 Mt and world refinery ~29 Mt are commodity context — this ceiling is screening offtake, not a cathode contract. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2026 copper (commodity-family context; 50 kt/y cathode ceiling is screening offtake, not production)', url: USGS_COPPER },
+      { label: 'Marimaca Oxide DFS — 50 kt/y cathode nameplate (capacity family; offtake cap is screening)', url: MARIMACA_DFS_2025 },
+    ]
+  ),
+};
+
+const MINERAL_DEMAND_KEYS = Object.freeze(['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium']);
+const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide', 'urea', 'ethylene', 'diesel']);
+
+function cloneDemandRow(item, extraNote, extra = {}) {
+  const cloned = {
+    value: item.value,
+    unit: item.unit,
+    quality: item.quality,
+    source: item.source,
+    note: extraNote ? `${item.note} ${extraNote}` : item.note,
+    evidence: item.evidence,
+  };
+  if (item.inherit) cloned.inherit = item.inherit;
+  if (extra.inherit) cloned.inherit = extra.inherit;
+  return cloned;
+}
+
+function inheritDemand(base, inheritNote, overrides = {}, inheritFrom = DEFAULT_DEMAND_REGION_ID) {
+  const out = {};
+  for (const [key, item] of Object.entries(base)) {
+    out[key] = overrides[key] || cloneDemandRow(item, inheritNote, { inherit: inheritFrom });
+  }
+  return out;
+}
+
+const CHILE_INHERIT_NOTE = 'Inherited me-levant screening offtake; Chile table only regionalizes lithium. Not a plant contract.';
+const AUSTRALIA_INHERIT_NOTE = 'Inherited me-levant screening offtake for fuels/chemicals without a cited Australia mineral series. Not a plant contract.';
+const DEFAULT_INHERIT_NOTE = 'Inherited me-levant screening offtake (unmapped site.region). Not a plant contract.';
+const GULF_INHERIT_NOTE = 'Inherited me-levant screening offtake for Gulf fuels/chemicals without a cited Gulf mineral series. Not a plant contract.';
+const EUROPE_INHERIT_NOTE = 'Inherited me-levant screening offtake for Europe fuels/chemicals without a cited Europe mineral series. Not a plant contract.';
+const INDIA_INHERIT_NOTE = 'Inherited me-levant screening offtake for India fuels/chemicals without a cited India mineral series. Not a plant contract.';
+const TEXAS_INHERIT_NOTE = 'Inherited me-levant screening offtake for Texas / US Gulf fuels/chemicals without a cited US mineral series. Not a plant contract.';
+const SOUTHERN_AFRICA_INHERIT_NOTE = 'Inherited me-levant screening offtake for Southern Africa fuels/chemicals without a cited regional mineral series. Not a plant contract.';
+const ASIA_CHINA_INHERIT_NOTE = 'Inherited me-levant screening offtake for China/Asia fuels/chemicals without a cited China mineral series. Not a plant contract.';
+
+const demandChile = inheritDemand(demand, CHILE_INHERIT_NOTE, {
+  lithium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS Chile Li production order',
+    'Conservative 20,000 t/y LCE-proxy ceiling, below USGS MCS 2025 Chile mine production 2024e ~49,000 t lithium content (major producer; world 2024e ~240,000 t). Chile is supply-side — this is not an offtake contract and not a LiCl quote.',
+    [{ label: 'USGS MCS 2025 lithium — Chile mine production 2024e ~49,000 t Li content (world 2024e ~240,000 t); not an offtake contract', url: USGS_LI }]
+  ),
+});
+
+const demandAustralia = inheritDemand(demand, AUSTRALIA_INHERIT_NOTE, {
+  lithium: row(
+    5e6, 'kg/year', 'screening', 'USGS MCS Australia Li production order',
+    'Conservative 5,000 t/y LCE-proxy ceiling, well below USGS MCS 2026 Australia mine production 2025e ~92,000 t lithium content. That production is hard-rock spodumene, not a Lake Mackay brine offtake. Not a plant contract and not a LiCl quote.',
+    [{ label: 'USGS MCS 2026 lithium — Australia mine production 2025e ~92,000 t Li content (hard-rock spodumene); not a brine offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    2e6, 'kg/year', 'screening', 'USGS MCS bromine; Australia not listed',
+    'Conservative 2,000 t/y regional ceiling. USGS MCS 2026 bromine world table lists Israel, Jordan, China, India, Japan, Ukraine, and withheld US — Australia is not a listed producer. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — Australia not a listed producer; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS potash; Australia not listed',
+    'Conservative 100 kt/y regional ceiling. USGS MCS 2026 potash world table does not list Australia among producers (Canada, Belarus, Russia, China, Germany, Israel, Jordan, …). Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 potash — Australia not a listed producer; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    3e9, 'kg/year', 'screening', 'USGS MCS Australia salt production',
+    'Conservative 3 Mt/y regional industrial/export ceiling, below USGS MCS 2026 Australia salt production 2025e ~12 Mt. Solar-salt trade proxy, not a Lake Mackay or Port Hedland offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — Australia production 2025e ~12 Mt; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    1e9, 'kg/year', 'screening', 'USGS MCS Australia gypsum production',
+    'Conservative 1 Mt/y regional construction/ag ceiling, below USGS MCS 2026 Australia gypsum 2025e ~4.2 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — Australia production 2025e ~4.2 Mt; not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    5e7, 'kg/year', 'screening', 'USGS MCS Australia magnesite; brine compound',
+    'Conservative 50 kt/y brine-Mg-compound ceiling, not Mg-metal and not magnesite offtake. USGS MCS 2026 magnesite Australia 2025e ~400 kt gross. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — Australia magnesite 2025e ~400 kt gross; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandDefault = inheritDemand(demand, DEFAULT_INHERIT_NOTE);
+
+const demandGulf = inheritDemand(demand, GULF_INHERIT_NOTE, {
+  lithium: row(
+    5e5, 'kg/year', 'screening', 'USGS MCS lithium; Gulf not listed',
+    'Conservative 500 t/y LCE-proxy ceiling. USGS MCS 2026 lithium world table does not list Gulf states as mine producers (Australia, Chile, China, Argentina, …). Not a Dead Sea inherit and not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 lithium — Gulf states not listed as mine producers; not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    5e6, 'kg/year', 'screening', 'USGS MCS bromine; Gulf ≠ Dead Sea',
+    'Conservative 5,000 t/y regional ceiling. USGS MCS 2026 bromine producers are Israel, Jordan, China, India, Japan, Ukraine, and withheld US — not KSA/UAE/Qatar. Dead Sea Br is Levant, not Gulf. Not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — Gulf states not listed; Dead Sea is Levant not Gulf; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS potash; Gulf not listed',
+    'Conservative 100 kt/y regional ceiling. USGS MCS 2026 potash lists Israel/Jordan Dead Sea, not Gulf states. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 potash — Gulf states not listed as producers; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    1e9, 'kg/year', 'screening', 'USGS MCS Saudi salt production',
+    'Conservative 1 Mt/y regional industrial ceiling, below USGS MCS 2026 Saudi Arabia salt 2025e ~2.4 Mt. Not a SWCC/DEWA offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — Saudi Arabia production 2025e ~2.4 Mt; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS Oman/Saudi gypsum',
+    'Conservative 2 Mt/y regional construction ceiling, below USGS MCS 2026 Oman gypsum 2025e ~14 Mt and Saudi Arabia ~3.8 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — Oman ~14 Mt and Saudi Arabia ~3.8 Mt (2025e); not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS magnesite; Gulf not listed',
+    'Conservative 20 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 magnesite world table does not list Gulf states. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — Gulf states not listed magnesite producers; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandEurope = inheritDemand(demand, EUROPE_INHERIT_NOTE, {
+  lithium: row(
+    2e5, 'kg/year', 'screening', 'USGS MCS Portugal Li production order',
+    'Conservative 200 t/y LCE-proxy ceiling, below USGS MCS 2026 Portugal mine production 2025e ~380 t lithium content (Europe’s listed producer). Not a brine offtake and not a plant contract.',
+    [{ label: 'USGS MCS 2026 lithium — Portugal mine production 2025e ~380 t Li content; not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    5e6, 'kg/year', 'screening', 'USGS MCS bromine; Europe small',
+    'Conservative 5,000 t/y regional ceiling. USGS MCS 2026 bromine lists Ukraine ~6,000 t 2025e; Western Europe is not a listed elemental-Br producer. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — Ukraine ~6,000 t 2025e; Western Europe not a listed producer; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    1e9, 'kg/year', 'screening', 'USGS MCS Germany/Spain potash',
+    'Conservative 1 Mt/y regional ceiling, below USGS MCS 2026 Germany potash 2025e ~3 Mt K₂O plus Spain ~450 kt. Screening offtake, not a K+S contract.',
+    [{ label: 'USGS MCS 2026 potash — Germany ~3 Mt and Spain ~450 kt K₂O (2025e); not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    8e9, 'kg/year', 'screening', 'USGS MCS Europe salt production',
+    'Conservative 8 Mt/y regional industrial ceiling, below USGS MCS 2026 Germany ~15 Mt, Netherlands ~5.4 Mt, Spain ~4 Mt, France ~4.5 Mt, UK ~2.6 Mt, Poland ~4.1 Mt (2025e). Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — Europe producers (Germany ~15 Mt, Spain ~4 Mt, … 2025e); not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS Europe gypsum production',
+    'Conservative 2 Mt/y regional construction ceiling, below USGS MCS 2026 Spain gypsum 2025e ~11 Mt, Germany ~4.7 Mt, France ~2.4 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — Spain ~11 Mt, Germany ~4.7 Mt, France ~2.4 Mt (2025e); not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    5e7, 'kg/year', 'screening', 'USGS MCS Europe magnesite; brine compound',
+    'Conservative 50 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 magnesite 2025e: Austria ~650 kt, Spain ~640 kt, Slovakia ~330 kt, Greece ~130 kt gross. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — Europe magnesite (Austria/Spain/Slovakia/Greece 2025e); brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandIndia = inheritDemand(demand, INDIA_INHERIT_NOTE, {
+  lithium: row(
+    2e5, 'kg/year', 'screening', 'USGS MCS lithium; India not listed',
+    'Conservative 200 t/y LCE-proxy ceiling. USGS MCS 2026 lithium world table does not list India as a mine producer. Not a Dead Sea inherit and not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 lithium — India not listed as a mine producer; not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    3e6, 'kg/year', 'screening', 'USGS MCS India bromine production',
+    'Conservative 3,000 t/y regional ceiling, below USGS MCS 2026 India bromine 2025e ~7,000 t. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — India production 2025e ~7,000 t; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS potash; India not listed',
+    'Conservative 100 kt/y regional ceiling. USGS MCS 2026 potash world table does not list India among producers. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 potash — India not a listed producer; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    4e9, 'kg/year', 'screening', 'USGS MCS India salt production',
+    'Conservative 4 Mt/y regional industrial ceiling, below USGS MCS 2026 India salt 2025e ~30 Mt. Not a Mundra offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — India production 2025e ~30 Mt; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    1e9, 'kg/year', 'screening', 'USGS MCS India gypsum production',
+    'Conservative 1 Mt/y regional construction/ag ceiling, below USGS MCS 2026 India gypsum 2025e ~4.3 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — India production 2025e ~4.3 Mt; not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS India magnesite; brine compound',
+    'Conservative 20 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 India magnesite 2025e ~85 kt gross. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — India magnesite 2025e ~85 kt gross; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandTexas = inheritDemand(demand, TEXAS_INHERIT_NOTE, {
+  lithium: row(
+    5e5, 'kg/year', 'screening', 'USGS MCS US lithium; production withheld',
+    'Conservative 500 t/y LCE-proxy ceiling. USGS MCS 2026 US lithium mine production is withheld (W); the listed US source is a Nevada brine operation, not a Texas Gulf offtake. Not a plant contract.',
+    [{ label: 'USGS MCS 2026 lithium — US mine production withheld (W); Nevada brine, not Texas Gulf; not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS US bromine; production withheld',
+    'Conservative 20,000 t/y regional ceiling. USGS MCS 2026: the United States is a leading bromine producer (Arkansas underground brines) but production is withheld (W). Arkansas brines are not a Texas Gulf offtake. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — US production withheld (W); Arkansas brines, not Texas Gulf offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    2e8, 'kg/year', 'screening', 'USGS MCS US potash production',
+    'Conservative 200 kt/y regional ceiling, below USGS MCS 2026 US potash 2025e ~500 kt K₂O. Not a Texas Gulf offtake contract.',
+    [{ label: 'USGS MCS 2026 potash — US production 2025e ~500 kt K₂O; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    8e9, 'kg/year', 'screening', 'USGS MCS US salt; Texas a top state',
+    'Conservative 8 Mt/y regional industrial ceiling, below USGS MCS 2026 US salt 2025e ~40 Mt. Texas is among the top producing States. Screening, not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — US production 2025e ~40 Mt (Texas among top States); not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS US gypsum; Texas a leading state',
+    'Conservative 2 Mt/y regional construction ceiling, below USGS MCS 2026 US crude gypsum 2025e ~20 Mt. Texas is a leading crude-gypsum State. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — US crude production 2025e ~20 Mt (Texas a leading State); not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS US Mg compounds; seawater/brine',
+    'Conservative 100 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 US magnesium-compounds production 2025e ~400 kt MgO from seawater and brines (CA/DE seawater, MI well brines, UT lake brines) — not a Texas Gulf offtake. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — US production 2025e ~400 kt MgO (seawater/brines); brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandSouthernAfrica = inheritDemand(demand, SOUTHERN_AFRICA_INHERIT_NOTE, {
+  lithium: row(
+    2e5, 'kg/year', 'screening', 'USGS MCS lithium; Namibia removed',
+    'Conservative 200 t/y LCE-proxy ceiling. USGS MCS 2026: Namibia was temporarily removed from lithium mine production owing to legal uncertainties. Zimbabwe ~28,000 t 2025e is not a Walvis Bay / Namibia offtake. Not a plant contract.',
+    [{ label: 'USGS MCS 2026 lithium — Namibia temporarily removed from mine production; not a Walvis offtake', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    2e6, 'kg/year', 'screening', 'USGS MCS bromine; Southern Africa not listed',
+    'Conservative 2,000 t/y regional ceiling. USGS MCS 2026 bromine world table does not list Namibia or South Africa. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — Southern Africa not a listed producer; not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    5e7, 'kg/year', 'screening', 'USGS MCS potash; Southern Africa not listed',
+    'Conservative 50 kt/y regional ceiling. USGS MCS 2026 potash world table does not list Namibia or South Africa among producers. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 potash — Southern Africa not a listed producer; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    5e8, 'kg/year', 'screening', 'USGS MCS salt; Southern Africa not listed',
+    'Conservative 500 kt/y regional industrial ceiling. USGS MCS 2026 salt country table does not list Namibia or South Africa among the named producers. Not a Namport offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — Southern Africa not among named country producers; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e8, 'kg/year', 'screening', 'USGS MCS gypsum; Southern Africa not listed',
+    'Conservative 200 kt/y regional construction ceiling. USGS MCS 2026 gypsum country table does not list Namibia or South Africa among the named producers. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — Southern Africa not among named country producers; not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    1e7, 'kg/year', 'screening', 'USGS MCS magnesite; Southern Africa not listed',
+    'Conservative 10 kt/y brine-Mg-compound ceiling, not Mg-metal. USGS MCS 2026 magnesite world table does not list Namibia or South Africa. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — Southern Africa not listed magnesite producers; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+});
+
+const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
+  lithium: row(
+    2e7, 'kg/year', 'screening', 'USGS MCS China Li production order',
+    'Conservative 20,000 t/y LCE-proxy ceiling, below USGS MCS 2026 China mine production 2025e ~62,000 t lithium content (2024 ~41,400 t). China is a major producer (mineral and brine). National supply-side — not a Zabuye or Qaidam offtake contract and not a LiCl quote.',
+    [{ label: 'USGS MCS 2026 lithium — China mine production 2025e ~62,000 t Li content (2024 ~41,400 t); not an offtake contract', url: USGS_LI_2026 }]
+  ),
+  bromine: row(
+    4e7, 'kg/year', 'screening', 'USGS MCS China bromine production',
+    'Conservative 40,000 t/y regional ceiling, below USGS MCS 2026 China bromine 2025e ~90,000 t (2024 ~100,000 t). China is a listed producer. Not a Dead Sea inherit and not a plant contract.',
+    [{ label: 'USGS MCS 2026 bromine — China production 2025e ~90,000 t (2024 ~100,000 t); not a plant offtake', url: USGS_BR_2026 }]
+  ),
+  potash: row(
+    3e9, 'kg/year', 'screening', 'USGS MCS China potash production',
+    'Conservative 3 Mt/y regional ceiling, below USGS MCS 2026 China potash 2025e ~6.3 Mt K₂O. National production (Qinghai is a major district) is not a Qaidam plant offtake contract.',
+    [{ label: 'USGS MCS 2026 potash — China production 2025e ~6.3 Mt K₂O; not a plant offtake', url: USGS_K_2026 }]
+  ),
+  salt: row(
+    1e10, 'kg/year', 'screening', 'USGS MCS China salt production',
+    'Conservative 10 Mt/y regional industrial ceiling, below USGS MCS 2026 China salt 2025e ~56 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 salt — China production 2025e ~56 Mt; not a plant offtake', url: USGS_SALT_2026 }]
+  ),
+  gypsum: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS China gypsum production',
+    'Conservative 2 Mt/y regional construction ceiling, below USGS MCS 2026 China gypsum 2025e ~12 Mt. Not a plant offtake contract.',
+    [{ label: 'USGS MCS 2026 gypsum — China production 2025e ~12 Mt; not a plant offtake', url: USGS_GYP_2026 }]
+  ),
+  magnesium: row(
+    1e8, 'kg/year', 'screening', 'USGS MCS China magnesite; brine compound',
+    'Conservative 100 kt/y brine-Mg-compound ceiling, not Mg-metal and not magnesite offtake. USGS MCS 2026 China magnesite 2025e ~12.7 Mt gross. Screening, not a plant contract.',
+    [{ label: 'USGS MCS 2026 magnesium compounds — China magnesite 2025e ~12.7 Mt gross; brine-compound ceiling, not metal', url: USGS_MG_2026 }]
+  ),
+  silicon: row(
+    5e8, 'kg/year', 'screening', 'USGS MCS silicon metal; China regional ceiling',
+    'Conservative 500 kt/y regional MG-Si ceiling. USGS MCS prices metallurgical-grade silicon metal; this is a screening offtake slice, not China production and not a contract.',
+    [{ label: 'USGS MCS 2025 silicon metal (price series; 500 kt/y China ceiling is screening offtake, not production)', url: USGS_SI }]
+  ),
+  aluminium: row(
+    2e9, 'kg/year', 'screening', 'USGS MCS aluminum; China regional ceiling',
+    'Conservative 2 Mt/y regional primary-aluminium ceiling. USGS MCS 2025 world smelter production 2024e ~72 Mt and China ~43 Mt — this ceiling is a tiny slice of China, not production and not a contract.',
+    [{ label: 'USGS MCS 2025 aluminum — world smelter ~72 Mt / China ~43 Mt (2024e); 2 Mt/y China ceiling is screening offtake, not production', url: USGS_AL }]
+  ),
+  polysilicon: row(
+    2e8, 'kg/year', 'screening', 'SoG poly China/Asia ceiling; USGS silicon family context',
+    'Conservative 200 kt/y China/Asia solar-grade poly ceiling (China dominates SoG poly). USGS MCS silicon PDF is commodity-family context — this ceiling is screening offtake, not USGS silicon-metal production and not a contract.',
+    [{ label: 'USGS MCS 2025 silicon (commodity-family context; 200 kt/y China poly ceiling is screening offtake, not USGS silicon-metal production)', url: USGS_SI }]
+  ),
+  'pv-module': row(
+    5e8, 'kg/year', 'screening', 'PV module China/Asia ceiling',
+    'Conservative 500 kt/y China/Asia module ceiling (~9.5 GWp/y at 52.7 kg/kWp). China dominates module assembly. Screening offtake, not a production table and not a contract.',
+    [{ label: 'Fraunhofer ISE Photovoltaics Report (module mass family; 500 kt/y China ceiling is screening offtake, not production)', url: FRAUNHOFER_PV_REPORT }]
+  ),
+  steel: row(
+    5e9, 'kg/year', 'screening', 'HBI / DRI iron China/Asia ceiling',
+    'Conservative 5 Mt/y China/Asia DRI/HBI ceiling. China dominates crude steel. USGS iron-and-steel PDF is commodity-family context. Screening offtake, not a production table and not a Platts HBI contract.',
+    [
+      { label: 'USGS MCS 2025 iron and steel (commodity-family context; 5 Mt/y China DRI/HBI ceiling is screening offtake, not production)', url: USGS_STEEL },
+      { label: 'World Bank commodity markets / pink sheet (metals family context; China ceiling is screening offtake)', url: WB_PINK },
+    ]
+  ),
+  titanium: row(
+    1e8, 'kg/year', 'screening', 'Ti sponge China/Asia ceiling',
+    'Conservative 100 kt/y China/Asia titanium-sponge ceiling. China is a large sponge producer. USGS titanium PDF is commodity-family context. Screening offtake, not a production table and not a TIMET contract.',
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; 100 kt/y China sponge ceiling is screening offtake, not production)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; China ceiling is screening offtake, not a TIMET contract)', url: USGS_TI_2026 },
+    ]
+  ),
+  'float-glass': row(
+    5e8, 'kg/year', 'screening', 'float / solar glass China/Asia ceiling',
+    'Conservative 500 kt/y China/Asia float/solar-glass ceiling. China dominates solar glass. Screening offtake, not a production table and not a Xinyi/Flat Glass Group contract.',
+    [
+      { label: 'Burrows & Fthenakis 2015 (float-line capacity family; 500 kt/y China ceiling is screening offtake, not production)', url: BURROWS_PV_GLASS, doi: '10.1016/j.solmat.2014.09.028' },
+      { label: 'Glass for Europe LCA of float glass (commodity-family context; China ceiling is screening offtake)', url: GFE_FLOAT_LCA },
+    ]
+  ),
+  cement: row(
+    5e9, 'kg/year', 'screening', 'USGS cement China/Asia ceiling',
+    'Conservative 5 Mt/y China/Asia grey-cement ceiling. USGS MCS 2026 China cement 2024 ~1.9 Gt — this ceiling is a tiny slice, not production and not a mill contract.',
+    [
+      { label: 'USGS MCS 2026 cement (commodity-family context; 5 Mt/y China ceiling is screening offtake, not production)', url: USGS_CEMENT },
+    ]
+  ),
+  'copper-cathode': row(
+    5e8, 'kg/year', 'screening', 'SX-EW cathode China/Asia ceiling',
+    'Conservative 500 kt/y China/Asia refined-copper ceiling. USGS MCS 2026 China refinery 2025e ~14 Mt — this ceiling is a tiny slice, not production and not a cathode contract.',
+    [
+      { label: 'USGS MCS 2026 copper (commodity-family context; 500 kt/y China cathode ceiling is screening offtake, not production)', url: USGS_COPPER },
+    ]
+  ),
+  'ndpr-oxide': row(
+    2e6, 'kg/year', 'screening', 'NdPr oxide China/Asia ceiling; ionic-clay supply',
+    'Conservative 2,000 t/y China/Asia NdPr-oxide ceiling. China dominates ionic-clay supply. Screening offtake, not a production table and not a contract.',
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 2 kt/y China NdPr ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  'other-reo': row(
+    1e7, 'kg/year', 'screening', 'mixed other-REO China/Asia ceiling; ionic-clay supply',
+    'Conservative 10,000 t/y China/Asia mixed other-REO ceiling. China dominates ionic-clay supply. Screening offtake, not a production table and not a contract.',
+    [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 10 kt/y China other-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  urea: row(
+    5e8, 'kg/year', 'screening', 'IEA/USGS fertilizer urea; China/Asia ceiling',
+    'Conservative 500 kt/y China/Asia urea ceiling. China is a large urea producer. IEA ammonia/fertilizer family and USGS nitrogen (fixed) are commodity context. Screening offtake, not a contract and not a silent ME-Levant inherit.',
+    [
+      { label: 'IEA Ammonia Technology Roadmap (ammonia/fertilizer family; 500 kt/y China urea ceiling is screening offtake, not a contract)', url: IEA_NH3 },
+      { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context; 500 kt/y China ceiling is screening offtake, not production', url: USGS_N },
+    ]
+  ),
+  ethylene: row(
+    5e8, 'kg/year', 'screening', 'ethylene China/Asia ceiling; MTO producer region',
+    'Conservative 500 kt/y China/Asia ethylene ceiling. China hosts most commercial MTO capacity. IEA ethylene family is commodity context. Screening offtake, not a contract and not a silent ME-Levant inherit.',
+    [
+      { label: 'IEA ethylene capacity/demand family (commodity context; 500 kt/y China ceiling is screening offtake, not a contract)', url: IEA_ETHYLENE },
+      { label: 'Yokogawa — Sinopec Zhongyuan S-MTO 600 kt/y (China MTO capacity-family context; offtake cap is screening)', url: SINOPEC_MTO_YOKOGAWA },
+    ]
+  ),
+  diesel: row(
+    1e9, 'kg/year', 'screening', 'diesel/gasoil China/Asia ceiling',
+    'Conservative 1 Mt/y China/Asia diesel/gasoil ceiling. China is a large distillate market. EIA/World Bank gasoil family is commodity context. Screening offtake, not a contract and not a silent ME-Levant inherit.',
+    [
+      { label: 'EIA gasoline and diesel fuel update (commodity context; 1 Mt/y China ceiling is screening offtake, not a contract)', url: EIA_DIESEL },
+      { label: 'World Bank commodity markets / pink sheet (gasoil family; China ceiling is screening offtake)', url: WB_PINK },
+    ]
+  ),
+});
+
+const demandByRegion = {
+  'me-levant': demand,
+  gulf: demandGulf,
+  'chile-atacama': demandChile,
+  australia: demandAustralia,
+  europe: demandEurope,
+  india: demandIndia,
+  texas: demandTexas,
+  'southern-africa': demandSouthernAfrica,
+  'asia-china': demandAsiaChina,
+  default: demandDefault,
+};
+const DEMAND_REGIONS = demandByRegion;
+
+const IEA_ELEC_EVIDENCE = [
+  { label: 'IEA Electricity 2024 (family; screening industrial tariff overlay, not a PPA)', url: IEA_ELEC },
+  { label: 'IEA Electricity 2026 (family; energy-intensive industrial price gaps, not a PPA)', url: IEA_ELEC_2026 },
+];
+
+// Screening industrial-power overlays (not a PPA). Default / unmapped keep costs.power ($0.04/kWh).
+const powerByRegion = {
+  'me-levant': row(
+    0.04, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Levant industrial power screening overlay ~$40/MWh (global $30–50/MWh mid). IEA Electricity family order — not an IEC/NEPCO tariff or plant PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+  gulf: row(
+    0.04, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Gulf industrial power screening overlay ~$40/MWh (gas-linked industrial order at the global $30–50/MWh mid). IEA Electricity family order — not a DEWA/EWEC/KAHRAMAA PPA or plant tariff.',
+    IEA_ELEC_EVIDENCE
+  ),
+  'chile-atacama': row(
+    0.07, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Chile industrial power screening overlay ~$70/MWh (above the global $30–50/MWh mid). IEA Electricity 2024 family order — not a SEN/SING PPA or plant tariff.',
+    IEA_ELEC_EVIDENCE
+  ),
+  australia: row(
+    0.08, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Australia industrial power screening overlay ~$80/MWh (above the global $30–50/MWh mid). IEA Electricity 2024 family order — not an NWIS/SWIS PPA or plant tariff.',
+    IEA_ELEC_EVIDENCE
+  ),
+  europe: row(
+    0.10, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'Europe industrial power screening overlay ~$100/MWh. IEA Electricity 2026: EU energy-intensive industrial prices remain ~2× US and ~50% above India/China; EU wholesale ~USD 95/MWh (2025). Not a Eurostat contract or plant PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+  india: row(
+    0.07, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'India industrial power screening overlay ~$70/MWh (below EU; IEA energy-intensive series uses Andhra Pradesh as the India marker). IEA Electricity family / CEA order — not a DISCOM tariff or plant PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+  texas: row(
+    0.06, '$/kWh', 'screening', 'IEA / EIA industrial electricity family',
+    'Texas industrial power screening overlay ~$60/MWh. IEA US energy-intensive series is Texas-based; EIA Electric Power Annual 2024 Texas industrial average ~6.12 ¢/kWh. Not an ERCOT PPA or retail contract.',
+    [
+      ...IEA_ELEC_EVIDENCE,
+      { label: 'EIA Electric Power Annual (Texas industrial average revenue per kWh; not a PPA)', url: EIA_EPA },
+    ]
+  ),
+  'southern-africa': row(
+    0.09, '$/kWh', 'screening', 'IEA Electricity family + Eskom/NERSA order',
+    'Southern Africa industrial power screening overlay ~$90/MWh (above the global $30–50/MWh mid). IEA Electricity family does not publish a South Africa energy-intensive point on the EU/US/India chart; Eskom/NERSA standard-tariff order sits above that mid (not Megaflex or an NPA quote). Not a plant PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+  'asia-china': row(
+    0.06, '$/kWh', 'screening', 'IEA industrial electricity family',
+    'China industrial power screening overlay ~$60/MWh, below the Europe ~$100/MWh overlay and near or below the India ~$70/MWh marker. IEA Electricity 2026 groups India/China energy-intensive prices about 50% below the EU. Not a State Grid, Qinghai, or Tibet tariff and not a PPA.',
+    IEA_ELEC_EVIDENCE
+  ),
+};
+
+// Product $/kg stays the global screening band unless a regional series is cited in priceByRegion.
+// Lithium is the USGS LCE proxy in every region (Chile is supply-side, not a LiCl contract).
+// Screening labor/construction/EPC location multipliers vs a US Gulf-ish baseline of 1.0.
+// Applied as capexIntensity_region = pack.capexIntensity × multiplier[region] in bindCapexPack.
+// Building-cost / ICP / IRENA installed-cost families as direction only; process equipment
+// is internationally traded so the construction spread is damped into ~0.7–1.3. Not plant quotes.
+// NREL ATB location adjustment is US-only; IEA electrolyzer $/kW is technology-family, not geography.
+// solar-pv may use solarCapexByRegion (cited IRENA TIC) instead of this damped multiplier.
+// Unmapped `default` omitted → getCapexMultiplierForRegion returns 1.
+const CAPEX_LOC_EVIDENCE = [
+  { label: 'Turner & Townsend Global Construction Market Intelligence 2026 (location-index / building-cost family; not a process-plant quote)', url: TT_GCMI },
+  { label: 'World Bank ICP 2021 construction price levels (family; not a plant quote)', url: WB_ICP },
+  { label: 'IRENA Renewable Power Generation Costs in 2024 (regional installed-cost direction only; solar TIC is not the minerals multiplier)', url: IRENA_COSTS_2024 },
+];
+const capexMultiplierByRegion = {
+  'me-levant': row(
+    0.85, '×', 'screening', 'labor/construction location proxy',
+    'Levant / Dead Sea screening CAPEX intensity vs US Gulf-ish baseline 1.0. Labor/EPC construction-cost proxy: Turner & Townsend GCMI Middle East building costs sit below US/Europe; World Bank ICP MENA construction price levels sit below North America. Process equipment is traded so the construction spread is damped into ~0.7–1.3. Not a Dead Sea plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  gulf: row(
+    0.9, '×', 'screening', 'labor/construction location proxy',
+    'Gulf screening CAPEX intensity vs US Gulf-ish baseline 1.0. Labor cheaper than US; imported craft and boom activity can offset. T&T UAE/KSA building costs sit below US coastal cities. Slightly above Levant. Not a DEWA/NEOM/KAHRAMAA plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  'chile-atacama': row(
+    1.05, '×', 'screening', 'labor/construction location proxy',
+    'Atacama / Chile screening CAPEX intensity vs US Gulf-ish baseline 1.0. T&T Santiago building costs sit below US coastal cities; Atacama remoteness and imported kit is a small premium vs US Gulf process-plant baseline. Screening, not an SQM/Albemarle quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  india: row(
+    0.75, '×', 'screening', 'labor/construction location proxy',
+    'India screening CAPEX intensity vs US Gulf-ish baseline 1.0. Lowest labor/EPC in this set. T&T Mumbai building costs well below US. IRENA 2024 India utility-PV TIC ~$525/kW vs US ~$1,058/kW is a wider solar-module/BOS spread — damped to 0.75 for process-plant location. Not a Mundra plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  australia: row(
+    1.15, '×', 'screening', 'labor/construction location proxy',
+    'Australia screening CAPEX intensity vs US Gulf-ish baseline 1.0. High labor and preliminaries (T&T Australia/NZ construction-cost family). Screening premium vs US Gulf. Not a Pilbara/Kwinana/Lake Mackay plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  europe: row(
+    1.2, '×', 'screening', 'labor/construction location proxy',
+    'Europe screening CAPEX intensity vs US Gulf-ish baseline 1.0. Highest labor/regulation in this set. T&T European building costs sit above Middle East/India. Screening, not a Eurostat contract or plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  texas: row(
+    1.0, '×', 'screening', 'labor/construction location proxy',
+    'Texas / US Gulf screening CAPEX intensity = 1.0 (the pack-intensity baseline geography). Not an USGC EPC quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  'southern-africa': row(
+    0.95, '×', 'screening', 'labor/construction location proxy',
+    'Southern Africa screening CAPEX intensity vs US Gulf-ish baseline 1.0. T&T Cape Town/Johannesburg building costs sit below US/Europe and above India. Labor cheaper; imported kit. Screening, not a Namport/Walvis plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  'asia-china': row(
+    0.8, '×', 'screening', 'labor/construction location proxy',
+    'China screening CAPEX intensity vs US Gulf-ish baseline 1.0. Coastal and industrial labor sit below the US (T&T / ICP direction). Tibet and Qaidam remoteness offset part of that discount, so the damped process-plant factor is 0.80 — between India 0.75 and Levant 0.85. Not a Zabuye or Qinghai Salt Lake plant quote.',
+    CAPEX_LOC_EVIDENCE
+  ),
+  // default omitted → 1
+};
+
+// Cited product-price overlays. Keys absent here stay on the global prices table.
+const priceByRegion = {
+  'chile-atacama': {
+    lithium: row(
+      14, '$/kg', 'cited', 'USGS MCS 2025 lithium',
+      'USGS MCS 2025 battery-grade Li₂CO₃ annual avg ~$14,000/t (2024e). Model product is Li salt / LiCl-like — LCE proxy for screening, not a LiCl contract. Chile is supply-side (USGS MCS Chile mine-production order); this USGS LCE proxy is not a Chilean offtake contract.',
+      [{ label: 'USGS Mineral Commodity Summaries 2025 — Lithium (battery-grade Li₂CO₃ ~$14,000/t 2024e); Chile supply-side, not a LiCl contract', url: USGS_LI }]
+    ),
+  },
+};
+
+// Cited solar-pv TIC overlays. Replaces pack $1000/kWp × location multiplier for solar-pv
+// only — IRENA module/BOS spread is wider than the damped process-plant CAPEX×. Not EPC quotes.
+const solarCapexByRegion = {
+  india: row(
+    525, '$/kWp', 'screening', 'IRENA 2024 India utility-PV TIC',
+    'India utility-scale solar TIC screening overlay $525/kWp (IRENA Renewable Power Generation Costs in 2024; vs US ~$1,058/kW). Replaces pack $1000/kWp × India 0.75 process-plant CAPEX× for solar-pv only. Not a Mundra EPC quote.',
+    [{ label: 'IRENA Renewable Power Generation Costs in 2024 — India utility-PV TIC ~$525/kW (not a plant quote)', url: IRENA_COSTS_2024 }]
+  ),
+};
+
+function resolveDemandRegion(region) {
+  if (region == null || region === '') return DEFAULT_DEMAND_REGION_ID;
+  const raw = String(region).trim();
+  if (demandByRegion[raw]) return raw;
+  if (REGION_STRING_TO_ID[raw]) return REGION_STRING_TO_ID[raw];
+  const lower = raw.toLowerCase();
+  for (const [label, id] of Object.entries(REGION_STRING_TO_ID)) {
+    if (label.toLowerCase() === lower) return id;
+  }
+  return 'default';
+}
+
+function getDemandForRegion(region) {
+  return demandByRegion[resolveDemandRegion(region)];
+}
+
+function getCostForRegion(key, region) {
+  const id = resolveDemandRegion(region);
+  if (key === 'power' && powerByRegion[id]) return powerByRegion[id];
+  return must(costs, key, 'cost');
+}
+
+function getPriceForRegion(key, region) {
+  const id = resolveDemandRegion(region);
+  const overlay = priceByRegion[id] && priceByRegion[id][key];
+  if (overlay) return overlay;
+  const item = must(prices, key, 'price');
+  if (key === 'lithium' && id && id !== 'me-levant' && id !== 'default') {
+    return {
+      ...item,
+      note: `${item.note} Regional table ${id}: lithium unit price stays the USGS LCE proxy — not a local LiCl contract.`,
+    };
+  }
+  return item;
+}
+
+function getCapexMultiplierForRegion(region) {
+  const id = resolveDemandRegion(region);
+  const item = capexMultiplierByRegion[id];
+  return item && Number.isFinite(Number(item.value)) ? Number(item.value) : 1;
+}
+
+const fuelsCapexNote = row(
+  null, null, 'screening', 'NREL ATB / DOE H2 family',
+  'Fuel-path converter CAPEX uses process packs (electrolyzer, DAC, SWRO, Sabatier, methanol) with literature intensities, not demo lumps. Family: NREL ATB / DOE hydrogen electrolysis / IEA DAC.',
+  [
+    { label: 'NREL Annual Technology Baseline (family cite; not a plant quote)', url: NREL_ATB },
+    { label: 'DOE hydrogen production: electrolysis (family cite)', url: DOE_H2 },
+  ]
+);
+
+function must(map, key, kind) {
+  const found = map[key];
+  if (!found) throw new Error(`Unknown TEA ${kind} ${key}`);
+  return found;
+}
+
+function getFreight(id) {
+  return must(freightBands, id, 'freight');
+}
+
+function attachFreight(bound, extra, role) {
+  const freightId = extra && extra.freight;
+  if (freightId == null || freightId === '') return bound;
+  const band = getFreight(freightId);
+  const freightUsdPerKg = Number(band.value) || 0;
+  bound.freightUsdPerKg = freightUsdPerKg;
+  bound.freightId = freightId;
+  if (Array.isArray(band.evidence) && band.evidence.length) {
+    bound.evidence = [...(bound.evidence || []), ...band.evidence];
+  }
+  if (role === 'sale') {
+    const gate = Number(bound.unitPrice) || 0;
+    bound.gateUnitPrice = gate;
+    bound.unitPrice = Math.max(0, gate - freightUsdPerKg);
+    bound.note = `${bound.note} Screening seller-paid freight ${freightId} $${freightUsdPerKg}/kg nets plant-gate $${gate}/kg to $${bound.unitPrice}/kg (screening FOB vs landed; not a carrier contract).`;
+  } else {
+    bound.note = `${bound.note} Screening inbound freight ${freightId} $${freightUsdPerKg}/kg on top of plant-gate unitCost (not a carrier contract).`;
+  }
+  return bound;
+}
+
+function installedCapexFromPack(pack, capacity) {
+  const intensity = Number(pack.capexIntensity);
+  const size = Number(capacity);
+  if (!Number.isFinite(intensity) || !Number.isFinite(size)) return null;
+  const exponent = pack.scaleExponent;
+  const ref = pack.refCapacity;
+  if (Number.isFinite(exponent) && Number.isFinite(ref) && ref > 0 && size > 0) {
+    return intensity * size * (size / ref) ** (exponent - 1);
+  }
+  return intensity * size;
+}
+
+function solarCapexOverlay(region) {
+  if (region == null || region === '') return null;
+  const id = resolveDemandRegion(region);
+  return solarCapexByRegion[id] || null;
+}
+
+
+// MECH18 — tank CAPEX by fluid class ($/m³ capacity). Region multiplies via CAPEX×.
+// At ρ=1000 kg/m³, generic $500/m³ ≡ MECH17 $0.50/kg fallback.
+const MATCH_TANK = 'https://www.matche.com/equipcost/Tank.html';
+const EPA_USP = 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf';
+const tankByFluid = {
+  freshwater: {
+    id: 'freshwater',
+    label: 'Freshwater',
+    capexPerM3: 400,
+    densityKgM3: 1000,
+    quality: 'screening',
+    source: 'atmospheric CS water tank TEA order',
+    note: 'Screening atmospheric carbon-steel freshwater storage ~$250–600/m³ installed (foundation included). Mid $400/m³. Not a vendor quote.',
+    evidence: [
+      { label: 'Matches process equipment — atmospheric storage tank cost order', url: MATCH_TANK },
+      { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
+    ],
+  },
+  seawater: {
+    id: 'seawater',
+    label: 'Seawater',
+    capexPerM3: 550,
+    densityKgM3: 1025,
+    quality: 'screening',
+    source: 'coated / duplex seawater tank TEA order',
+    note: 'Screening seawater storage with coating / duplex uplift vs freshwater (~$400–800/m³). Mid $550/m³. Not a vendor quote.',
+    evidence: [
+      { label: 'Matches process equipment — atmospheric storage tank cost order (seawater uplift screening)', url: MATCH_TANK },
+      { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
+    ],
+  },
+  brine: {
+    id: 'brine',
+    label: 'Brine',
+    capexPerM3: 750,
+    densityKgM3: 1200,
+    quality: 'screening',
+    source: 'brine / high-TDS tank TEA order',
+    note: 'Screening brine / high-TDS atmospheric storage with corrosion + density uplift (~$500–1200/m³). Mid $750/m³. Default density 1200 kg/m³ when unspecified. Not a vendor quote.',
+    evidence: [
+      { label: 'Matches process equipment — atmospheric storage tank cost order (brine uplift screening)', url: MATCH_TANK },
+      { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
+    ],
+  },
+  generic: {
+    id: 'generic',
+    label: 'Generic liquid',
+    capexPerM3: 500,
+    densityKgM3: 1000,
+    quality: 'screening',
+    source: 'MECH17 $0.50/kg water-eq fallback',
+    note: 'Generic liquid tank screening $500/m³ ≡ MECH17 $0.50/kg at ρ=1000 kg/m³. Use when fluid class is unknown. Not a vendor quote.',
+    evidence: [
+      { label: 'Matches process equipment — atmospheric storage tank cost order', url: MATCH_TANK },
+      { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
+    ],
+  },
+};
+const DEFAULT_TANK_FLUID = 'generic';
+const TANK_FLUID_ALIASES = {
+  water: 'freshwater',
+  freshwater: 'freshwater',
+  seawater: 'seawater',
+  brine: 'brine',
+  generic: 'generic',
+  liquid: 'generic',
+  unknown: 'generic',
+};
+
+function resolveTankFluidClass(raw) {
+  if (raw == null || raw === '') return DEFAULT_TANK_FLUID;
+  const key = String(raw).trim().toLowerCase();
+  return TANK_FLUID_ALIASES[key] || (tankByFluid[key] ? key : DEFAULT_TANK_FLUID);
+}
+
+function getTankFluidSpec(fluidClass) {
+  return tankByFluid[resolveTankFluidClass(fluidClass)];
+}
+
+// UNESCO EOS-80 practical density at 25 °C, 1 atm. S in g/kg.
+// The published fit is about 0–42 g/kg; outside that, return null (no extrapolated ρ).
+function estimateDensityKgM3FromSalinity(salinityGPerKg) {
+  const S = Number(salinityGPerKg);
+  if (!Number.isFinite(S) || S < 0 || S > 42) return null;
+  const t = 25;
+  const rhoW = 999.842594
+    + 6.793952e-2 * t
+    - 9.095290e-3 * t * t
+    + 1.001685e-4 * t ** 3
+    - 1.120083e-6 * t ** 4
+    + 6.536332e-9 * t ** 5;
+  const A = 8.24493e-1 - 4.0899e-3 * t + 7.6438e-5 * t * t - 8.2467e-7 * t ** 3 + 5.3875e-9 * t ** 4;
+  const B = -5.72466e-3 + 1.0227e-4 * t - 1.6546e-6 * t * t;
+  const C = 4.8314e-4;
+  return rhoW + A * S + B * S ** 1.5 + C * S * S;
+}
+
+function readAssaySalinityGPerKg(bag) {
+  if (!bag || typeof bag !== 'object') return null;
+  for (const field of ['salinity_g_per_kg', 'salinity_psu', 'tds_g_per_kg']) {
+    if (bag[field] == null || bag[field] === '') continue;
+    const n = Number(bag[field]);
+    if (Number.isFinite(n) && n >= 0) return { S: n, field };
+  }
+  if (bag.tds_mg_per_kg != null && bag.tds_mg_per_kg !== '') {
+    const n = Number(bag.tds_mg_per_kg);
+    if (Number.isFinite(n) && n >= 0) return { S: n / 1000, field: 'tds_mg_per_kg' };
+  }
+  // tds_mg_per_L is mass/volume, not g/kg. Fixed-point proxy, not a lab density:
+  // S0 = mg/L ÷ 1000, then S_{n+1} = mg/L ÷ ρ_UNESCO25(S_n) until |ΔS|≤1e-6 or 12 passes.
+  // If any ρ() is null (S outside 0–42), keep the out-of-range salinity for the caller.
+  if (bag.tds_mg_per_L != null && bag.tds_mg_per_L !== '') {
+    const n = Number(bag.tds_mg_per_L);
+    if (Number.isFinite(n) && n >= 0) {
+      let S = n / 1000;
+      for (let pass = 0; pass < 12; pass += 1) {
+        const rho = estimateDensityKgM3FromSalinity(S);
+        if (!(rho > 0)) return { S, field: 'tds_mg_per_L', proxy: true };
+        const next = n / rho;
+        if (Math.abs(next - S) <= 1e-6) return { S: next, field: 'tds_mg_per_L', proxy: true };
+        S = next;
+      }
+      return { S, field: 'tds_mg_per_L', proxy: true };
+    }
+  }
+  return null;
+}
+
+// Density hint when an assay has salinity/TDS but no density_kg_per_L.
+// In-range → UNESCO 25 °C. Out of range → labeled fluid-class fallback (caller supplies ρ).
+// tds_mg_per_L uses the fixed-point proxy above (not a lab density).
+function densityHintFromAssay(bag) {
+  const read = readAssaySalinityGPerKg(bag);
+  if (!read) return null;
+  const rho = estimateDensityKgM3FromSalinity(read.S);
+  if (rho == null) {
+    return {
+      densityKgM3: null,
+      outOfRange: true,
+      source: read.proxy
+        ? 'fluid default (TDS mg/L proxy outside UNESCO 0–42 g/kg fit)'
+        : 'fluid default (assay salinity outside UNESCO 0–42 g/kg fit)',
+    };
+  }
+  return {
+    densityKgM3: rho,
+    source: read.proxy
+      ? 'salinity estimate (UNESCO 25 °C, TDS mg/L proxy)'
+      : 'salinity estimate (UNESCO 25 °C)',
+  };
+}
+
+
+/** Screening tank CAPEX: (capacityKg / density) × $/m³ × regional CAPEX×. */
+function bindTankCapex(extra = {}) {
+  const fluid = getTankFluidSpec(extra.fluidClass);
+  const density = Number(extra.densityKgM3);
+  const rho = Number.isFinite(density) && density > 0 ? density : fluid.densityKgM3;
+  const regionMul = extra.region != null ? getCapexMultiplierForRegion(extra.region) : 1;
+  const basePerM3 = Number(extra.capexPerM3);
+  const perM3 = (Number.isFinite(basePerM3) && basePerM3 >= 0 ? basePerM3 : fluid.capexPerM3) * regionMul;
+  const kg = Math.max(0, Number(extra.capacityKg) || 0);
+  const m3 = rho > 0 ? kg / rho : 0;
+  const installed = m3 * perM3;
+  return {
+    installedCapex: installed,
+    fixedOMPercent: extra.fixedOMPercent ?? 2,
+    variableOM: extra.variableOM ?? 0,
+    assetLifeYears: extra.assetLifeYears ?? 25,
+    capexPerM3: perM3,
+    capexPerKg: rho > 0 ? perM3 / rho : 0,
+    fluidClass: fluid.id,
+    fluidLabel: fluid.label,
+    densityKgM3: rho,
+    intensityUnit: '$/m³ capacity',
+    quality: fluid.quality,
+    source: fluid.source,
+    note: `${fluid.note} Regional CAPEX× applied when region is set (here ×${regionMul}).`,
+    evidence: fluid.evidence,
+    regionMultiplier: regionMul,
+  };
+}
+
+function bindCapexPack(processKey, extra = {}) {
+  const item = must(packs, processKey, 'pack');
+  const capacity = extra.capacity;
+  const solarOverlay = processKey === 'solar-pv' ? solarCapexOverlay(extra.region) : null;
+  const regionMul = extra.region != null && !solarOverlay ? getCapexMultiplierForRegion(extra.region) : 1;
+  const merged = {
+    ...item,
+    scaleExponent: extra.scaleExponent ?? item.scaleExponent,
+    refCapacity: extra.refCapacity ?? item.refCapacity,
+    capexIntensity: extra.capexIntensity ?? (solarOverlay ? solarOverlay.value : item.capexIntensity * regionMul),
+  };
+  const scaled = merged.scaleExponent != null && merged.refCapacity != null && Number.isFinite(capacity);
+  const precompute = extra.precompute != null ? extra.precompute : (item.precompute || scaled);
+  const fields = {
+    quality: solarOverlay ? solarOverlay.quality : item.quality,
+    source: solarOverlay ? solarOverlay.source : item.source,
+    note: solarOverlay ? solarOverlay.note : item.note,
+    evidence: solarOverlay ? solarOverlay.evidence : item.evidence,
+    capexIntensity: merged.capexIntensity,
+    assetLifeYears: extra.assetLifeYears ?? item.assetLifeYears,
+    variableOM: extra.variableOM ?? item.variableOm,
+  };
+  if (item.capexIntensityBand) fields.capexIntensityBand = item.capexIntensityBand;
+  if (merged.scaleExponent != null) {
+    fields.scaleExponent = merged.scaleExponent;
+    fields.refCapacity = merged.refCapacity;
+  }
+  if (item.fixedOmPerCapacity != null && Number.isFinite(capacity) && extra.fixedOM == null) {
+    fields.fixedOM = item.fixedOmPerCapacity * capacity;
+  } else if (extra.fixedOM != null) {
+    fields.fixedOM = extra.fixedOM;
+  } else {
+    fields.fixedOMPercent = extra.fixedOMPercent ?? item.fixedOmPercent;
+  }
+  if (extra.installedCapex != null) {
+    fields.installedCapex = extra.installedCapex;
+  } else if (precompute && Number.isFinite(capacity)) {
+    fields.installedCapex = installedCapexFromPack(merged, capacity);
+  } else {
+    fields.capexRate = extra.capexRate ?? merged.capexIntensity;
+  }
+  return fields;
+}
+
+function bindSale(key, extra = {}) {
+  const region = extra && extra.region;
+  const item = getPriceForRegion(key, region);
+  const cap = must(getDemandForRegion(region), key, 'demand');
+  const bound = {
+    disposition: 'sale',
+    unitPrice: item.value,
+    annualDemandLimit: cap.value,
+    quality: item.quality,
+    source: item.source,
+    note: `${item.note} Offtake cap ${cap.value} ${cap.unit}: ${cap.note}`,
+    evidence: item.evidence,
+    demandRegionId: resolveDemandRegion(region),
+  };
+  if (cap.inherit) bound.inherit = cap.inherit;
+  return attachFreight(bound, extra, 'sale');
+}
+
+function bindSaleForRegion(region) {
+  return key => bindSale(key, { region });
+}
+
+function bindCost(key, extra = {}) {
+  const item = getCostForRegion(key, extra && extra.region);
+  return attachFreight({
+    unitCost: item.value,
+    quality: item.quality,
+    source: item.source,
+    note: item.note,
+    evidence: item.evidence,
+  }, extra, 'cost');
+}
+
+function bindCapex(key, extra = {}) {
+  return bindCapexPack(key, extra);
+}
+
+function bindPriceFields(key) {
+  const item = must(prices, key, 'price');
+  return {
+    unitPrice: item.value,
+    quality: item.quality,
+    source: item.source,
+    note: item.note,
+    evidence: item.evidence,
+  };
+}
+
+function snapshot(map, keys) {
+  return keys.map(key => {
+    const item = map[key];
+    const snap = {
+      key,
+      value: item.value,
+      unit: item.unit,
+      quality: item.quality,
+      source: item.source,
+      note: item.note,
+      evidence: item.evidence,
+    };
+    if (item.inherit) snap.inherit = item.inherit;
+    return snap;
+  });
+}
+
+function snapshotPacks(keys) {
+  return keys.map(key => {
+    const item = packs[key];
+    const snapshot = {
+      key,
+      capexIntensity: item.capexIntensity,
+      unit: item.intensityUnit,
+      scaleExponent: item.scaleExponent,
+      refCapacity: item.refCapacity,
+      fixedOmPercent: item.fixedOmPercent,
+      variableOm: item.variableOm,
+      quality: item.quality,
+      source: item.source,
+      note: item.note,
+      evidence: item.evidence,
+    };
+    if (item.capexIntensityBand) snapshot.capexIntensityBand = item.capexIntensityBand;
+    return snapshot;
+  });
+}
+
+function abundanceEvidence(region) {
+  const regionId = resolveDemandRegion(region);
+  const demandMap = getDemandForRegion(regionId);
+  return {
+    prices: snapshot(prices, ['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium', 'caustic', 'ammonia', 'oxygen']),
+    costs: ['power', 'brine', 'water', 'salt-feed'].map(key => {
+      const item = getCostForRegion(key, regionId);
+      return {
+        key,
+        value: item.value,
+        unit: item.unit,
+        quality: item.quality,
+        source: item.source,
+        note: item.note,
+        evidence: item.evidence,
+      };
+    }),
+    capex: snapshot(capex, ['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']),
+    packs: snapshotPacks(['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']),
+    demand: snapshot(demandMap, ['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium', 'caustic', 'ammonia', 'oxygen']),
+    demandRegion: DEMAND_REGION_LABELS[regionId],
+    demandRegionId: regionId,
+  };
+}
+
+return {
+  prices,
+  costs,
+  freightBands,
+  capex,
+  packs,
+  demand,
+  demandByRegion,
+  DEMAND_REGIONS,
+  powerByRegion,
+  capexMultiplierByRegion,
+  priceByRegion,
+  solarCapexByRegion,
+  tankByFluid,
+  DEFAULT_TANK_FLUID,
+  MINERAL_DEMAND_KEYS,
+  FUEL_CHEM_DEMAND_KEYS,
+  REGION_STRING_TO_ID,
+  DEFAULT_DEMAND_REGION_ID,
+  DEMAND_REGION_LABELS,
+  fuelsCapexNote,
+  EDITOR_DEMAND_DEFAULT,
+  DEMAND_REGION,
+  installedCapexFromPack,
+  resolveDemandRegion,
+  getDemandForRegion,
+  getCostForRegion,
+  getPriceForRegion,
+  getCapexMultiplierForRegion,
+  getFreight,
+  resolveTankFluidClass,
+  getTankFluidSpec,
+  estimateDensityKgM3FromSalinity,
+  densityHintFromAssay,
+  bindTankCapex,
+  bindSale,
+  bindSaleForRegion,
+  bindCost,
+  bindCapex,
+  bindCapexPack,
+  bindPriceFields,
+  abundanceEvidence,
+};
+});

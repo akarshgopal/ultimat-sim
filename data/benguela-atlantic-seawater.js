@@ -1,0 +1,50 @@
+(function exposeSeawaterAssay(root, data) {
+  if (typeof module === 'object' && module.exports) module.exports = data;
+  else root.BenguelaAtlanticSeawater = data;
+})(globalThis, {
+  "meta": {
+    "retrieved": "2026-09-21",
+    "id": "benguela-atlantic-seawater",
+    "site": {
+      "context": "Northern Benguela / SE Atlantic surface salinity ~35.2 g/kg; Millero S=35 majors scaled 35.2/35. Basin typical, not an intake/discharge permit sample.",
+      "latitude": -23,
+      "longitude": 14.5
+    },
+    "quality": "Majors cited from Millero/Pilson S=35 scaled 35.2/35 for northern Benguela / SE Atlantic surface salinity (WOA climatology family ~35.0–35.5; Mohrholz et al. 2008 Walvis 23°S hydrography). Basin typical, not a Walvis Bay intake/discharge permit.",
+    "notes": "Ion mass concentrations are g/kg seawater. Base S=35 g/kg Millero majors scaled by 35.2/35. HCO3 omitted. Density screening only. Not a NaCl proxy. Not a Namport intake sample."
+  },
+  "density_kg_per_L": 1.025,
+  "salinity_g_per_kg": 35.2,
+  "ions_g_per_kg": {
+    "Cl-": 19.463588571428573,
+    "Na+": 10.842605714285716,
+    "SO4-2": 2.727497142857143,
+    "Mg+2": 1.291337142857143,
+    "Ca+2": 0.4142537142857143,
+    "K+": 0.40128,
+    "Br-": 0.06768457142857143
+  },
+  "mol_per_kg": {
+    "Cl-": 0.549043401168648,
+    "Na+": 0.4716274319366026,
+    "SO4-2": 0.028393682519853664,
+    "Mg+2": 0.05313051400358539,
+    "Ca+2": 0.010336187291923605,
+    "K+": 0.010263361834146242,
+    "Br-": 0.0008470736312146004
+  },
+  "evidence": [
+    {
+      "label": "Millero et al. 2008, Deep-Sea Research I: reference composition of seawater at S=35 (DOI)",
+      "url": "https://doi.org/10.1016/j.dsr.2007.10.001"
+    },
+    {
+      "label": "Mohrholz et al. 2008 Cont. Shelf Res.: northern Benguela / Walvis Bay 23°S water-mass hydrography (DOI)",
+      "url": "https://doi.org/10.1016/j.csr.2007.10.001"
+    },
+    {
+      "label": "NOAA NCEI World Ocean Atlas 2023 Volume 2: Salinity (DOI)",
+      "url": "https://doi.org/10.25923/70qt-9574"
+    }
+  ]
+});

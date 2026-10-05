@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "retrieved": "2026-09-23",
+    "id": "patagonian-atlantic-seawater",
+    "site": {
+      "latitude": -42.77,
+      "longitude": -65.04,
+      "context": "SW Atlantic / Patagonian shelf surface salinity ~34 g/kg; Millero S=35 majors scaled 34/35. Not an intake/discharge permit sample."
+    },
+    "quality": "Majors cited from Millero/Pilson S=35 scaled 34/35 for Patagonian shelf / SW Atlantic surface salinity (WOA climatology family ~33.5–34.5). Not an intake/discharge permit.",
+    "notes": "Ion mass concentrations are g/kg seawater. Base S=35 g/kg Millero majors scaled by 34/35. HCO3 omitted. Density screening only. Not a NaCl proxy."
+  },
+  "density_kg_per_L": 1.0272,
+  "salinity_g_per_kg": 34,
+  "ions_g_per_kg": {
+    "Cl-": 18.800057142857145,
+    "Na+": 10.472971428571428,
+    "SO4-2": 2.634514285714286,
+    "Mg+2": 1.2473142857142858,
+    "Ca+2": 0.4002285714285714,
+    "K+": 0.3876,
+    "Br-": 0.06537714285714286
+  },
+  "mol_per_kg": {
+    "Cl-": 0.5303260124924442,
+    "Na+": 0.4555492240296729,
+    "SO4-2": 0.0274257160703132,
+    "Mg+2": 0.051319246480735894,
+    "Ca+2": 0.009986241115538983,
+    "K+": 0.009913474498891255,
+    "Br-": 0.0008181961210595572
+  },
+  "evidence": [
+    {
+      "label": "Millero et al. 2008, Deep-Sea Research I: reference composition of seawater at S=35 (DOI)",
+      "url": "https://doi.org/10.1016/j.dsr.2007.10.001"
+    },
+    {
+      "label": "NOAA NCEI World Ocean Atlas 2023 Volume 2: Salinity (DOI)",
+      "url": "https://doi.org/10.25923/70qt-9574"
+    }
+  ]
+}

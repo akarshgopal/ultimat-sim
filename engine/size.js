@@ -1,0 +1,3800 @@
+(function exposeSize(root, factory) {
+  const api = factory(
+    typeof require === 'function' ? require('./model') : root.FlowsheetModel,
+    typeof require === 'function' ? require('./solve') : root.FlowsheetSolver,
+    typeof require === 'function' ? require('./footprint') : root.FlowsheetFootprint,
+    typeof require === 'function' ? require('./heat') : root.FlowsheetHeat,
+    typeof require === 'function' ? require('./economics') : root.FlowsheetEconomics
+  );
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.FlowsheetSize = api;
+})(globalThis, (model, solver, footprint, heat, economics) => {
+const { SUBSTANCES, cloneStream, scaleStream, streamMassKg } = model;
+const { solveOperation } = solver;
+const { cascadeHeat } = heat;
+
+// Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
+// this module is the separate design calculation that chooses those capacities.
+//
+// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass, cement, copper, ndpr)
+//   -> strategy estimates converter duties and source budgets
+//   -> T-feasible cascade before purchasing heat on every path with
+//      sinks/sources; residual heat is electric resistance COP=1 for PV;
+//      covered heat is not. Parked converters are not credited.
+//   -> solarKWp from site.dailyPVKWhPerKWp (else typical-day hourly sum)
+//   -> solveOperation
+//   -> recycle / yield credit from the solved plant
+//   -> repeat until the operating residual is within tolerance
+//
+// Prices, CAPEX, OPEX, NPV, and IRR never enter the physics sizing loop.
+// sizeForPositiveCashflow scores dollars only after solveOperation via
+// evaluateEconomics / scorePositiveCashflow. Land hectares are recorded from
+// engine/footprint.js as a physical consequence of the sized array and pads.
+// Solar installedCapex/fixedOM on the electricity source are scaled with kWp
+// only so the definition stays consistent after sizing; they are not a
+// convergence signal inside iterateSize.
+
+const H2_PER_KG_CH4 = 4 * SUBSTANCES.H2.molarMassG / SUBSTANCES.CH4.molarMassG;
+const CO2_PER_KG_CH4 = SUBSTANCES.CO2.molarMassG / SUBSTANCES.CH4.molarMassG;
+const WATER_KG_PER_KG_H2 = SUBSTANCES.H2O.molarMassG / SUBSTANCES.H2.molarMassG;
+const WATER_KG_PER_KG_CH4 = H2_PER_KG_CH4 * WATER_KG_PER_KG_H2;
+const RECOVERED_WATER_PER_KG_CH4 = 2 * SUBSTANCES.H2O.molarMassG / SUBSTANCES.CH4.molarMassG;
+const DEFAULT_MAX_ITERATIONS = 20;
+const DEFAULT_TOLERANCE = 1e-8;
+const PRODUCT_ALIASES = {
+  ch4: 'CH4',
+  methane: 'CH4',
+  h2: 'H2',
+  li: 'lithium',
+  licl: 'lithium',
+  lithium: 'lithium',
+  salt: 'salt',
+  meoh: 'methanol',
+  ch3oh: 'methanol',
+  methanol: 'methanol',
+  nh3: 'ammonia',
+  ammonia: 'ammonia',
+  // Canonical crustal PV-module product is `module` (Mejillones BOM chain).
+  module: 'module',
+  'pv-module': 'module',
+  pvmodule: 'module',
+  pv: 'module',
+  steel: 'steel',
+  fe: 'steel',
+  dri: 'steel',
+  iron: 'steel',
+  ethylene: 'ethylene',
+  c2h4: 'ethylene',
+  mto: 'ethylene',
+  olefin: 'ethylene',
+  diesel: 'diesel',
+  ft: 'diesel',
+  syncrude: 'diesel',
+  urea: 'urea',
+  'co(nh2)2': 'urea',
+  titanium: 'titanium',
+  ti: 'titanium',
+  sponge: 'titanium',
+  // Canonical float/solar-glass product is `float-glass` (tea sale key; Mejillones island).
+  'float-glass': 'float-glass',
+  glass: 'float-glass',
+  'solar-glass': 'float-glass',
+  // Canonical grey-cement product is `cement` (tea sale key; Mejillones island).
+  // The kiln product is clinker (gypsum ~4–5% omitted); aliases clinker / cem-i / portland
+  // still size the `cement` sale key, not a separate clinker contract.
+  cement: 'cement',
+  clinker: 'cement',
+  'cem-i': 'cement',
+  portland: 'cement',
+  // Canonical copper cathode product is `copper` (Mejillones SX-EW island).
+  // Tea sale key is `copper-cathode`; aliases copper / cu / cathode / cu-ew
+  // still size that cathode sale, not a separate contract.
+  copper: 'copper',
+  cu: 'copper',
+  cathode: 'copper',
+  'cu-ew': 'copper',
+  'copper-cathode': 'copper',
+  // Canonical separated NdPr-oxide product is `ndpr` (Maglut ree-chromatography;
+  // tea sale key `ndpr-oxide-separated`). Aliases nd-pr / ndpr-oxide /
+  // ndpr-oxide-separated / nd2o3 / maglut still size that NdPr sink, not a
+  // mixed un-separated oxide contract.
+  ndpr: 'ndpr',
+  'nd-pr': 'ndpr',
+  'ndpr-oxide': 'ndpr',
+  'ndpr-oxide-separated': 'ndpr',
+  nd2o3: 'ndpr',
+  maglut: 'ndpr',
+};
+const PV_MODULE_CHAIN_UNITS = Object.freeze([
+  'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module',
+]);
+const PV_MODULE_SEC_DEFAULTS = Object.freeze({
+  'mg-si': 12,
+  polysilicon: 65,
+  'bayer-alumina': 3.5,
+  'aluminium-smelter': 14,
+  'pv-module': 0.05,
+});
+const RESOURCE_RIGHT_KEY = Object.freeze({
+  grid: 'gridImport',
+  freshwater: 'freshwater',
+  seawater: 'seawaterIntake',
+  brine: 'brineConcession',
+  salt: 'saltPurchase',
+  discharge: 'seawaterDischarge',
+});
+
+function rightIsAuthorized(right) {
+  if (!right) return true;
+  if (right.authorize === true) return true;
+  if (right.authorize === false) return false;
+  return right.status === 'authorized' || right.status === 'assumed';
+}
+
+function assertSizeMayAssume(definition, resourceIds) {
+  const rights = definition?.site?.rights;
+  if (!rights) return;
+  for (const resourceId of resourceIds) {
+    const key = RESOURCE_RIGHT_KEY[resourceId];
+    if (!key) continue;
+    const right = rights[key];
+    if (right && !rightIsAuthorized(right)) {
+      throw new Error(`size-to-target cannot assume ${key}`);
+    }
+  }
+}
+
+function withholdUnauthorizedSupply(definition) {
+  const site = definition?.site;
+  if (!site?.resources) return;
+  if (site.resources.grid && !rightIsAuthorized(site.rights?.gridImport)) {
+    site.resources.grid.stream = { kind: 'electricity', kWh: 0 };
+  }
+  if (site.resources.freshwater && !rightIsAuthorized(site.rights?.freshwater)) {
+    site.resources.freshwater.stream = {
+      kind: 'material',
+      mol: { H2O: 0 },
+      phase: 'liquid',
+      T_C: 25,
+      P_bar: 1,
+    };
+  }
+}
+
+function cloneDefinition(definition) {
+  return JSON.parse(JSON.stringify(definition));
+}
+
+function resolveDefinition(caseOrBuilder) {
+  const definition = typeof caseOrBuilder === 'function' ? caseOrBuilder() : caseOrBuilder;
+  if (!definition?.graph?.nodes) throw new Error('sizeToProduct needs a case definition or builder');
+  return cloneDefinition(definition);
+}
+
+function nodeBy(definition, predicate) {
+  return definition.graph.nodes.find(predicate);
+}
+
+function converter(definition, unit) {
+  if (unit === 'dac') return nodeBy(definition, node => String(node.unit).startsWith('dac'));
+  if (unit === 'desal') return nodeBy(definition, node => ['swro', 'med', 'msf'].includes(node.unit));
+  return nodeBy(definition, node => node.unit === unit);
+}
+
+function hasWaterRecycle(definition, sabatier) {
+  if (!sabatier) return false;
+  return definition.graph.edges.some(edge => edge.recycle && edge.from.node === sabatier.id);
+}
+
+function dailyPvKWhPerKWp(definition) {
+  const listed = Number(definition.site?.dailyPVKWhPerKWp);
+  if (listed > 0) return listed;
+  const hours = solver.hourlyProfile?.(definition.site);
+  if (hours?.length) {
+    const sum = hours.reduce((total, value) => total + value, 0);
+    if (sum > 0) return sum;
+  }
+  return 0;
+}
+
+function electricityNode(definition) {
+  return nodeBy(definition, node => node.id === 'electricity')
+    || nodeBy(definition, node => node.id === 'power')
+    || nodeBy(definition, node => node.unit === 'electricity-source' || node.siteResource === 'electricity');
+}
+
+function sourceFeeding(definition, nodeId, port) {
+  const edge = definition.graph.edges.find(item => item.to.node === nodeId && item.to.port === port);
+  if (!edge) return null;
+  const upstream = nodeBy(definition, node => node.id === edge.from.node);
+  if (!upstream) return null;
+  if (String(upstream.unit).includes('source')) return upstream;
+  // MECH11: walk past intake pumps / gas blowers / buffers to the assay source.
+  if (upstream.unit === 'intake-pump' || upstream.unit === 'gas-blower' || upstream.unit === 'material-buffer') {
+    return sourceFeeding(definition, upstream.id, 'in') || upstream;
+  }
+  if (upstream.unit === 'material-mixer' || upstream.unit === 'electrical-bus') {
+    const feed = definition.graph.edges.find(item => item.to.node === upstream.id && !item.recycle);
+    return feed ? nodeBy(definition, node => node.id === feed.from.node) : upstream;
+  }
+  return upstream;
+}
+
+function intakePumpElectricityKWh(definition, brineKg) {
+  const pump = nodeBy(definition, node => node.unit === 'intake-pump' && (node.id === 'brine-pump' || node.id.includes('brine')));
+  if (!pump || !(brineKg > 0)) return 0;
+  const density = Number(pump.params?.densityKgM3 ?? 1025) || 1025;
+  const sec = pump.params?.pumpKWhPerKg != null && pump.params?.pumpKWhPerKg !== ''
+    ? Number(pump.params.pumpKWhPerKg)
+    : Number(pump.params?.pumpKWhPerM3 ?? 0.4);
+  if (!(sec >= 0) || !(density > 0)) return 0;
+  return pump.params?.pumpKWhPerKg != null && pump.params?.pumpKWhPerKg !== ''
+    ? brineKg * sec
+    : (brineKg / density) * sec;
+}
+
+
+function airNm3PerKgFromDefinition(definition) {
+  const air = nodeBy(definition, node => node.id === 'air') || nodeBy(definition, node => node.siteResource === 'air');
+  const stream = air?.params?.stream;
+  if (!stream?.mol) return 22.414 / 29;
+  const mass = streamMassKg(stream);
+  const totalMol = Object.values(stream.mol).reduce((sum, amount) => sum + amount, 0);
+  if (!(mass > 0) || !(totalMol > 0)) return 22.414 / 29;
+  return (totalMol * 22.414 / 1000) / mass;
+}
+
+function liftElectricityKWh(definition, { seawaterKg = 0, airKg = 0, feedDensity = 1025 } = {}) {
+  let kWh = 0;
+  for (const pump of definition.graph.nodes.filter(node => node.unit === 'intake-pump' && node.id !== 'brine-pump')) {
+    const density = Number(pump.params?.densityKgM3 ?? feedDensity) || feedDensity;
+    const useKg = pump.params?.pumpKWhPerKg != null && pump.params?.pumpKWhPerKg !== '';
+    const sec = useKg
+      ? Number(pump.params.pumpKWhPerKg)
+      : Number(pump.params?.pumpKWhPerM3 ?? 0.4);
+    if (!(sec >= 0) || !(seawaterKg > 0) || !(density > 0)) continue;
+    kWh += useKg ? seawaterKg * sec : (seawaterKg / density) * sec;
+  }
+  for (const blower of definition.graph.nodes.filter(node => node.unit === 'gas-blower')) {
+    const useKg = blower.params?.blowerKWhPerKg != null && blower.params?.blowerKWhPerKg !== '';
+    const sec = useKg
+      ? Number(blower.params.blowerKWhPerKg)
+      : Number(blower.params?.blowerKWhPerNm3 ?? 0.001);
+    if (!(sec >= 0) || !(airKg > 0)) continue;
+    kWh += useKg ? airKg * sec : airKg * airNm3PerKgFromDefinition(definition) * sec;
+  }
+  return kWh;
+}
+
+function syncLiftDuties(definition, duties = {}) {
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  const seawaterKg = Number(duties.seawaterKg) || 0;
+  const airKg = Number(duties.airKg) || 0;
+  const swro = Number(duties.swro) || 0;
+  for (const pump of definition.graph.nodes.filter(node => node.unit === 'intake-pump' && node.id !== 'brine-pump')) {
+    const density = Number(pump.params?.densityKgM3 ?? duties.feedDensity ?? 1025) || 1025;
+    let m3 = 0;
+    if (seawaterKg > 0 && density > 0) m3 = seawaterKg / density;
+    else if (swro > 0) {
+      const desal = converter(definition, 'desal');
+      const recovery = Number(desal?.params?.recovery ?? 0.45) || 0.45;
+      m3 = recovery > 0 ? swro / recovery : 0;
+    }
+    pump.capacity = m3;
+    setpoints[pump.id] = m3;
+  }
+  for (const blower of definition.graph.nodes.filter(node => node.unit === 'gas-blower')) {
+    if (!(airKg > 0)) {
+      blower.capacity = 0;
+      setpoints[blower.id] = 0;
+      continue;
+    }
+    const nm3 = airKg * airNm3PerKgFromDefinition(definition);
+    blower.capacity = nm3;
+    setpoints[blower.id] = nm3;
+  }
+}
+
+function chainParams(definition) {
+  const sabatier = converter(definition, 'sabatier');
+  const electrolyzer = converter(definition, 'electrolyzer');
+  const dac = converter(definition, 'dac');
+  const desal = converter(definition, 'desal');
+  if (!sabatier) throw new Error('sizeToProduct needs a Sabatier block to size methane demand');
+  return {
+    sabatier,
+    electrolyzer,
+    dac,
+    desal,
+    h2PerKg: H2_PER_KG_CH4,
+    co2PerKg: CO2_PER_KG_CH4,
+    waterKgPerKg: WATER_KG_PER_KG_CH4,
+    recoveredWaterPerKg: RECOVERED_WATER_PER_KG_CH4,
+    recovery: Number(desal?.params?.recovery ?? 0.45) || 0.45,
+    productDensity: Number(desal?.params?.productDensityKgM3 ?? 1000) || 1000,
+    feedDensity: Number(desal?.params?.feedDensityKgM3 ?? 1025) || 1025,
+    secH2: Number(electrolyzer?.params?.secKWhPerKgH2 ?? 52),
+    secDac: Number(dac?.params?.electricityKWhPerKgCO2 ?? 0.5),
+    heatDac: String(dac?.unit).includes('electroswing') ? 0 : Number(dac?.params?.heatKWhPerKgCO2 ?? 0),
+    secDesal: Number(desal?.params?.secKWhPerM3 ?? desal?.params?.electricityKWhPerM3 ?? 3.5),
+    heatDesal: Number(desal?.params?.heatKWhPerM3 ?? 0),
+    secCh4: Number(sabatier.params?.electricityKWhPerKgCH4 ?? sabatier.params?.secKWhPerKgCH4 ?? 1),
+    heatKWhPerKgCH4: Number(sabatier.params?.heatKWhPerKgCH4 ?? 2.86),
+    wasteHeatT_C: Number(sabatier.params?.wasteHeatT_C ?? 250),
+    minHeatDac: Number(dac?.params?.minHeatT_C ?? 80),
+    minHeatDesal: Number(desal?.params?.minHeatT_C ?? 0),
+    captureFraction: Number(dac?.params?.captureFraction ?? 0.9),
+    consumablesPerKgCO2: Number(dac?.params?.consumablesPerKgCO2 ?? 0),
+    recycle: hasWaterRecycle(definition, sabatier),
+  };
+}
+
+function creditHeat(flag) {
+  return flag !== false;
+}
+
+function cascadePurchasedHeat({ sources = [], sinks = [], enabled = true } = {}) {
+  const demandKWh = (sinks || []).reduce((sum, sink) => sum + (Number(sink.demandKWh) || 0), 0);
+  if (!enabled) {
+    return { heatCoveredKWh: 0, purchasedHeatKWh: demandKWh, heatResidualKWh: demandKWh };
+  }
+  const cascade = cascadeHeat({ sources, sinks });
+  return {
+    heatCoveredKWh: cascade.coveredKWh,
+    purchasedHeatKWh: cascade.residualDemandKWh,
+    heatResidualKWh: cascade.residualDemandKWh,
+  };
+}
+
+function parkedSet(parked = []) {
+  return new Set((parked || []).filter(Boolean).map(item => (typeof item === 'string' ? item : item.id)));
+}
+
+function converterActivity(definition, node) {
+  const cap = Number(node.capacity);
+  const sp = Number(definition.operation?.setpoints?.[node.id]);
+  if (Number.isFinite(cap) && cap >= 0 && Number.isFinite(sp) && sp >= 0) return Math.min(cap, sp);
+  if (Number.isFinite(sp) && sp >= 0) return sp;
+  if (Number.isFinite(cap) && cap >= 0) return cap;
+  return 0;
+}
+
+function converterWasteHeat(node, activity) {
+  if (!(activity > 0)) return null;
+  const params = node.params || {};
+  let kWh = 0;
+  let T_C = Number(params.wasteHeatT_C);
+  if (node.unit === 'sabatier') {
+    kWh = activity * Number(params.heatKWhPerKgCH4 ?? 2.86);
+    if (!Number.isFinite(T_C)) T_C = 250;
+  } else if (node.unit === 'methanol') {
+    kWh = activity * Number(params.wasteHeatKWhPerKg ?? params.heatKWhPerKg ?? 0.43);
+    if (!Number.isFinite(T_C)) T_C = 250;
+  } else if (node.unit === 'med' || node.unit === 'msf') {
+    kWh = activity * Number(params.heatKWhPerM3 ?? 0);
+    if (!Number.isFinite(T_C)) T_C = 40;
+  } else if (String(node.unit).startsWith('dac')) {
+    kWh = activity * Number(params.heatKWhPerKgCO2 ?? 0);
+    if (!Number.isFinite(T_C)) T_C = 40;
+  } else {
+    kWh = activity * Number(params.wasteHeatKWhPerKg ?? params.heatKWhPerKg ?? 0);
+  }
+  if (!(kWh > 0) || !Number.isFinite(T_C)) return null;
+  return { id: node.id, kWh, T_C };
+}
+
+function liveHeatSources(definition, parked = []) {
+  const skip = parkedSet(parked);
+  const sources = [];
+  for (const node of definition.graph?.nodes || []) {
+    if (skip.has(node.id) || skip.has(node.unit)) continue;
+    const source = converterWasteHeat(node, converterActivity(definition, node));
+    if (source) sources.push(source);
+  }
+  return sources;
+}
+
+function processHeatSinks(definition, parked = []) {
+  const skip = parkedSet(parked);
+  const sinks = [];
+  for (const node of definition.graph?.nodes || []) {
+    if (skip.has(node.id) || skip.has(node.unit)) continue;
+    const activity = converterActivity(definition, node);
+    if (!(activity > 0)) continue;
+    const params = node.params || {};
+    if (String(node.unit).startsWith('dac') && node.unit !== 'dac-electroswing') {
+      const demandKWh = activity * Number(params.heatKWhPerKgCO2 ?? 0);
+      if (demandKWh > 0) {
+        sinks.push({ id: node.id, demandKWh, minT_C: Number(params.minHeatT_C ?? 80) });
+      }
+    }
+    if (node.unit === 'med' || node.unit === 'msf') {
+      const demandKWh = activity * Number(params.heatKWhPerM3 ?? 0);
+      if (demandKWh > 0) {
+        sinks.push({ id: node.id, demandKWh, minT_C: Number(params.minHeatT_C ?? 70) });
+      }
+    }
+  }
+  return sinks;
+}
+
+function dutyHeat({ definition, sources = [], sinks = [], parked = [], heatCredit } = {}) {
+  const extraIds = new Set(sources.map(item => item.id));
+  const live = definition ? liveHeatSources(definition, [...parked, ...extraIds]) : [];
+  return cascadePurchasedHeat({
+    sources: [...live, ...sources],
+    sinks,
+    enabled: creditHeat(heatCredit),
+  });
+}
+
+function reactionProductSink(definition, converterNode, port) {
+  if (!converterNode) return null;
+  const edge = definition.graph.edges.find(item => item.from.node === converterNode.id && item.from.port === port);
+  if (!edge) {
+    return nodeBy(definition, node => String(node.unit).includes('sink') && (
+      node.id === port || node.id === `${converterNode.id}-product` || node.id === `${port}-product`
+    ));
+  }
+  const sink = nodeBy(definition, node => node.id === edge.to.node);
+  return sink && String(sink.unit).includes('sink') ? sink : null;
+}
+
+function h2Chain(definition) {
+  const electrolyzer = converter(definition, 'electrolyzer');
+  if (!electrolyzer) throw new Error('sizeToProduct needs an electrolyzer to size hydrogen demand');
+  const desal = converter(definition, 'desal');
+  const water = desal
+    ? nodeBy(definition, node => node.id === 'seawater')
+      || nodeBy(definition, node => node.siteResource === 'seawater')
+      || sourceFeeding(definition, desal.id, 'feed')
+    : sourceFeeding(definition, electrolyzer.id, 'water')
+      || nodeBy(definition, node => node.id === 'water' || node.siteResource === 'water');
+  if (!desal && !water) {
+    throw new Error('sizeToProduct needs desalination or a water source to size hydrogen demand');
+  }
+  return {
+    electrolyzer,
+    desal,
+    dac: converter(definition, 'dac'),
+    sabatier: converter(definition, 'sabatier'),
+    water,
+    waterKgPerKg: WATER_KG_PER_KG_H2,
+    recovery: Number(desal?.params?.recovery ?? 0.45) || 0.45,
+    productDensity: Number(desal?.params?.productDensityKgM3 ?? 1000) || 1000,
+    feedDensity: Number(desal?.params?.feedDensityKgM3 ?? 1025) || 1025,
+    secH2: Number(electrolyzer.params?.secKWhPerKgH2 ?? 52),
+    secDesal: Number(desal?.params?.secKWhPerM3 ?? desal?.params?.electricityKWhPerM3 ?? 3.5),
+    heatDesal: Number(desal?.params?.heatKWhPerM3 ?? 0),
+    minHeatDesal: Number(desal?.params?.minHeatT_C ?? 0),
+  };
+}
+
+function methanolChain(definition) {
+  const methanol = converter(definition, 'methanol');
+  if (!methanol) throw new Error('sizeToProduct needs a methanol block to size methanol demand');
+  const sink = reactionProductSink(definition, methanol, 'methanol');
+  if (!sink) throw new Error('sizeToProduct needs a methanol sink');
+  const h2Feed = sourceFeeding(definition, methanol.id, 'hydrogen');
+  const co2Feed = sourceFeeding(definition, methanol.id, 'co2');
+  if (!h2Feed) throw new Error('sizeToProduct needs a hydrogen feed to size methanol demand');
+  if (!co2Feed) throw new Error('sizeToProduct needs a CO2 feed to size methanol demand');
+  const electrolyzer = converter(definition, 'electrolyzer');
+  const dac = converter(definition, 'dac');
+  const desal = converter(definition, 'desal');
+  return {
+    methanol,
+    sink,
+    electrolyzer,
+    dac,
+    desal,
+    sabatier: converter(definition, 'sabatier'),
+    h2Feed,
+    co2Feed,
+    h2PerKg: 3 * SUBSTANCES.H2.molarMassG / SUBSTANCES.CH3OH.molarMassG,
+    co2PerKg: SUBSTANCES.CO2.molarMassG / SUBSTANCES.CH3OH.molarMassG,
+    waterKgPerKg: 3 * SUBSTANCES.H2O.molarMassG / SUBSTANCES.CH3OH.molarMassG,
+    recovery: Number(desal?.params?.recovery ?? 0.45) || 0.45,
+    productDensity: Number(desal?.params?.productDensityKgM3 ?? 1000) || 1000,
+    feedDensity: Number(desal?.params?.feedDensityKgM3 ?? 1025) || 1025,
+    secH2: electrolyzer ? Number(electrolyzer.params?.secKWhPerKgH2 ?? 52) : 0,
+    secDac: dac ? Number(dac.params?.electricityKWhPerKgCO2 ?? 0.5) : 0,
+    heatDac: dac && !String(dac.unit).includes('electroswing') ? Number(dac.params?.heatKWhPerKgCO2 ?? 0) : 0,
+    secDesal: Number(desal?.params?.secKWhPerM3 ?? desal?.params?.electricityKWhPerM3 ?? 3.5),
+    heatDesal: Number(desal?.params?.heatKWhPerM3 ?? 0),
+    secMeoh: Number(methanol.params?.electricityKWhPerKg ?? 0.5),
+    wasteHeatPerKg: Number(methanol.params?.wasteHeatKWhPerKg ?? methanol.params?.heatKWhPerKg ?? 0.43),
+    wasteHeatT_C: Number(methanol.params?.wasteHeatT_C ?? 250),
+    minHeatDac: Number(dac?.params?.minHeatT_C ?? 80),
+    minHeatDesal: Number(desal?.params?.minHeatT_C ?? 0),
+    captureFraction: Number(dac?.params?.captureFraction ?? 0.9),
+    consumablesPerKgCO2: Number(dac?.params?.consumablesPerKgCO2 ?? 0),
+  };
+}
+
+function ammoniaChain(definition) {
+  const ammonia = converter(definition, 'ammonia');
+  if (!ammonia) throw new Error('sizeToProduct needs an ammonia block to size ammonia demand');
+  const sink = reactionProductSink(definition, ammonia, 'ammonia')
+    || nodeBy(definition, node => node.id === 'ammonia-product' && String(node.unit).includes('sink'));
+  if (!sink) throw new Error('sizeToProduct needs an ammonia sink');
+  const h2Feed = sourceFeeding(definition, ammonia.id, 'hydrogen');
+  const n2Feed = sourceFeeding(definition, ammonia.id, 'nitrogen');
+  if (!h2Feed) throw new Error('sizeToProduct needs a hydrogen feed to size ammonia demand');
+  if (!n2Feed) throw new Error('sizeToProduct needs a nitrogen feed to size ammonia demand');
+  const electrolyzer = converter(definition, 'electrolyzer');
+  const asu = converter(definition, 'asu');
+  const desal = converter(definition, 'desal');
+  const dac = converter(definition, 'dac');
+  return {
+    ammonia,
+    sink,
+    electrolyzer,
+    asu,
+    desal,
+    dac,
+    h2Feed,
+    n2Feed,
+    h2PerKg: 1.5 * SUBSTANCES.H2.molarMassG / SUBSTANCES.NH3.molarMassG,
+    n2PerKg: 0.5 * SUBSTANCES.N2.molarMassG / SUBSTANCES.NH3.molarMassG,
+    waterKgPerKg: 1.5 * SUBSTANCES.H2O.molarMassG / SUBSTANCES.NH3.molarMassG,
+    recovery: Number(desal?.params?.recovery ?? 0.45) || 0.45,
+    productDensity: Number(desal?.params?.productDensityKgM3 ?? 1000) || 1000,
+    feedDensity: Number(desal?.params?.feedDensityKgM3 ?? 1025) || 1025,
+    secH2: electrolyzer ? Number(electrolyzer.params?.secKWhPerKgH2 ?? 52) : 0,
+    secAsu: asu ? Number(asu.params?.electricityKWhPerKgN2 ?? 0.25) : 0,
+    secDesal: Number(desal?.params?.secKWhPerM3 ?? desal?.params?.electricityKWhPerM3 ?? 3.5),
+    heatDesal: Number(desal?.params?.heatKWhPerM3 ?? 0),
+    heatDac: dac && !String(dac.unit).includes('electroswing') ? Number(dac.params?.heatKWhPerKgCO2 ?? 0) : 0,
+    secNH3: Number(ammonia.params?.electricityKWhPerKg ?? 0.6),
+    minHeatDac: Number(dac?.params?.minHeatT_C ?? 80),
+    minHeatDesal: Number(desal?.params?.minHeatT_C ?? 0),
+    captureFraction: Number(dac?.params?.captureFraction ?? 0.9),
+    nitrogenRecovery: Number(asu?.params?.nitrogenRecovery ?? 0.98) || 0.98,
+  };
+}
+
+function airKgForCo2(definition, co2Kg, captureFraction) {
+  const air = nodeBy(definition, node => node.id === 'air')
+    || nodeBy(definition, node => node.siteResource === 'air');
+  if (!air?.params?.stream || !(co2Kg > 0) || !(captureFraction > 0)) return 0;
+  const mass = streamMassKg(air.params.stream);
+  const co2KgInAir = (air.params.stream.mol.CO2 || 0) * SUBSTANCES.CO2.molarMassG / 1000;
+  if (!(mass > 0) || !(co2KgInAir > 0)) return 0;
+  return co2Kg / captureFraction / (co2KgInAir / mass);
+}
+
+function airKgForN2(definition, n2Kg, nitrogenRecovery) {
+  const air = nodeBy(definition, node => node.id === 'air')
+    || nodeBy(definition, node => node.siteResource === 'air');
+  if (!air?.params?.stream || !(n2Kg > 0) || !(nitrogenRecovery > 0)) return 0;
+  const mass = streamMassKg(air.params.stream);
+  const n2KgInAir = (air.params.stream.mol.N2 || 0) * SUBSTANCES.N2.molarMassG / 1000;
+  if (!(mass > 0) || !(n2KgInAir > 0)) return 0;
+  return n2Kg / nitrogenRecovery / (n2KgInAir / mass);
+}
+
+function applyCapScale(duties, raw, caps, keys) {
+  const scales = [1];
+  const pushScale = (cap, duty) => {
+    if (cap != null && Number.isFinite(cap) && duty > 0) scales.push(Math.max(0, cap) / duty);
+  };
+  for (const [capKey, dutyKey] of keys) pushScale(caps[capKey], duties[dutyKey]);
+  const scale = Math.min(...scales);
+  const capped = scale < 1 - 1e-12;
+  let next = capped ? raw(duties._scaleBasis * scale) : duties;
+  if (caps.solarKWp != null) next.solarKWp = Math.min(next.solarKWp, Math.max(0, caps.solarKWp));
+  if (caps.swro != null && next.swro != null) next.swro = Math.min(next.swro, Math.max(0, caps.swro));
+  if (caps.electrolyzer != null && next.h2 != null) next.h2 = Math.min(next.h2, Math.max(0, caps.electrolyzer));
+  if (caps.dac != null && next.co2 != null) next.co2 = Math.min(next.co2, Math.max(0, caps.dac));
+  if (caps.sabatier != null && next.ch4 != null) next.ch4 = Math.min(next.ch4, Math.max(0, caps.sabatier));
+  if (caps.methanol != null && next.methanol != null) next.methanol = Math.min(next.methanol, Math.max(0, caps.methanol));
+  if (caps.ammonia != null && next.ammonia != null) next.ammonia = Math.min(next.ammonia, Math.max(0, caps.ammonia));
+  if (caps.asu != null && next.n2 != null) next.n2 = Math.min(next.n2, Math.max(0, caps.asu));
+  if (caps.minerals != null && next.brineKg != null) next.brineKg = Math.min(next.brineKg, Math.max(0, caps.minerals));
+  next.capped = capped;
+  return next;
+}
+
+function estimateDuties(definition, methaneKg, recoveredPerKg, caps, heatCredit = true) {
+  const chain = chainParams(definition);
+  const yieldPerKWp = dailyPvKWhPerKWp(definition);
+  const recycleCredit = chain.recycle ? Math.max(0, recoveredPerKg) : 0;
+  const enabled = creditHeat(heatCredit);
+
+  const raw = ch4 => {
+    const methane = Math.max(0, ch4);
+    const h2 = methane * chain.h2PerKg;
+    const co2 = methane * chain.co2PerKg;
+    const makeupWaterKg = Math.max(0, methane * chain.waterKgPerKg - methane * recycleCredit);
+    const swro = makeupWaterKg / chain.productDensity;
+    const seawaterKg = (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity;
+    const airKg = airKgForCo2(definition, co2, chain.captureFraction);
+    const processElectricityKWh = h2 * chain.secH2 + co2 * chain.secDac + swro * chain.secDesal + methane * chain.secCh4
+      + liftElectricityKWh(definition, { seawaterKg, airKg, feedDensity: chain.feedDensity });
+    const dacHeatKWh = co2 * chain.heatDac;
+    const desalHeatKWh = swro * chain.heatDesal;
+    const sources = [];
+    const sinks = [];
+    if (methane > 0 && chain.heatKWhPerKgCH4 > 0) {
+      sources.push({
+        id: chain.sabatier.id,
+        kWh: methane * chain.heatKWhPerKgCH4,
+        T_C: chain.wasteHeatT_C,
+      });
+    }
+    if (dacHeatKWh > 0 && chain.dac) {
+      sinks.push({
+        id: chain.dac.id,
+        demandKWh: dacHeatKWh,
+        minT_C: chain.minHeatDac,
+      });
+    }
+    if (desalHeatKWh > 0 && chain.desal) {
+      sinks.push({
+        id: chain.desal.id,
+        demandKWh: desalHeatKWh,
+        minT_C: chain.minHeatDesal,
+      });
+    }
+    const cascade = dutyHeat({
+      definition,
+      sources,
+      sinks,
+      parked: [chain.sabatier],
+      heatCredit: enabled,
+    });
+    // Screening: unmet process heat after cascade is electric resistance COP=1.
+    // Covered cascade duty is not added to electricity or PV.
+    const electricityKWh = processElectricityKWh + cascade.heatResidualKWh;
+    const solarKWp = yieldPerKWp > 0 ? electricityKWh / yieldPerKWp : 0;
+    return {
+      ch4: methane,
+      h2,
+      co2,
+      makeupWaterKg,
+      swro,
+      seawaterKg,
+      processElectricityKWh,
+      electricityKWh,
+      heatKWh: cascade.purchasedHeatKWh,
+      heatCoveredKWh: cascade.heatCoveredKWh,
+      heatResidualKWh: cascade.heatResidualKWh,
+      solarKWp,
+      airKg,
+      consumablesKg: co2 * chain.consumablesPerKgCO2,
+      yieldPerKWp,
+      _scaleBasis: methane,
+    };
+  };
+
+  let duties = raw(methaneKg);
+  return applyCapScale(duties, raw, caps, [
+    ['sabatier', 'ch4'],
+    ['electrolyzer', 'h2'],
+    ['dac', 'co2'],
+    ['swro', 'swro'],
+    ['solarKWp', 'solarKWp'],
+  ]);
+}
+
+function estimateH2Duties(definition, h2Kg, caps, heatCredit = true) {
+  const chain = h2Chain(definition);
+  const yieldPerKWp = dailyPvKWhPerKWp(definition);
+  const raw = targetH2 => {
+    const h2 = Math.max(0, targetH2);
+    const makeupWaterKg = h2 * chain.waterKgPerKg;
+    const swro = chain.desal ? makeupWaterKg / chain.productDensity : 0;
+    const seawaterKg = chain.desal
+      ? (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity
+      : makeupWaterKg;
+    const processElectricityKWh = h2 * chain.secH2 + swro * chain.secDesal
+      + liftElectricityKWh(definition, { seawaterKg, airKg: 0, feedDensity: chain.feedDensity });
+    const desalHeatKWh = swro * chain.heatDesal;
+    const sinks = desalHeatKWh > 0 && chain.desal
+      ? [{ id: chain.desal.id, demandKWh: desalHeatKWh, minT_C: chain.minHeatDesal }]
+      : [];
+    // H2 parks Sabatier/DAC: no methanation waste credit. Other live hot
+    // sources (not parked) may cover MED/MSF heat. Residual is COP=1.
+    const cascade = dutyHeat({
+      definition,
+      sources: [],
+      sinks,
+      parked: [chain.sabatier, chain.dac],
+      heatCredit,
+    });
+    const electricityKWh = processElectricityKWh + cascade.heatResidualKWh;
+    const solarKWp = yieldPerKWp > 0 ? electricityKWh / yieldPerKWp : 0;
+    return {
+      ch4: 0,
+      h2,
+      co2: 0,
+      makeupWaterKg,
+      swro,
+      seawaterKg,
+      processElectricityKWh,
+      electricityKWh,
+      heatKWh: cascade.purchasedHeatKWh,
+      heatCoveredKWh: cascade.heatCoveredKWh,
+      heatResidualKWh: cascade.heatResidualKWh,
+      solarKWp,
+      airKg: 0,
+      consumablesKg: 0,
+      yieldPerKWp,
+      _scaleBasis: h2,
+    };
+  };
+  return applyCapScale(raw(h2Kg), raw, caps, [
+    ['electrolyzer', 'h2'],
+    ['swro', 'swro'],
+    ['solarKWp', 'solarKWp'],
+  ]);
+}
+
+function estimateMethanolDuties(definition, methanolKg, caps, heatCredit = true) {
+  const chain = methanolChain(definition);
+  const yieldPerKWp = dailyPvKWhPerKWp(definition);
+  const usesElectrolyzer = chain.h2Feed?.unit === 'electrolyzer' || Boolean(chain.electrolyzer && chain.h2Feed?.id === chain.electrolyzer.id);
+  const usesDac = Boolean(chain.dac) && (chain.co2Feed?.id === chain.dac.id || String(chain.co2Feed?.unit || '').startsWith('dac'));
+  const raw = target => {
+    const methanol = Math.max(0, target);
+    const h2 = methanol * chain.h2PerKg;
+    const co2 = methanol * chain.co2PerKg;
+    const makeupWaterKg = usesElectrolyzer ? h2 * WATER_KG_PER_KG_H2 : 0;
+    const swro = chain.desal && makeupWaterKg > 0 ? makeupWaterKg / chain.productDensity : 0;
+    const seawaterKg = chain.desal && swro > 0
+      ? (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity
+      : makeupWaterKg;
+    const airKg = usesDac ? airKgForCo2(definition, co2, chain.captureFraction) : 0;
+    const processElectricityKWh = methanol * chain.secMeoh
+      + (usesElectrolyzer ? h2 * chain.secH2 : 0)
+      + (usesDac ? co2 * chain.secDac : 0)
+      + swro * chain.secDesal
+      + liftElectricityKWh(definition, { seawaterKg, airKg, feedDensity: chain.feedDensity });
+    const sources = [];
+    const sinks = [];
+    if (methanol > 0 && chain.wasteHeatPerKg > 0) {
+      sources.push({ id: chain.methanol.id, kWh: methanol * chain.wasteHeatPerKg, T_C: chain.wasteHeatT_C });
+    }
+    const dacHeatKWh = usesDac ? co2 * chain.heatDac : 0;
+    const desalHeatKWh = swro * chain.heatDesal;
+    if (dacHeatKWh > 0 && chain.dac) {
+      sinks.push({ id: chain.dac.id, demandKWh: dacHeatKWh, minT_C: chain.minHeatDac });
+    }
+    if (desalHeatKWh > 0 && chain.desal) {
+      sinks.push({ id: chain.desal.id, demandKWh: desalHeatKWh, minT_C: chain.minHeatDesal });
+    }
+    const cascade = dutyHeat({
+      definition,
+      sources,
+      sinks,
+      parked: [chain.methanol],
+      heatCredit,
+    });
+    const electricityKWh = processElectricityKWh + cascade.heatResidualKWh;
+    const solarKWp = yieldPerKWp > 0 ? electricityKWh / yieldPerKWp : 0;
+    return {
+      methanol,
+      ch4: 0,
+      h2,
+      co2,
+      makeupWaterKg,
+      swro,
+      seawaterKg,
+      processElectricityKWh,
+      electricityKWh,
+      heatKWh: cascade.purchasedHeatKWh,
+      heatCoveredKWh: cascade.heatCoveredKWh,
+      heatResidualKWh: cascade.heatResidualKWh,
+      solarKWp,
+      airKg,
+      consumablesKg: usesDac ? co2 * chain.consumablesPerKgCO2 : 0,
+      yieldPerKWp,
+      _scaleBasis: methanol,
+    };
+  };
+  return applyCapScale(raw(methanolKg), raw, caps, [
+    ['methanol', 'methanol'],
+    ['electrolyzer', 'h2'],
+    ['dac', 'co2'],
+    ['swro', 'swro'],
+    ['solarKWp', 'solarKWp'],
+  ]);
+}
+
+function estimateAmmoniaDuties(definition, ammoniaKg, caps, heatCredit = true) {
+  const chain = ammoniaChain(definition);
+  const yieldPerKWp = dailyPvKWhPerKWp(definition);
+  const usesElectrolyzer = chain.h2Feed?.unit === 'electrolyzer' || Boolean(chain.electrolyzer && chain.h2Feed?.id === chain.electrolyzer.id);
+  const usesAsu = chain.n2Feed?.unit === 'asu' || Boolean(chain.asu && chain.n2Feed?.id === chain.asu.id);
+  const raw = target => {
+    const ammonia = Math.max(0, target);
+    const h2 = ammonia * chain.h2PerKg;
+    const n2 = ammonia * chain.n2PerKg;
+    const makeupWaterKg = usesElectrolyzer ? h2 * WATER_KG_PER_KG_H2 : 0;
+    const swro = chain.desal && makeupWaterKg > 0 ? makeupWaterKg / chain.productDensity : 0;
+    const seawaterKg = chain.desal && swro > 0
+      ? (chain.recovery > 0 ? swro / chain.recovery : 0) * chain.feedDensity
+      : makeupWaterKg;
+    const airKg = usesAsu ? airKgForN2(definition, n2, chain.nitrogenRecovery) : 0;
+    const processElectricityKWh = ammonia * chain.secNH3
+      + (usesElectrolyzer ? h2 * chain.secH2 : 0)
+      + (usesAsu ? n2 * chain.secAsu : 0)
+      + swro * chain.secDesal
+      + liftElectricityKWh(definition, { seawaterKg, airKg, feedDensity: chain.feedDensity });
+    const sinks = [];
+    const desalHeatKWh = swro * chain.heatDesal;
+    if (desalHeatKWh > 0 && chain.desal) {
+      sinks.push({ id: chain.desal.id, demandKWh: desalHeatKWh, minT_C: chain.minHeatDesal });
+    }
+    const cascade = dutyHeat({
+      definition,
+      sources: [],
+      sinks: [...sinks, ...processHeatSinks(definition, [chain.desal])],
+      parked: [],
+      heatCredit,
+    });
+    const electricityKWh = processElectricityKWh + cascade.heatResidualKWh;
+    const solarKWp = yieldPerKWp > 0 ? electricityKWh / yieldPerKWp : 0;
+    return {
+      ammonia,
+      n2,
+      ch4: 0,
+      methanol: 0,
+      h2,
+      co2: 0,
+      makeupWaterKg,
+      swro,
+      seawaterKg,
+      processElectricityKWh,
+      electricityKWh,
+      heatKWh: cascade.purchasedHeatKWh,
+      heatCoveredKWh: cascade.heatCoveredKWh,
+      heatResidualKWh: cascade.heatResidualKWh,
+      solarKWp,
+      airKg,
+      consumablesKg: 0,
+      yieldPerKWp,
+      _scaleBasis: ammonia,
+    };
+  };
+  return applyCapScale(raw(ammoniaKg), raw, caps, [
+    ['ammonia', 'ammonia'],
+    ['electrolyzer', 'h2'],
+    ['asu', 'n2'],
+    ['swro', 'swro'],
+    ['solarKWp', 'solarKWp'],
+  ]);
+}
+
+function setMaterial(node, targetKg, definition) {
+  if (!node?.params?.stream || node.params.stream.kind !== 'material') return;
+  if (definition && targetKg > 0) assertSizeMayAssume(definition, [node.siteResource]);
+  const current = streamMassKg(node.params.stream);
+  if (!(current > 0)) return;
+  node.params.stream = scaleStream(node.params.stream, Math.max(0, targetKg) / current);
+}
+
+function setElectricity(node, kWh, definition) {
+  if (!node?.params?.stream) return;
+  if (definition && kWh > 0) assertSizeMayAssume(definition, [node.siteResource]);
+  node.params.stream = { kind: 'electricity', kWh: Math.max(0, kWh) };
+}
+
+function setHeat(node, kWh) {
+  if (!node?.params?.stream) return;
+  node.params.stream = { ...node.params.stream, kind: 'heat', kWh: Math.max(0, kWh) };
+}
+
+function setConsumable(node, amount) {
+  if (!node?.params?.stream) return;
+  node.params.stream = { ...node.params.stream, amount: Math.max(0, amount) };
+}
+
+function scaleFeedNode(definition, node, kg) {
+  if (!node) return;
+  if (node.params?.stream?.kind === 'material') {
+    setMaterial(node, kg, definition);
+    syncSiteResource(definition, node);
+    return;
+  }
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  if (node.unit === 'chlor-alkali') {
+    const naohKg = kg * 2 * SUBSTANCES.NaOH.molarMassG / SUBSTANCES.H2.molarMassG;
+    setpoints[node.id] = naohKg;
+    node.capacity = naohKg;
+    const salt = sourceFeeding(definition, node.id, 'salt');
+    const water = sourceFeeding(definition, node.id, 'water');
+    if (salt?.params?.stream) {
+      setMaterial(salt, naohKg, definition);
+      syncSiteResource(definition, salt);
+    }
+    if (water?.params?.stream) {
+      const waterKg = naohKg * SUBSTANCES.H2O.molarMassG / SUBSTANCES.NaOH.molarMassG;
+      setMaterial(water, waterKg, definition);
+      syncSiteResource(definition, water);
+    }
+    return;
+  }
+  setpoints[node.id] = kg;
+  node.capacity = Math.max(0, kg);
+}
+
+function syncSiteResource(definition, node) {
+  if (!node?.siteResource || !definition.site?.resources?.[node.siteResource]) return;
+  definition.site.resources[node.siteResource].stream = cloneStream(node.params.stream);
+}
+
+function scaleSolarEconomics(node, previousKWp, nextKWp) {
+  if (!node?.economics || !(previousKWp > 0) || !Number.isFinite(nextKWp)) return;
+  const ratio = nextKWp / previousKWp;
+  if (node.economics.installedCapex != null) node.economics.installedCapex *= ratio;
+  if (node.economics.fixedOM != null) node.economics.fixedOM *= ratio;
+}
+
+function parkConverter(definition, node) {
+  if (!node) return;
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  setpoints[node.id] = 0;
+  node.capacity = 0;
+}
+
+function applyPowerAndSite(definition, duties) {
+  const electricity = electricityNode(definition);
+  const previousKWp = Number(definition.site?.solarKWp) || 0;
+  const electricityKWh = duties.yieldPerKWp > 0 ? duties.solarKWp * duties.yieldPerKWp : duties.electricityKWh;
+  setElectricity(electricity, electricityKWh, definition);
+  scaleSolarEconomics(electricity, previousKWp, duties.solarKWp || 0);
+
+  if (definition.site) {
+    definition.site.solarKWp = duties.solarKWp || 0;
+    if (duties.yieldPerKWp > 0) definition.site.dailyPVKWhPerKWp = duties.yieldPerKWp;
+    if (definition.site.resources?.electricity) {
+      definition.site.resources.electricity.stream = { kind: 'electricity', kWh: electricityKWh };
+      definition.site.resources.electricity.evidence = `PVGIS typical-day × ${duties.solarKWp || 0} kWp`;
+    }
+    if (definition.site.meteo && duties.yieldPerKWp > 0) {
+      definition.site.meteo.dailyPVKWhPerKWp = duties.yieldPerKWp;
+    }
+    withholdUnauthorizedSupply(definition);
+  }
+  syncSiteResource(definition, electricity);
+}
+
+function applyDuties(definition, duties) {
+  const chain = chainParams(definition);
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  setpoints[chain.sabatier.id] = duties.ch4;
+  chain.sabatier.capacity = duties.ch4;
+  if (chain.electrolyzer) {
+    setpoints[chain.electrolyzer.id] = duties.h2;
+    chain.electrolyzer.capacity = duties.h2;
+  }
+  if (chain.dac) {
+    setpoints[chain.dac.id] = duties.co2;
+    chain.dac.capacity = duties.co2;
+  }
+  if (chain.desal) {
+    setpoints[chain.desal.id] = duties.swro;
+    chain.desal.capacity = duties.swro;
+  }
+
+  const air = nodeBy(definition, node => node.id === 'air') || nodeBy(definition, node => node.siteResource === 'air');
+  const seawater = nodeBy(definition, node => node.id === 'seawater')
+    || nodeBy(definition, node => node.siteResource === 'seawater');
+  const heat = nodeBy(definition, node => node.id === 'heat') || nodeBy(definition, node => node.siteResource === 'heat');
+  const consumables = nodeBy(definition, node => node.id === 'consumables')
+    || nodeBy(definition, node => node.unit === 'consumable-source');
+
+  if (duties.airKg > 0) setMaterial(air, duties.airKg, definition);
+  if (duties.seawaterKg > 0) setMaterial(seawater, duties.seawaterKg, definition);
+  // Purchased residual is duties.heatKWh. Cascade is accounting-only (no HEN,
+  // no edge rewrite), so the heat-source still delivers residual + covered
+  // process demand. Always write, including 0, to avoid a stale heat budget.
+  setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
+  if (duties.consumablesKg > 0) setConsumable(consumables, duties.consumablesKg);
+
+  applyPowerAndSite(definition, duties);
+  for (const node of [air, seawater, heat, consumables]) syncSiteResource(definition, node);
+
+  syncLiftDuties(definition, duties);
+  definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+}
+
+function ensureHydrogenOfftake(definition, electrolyzer, sabatier) {
+  if (!electrolyzer) return;
+  const edges = definition.graph.edges || (definition.graph.edges = []);
+  const h2Edge = edges.find(edge => edge.from?.node === electrolyzer.id && edge.from?.port === 'hydrogen');
+  const sinkId = 'hydrogen';
+  let sink = nodeBy(definition, node => node.id === sinkId)
+    || nodeBy(definition, node => node.unit === 'material-sink' && /h2|hydrogen/i.test(node.id));
+  if (!sink) {
+    sink = { id: sinkId, unit: 'material-sink' };
+    definition.graph.nodes.push(sink);
+  }
+  const previousSink = h2Edge?.to?.node;
+  if (h2Edge) {
+    // Parked Sabatier must not swallow product H2 — sell/vent through a sink.
+    if (h2Edge.to?.node !== sink.id) h2Edge.to = { node: sink.id, port: 'in' };
+  } else {
+    edges.push({ from: { node: electrolyzer.id, port: 'hydrogen' }, to: { node: sink.id, port: 'in' } });
+  }
+  if (sabatier) {
+    // Sabatier.hydrogen is required; feed a zero stream so validation stays closed while parked.
+    const parkId = 'hydrogen-park';
+    let park = nodeBy(definition, node => node.id === parkId);
+    const parkStream = {
+      kind: 'material',
+      mol: { H2: 0 },
+      phase: 'gas',
+      T_C: 25,
+      P_bar: 1,
+    };
+    if (!park) {
+      park = {
+        id: parkId,
+        unit: 'material-source',
+        siteResource: parkId,
+        params: { stream: parkStream },
+      };
+      definition.graph.nodes.push(park);
+    } else {
+      park.siteResource = parkId;
+      park.params = park.params || {};
+      park.params.stream = parkStream;
+    }
+    if (definition.site) {
+      definition.site.resources = definition.site.resources || {};
+      definition.site.resources[parkId] = {
+        stream: parkStream,
+        quality: 'user-assumption',
+        evidence: 'Zero H2 feed to keep parked Sabatier ports valid while product H2 goes to offtake',
+      };
+    }
+    const sabH2 = edges.find(edge => edge.to?.node === sabatier.id && edge.to?.port === 'hydrogen');
+    if (sabH2) sabH2.from = { node: park.id, port: 'out' };
+    else if (previousSink === sabatier.id || !edges.some(edge => edge.to?.node === sabatier.id && edge.to?.port === 'hydrogen')) {
+      edges.push({ from: { node: park.id, port: 'out' }, to: { node: sabatier.id, port: 'hydrogen' } });
+    }
+  }
+}
+
+function applyH2Duties(definition, duties) {
+  const chain = h2Chain(definition);
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  setpoints[chain.electrolyzer.id] = duties.h2;
+  chain.electrolyzer.capacity = duties.h2;
+  if (chain.desal) {
+    setpoints[chain.desal.id] = duties.swro;
+    chain.desal.capacity = duties.swro;
+  }
+  parkConverter(definition, chain.sabatier);
+  parkConverter(definition, chain.dac);
+  ensureHydrogenOfftake(definition, chain.electrolyzer, chain.sabatier);
+
+  const water = chain.water
+    || nodeBy(definition, node => node.id === 'seawater')
+    || nodeBy(definition, node => node.siteResource === 'seawater');
+  const heat = nodeBy(definition, node => node.id === 'heat') || nodeBy(definition, node => node.siteResource === 'heat');
+  if (duties.seawaterKg > 0) setMaterial(water, duties.seawaterKg, definition);
+  setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
+  applyPowerAndSite(definition, duties);
+  syncSiteResource(definition, water);
+  syncSiteResource(definition, heat);
+  syncLiftDuties(definition, duties);
+  definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+}
+
+function applyMethanolDuties(definition, duties) {
+  const chain = methanolChain(definition);
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  setpoints[chain.methanol.id] = duties.methanol;
+  chain.methanol.capacity = duties.methanol;
+  if (chain.electrolyzer && (chain.h2Feed?.id === chain.electrolyzer.id || chain.h2Feed?.unit === 'electrolyzer')) {
+    setpoints[chain.electrolyzer.id] = duties.h2;
+    chain.electrolyzer.capacity = duties.h2;
+  } else {
+    scaleFeedNode(definition, chain.h2Feed, duties.h2);
+  }
+  if (chain.dac && (chain.co2Feed?.id === chain.dac.id || String(chain.co2Feed?.unit || '').startsWith('dac'))) {
+    setpoints[chain.dac.id] = duties.co2;
+    chain.dac.capacity = duties.co2;
+  } else {
+    scaleFeedNode(definition, chain.co2Feed, duties.co2);
+  }
+  if (chain.desal) {
+    setpoints[chain.desal.id] = duties.swro;
+    chain.desal.capacity = duties.swro;
+  }
+  const seawater = nodeBy(definition, node => node.id === 'seawater')
+    || nodeBy(definition, node => node.siteResource === 'seawater');
+  const air = nodeBy(definition, node => node.id === 'air') || nodeBy(definition, node => node.siteResource === 'air');
+  const heat = nodeBy(definition, node => node.id === 'heat') || nodeBy(definition, node => node.siteResource === 'heat');
+  const consumables = nodeBy(definition, node => node.id === 'consumables')
+    || nodeBy(definition, node => node.unit === 'consumable-source');
+  if (duties.seawaterKg > 0) setMaterial(seawater || chain.desal && sourceFeeding(definition, chain.desal.id, 'feed'), duties.seawaterKg, definition);
+  if (duties.airKg > 0) setMaterial(air, duties.airKg, definition);
+  setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
+  if (duties.consumablesKg > 0) setConsumable(consumables, duties.consumablesKg);
+  applyPowerAndSite(definition, duties);
+  for (const node of [seawater, air, heat, consumables]) syncSiteResource(definition, node);
+  syncLiftDuties(definition, duties);
+  definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+}
+
+function applyAmmoniaDuties(definition, duties) {
+  const chain = ammoniaChain(definition);
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  setpoints[chain.ammonia.id] = duties.ammonia;
+  chain.ammonia.capacity = duties.ammonia;
+  if (chain.electrolyzer && (chain.h2Feed?.id === chain.electrolyzer.id || chain.h2Feed?.unit === 'electrolyzer')) {
+    setpoints[chain.electrolyzer.id] = duties.h2;
+    chain.electrolyzer.capacity = duties.h2;
+  } else {
+    scaleFeedNode(definition, chain.h2Feed, duties.h2);
+  }
+  if (chain.asu && (chain.n2Feed?.id === chain.asu.id || chain.n2Feed?.unit === 'asu')) {
+    setpoints[chain.asu.id] = duties.n2;
+    chain.asu.capacity = duties.n2;
+  } else {
+    scaleFeedNode(definition, chain.n2Feed, duties.n2);
+  }
+  if (chain.desal) {
+    setpoints[chain.desal.id] = duties.swro;
+    chain.desal.capacity = duties.swro;
+  }
+  const seawater = nodeBy(definition, node => node.id === 'seawater')
+    || nodeBy(definition, node => node.siteResource === 'seawater');
+  const air = nodeBy(definition, node => node.id === 'air') || nodeBy(definition, node => node.siteResource === 'air');
+  const heat = nodeBy(definition, node => node.id === 'heat') || nodeBy(definition, node => node.siteResource === 'heat');
+  if (duties.seawaterKg > 0) setMaterial(seawater, duties.seawaterKg, definition);
+  if (duties.airKg > 0) setMaterial(air, duties.airKg, definition);
+  setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
+  applyPowerAndSite(definition, duties);
+  for (const node of [seawater, air, heat]) syncSiteResource(definition, node);
+  syncLiftDuties(definition, duties);
+  definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+}
+
+function activity(solved, node) {
+  return node ? solved.nodes[node.id]?.activity || 0 : 0;
+}
+
+function electricityConsumed(solved) {
+  let kWh = 0;
+  for (const result of Object.values(solved.nodes || {})) {
+    for (const stream of Object.values(result.consumed || {})) {
+      if (stream?.kind === 'electricity') kWh += stream.kWh;
+    }
+  }
+  return kWh;
+}
+
+function processElectricityKWh(duties) {
+  if (duties.processElectricityKWh != null) return duties.processElectricityKWh;
+  return Math.max(0, (duties.electricityKWh || 0) - (duties.heatResidualKWh || 0));
+}
+
+function heatMeasureExtras(solved, duties) {
+  const covered = solved?.heatIntegration?.coveredKWh;
+  const residual = solved?.heatIntegration?.residualDemandKWh;
+  return {
+    heatCoveredKWh: Number.isFinite(covered) ? covered : Number(duties?.heatCoveredKWh) || 0,
+    heatResidualKWh: Number.isFinite(residual) ? residual : Number(duties?.heatResidualKWh) || 0,
+  };
+}
+
+function recoveredWaterKg(solved, sabatier) {
+  const water = solved.nodes[sabatier.id]?.outlets?.water;
+  return water ? streamMassKg(water) : 0;
+}
+
+function sinkMassKg(solved, sink) {
+  const received = sink ? solved.nodes[sink.id]?.received : null;
+  return received?.kind === 'material' ? streamMassKg(received) : 0;
+}
+
+function relativeGap(actual, expected) {
+  return Math.abs((actual || 0) - (expected || 0)) / Math.max(1, Math.abs(expected || 0));
+}
+
+function landHaFor(definition, solved) {
+  if (!footprint?.estimateFootprint || !definition.site) return 0;
+  return footprint.estimateFootprint({
+    site: definition.site,
+    graph: definition.graph,
+    solved,
+  }).totalHa;
+}
+
+function historyDuties(duties, solved, definition, extras = {}) {
+  return {
+    ch4: duties.ch4 || 0,
+    h2: duties.h2 || 0,
+    co2: duties.co2 || 0,
+    waterKg: duties.makeupWaterKg || 0,
+    swro: duties.swro || 0,
+    seawaterKg: duties.seawaterKg || 0,
+    brineKg: duties.brineKg || 0,
+    electricityKWh: duties.electricityKWh || 0,
+    heatKWh: duties.heatKWh || 0,
+    heatCoveredKWh: extras.heatCoveredKWh ?? duties.heatCoveredKWh ?? 0,
+    heatResidualKWh: extras.heatResidualKWh ?? duties.heatResidualKWh ?? 0,
+    solarKWp: duties.solarKWp || 0,
+    airKg: duties.airKg || 0,
+    consumablesKg: duties.consumablesKg || 0,
+    landHa: landHaFor(definition, solved),
+    ...extras,
+  };
+}
+
+function productSink(definition, product) {
+  const byId = nodeBy(definition, node => node.id === product && String(node.unit).includes('sink'));
+  if (byId) return byId;
+  const minerals = converter(definition, 'brine-minerals');
+  if (!minerals) return null;
+  const edge = definition.graph.edges.find(item => item.from.node === minerals.id && item.from.port === product);
+  return edge ? nodeBy(definition, node => node.id === edge.to.node) : null;
+}
+
+function brineSource(definition, minerals) {
+  return nodeBy(definition, node => node.id === 'brine')
+    || nodeBy(definition, node => node.siteResource === 'brine')
+    || sourceFeeding(definition, minerals.id, 'brine');
+}
+
+function recoverMineralKg(residual, productId, cation, cationCount, anion, anionCount, recovery) {
+  const fraction = Number(recovery);
+  const safe = Number.isFinite(fraction) && fraction > 0 ? Math.min(1, Math.max(0, fraction)) : 0;
+  const mol = Math.min((residual[cation] || 0) / cationCount, (residual[anion] || 0) / anionCount) * safe;
+  residual[cation] = (residual[cation] || 0) - mol * cationCount;
+  residual[anion] = (residual[anion] || 0) - mol * anionCount;
+  return mol * SUBSTANCES[productId].molarMassG / 1000;
+}
+
+function mineralYieldsKg(brineStream, params) {
+  const residual = { ...brineStream.mol };
+  return {
+    lithium: recoverMineralKg(residual, 'LiCl', 'Li+', 1, 'Cl-', 1, params.lithiumRecovery ?? 0.9),
+    bromide: recoverMineralKg(residual, 'NaBr', 'Na+', 1, 'Br-', 1, params.bromideRecovery ?? 0.9),
+    magnesium: recoverMineralKg(residual, 'MgCl2', 'Mg+2', 1, 'Cl-', 2, params.magnesiumRecovery ?? 0.5),
+    potash: recoverMineralKg(residual, 'KCl', 'K+', 1, 'Cl-', 1, params.potashRecovery ?? 0.7),
+    gypsum: recoverMineralKg(residual, 'CaSO4', 'Ca+2', 1, 'SO4-2', 1, params.gypsumRecovery ?? 0.7),
+    salt: recoverMineralKg(residual, 'NaCl', 'Na+', 1, 'Cl-', 1, params.saltRecovery ?? 0.5),
+  };
+}
+
+function mineralYieldPerKg(brineStream, params, product) {
+  if (!brineStream || brineStream.kind !== 'material') return 0;
+  const mass = streamMassKg(brineStream);
+  if (!(mass > 0)) return 0;
+  return (mineralYieldsKg(brineStream, params)[product] || 0) / mass;
+}
+
+function applyMineralDuties(definition, duties) {
+  const minerals = converter(definition, 'brine-minerals');
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  setpoints[minerals.id] = duties.brineKg;
+  minerals.capacity = duties.brineKg;
+  const brine = brineSource(definition, minerals);
+  if (duties.brineKg >= 0) setMaterial(brine, duties.brineKg, definition);
+  const brinePump = nodeBy(definition, item => item.id === 'brine-pump' || (item.unit === 'intake-pump' && String(item.id).includes('brine')));
+  if (brinePump && duties.brineKg >= 0) {
+    const density = Number(brinePump.params?.densityKgM3 ?? 1200) || 1200;
+    const brineM3 = duties.brineKg / density;
+    brinePump.capacity = brineM3;
+    setpoints[brinePump.id] = brineM3;
+  }
+  const heat = nodeBy(definition, node => node.id === 'heat') || nodeBy(definition, node => node.siteResource === 'heat');
+  setHeat(heat, (duties.heatKWh || 0) + (duties.heatCoveredKWh || 0));
+  applyPowerAndSite(definition, duties);
+  syncSiteResource(definition, brine);
+  syncSiteResource(definition, heat);
+  definition.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+}
+
+function iterateSize({
+  definition, target, caps, maxIterations, tolerance, product, estimate, apply, measure,
+}) {
+  const history = [];
+  let residual = Infinity;
+  let consistency = Infinity;
+  let solved = null;
+  let duties = null;
+  let iterations = 0;
+  let achieved = 0;
+  const state = {};
+
+  for (; iterations < maxIterations; iterations += 1) {
+    duties = estimate(definition, target, state, caps);
+    apply(definition, duties);
+    solved = solveOperation(definition);
+    const measured = measure(solved, definition, duties, state);
+    achieved = measured.achieved;
+    consistency = measured.consistency;
+    residual = measured.residual;
+    Object.assign(state, measured.state || {});
+    history.push({
+      iteration: iterations + 1,
+      residual,
+      consistency,
+      capped: Boolean(duties.capped),
+      duties: measured.historyDuties,
+    });
+    if (consistency < tolerance && (residual < tolerance || duties.capped)) break;
+  }
+
+  const count = Math.min(iterations + 1, maxIterations);
+  const warnings = [...(solved.warnings || [])];
+  for (const warning of solver.unverifiedRightsWarnings?.(definition.site) || []) {
+    if (!warnings.includes(warning)) warnings.push(warning);
+  }
+  const lastDuties = history[history.length - 1]?.duties || {};
+  return {
+    definition,
+    solved,
+    product,
+    rate: target,
+    target,
+    achieved,
+    iterations: count,
+    residual,
+    consistency,
+    converged: consistency < tolerance && (relativeGap(achieved, target) < tolerance || Boolean(duties?.capped)),
+    history,
+    warnings,
+    heatCoveredKWh: lastDuties.heatCoveredKWh ?? solved?.heatIntegration?.coveredKWh ?? 0,
+    heatResidualKWh: lastDuties.heatResidualKWh ?? solved?.heatIntegration?.residualDemandKWh ?? 0,
+  };
+}
+
+function sizeMethane(definition, target, opts) {
+  const chain = chainParams(definition);
+  let recoveredPerKg = chain.recycle ? chain.recoveredWaterPerKg : 0;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'CH4',
+    estimate: (current, methaneKg, _state, caps) => (
+      estimateDuties(current, methaneKg, recoveredPerKg, caps, opts.heatCredit)
+    ),
+    apply: applyDuties,
+    measure: (solved, current, duties) => {
+      const achieved = activity(solved, chain.sabatier);
+      if (chain.recycle && achieved > 0) {
+        recoveredPerKg = recoveredWaterKg(solved, chain.sabatier) / achieved;
+      } else if (chain.recycle) {
+        recoveredPerKg = chain.recoveredWaterPerKg;
+      }
+      const gaps = [
+        relativeGap(achieved, duties.ch4),
+        relativeGap(electricityConsumed(solved), processElectricityKWh(duties)),
+      ];
+      if (chain.electrolyzer) gaps.push(relativeGap(activity(solved, chain.electrolyzer), duties.h2));
+      if (chain.dac) gaps.push(relativeGap(activity(solved, chain.dac), duties.co2));
+      if (chain.desal) gaps.push(relativeGap(activity(solved, chain.desal), duties.swro));
+      if (chain.recycle) {
+        const recovered = recoveredWaterKg(solved, chain.sabatier);
+        gaps.push(relativeGap(duties.makeupWaterKg, Math.max(0, duties.ch4 * chain.waterKgPerKg - recovered)));
+      }
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          achievedH2: activity(solved, chain.electrolyzer),
+          achievedCo2: activity(solved, chain.dac),
+          achievedSwro: activity(solved, chain.desal),
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function sizeHydrogen(definition, target, opts) {
+  const chain = h2Chain(definition);
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'H2',
+    estimate: (current, h2Kg, _state, caps) => estimateH2Duties(current, h2Kg, caps, opts.heatCredit),
+    apply: applyH2Duties,
+    measure: (solved, current, duties) => {
+      const achieved = activity(solved, chain.electrolyzer);
+      const gaps = [
+        relativeGap(achieved, duties.h2),
+        relativeGap(electricityConsumed(solved), processElectricityKWh(duties)),
+      ];
+      if (chain.desal) gaps.push(relativeGap(activity(solved, chain.desal), duties.swro));
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          achievedH2: achieved,
+          achievedSwro: activity(solved, chain.desal),
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function sizeMethanol(definition, target, opts) {
+  const chain = methanolChain(definition);
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'methanol',
+    estimate: (current, rate, _state, caps) => estimateMethanolDuties(current, rate, caps, opts.heatCredit),
+    apply: applyMethanolDuties,
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      const gaps = [
+        relativeGap(activity(solved, chain.methanol), duties.methanol),
+        relativeGap(electricityConsumed(solved), processElectricityKWh(duties)),
+      ];
+      if (chain.electrolyzer && chain.h2Feed?.id === chain.electrolyzer.id) {
+        gaps.push(relativeGap(activity(solved, chain.electrolyzer), duties.h2));
+      }
+      if (chain.dac && chain.co2Feed?.id === chain.dac.id) {
+        gaps.push(relativeGap(activity(solved, chain.dac), duties.co2));
+      }
+      if (chain.desal) gaps.push(relativeGap(activity(solved, chain.desal), duties.swro));
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          achievedMethanol: activity(solved, chain.methanol),
+          achievedH2: activity(solved, chain.electrolyzer),
+          achievedCo2: activity(solved, chain.dac),
+          achievedSwro: activity(solved, chain.desal),
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function sizeDedicatedAmmonia(definition, target, opts) {
+  const chain = ammoniaChain(definition);
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'ammonia',
+    estimate: (current, rate, _state, caps) => estimateAmmoniaDuties(current, rate, caps, opts.heatCredit),
+    apply: applyAmmoniaDuties,
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      const gaps = [
+        relativeGap(activity(solved, chain.ammonia), duties.ammonia),
+        relativeGap(electricityConsumed(solved), processElectricityKWh(duties)),
+      ];
+      if (chain.electrolyzer && chain.h2Feed?.id === chain.electrolyzer.id) {
+        gaps.push(relativeGap(activity(solved, chain.electrolyzer), duties.h2));
+      }
+      if (chain.asu && chain.n2Feed?.id === chain.asu.id) {
+        gaps.push(relativeGap(activity(solved, chain.asu), duties.n2));
+      }
+      if (chain.desal) gaps.push(relativeGap(activity(solved, chain.desal), duties.swro));
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          achievedAmmonia: activity(solved, chain.ammonia),
+          achievedH2: activity(solved, chain.electrolyzer),
+          achievedN2: activity(solved, chain.asu),
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function sizeCoupledAmmonia(definition, target, opts) {
+  const chain = ammoniaChain(definition);
+  const baseline = baselineAbundanceDuties(definition);
+  const baseAmmonia = Number(baseline.setpoints[chain.ammonia.id] || 0);
+  let yieldPerScale = baseAmmonia > 0 ? baseAmmonia : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'ammonia',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const ammonia = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? ammonia / yieldPerScale : 0;
+        const brineKg = baseline.brineKg * scale;
+        const powerId = electricityNode(current)?.id;
+        const basePower = Number(baseline.streams[powerId]?.kWh) || 0;
+        const processElectricityKWh = basePower * scale;
+        const sinks = processHeatSinks(current);
+        const cascade = dutyHeat({
+          definition: current,
+          sources: [],
+          sinks,
+          parked: [],
+          heatCredit: opts.heatCredit,
+        });
+        const electricityKWh = processElectricityKWh + cascade.heatResidualKWh;
+        const solarKWp = yieldPerKWp > 0 ? electricityKWh / yieldPerKWp : 0;
+        return {
+          ammonia,
+          scale,
+          brineKg,
+          n2: 0,
+          h2: 0,
+          ch4: 0,
+          methanol: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: brineKg,
+          processElectricityKWh,
+          electricityKWh,
+          heatKWh: cascade.purchasedHeatKWh,
+          heatCoveredKWh: cascade.heatCoveredKWh,
+          heatResidualKWh: cascade.heatResidualKWh,
+          solarKWp,
+          yieldPerKWp,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: brineKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['ammonia', 'ammonia'],
+        ['minerals', 'brineKg'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyAbundanceScale(current, baseline, duties.scale, 'full');
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(activity(solved, chain.ammonia), duties.ammonia),
+        relativeGap(achieved, duties.ammonia),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          achievedAmmonia: activity(solved, chain.ammonia),
+          scale: duties.scale,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function sizeAmmonia(definition, target, opts) {
+  if (converter(definition, 'brine-minerals')) return sizeCoupledAmmonia(definition, target, opts);
+  return sizeDedicatedAmmonia(definition, target, opts);
+}
+
+function pvModuleSink(definition, pvModule) {
+  return reactionProductSink(definition, pvModule, 'module')
+    || nodeBy(definition, node => node.id === 'module' && String(node.unit).includes('sink'));
+}
+
+function pvModuleChain(definition) {
+  const pvModule = converter(definition, 'pv-module');
+  if (!pvModule) throw new Error('sizeToProduct needs a pv-module block to size module demand');
+  const sink = pvModuleSink(definition, pvModule);
+  if (!sink) throw new Error('sizeToProduct needs a module sink');
+  const converters = definition.graph.nodes.filter(node => PV_MODULE_CHAIN_UNITS.includes(node.unit));
+  const converterIds = new Set(converters.map(node => node.id));
+  const sources = [];
+  const seen = new Set();
+  for (const edge of definition.graph.edges || []) {
+    if (!converterIds.has(edge.to?.node)) continue;
+    const upstream = nodeBy(definition, node => node.id === edge.from.node);
+    if (!upstream || seen.has(upstream.id)) continue;
+    if (upstream.unit === 'material-source' && upstream.params?.stream?.kind === 'material') {
+      seen.add(upstream.id);
+      sources.push(upstream);
+    }
+  }
+  return { pvModule, sink, converters, sources };
+}
+
+function converterDutyKg(definition, node) {
+  const cap = Number(node.capacity);
+  const sp = Number(definition.operation?.setpoints?.[node.id]);
+  const fromCap = Number.isFinite(cap) && cap > 0 ? cap : 0;
+  const fromSp = Number.isFinite(sp) && sp > 0 ? sp : 0;
+  return Math.max(fromCap, fromSp);
+}
+
+function baselinePvModuleDuties(definition) {
+  const chain = pvModuleChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    moduleKg: converterDuties[chain.pvModule.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function converterSecKWhPerKg(node) {
+  const listed = Number(node.params?.electricityKWhPerKg);
+  if (Number.isFinite(listed) && listed >= 0) return listed;
+  return PV_MODULE_SEC_DEFAULTS[node.unit] ?? 0;
+}
+
+function pvModuleProcessElectricityKWh(definition, baseline, scale) {
+  let kWh = 0;
+  for (const node of definition.graph.nodes) {
+    const baseDuty = baseline.converterDuties[node.id];
+    if (!(baseDuty > 0)) continue;
+    kWh += baseDuty * scale * converterSecKWhPerKg(node);
+  }
+  return kWh;
+}
+
+function applyPvModuleScale(definition, baseline, duties) {
+  const ratio = Number(duties.scale) || 0;
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  for (const [id, base] of Object.entries(baseline.converterDuties)) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node) continue;
+    const next = base * ratio;
+    node.capacity = next;
+    setpoints[id] = next;
+  }
+  for (const [id, stream] of Object.entries(baseline.streams)) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node?.params) continue;
+    node.params.stream = JSON.parse(JSON.stringify(stream));
+    scaleMaterialStream(node.params.stream, ratio);
+    syncSiteResource(definition, node);
+  }
+}
+
+function sizePvModule(definition, target, opts) {
+  const chain = pvModuleChain(definition);
+  const baseline = baselinePvModuleDuties(definition);
+  if (!(baseline.moduleKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size module: pv-module has no baseline capacity');
+  }
+  let yieldPerScale = baseline.moduleKg > 0 ? baseline.moduleKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'module',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const moduleKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? moduleKg / yieldPerScale : 0;
+        const processElectricityKWh = pvModuleProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          module: moduleKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: moduleKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['module', 'module'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyPvModuleScale(current, baseline, duties);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.module),
+        relativeGap(activity(solved, chain.pvModule), duties.module),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          module: duties.module,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function applyRatioScale(definition, baseline, ratio) {
+  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
+  for (const [id, base] of Object.entries(baseline.converterDuties || {})) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node) continue;
+    const next = base * ratio;
+    node.capacity = next;
+    setpoints[id] = next;
+  }
+  for (const [id, stream] of Object.entries(baseline.streams || {})) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node?.params) continue;
+    node.params.stream = JSON.parse(JSON.stringify(stream));
+    scaleMaterialStream(node.params.stream, ratio);
+    syncSiteResource(definition, node);
+  }
+}
+
+function collectMaterialSourcesFeeding(definition, nodeId, seen) {
+  const sources = [];
+  for (const edge of definition.graph.edges || []) {
+    if (edge.to?.node !== nodeId) continue;
+    const upstream = nodeBy(definition, node => node.id === edge.from.node);
+    if (!upstream || seen.has(upstream.id)) continue;
+    if (upstream.unit === 'material-source' && upstream.params?.stream?.kind === 'material') {
+      seen.add(upstream.id);
+      sources.push(upstream);
+    }
+  }
+  return sources;
+}
+
+function collectMaterialSourceOnPort(definition, nodeId, port, seen) {
+  const upstream = sourceFeeding(definition, nodeId, port);
+  if (!upstream || seen.has(upstream.id)) return null;
+  if (upstream.unit === 'material-source' && upstream.params?.stream?.kind === 'material') {
+    seen.add(upstream.id);
+    return upstream;
+  }
+  return null;
+}
+
+function converterSecKWh(node, keys, fallback) {
+  if (!node) return fallback;
+  for (const key of keys) {
+    const listed = Number(node.params?.[key]);
+    if (Number.isFinite(listed) && listed >= 0) return listed;
+  }
+  return fallback;
+}
+
+function ratioChainElectricityKWh(definition, baseline, scale, secOf) {
+  let kWh = 0;
+  for (const [id, duty] of Object.entries(baseline.converterDuties || {})) {
+    if (!(duty > 0)) continue;
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node) continue;
+    const sec = Number(secOf(node)) || 0;
+    if (sec > 0) kWh += duty * scale * sec;
+  }
+  return kWh;
+}
+
+function steelSink(definition, dri) {
+  return reactionProductSink(definition, dri, 'steel')
+    || nodeBy(definition, node => node.id === 'steel' && String(node.unit).includes('sink'));
+}
+
+function steelChain(definition) {
+  const dri = converter(definition, 'hydrogen-dri');
+  if (!dri) throw new Error('sizeToProduct needs a hydrogen-dri block to size steel demand');
+  const sink = steelSink(definition, dri);
+  if (!sink) throw new Error('sizeToProduct needs a steel sink');
+  const electrolyzer = converter(definition, 'electrolyzer');
+  const swro = converter(definition, 'swro');
+  const converters = [dri, electrolyzer, swro].filter(Boolean);
+  const seen = new Set();
+  const sources = collectMaterialSourcesFeeding(definition, dri.id, seen);
+  if (swro) {
+    const seawater = sourceFeeding(definition, swro.id, 'feed');
+    if (seawater && !seen.has(seawater.id)
+      && seawater.unit === 'material-source'
+      && seawater.params?.stream?.kind === 'material') {
+      seen.add(seawater.id);
+      sources.push(seawater);
+    }
+  }
+  return { dri, sink, electrolyzer, swro, converters, sources };
+}
+
+function baselineSteelDuties(definition) {
+  const chain = steelChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    steelKg: converterDuties[chain.dri.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function steelProcessElectricityKWh(definition, baseline, scale) {
+  let kWh = 0;
+  const dri = converter(definition, 'hydrogen-dri');
+  if (dri && baseline.converterDuties[dri.id] > 0) {
+    const listed = Number(dri.params?.electricityKWhPerKg);
+    const sec = Number.isFinite(listed) && listed >= 0 ? listed : 0.7;
+    kWh += baseline.converterDuties[dri.id] * scale * sec;
+  }
+  const electrolyzer = converter(definition, 'electrolyzer');
+  if (electrolyzer && baseline.converterDuties[electrolyzer.id] > 0) {
+    const listed = Number(electrolyzer.params?.secKWhPerKgH2);
+    const sec = Number.isFinite(listed) && listed >= 0 ? listed : 52;
+    kWh += baseline.converterDuties[electrolyzer.id] * scale * sec;
+  }
+  const swro = converter(definition, 'swro');
+  if (swro && baseline.converterDuties[swro.id] > 0) {
+    const listed = Number(swro.params?.secKWhPerM3 ?? swro.params?.electricityKWhPerM3);
+    const sec = Number.isFinite(listed) && listed >= 0 ? listed : 3.5;
+    kWh += baseline.converterDuties[swro.id] * scale * sec;
+  }
+  return kWh;
+}
+
+function sizeSteel(definition, target, opts) {
+  const chain = steelChain(definition);
+  const baseline = baselineSteelDuties(definition);
+  if (!(baseline.steelKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size steel: hydrogen-dri has no baseline capacity');
+  }
+  let yieldPerScale = baseline.steelKg > 0 ? baseline.steelKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'steel',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const steelKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? steelKg / yieldPerScale : 0;
+        const processElectricityKWh = steelProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          steel: steelKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: steelKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['steel', 'steel'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.steel),
+        relativeGap(activity(solved, chain.dri), duties.steel),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          steel: duties.steel,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function ethyleneSink(definition, mtoNode) {
+  return reactionProductSink(definition, mtoNode, 'ethylene')
+    || nodeBy(definition, node => (
+      (node.id === 'ethylene' || node.id === 'ethylene-product') && String(node.unit).includes('sink')
+    ));
+}
+
+function ethyleneChain(definition) {
+  const mtoNode = converter(definition, 'mto');
+  if (!mtoNode) throw new Error('sizeToProduct needs an mto block to size ethylene demand');
+  const sink = ethyleneSink(definition, mtoNode);
+  if (!sink) throw new Error('sizeToProduct needs an ethylene sink');
+  const meohFeed = sourceFeeding(definition, mtoNode.id, 'methanol');
+  const methanol = meohFeed?.unit === 'methanol' ? meohFeed : null;
+  const h2Feed = methanol ? sourceFeeding(definition, methanol.id, 'hydrogen') : null;
+  const electrolyzer = h2Feed?.unit === 'electrolyzer'
+    ? h2Feed
+    : (methanol ? converter(definition, 'electrolyzer') : null);
+  const swro = electrolyzer ? converter(definition, 'swro') : null;
+  const converters = [mtoNode, methanol, electrolyzer, swro].filter(Boolean);
+  const seen = new Set();
+  const sources = collectMaterialSourcesFeeding(definition, mtoNode.id, seen);
+  if (methanol) {
+    for (const extra of collectMaterialSourcesFeeding(definition, methanol.id, seen)) sources.push(extra);
+  }
+  const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
+  if (seawater) sources.push(seawater);
+  return { mto: mtoNode, sink, methanol, electrolyzer, swro, converters, sources };
+}
+
+function baselineEthyleneDuties(definition) {
+  const chain = ethyleneChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    ethyleneKg: converterDuties[chain.mto.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function ethyleneProcessElectricityKWh(definition, baseline, scale) {
+  return ratioChainElectricityKWh(definition, baseline, scale, node => {
+    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
+    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
+    if (node.unit === 'methanol') return converterSecKWh(node, ['electricityKWhPerKg'], 0.5);
+    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'mto' ? 4 : 0);
+  });
+}
+
+function sizeEthylene(definition, target, opts) {
+  const chain = ethyleneChain(definition);
+  const baseline = baselineEthyleneDuties(definition);
+  if (!(baseline.ethyleneKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size ethylene: mto has no baseline capacity');
+  }
+  let yieldPerScale = baseline.ethyleneKg > 0 ? baseline.ethyleneKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'ethylene',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const ethyleneKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? ethyleneKg / yieldPerScale : 0;
+        const processElectricityKWh = ethyleneProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          ethylene: ethyleneKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: ethyleneKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['ethylene', 'ethylene'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.ethylene),
+        relativeGap(activity(solved, chain.mto), duties.ethylene),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          ethylene: duties.ethylene,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function dieselSink(definition, ftNode) {
+  return reactionProductSink(definition, ftNode, 'diesel')
+    || nodeBy(definition, node => (
+      (node.id === 'diesel' || node.id === 'diesel-product') && String(node.unit).includes('sink')
+    ));
+}
+
+function dieselChain(definition) {
+  const ftNode = converter(definition, 'ft-liquids');
+  if (!ftNode) throw new Error('sizeToProduct needs an ft-liquids block to size diesel demand');
+  const sink = dieselSink(definition, ftNode);
+  if (!sink) throw new Error('sizeToProduct needs a diesel sink');
+  const h2Feed = sourceFeeding(definition, ftNode.id, 'hydrogen');
+  const electrolyzer = h2Feed?.unit === 'electrolyzer' ? h2Feed : null;
+  const swro = electrolyzer ? converter(definition, 'swro') : null;
+  const converters = [ftNode, electrolyzer, swro].filter(Boolean);
+  const seen = new Set();
+  const sources = collectMaterialSourcesFeeding(definition, ftNode.id, seen);
+  const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
+  if (seawater) sources.push(seawater);
+  return { ft: ftNode, sink, electrolyzer, swro, converters, sources };
+}
+
+function baselineDieselDuties(definition) {
+  const chain = dieselChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    dieselKg: converterDuties[chain.ft.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function dieselProcessElectricityKWh(definition, baseline, scale) {
+  return ratioChainElectricityKWh(definition, baseline, scale, node => {
+    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
+    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
+    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'ft-liquids' ? 0.22 : 0);
+  });
+}
+
+function ureaSink(definition, ureaNode) {
+  return reactionProductSink(definition, ureaNode, 'urea')
+    || nodeBy(definition, node => (
+      (node.id === 'urea' || node.id === 'urea-product') && String(node.unit).includes('sink')
+    ));
+}
+
+function ureaChain(definition) {
+  const ureaNode = converter(definition, 'urea');
+  if (!ureaNode) throw new Error('sizeToProduct needs a urea block to size urea demand');
+  const sink = ureaSink(definition, ureaNode);
+  if (!sink) throw new Error('sizeToProduct needs a urea sink');
+  const nh3Feed = sourceFeeding(definition, ureaNode.id, 'ammonia');
+  const ammonia = nh3Feed?.unit === 'ammonia' ? nh3Feed : null;
+  const electrolyzer = ammonia ? converter(definition, 'electrolyzer') : null;
+  const asu = ammonia ? converter(definition, 'asu') : null;
+  const swro = ammonia ? converter(definition, 'swro') : null;
+  const converters = [ureaNode, ammonia, electrolyzer, asu, swro].filter(Boolean);
+  const seen = new Set();
+  const sources = collectMaterialSourcesFeeding(definition, ureaNode.id, seen);
+  const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
+  if (seawater) sources.push(seawater);
+  const air = asu && collectMaterialSourceOnPort(definition, asu.id, 'air', seen);
+  if (air) sources.push(air);
+  return { urea: ureaNode, sink, ammonia, electrolyzer, asu, swro, converters, sources };
+}
+
+function baselineUreaDuties(definition) {
+  const chain = ureaChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    ureaKg: converterDuties[chain.urea.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function ureaProcessElectricityKWh(definition, baseline, scale) {
+  return ratioChainElectricityKWh(definition, baseline, scale, node => {
+    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
+    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
+    if (node.unit === 'asu') return converterSecKWh(node, ['electricityKWhPerKgN2'], 0.25);
+    if (node.unit === 'ammonia') return converterSecKWh(node, ['electricityKWhPerKg'], 0.6);
+    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'urea' ? 0.8 : 0);
+  });
+}
+
+function sizeDiesel(definition, target, opts) {
+  const chain = dieselChain(definition);
+  const baseline = baselineDieselDuties(definition);
+  if (!(baseline.dieselKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size diesel: ft-liquids has no baseline capacity');
+  }
+  let yieldPerScale = baseline.dieselKg > 0 ? baseline.dieselKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'diesel',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const dieselKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? dieselKg / yieldPerScale : 0;
+        const processElectricityKWh = dieselProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          diesel: dieselKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: dieselKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['diesel', 'diesel'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.diesel),
+        relativeGap(activity(solved, chain.ft), duties.diesel),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          diesel: duties.diesel,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function sizeUrea(definition, target, opts) {
+  const chain = ureaChain(definition);
+  const baseline = baselineUreaDuties(definition);
+  if (!(baseline.ureaKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size urea: urea has no baseline capacity');
+  }
+  let yieldPerScale = baseline.ureaKg > 0 ? baseline.ureaKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'urea',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const ureaKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? ureaKg / yieldPerScale : 0;
+        const processElectricityKWh = ureaProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          urea: ureaKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: ureaKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['urea', 'urea'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.urea),
+        relativeGap(activity(solved, chain.urea), duties.urea),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          urea: duties.urea,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function titaniumSink(definition, krollNode) {
+  return reactionProductSink(definition, krollNode, 'titanium')
+    || nodeBy(definition, node => (
+      (node.id === 'titanium' || node.id === 'titanium-product' || node.id === 'sponge')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function titaniumChain(definition) {
+  const kroll = converter(definition, 'titanium-kroll');
+  if (!kroll) throw new Error('sizeToProduct needs a titanium-kroll block to size titanium demand');
+  const sink = titaniumSink(definition, kroll);
+  if (!sink) throw new Error('sizeToProduct needs a titanium sink');
+  const sources = collectMaterialSourcesFeeding(definition, kroll.id, new Set());
+  return { kroll, sink, converters: [kroll], sources };
+}
+
+function baselineTitaniumDuties(definition) {
+  const chain = titaniumChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    titaniumKg: converterDuties[chain.kroll.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function titaniumProcessElectricityKWh(definition, baseline, scale) {
+  const kroll = converter(definition, 'titanium-kroll');
+  if (!kroll || !(baseline.converterDuties[kroll.id] > 0)) return 0;
+  const listed = Number(kroll.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 8;
+  return baseline.converterDuties[kroll.id] * scale * sec;
+}
+
+function sizeTitanium(definition, target, opts) {
+  const chain = titaniumChain(definition);
+  const baseline = baselineTitaniumDuties(definition);
+  if (!(baseline.titaniumKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size titanium: titanium-kroll has no baseline capacity');
+  }
+  let yieldPerScale = baseline.titaniumKg > 0 ? baseline.titaniumKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'titanium',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const titaniumKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? titaniumKg / yieldPerScale : 0;
+        const processElectricityKWh = titaniumProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          titanium: titaniumKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: titaniumKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['titanium', 'titanium'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.titanium),
+        relativeGap(activity(solved, chain.kroll), duties.titanium),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          titanium: duties.titanium,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function floatGlassSink(definition, glassNode) {
+  return reactionProductSink(definition, glassNode, 'glass')
+    || nodeBy(definition, node => (
+      (node.id === 'glass' || node.id === 'float-glass' || node.id === 'solar-glass'
+        || node.id === 'float-glass-product')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function floatGlassChain(definition) {
+  const floatGlass = converter(definition, 'float-glass');
+  if (!floatGlass) throw new Error('sizeToProduct needs a float-glass block to size float-glass demand');
+  const sink = floatGlassSink(definition, floatGlass);
+  if (!sink) throw new Error('sizeToProduct needs a glass sink');
+  const sources = collectMaterialSourcesFeeding(definition, floatGlass.id, new Set());
+  return { floatGlass, sink, converters: [floatGlass], sources };
+}
+
+function baselineFloatGlassDuties(definition) {
+  const chain = floatGlassChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    glassKg: converterDuties[chain.floatGlass.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function floatGlassProcessElectricityKWh(definition, baseline, scale) {
+  const floatGlass = converter(definition, 'float-glass');
+  if (!floatGlass || !(baseline.converterDuties[floatGlass.id] > 0)) return 0;
+  const listed = Number(floatGlass.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 2.5;
+  return baseline.converterDuties[floatGlass.id] * scale * sec;
+}
+
+function sizeFloatGlass(definition, target, opts) {
+  const chain = floatGlassChain(definition);
+  const baseline = baselineFloatGlassDuties(definition);
+  if (!(baseline.glassKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size float-glass: float-glass has no baseline capacity');
+  }
+  let yieldPerScale = baseline.glassKg > 0 ? baseline.glassKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'float-glass',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const glassKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? glassKg / yieldPerScale : 0;
+        const processElectricityKWh = floatGlassProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          'float-glass': glassKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: glassKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['float-glass', 'float-glass'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties['float-glass']),
+        relativeGap(activity(solved, chain.floatGlass), duties['float-glass']),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          'float-glass': duties['float-glass'],
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function cementSink(definition, cementNode) {
+  return reactionProductSink(definition, cementNode, 'cement')
+    || nodeBy(definition, node => (
+      (node.id === 'cement' || node.id === 'clinker' || node.id === 'portland'
+        || node.id === 'cement-product' || node.id === 'cem-i')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function cementChain(definition) {
+  const cementNode = converter(definition, 'cement');
+  if (!cementNode) throw new Error('sizeToProduct needs a cement block to size cement demand');
+  const sink = cementSink(definition, cementNode);
+  if (!sink) throw new Error('sizeToProduct needs a cement sink');
+  const sources = collectMaterialSourcesFeeding(definition, cementNode.id, new Set());
+  return { cement: cementNode, sink, converters: [cementNode], sources };
+}
+
+function baselineCementDuties(definition) {
+  const chain = cementChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    cementKg: converterDuties[chain.cement.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function cementProcessElectricityKWh(definition, baseline, scale) {
+  const cementNode = converter(definition, 'cement');
+  if (!cementNode || !(baseline.converterDuties[cementNode.id] > 0)) return 0;
+  const listed = Number(cementNode.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 1.05;
+  return baseline.converterDuties[cementNode.id] * scale * sec;
+}
+
+function sizeCement(definition, target, opts) {
+  const chain = cementChain(definition);
+  const baseline = baselineCementDuties(definition);
+  if (!(baseline.cementKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size cement: cement has no baseline capacity');
+  }
+  let yieldPerScale = baseline.cementKg > 0 ? baseline.cementKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'cement',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const cementKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? cementKg / yieldPerScale : 0;
+        const processElectricityKWh = cementProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          cement: cementKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: cementKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['cement', 'cement'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.cement),
+        relativeGap(activity(solved, chain.cement), duties.cement),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          cement: duties.cement,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function copperSink(definition, ewNode) {
+  return reactionProductSink(definition, ewNode, 'cathode')
+    || nodeBy(definition, node => (
+      (node.id === 'cathode' || node.id === 'cathode-product' || node.id === 'copper'
+        || node.id === 'copper-product' || node.id === 'copper-cathode')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function copperChain(definition) {
+  const copperEw = converter(definition, 'copper-ew');
+  if (!copperEw) throw new Error('sizeToProduct needs a copper-ew block to size copper demand');
+  const sink = copperSink(definition, copperEw);
+  if (!sink) throw new Error('sizeToProduct needs a copper sink');
+  const sources = collectMaterialSourcesFeeding(definition, copperEw.id, new Set());
+  return { copperEw, sink, converters: [copperEw], sources };
+}
+
+function baselineCopperDuties(definition) {
+  const chain = copperChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    copperKg: converterDuties[chain.copperEw.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function copperProcessElectricityKWh(definition, baseline, scale) {
+  const copperEw = converter(definition, 'copper-ew');
+  if (!copperEw || !(baseline.converterDuties[copperEw.id] > 0)) return 0;
+  const listed = Number(copperEw.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 2.2;
+  return baseline.converterDuties[copperEw.id] * scale * sec;
+}
+
+function sizeCopper(definition, target, opts) {
+  const chain = copperChain(definition);
+  const baseline = baselineCopperDuties(definition);
+  if (!(baseline.copperKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size copper: copper-ew has no baseline capacity');
+  }
+  let yieldPerScale = baseline.copperKg > 0 ? baseline.copperKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'copper',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const copperKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? copperKg / yieldPerScale : 0;
+        const processElectricityKWh = copperProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          copper: copperKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: copperKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['copper', 'copper'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.copper),
+        relativeGap(activity(solved, chain.copperEw), duties.copper),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          copper: duties.copper,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+const NDPR_SEPARATOR_UNITS = Object.freeze(['ree-chromatography', 'ree-sx']);
+
+function ndprSink(definition, separator) {
+  return reactionProductSink(definition, separator, 'ndpr')
+    || nodeBy(definition, node => (
+      (node.id === 'ndpr' || node.id === 'ndpr-oxide' || node.id === 'ndpr-oxide-separated'
+        || node.id === 'nd2o3')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function ndprChain(definition) {
+  const separators = definition.graph.nodes.filter(node => NDPR_SEPARATOR_UNITS.includes(node.unit));
+  if (separators.length > 1) {
+    throw new Error('sizeToProduct cannot size ndpr: multiple REE separators');
+  }
+  const chrom = separators[0];
+  if (!chrom) throw new Error('sizeToProduct needs a ree-chromatography block to size ndpr demand');
+  const sink = ndprSink(definition, chrom);
+  if (!sink) throw new Error('sizeToProduct needs an ndpr sink');
+  const sources = collectMaterialSourcesFeeding(definition, chrom.id, new Set());
+  return { chrom, sink, converters: [chrom], sources };
+}
+
+function baselineNdprDuties(definition) {
+  const chain = ndprChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    reoKg: converterDuties[chain.chrom.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function ndprProcessElectricityKWh(definition, baseline, scale) {
+  return ratioChainElectricityKWh(definition, baseline, scale, node => (
+    converterSecKWh(
+      node,
+      ['electricityKWhPerKgReo', 'electricityKWhPerKg'],
+      node.unit === 'ree-sx' ? 5.3 : 5,
+    )
+  ));
+}
+
+function sizeNdpr(definition, target, opts) {
+  const chain = ndprChain(definition);
+  const baseline = baselineNdprDuties(definition);
+  if (!(baseline.reoKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size ndpr: ree-chromatography has no baseline capacity');
+  }
+  let yieldPerScale = 1;
+  if (target > 0) {
+    const baselineNdpr = sinkMassKg(solveOperation(definition), chain.sink);
+    if (!(baselineNdpr > 0)) {
+      throw new Error('sizeToProduct cannot size ndpr: ndpr sink has no baseline product');
+    }
+    yieldPerScale = baselineNdpr;
+  }
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'ndpr',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const ndprKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? ndprKg / yieldPerScale : 0;
+        const processElectricityKWh = ndprProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          ndpr: ndprKg,
+          reo: baseline.reoKg * scale,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: ndprKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['ndpr', 'ndpr'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.ndpr),
+        relativeGap(activity(solved, chain.chrom), duties.reo),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          ndpr: duties.ndpr,
+          reo: duties.reo,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function sizeMinerals(definition, product, target, opts) {
+  const minerals = converter(definition, 'brine-minerals');
+  if (!minerals) throw new Error('sizeToProduct needs a brine-minerals block to size lithium or salt demand');
+  const sink = productSink(definition, product);
+  if (!sink) throw new Error(`sizeToProduct needs a ${product} sink`);
+  const brine = brineSource(definition, minerals);
+  if (!brine?.params?.stream || brine.params.stream.kind !== 'material') {
+    throw new Error('sizeToProduct needs a brine source feeding brine-minerals');
+  }
+  const yield0 = mineralYieldPerKg(brine.params.stream, minerals.params || {}, product);
+  if (!(yield0 > 0)) throw new Error(`sizeToProduct cannot size ${product}: brine has no recoverable ${product}`);
+  const sec = Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05);
+  const currentBrineKg = streamMassKg(brine.params.stream);
+  const suppliedKWh = Number(electricityNode(definition)?.params?.stream?.kWh) || 0;
+  const pumpKWh0 = intakePumpElectricityKWh(definition, currentBrineKg);
+  let otherKWh = Math.max(0, suppliedKWh - currentBrineKg * sec - pumpKWh0);
+  let yieldPerKg = yield0;
+
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product,
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const brineKg = Math.max(0, kg);
+        const processElectricityKWh = brineKg * sec + intakePumpElectricityKWh(current, brineKg) + otherKWh;
+        const sinks = processHeatSinks(current);
+        const cascade = dutyHeat({
+          definition: current,
+          sources: [],
+          sinks,
+          parked: [],
+          heatCredit: opts.heatCredit,
+        });
+        const electricityKWh = processElectricityKWh + cascade.heatResidualKWh;
+        const solarKWp = yieldPerKWp > 0 ? electricityKWh / yieldPerKWp : 0;
+        return {
+          brineKg,
+          seawaterKg: brineKg,
+          processElectricityKWh,
+          electricityKWh,
+          heatKWh: cascade.purchasedHeatKWh,
+          heatCoveredKWh: cascade.heatCoveredKWh,
+          heatResidualKWh: cascade.heatResidualKWh,
+          solarKWp,
+          yieldPerKWp,
+          makeupWaterKg: 0,
+          swro: 0,
+          h2: 0,
+          ch4: 0,
+          co2: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: brineKg,
+        };
+      };
+      const uncappedBrine = yieldPerKg > 0 ? rate / yieldPerKg : 0;
+      return applyCapScale(raw(uncappedBrine), raw, caps, [
+        ['minerals', 'brineKg'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: applyMineralDuties,
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, sink);
+      const brineActivity = activity(solved, minerals);
+      if (duties.brineKg > 0 && achieved > 0) yieldPerKg = achieved / duties.brineKg;
+      const consumedKWh = electricityConsumed(solved);
+      otherKWh = Math.max(0, consumedKWh - brineActivity * sec - intakePumpElectricityKWh(current, brineActivity));
+      const gaps = [
+        relativeGap(brineActivity, duties.brineKg),
+        relativeGap(consumedKWh, duties.electricityKWh),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          achievedBrine: activity(solved, minerals),
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function normalizeProduct(product) {
+  const key = String(product ?? '').trim().toLowerCase();
+  const normalized = PRODUCT_ALIASES[key];
+  if (!normalized) {
+    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass, cement, copper, or ndpr');
+  }
+  return normalized;
+}
+
+function sizeToProduct(opts = {}) {
+  const product = normalizeProduct(opts.product);
+  const rate = opts.rate;
+  if (!Number.isFinite(rate) || rate < 0) {
+    throw new Error('Product rate must be a non-negative finite kg/day');
+  }
+  const caseOrBuilder = opts.definition ?? opts.caseOrBuilder;
+  const definition = resolveDefinition(caseOrBuilder);
+  const maxIterations = Math.max(1, Number(opts.maxIterations) || DEFAULT_MAX_ITERATIONS);
+  const tolerance = Number(opts.tolerance) > 0 ? Number(opts.tolerance) : DEFAULT_TOLERANCE;
+  const loopOpts = { caps: opts.caps || {}, maxIterations, tolerance, heatCredit: opts.heatCredit };
+  if (product === 'CH4') return sizeMethane(definition, rate, loopOpts);
+  if (product === 'H2') return sizeHydrogen(definition, rate, loopOpts);
+  if (product === 'methanol') return sizeMethanol(definition, rate, loopOpts);
+  if (product === 'ammonia') return sizeAmmonia(definition, rate, loopOpts);
+  if (product === 'module') return sizePvModule(definition, rate, loopOpts);
+  if (product === 'steel') return sizeSteel(definition, rate, loopOpts);
+  if (product === 'ethylene') return sizeEthylene(definition, rate, loopOpts);
+  if (product === 'diesel') return sizeDiesel(definition, rate, loopOpts);
+  if (product === 'urea') return sizeUrea(definition, rate, loopOpts);
+  if (product === 'titanium') return sizeTitanium(definition, rate, loopOpts);
+  if (product === 'float-glass') return sizeFloatGlass(definition, rate, loopOpts);
+  if (product === 'cement') return sizeCement(definition, rate, loopOpts);
+  if (product === 'copper') return sizeCopper(definition, rate, loopOpts);
+  if (product === 'ndpr') return sizeNdpr(definition, rate, loopOpts);
+  return sizeMinerals(definition, product, rate, loopOpts);
+}
+
+function sizeToTarget(caseOrBuilder, target, opts = {}) {
+  if (!Number.isFinite(target) || target < 0) {
+    throw new Error('Methane target must be a non-negative finite kg/day');
+  }
+  return sizeToProduct({
+    product: 'CH4',
+    rate: target,
+    caseOrBuilder,
+    caps: opts.caps,
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    heatCredit: opts.heatCredit,
+  });
+}
+
+function sizeCoastalToMethane(target, month = 0, opts = {}) {
+  const coastal = typeof require === 'function' ? require('../cases/coastal') : globalThis.CoastalCase;
+  if (!coastal?.createCoastalCase) throw new Error('Coastal case is not loaded');
+  return sizeToTarget(() => coastal.createCoastalCase(month), target, opts);
+}
+
+
+const { evaluateEconomics, scorePositiveCashflow } = economics || {};
+const ABUNDANCE_SCALES = [0.25, 0.5, 1, 1.5, 2];
+const FUEL_RATES = [0, 2, 5, 10, 15, 20];
+// Absolute multiplier versus the immutable pre-sizing seed, not the plant
+// already on screen. Repeated Optimize must not compound 2× into 4×, 8×, …
+const ABSOLUTE_SCALE_CAP = 10;
+const FAST_SCALES = [1];
+const FAST_RATES = [0];
+const REFINE_MAX_EXTRA = 6;
+const ABUNDANCE_DOWNSTREAM = Object.freeze(['chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']);
+const ABUNDANCE_SALE_IDS = Object.freeze([
+  'lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'recovered-salt', 'caustic', 'bromine', 'bromide',
+]);
+const FUEL_SALE_IDS = Object.freeze(['methane', 'methanol', 'methanol-product', 'hydrogen', 'h2']);
+
+function operatingRevenue(candidate) {
+  const fromObjective = Number(candidate?.objective?.annualRevenue);
+  if (Number.isFinite(fromObjective) && fromObjective > 0) return fromObjective;
+  const products = candidate?.objective?.products || candidate?.products || [];
+  let revenue = 0;
+  for (const product of products) revenue += Number(product.annualRevenue) || 0;
+  if (revenue > 0) return revenue;
+  return Number(candidate?.economics?.annualRevenue) || 0;
+}
+
+// Maximizer: max positiveSaleCount s.t. met (cash>0); ties -> max cash.
+// positiveSaleCount is met-gated in scorePositiveCashflow. Do not substitute
+// activeSaleCount here — that unconstrained count is reporting-only.
+function betterCashflowCandidate(left, right) {
+  if (!left) return right;
+  if (!right) return left;
+  if (left.objective.met !== right.objective.met) return left.objective.met ? left : right;
+  if (left.objective.met) {
+    if (left.objective.positiveSaleCount !== right.objective.positiveSaleCount) {
+      return left.objective.positiveSaleCount > right.objective.positiveSaleCount ? left : right;
+    }
+    return left.objective.annualNetCash >= right.objective.annualNetCash ? left : right;
+  }
+  const revLeft = operatingRevenue(left);
+  const revRight = operatingRevenue(right);
+  if ((revLeft > 0) !== (revRight > 0)) return revLeft > 0 ? left : right;
+  if (revLeft !== revRight) return revLeft > revRight ? left : right;
+  if (left.objective.positiveSaleCount !== right.objective.positiveSaleCount) {
+    return left.objective.positiveSaleCount > right.objective.positiveSaleCount ? left : right;
+  }
+  return left.objective.annualNetCash >= right.objective.annualNetCash ? left : right;
+}
+
+function gridKey(value) {
+  return Math.round(Number(value) * 1e6) / 1e6;
+}
+
+function cashOf(candidate) {
+  const cash = Number(candidate?.objective?.annualNetCash);
+  return Number.isFinite(cash) ? cash : -Infinity;
+}
+
+function midValue(left, right) {
+  const lo = Math.min(left, right);
+  const hi = Math.max(left, right);
+  if (!(hi > lo) || hi - lo < 1e-9) return null;
+  if (lo > 0) {
+    const geo = Math.sqrt(lo * hi);
+    if (Math.abs(geo - lo) < 1e-6 || Math.abs(geo - hi) < 1e-6) return (lo + hi) / 2;
+    return geo;
+  }
+  return (lo + hi) / 2;
+}
+
+function listedGrid(opts, key, fallback) {
+  const listed = opts && opts[key];
+  return listed && listed.length ? listed.slice() : fallback.slice();
+}
+
+function shouldRefine(opts, grid) {
+  if (opts && (opts.refine === false || opts.fast === true)) return false;
+  if (opts && opts.refine === true) return true;
+  return Array.isArray(grid) && grid.length >= 2;
+}
+
+function axisValueOf(candidate) {
+  const selected = candidate && candidate.selected;
+  if (!selected) return null;
+  if (Number.isFinite(Number(selected.rate)) && selected.family !== 'abundance') return Number(selected.rate);
+  if (Number.isFinite(Number(selected.scale))) return Number(selected.scale);
+  return null;
+}
+
+function nextRefineValue(sortedValues, resultAt, seen, best) {
+  const bestVal = axisValueOf(best);
+  const intervals = [];
+  for (let i = 0; i < sortedValues.length - 1; i += 1) {
+    const a = sortedValues[i];
+    const b = sortedValues[i + 1];
+    const mid = midValue(a, b);
+    if (mid == null || seen.has(gridKey(mid))) continue;
+    const ca = cashOf(resultAt.get(a));
+    const cb = cashOf(resultAt.get(b));
+    const signChange = (ca > 0) !== (cb > 0);
+    const touchesBest = bestVal != null && (Math.abs(a - bestVal) < 1e-9 || Math.abs(b - bestVal) < 1e-9);
+    intervals.push({ mid, signChange, touchesBest, a, b });
+  }
+  const crossing = intervals.find(item => item.signChange);
+  if (crossing) return crossing.mid;
+  const nearBest = intervals.filter(item => item.touchesBest);
+  if (nearBest.length) {
+    nearBest.sort((left, right) => (right.b - right.a) - (left.b - left.a));
+    return nearBest[0].mid;
+  }
+  return intervals.length ? intervals[0].mid : null;
+}
+
+function neighborMids(grid, center) {
+  const sorted = [...new Set((grid || []).map(gridKey).filter(value => Number.isFinite(value) && value >= 0))].sort((a, b) => a - b);
+  if (!sorted.length || !Number.isFinite(center)) return [];
+  const key = gridKey(center);
+  let index = sorted.findIndex(value => Math.abs(value - key) < 1e-9);
+  if (index < 0) {
+    index = sorted.reduce((best, value, i) => (
+      Math.abs(value - key) < Math.abs(sorted[best] - key) ? i : best
+    ), 0);
+  }
+  const extras = [];
+  if (index > 0) {
+    const mid = midValue(sorted[index - 1], sorted[index]);
+    if (mid != null) extras.push(gridKey(mid));
+  }
+  if (index < sorted.length - 1) {
+    const mid = midValue(sorted[index], sorted[index + 1]);
+    if (mid != null) extras.push(gridKey(mid));
+  }
+  return extras.filter(value => Math.abs(value - key) > 1e-9);
+}
+
+function refineAxis({ coarse, evaluate, enabled, maxExtra = REFINE_MAX_EXTRA }) {
+  const seen = new Set();
+  const resultAt = new Map();
+  let best = null;
+  let tried = 0;
+
+  const consider = (value) => {
+    const key = gridKey(value);
+    if (!Number.isFinite(key) || key < 0 || seen.has(key)) return;
+    seen.add(key);
+    tried += 1;
+    try {
+      const candidate = evaluate(value);
+      if (candidate) {
+        resultAt.set(key, candidate);
+        best = betterCashflowCandidate(best, candidate);
+      } else {
+        resultAt.set(key, null);
+      }
+    } catch (error) {
+      resultAt.set(key, {
+        mode: 'positive-cashflow',
+        error: error.message,
+        objective: {
+          met: false,
+          positiveSaleCount: 0,
+          activeSaleCount: 0,
+          annualNetCash: -Infinity,
+          formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).',
+        },
+        warnings: [error.message],
+      });
+      if (!best) best = resultAt.get(key);
+    }
+  };
+
+  for (const value of coarse || []) consider(value);
+  if (enabled) {
+    const extraCap = Number.isFinite(Number(maxExtra)) ? Math.max(0, Math.floor(Number(maxExtra))) : REFINE_MAX_EXTRA;
+    for (let step = 0; step < extraCap; step += 1) {
+      const sorted = [...seen].sort((a, b) => a - b);
+      const next = nextRefineValue(sorted, resultAt, seen, best);
+      if (next == null) break;
+      consider(next);
+    }
+  }
+  return { best, tried };
+}
+
+function scaleMaterialStream(stream, ratio) {
+  if (!stream || stream.kind !== 'material' || !stream.mol) return;
+  for (const key of Object.keys(stream.mol)) stream.mol[key] *= ratio;
+}
+
+function removeGraphNodes(definition, ids) {
+  const drop = new Set(ids.filter(Boolean));
+  if (!drop.size) return;
+  definition.graph.nodes = definition.graph.nodes.filter(node => !drop.has(node.id));
+  definition.graph.edges = definition.graph.edges.filter(edge => !drop.has(edge.from.node) && !drop.has(edge.to.node));
+  for (const id of drop) delete definition.operation.setpoints[id];
+  const priorities = definition.operation.priorities || {};
+  for (const [bus, order] of Object.entries(priorities)) {
+    priorities[bus] = (order || []).filter(id => !drop.has(id));
+  }
+}
+
+function isPreSizingSeed(seed) {
+  return Boolean(seed && Number(seed.brineKg) > 0 && seed.streams && typeof seed.streams === 'object');
+}
+
+function baselineAbundanceDuties(definition) {
+  const minerals = converter(definition, 'brine-minerals');
+  const brine = brineSource(definition, minerals);
+  if (!minerals || !brine?.params?.stream) throw new Error('sizeForPositiveCashflow needs brine-minerals and a brine source');
+  return {
+    brineKg: streamMassKg(brine.params.stream),
+    setpoints: { ...(definition.operation.setpoints || {}) },
+    streams: Object.fromEntries(
+      definition.graph.nodes
+        .filter(node => node.params?.stream)
+        .map(node => [node.id, JSON.parse(JSON.stringify(node.params.stream))])
+    ),
+  };
+}
+
+function baselineFromSeed(definition) {
+  const stamped = definition?.operation?.preSizingSeed;
+  if (isPreSizingSeed(stamped)) return JSON.parse(JSON.stringify(stamped));
+  return baselineAbundanceDuties(definition);
+}
+
+function absoluteScale(scale) {
+  const value = Number(scale);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.min(value, ABSOLUTE_SCALE_CAP);
+}
+
+function stampPreSizingSeed(definition, baseline) {
+  if (!definition || !isPreSizingSeed(baseline)) return;
+  definition.operation = definition.operation || { setpoints: {} };
+  if (isPreSizingSeed(definition.operation.preSizingSeed)) return;
+  definition.operation.preSizingSeed = JSON.parse(JSON.stringify(baseline));
+}
+
+function applyAbundanceScale(definition, baseline, scale, slateMode) {
+  const ratio = absoluteScale(scale);
+  stampPreSizingSeed(definition, baseline);
+  const minerals = converter(definition, 'brine-minerals');
+  const brine = brineSource(definition, minerals);
+  const brineKg = baseline.brineKg * ratio;
+  brine.params.stream = JSON.parse(JSON.stringify(baseline.streams[brine.id] || brine.params.stream));
+  scaleMaterialStream(brine.params.stream, ratio);
+  minerals.capacity = brineKg;
+  definition.operation.setpoints[minerals.id] = brineKg;
+
+  const brinePump = nodeBy(definition, item => item.id === 'brine-pump' || item.unit === 'intake-pump');
+  if (brinePump) {
+    const density = Number(brinePump.params?.densityKgM3 ?? 1200) || 1200;
+    const brineM3 = brineKg / density;
+    brinePump.capacity = brineM3;
+    definition.operation.setpoints[brinePump.id] = brineM3;
+  }
+
+  for (const id of ABUNDANCE_DOWNSTREAM) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node) continue;
+    const base = Number(baseline.setpoints[id] || 0);
+    node.capacity = base * ratio;
+    definition.operation.setpoints[id] = base * ratio;
+  }
+
+  for (const id of ['salt-feed', 'water', 'air', 'power']) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node?.params?.stream || !baseline.streams[id]) continue;
+    node.params.stream = JSON.parse(JSON.stringify(baseline.streams[id]));
+    if (node.params.stream.kind === 'electricity') node.params.stream.kWh *= ratio;
+    else scaleMaterialStream(node.params.stream, ratio);
+  }
+
+  if (slateMode === 'minerals-only') {
+    minerals.params = { ...(minerals.params || {}), bromideRecovery: 0 };
+    for (const id of ABUNDANCE_DOWNSTREAM) {
+      const node = nodeBy(definition, item => item.id === id);
+      if (!node) continue;
+      node.capacity = 0;
+      definition.operation.setpoints[id] = 0;
+    }
+    for (const id of ['salt-feed', 'water', 'air']) {
+      const node = nodeBy(definition, item => item.id === id);
+      if (!node?.params?.stream?.mol) continue;
+      for (const key of Object.keys(node.params.stream.mol)) node.params.stream.mol[key] = 0;
+    }
+    const power = electricityNode(definition);
+    if (power?.params?.stream) {
+      power.params.stream.kWh = brineKg * Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05)
+        + intakePumpElectricityKWh(definition, brineKg);
+    }
+  } else if (slateMode === 'minerals+halogens') {
+    if (!nodeBy(definition, item => item.id === 'hydrogen-vent')) {
+      definition.graph.nodes.push({ id: 'hydrogen-vent', unit: 'material-sink', economics: { disposition: 'vent' } });
+    }
+    const h2Edge = definition.graph.edges.find(edge => edge.from.node === 'chlor-alkali' && edge.from.port === 'hydrogen');
+    if (h2Edge) h2Edge.to = { node: 'hydrogen-vent', port: 'in' };
+    removeGraphNodes(definition, ['asu', 'ammonia', 'ammonia-product', 'oxygen', 'offgas', 'air']);
+    const ca = Number(definition.operation.setpoints['chlor-alkali'] || 0);
+    const br = Number(definition.operation.setpoints['bromine-recovery'] || 0);
+    const power = electricityNode(definition);
+    if (power?.params?.stream) {
+      power.params.stream.kWh = brineKg * Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05)
+        + intakePumpElectricityKWh(definition, brineKg)
+        + ca * 2.5 + br * 0.2;
+    }
+  }
+
+  syncSiteResource(definition, brine);
+  const power = electricityNode(definition);
+  if (power) syncSiteResource(definition, power);
+  syncAbundanceSolar(definition, power);
+  definition.operation.boundaryLimitedBy = [];
+}
+
+// Abundance scales rewrite the electricity stream. Land uses site.solarKWp, so
+// the array has to follow that stream or the footprint stays on the seed size.
+function syncAbundanceSolar(definition, power) {
+  if (!definition.site || !power?.params?.stream) return;
+  const yieldPerKWp = dailyPvKWhPerKWp(definition);
+  const kWh = Number(power.params.stream.kWh) || 0;
+  if (!(yieldPerKWp > 0)) return;
+  const nextKWp = kWh / yieldPerKWp;
+  scaleSolarEconomics(power, Number(definition.site.solarKWp) || 0, nextKWp);
+  definition.site.solarKWp = nextKWp;
+  if (definition.site.resources?.electricity) {
+    definition.site.resources.electricity.stream = { kind: 'electricity', kWh };
+    definition.site.resources.electricity.evidence = `PVGIS typical-day × ${nextKWp} kWp`;
+  }
+}
+
+function saleKgOf(product) {
+  return Number(product?.deliveredAmount) || 0;
+}
+
+function isAmmoniaSaleId(id) {
+  return id === 'ammonia' || id === 'ammonia-product';
+}
+
+// When brine-minerals dominate cash+/tonnes, report family=abundance even if a
+// joint/fuel search also tried ammonia rates. Ammonia on an abundance hub is a
+// co-product, not a fuel winner.
+function selectedForSlate(candidate) {
+  const selected = candidate?.selected;
+  if (!selected || typeof selected !== 'object') return selected;
+  const definition = candidate.definition;
+  const hasMinerals = Boolean(converter(definition, 'brine-minerals'));
+  if (!hasMinerals) return selected;
+  const products = candidate.objective?.products || candidate.products || [];
+  let mineralKg = 0;
+  let fuelKg = 0;
+  for (const product of products) {
+    if (!(Number(product?.annualRevenue) > 0)) continue;
+    const id = String(product.id || '');
+    const kg = saleKgOf(product);
+    if (ABUNDANCE_SALE_IDS.includes(id) || isAmmoniaSaleId(id)) mineralKg += kg;
+    else if (FUEL_SALE_IDS.includes(id)) fuelKg += kg;
+  }
+  if (!(mineralKg > 0 && mineralKg >= fuelKg)) return selected;
+  if (selected.family === 'abundance' && selected.product !== 'ammonia') return selected;
+  const next = { family: 'abundance' };
+  if (Number.isFinite(Number(selected.scale))) next.scale = Number(selected.scale);
+  if (selected.slateMode) next.slateMode = selected.slateMode;
+  return next;
+}
+
+function scoreSizedCandidate(definition, solved, selected, warnings = []) {
+  if (!evaluateEconomics || !scorePositiveCashflow) {
+    throw new Error('sizeForPositiveCashflow needs FlowsheetEconomics');
+  }
+  const economicsResult = evaluateEconomics(definition, solved);
+  const residual = Number(solved?.balances?.maxAbsResidual);
+  const objective = scorePositiveCashflow({
+    ...economicsResult,
+    maxAbsResidual: Number.isFinite(residual) ? residual : Infinity,
+  });
+  return {
+    mode: 'positive-cashflow',
+    definition,
+    solved,
+    economics: economicsResult,
+    objective,
+    products: objective.products,
+    selected,
+    warnings: [...warnings, ...(solved.warnings || [])],
+    residual: solved.balances?.maxAbsResidual ?? 0,
+    converged: (solved.balances?.maxAbsResidual ?? 0) < 1e-6,
+    iterations: 1,
+    heatCoveredKWh: solved.heatIntegration?.coveredKWh ?? 0,
+    heatResidualKWh: solved.heatIntegration?.residualDemandKWh ?? 0,
+  };
+}
+
+function fuelProductsOn(definition) {
+  const products = [];
+  if (converter(definition, 'sabatier') || productSink(definition, 'CH4') || nodeBy(definition, node => node.id === 'methane')) {
+    products.push('CH4');
+  }
+  if (converter(definition, 'electrolyzer')) products.push('H2');
+  if (converter(definition, 'methanol')) products.push('methanol');
+  if (converter(definition, 'ammonia')) products.push('ammonia');
+  return products;
+}
+
+function jointFuelProducts(definition) {
+  return fuelProductsOn(definition).filter(product => {
+    if (product === 'ammonia' && converter(definition, 'brine-minerals')) return false;
+    return true;
+  });
+}
+
+function evaluateAbundanceAt(seed, baseline, slateMode, scale) {
+  const definition = resolveDefinition(seed);
+  if (definition.site?.rights?.brineConcession && !rightIsAuthorized(definition.site.rights.brineConcession)) {
+    assertSizeMayAssume(definition, ['brine']);
+  }
+  const appliedScale = absoluteScale(scale);
+  applyAbundanceScale(definition, baseline, appliedScale, slateMode);
+  withholdUnauthorizedSupply(definition);
+  const solved = solveOperation(definition);
+  return scoreSizedCandidate(definition, solved, { family: 'abundance', slateMode, scale: appliedScale }, []);
+}
+
+function searchAbundanceCashflow(seed, opts) {
+  const baselineDef = resolveDefinition(seed);
+  const baseline = baselineFromSeed(baselineDef);
+  const modes = [];
+  if (converter(baselineDef, 'brine-minerals')) modes.push('minerals-only');
+  if (nodeBy(baselineDef, node => node.id === 'chlor-alkali') && nodeBy(baselineDef, node => node.id === 'bromine-recovery')) {
+    modes.push('minerals+halogens');
+  }
+  modes.push('full');
+  const scales = listedGrid(opts, 'scales', ABUNDANCE_SCALES);
+  const refine = shouldRefine(opts, scales);
+  let best = null;
+  let tried = 0;
+  for (const slateMode of modes) {
+    const found = refineAxis({
+      coarse: scales,
+      enabled: refine,
+      maxExtra: opts.maxRefine,
+      evaluate: scale => evaluateAbundanceAt(seed, baseline, slateMode, scale),
+    });
+    tried += found.tried;
+    best = betterCashflowCandidate(best, found.best);
+  }
+  if (!best || !best.definition) throw new Error(best?.error || 'sizeForPositiveCashflow found no feasible abundance slate');
+  best.candidatesTried = tried;
+  if (!best.objective.met) {
+    best.warnings = [...(best.warnings || []), 'No cash-positive co-product slate under searched modes/scales'];
+  }
+  return best;
+}
+
+function evaluateFuelAt(seed, product, rate, opts) {
+  const sized = sizeToProduct({
+    product,
+    rate,
+    caseOrBuilder: seed,
+    caps: opts.caps,
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    heatCredit: opts.heatCredit,
+  });
+  const candidate = scoreSizedCandidate(
+    sized.definition,
+    sized.solved,
+    { family: 'fuel', product, rate },
+    sized.warnings || []
+  );
+  candidate.iterations = sized.iterations;
+  candidate.history = sized.history;
+  candidate.residual = sized.residual;
+  candidate.converged = sized.converged;
+  candidate.heatCoveredKWh = sized.heatCoveredKWh;
+  candidate.heatResidualKWh = sized.heatResidualKWh;
+  return candidate;
+}
+
+function searchFuelCashflow(seed, opts) {
+  const rates = listedGrid(opts, 'rates', FUEL_RATES);
+  const probe = resolveDefinition(seed);
+  const products = fuelProductsOn(probe);
+  if (!products.length) throw new Error('sizeForPositiveCashflow needs Sabatier/CH4, electrolyzer/H2, methanol, or ammonia sale paths');
+  const refine = shouldRefine(opts, rates);
+  let best = null;
+  let tried = 0;
+  for (const product of products) {
+    const found = refineAxis({
+      coarse: rates,
+      enabled: refine,
+      maxExtra: opts.maxRefine,
+      evaluate: rate => evaluateFuelAt(seed, product, rate, opts),
+    });
+    tried += found.tried;
+    if (found.best && found.best.definition) best = betterCashflowCandidate(best, found.best);
+  }
+  if (!best) throw new Error('sizeForPositiveCashflow found no feasible fuel sizing candidate');
+  best.candidatesTried = tried;
+  if (!best.objective.met) {
+    best.warnings = [...(best.warnings || []), 'No cash-positive fuel slate under searched rates; returning best annualNetCash'];
+  }
+  return best;
+}
+
+function evaluateJointAt(seed, baseline, scale, product, rate, opts) {
+  const scaled = resolveDefinition(seed);
+  const appliedScale = absoluteScale(scale);
+  applyAbundanceScale(scaled, baseline, appliedScale, 'full');
+  const sized = sizeToProduct({
+    product,
+    rate,
+    definition: scaled,
+    caps: opts.caps,
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    heatCredit: opts.heatCredit,
+  });
+  const candidate = scoreSizedCandidate(
+    sized.definition,
+    sized.solved,
+    { family: 'joint', slateMode: 'full', scale: appliedScale, product, rate },
+    sized.warnings || []
+  );
+  candidate.iterations = sized.iterations;
+  candidate.history = sized.history;
+  candidate.residual = sized.residual;
+  candidate.converged = sized.converged;
+  candidate.heatCoveredKWh = sized.heatCoveredKWh;
+  candidate.heatResidualKWh = sized.heatResidualKWh;
+  return candidate;
+}
+
+function searchJointCashflow(seed, opts) {
+  const products = jointFuelProducts(resolveDefinition(seed));
+  if (!products.length) return null;
+  const baselineDef = resolveDefinition(seed);
+  if (!converter(baselineDef, 'brine-minerals')) return null;
+  const baseline = baselineFromSeed(baselineDef);
+  const scales = listedGrid(opts, 'scales', ABUNDANCE_SCALES);
+  const rates = listedGrid(opts, 'rates', FUEL_RATES);
+  let best = null;
+  let tried = 0;
+  const seen = new Set();
+  const consider = (scale, product, rate) => {
+    const key = `${gridKey(scale)}|${product}|${gridKey(rate)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    tried += 1;
+    try {
+      const candidate = evaluateJointAt(seed, baseline, scale, product, rate, opts);
+      best = betterCashflowCandidate(best, candidate);
+    } catch {
+      /* skip infeasible joint point */
+    }
+  };
+  for (const scale of scales) {
+    for (const product of products) {
+      for (const rate of rates) consider(scale, product, rate);
+    }
+  }
+  if (shouldRefine(opts, scales) && shouldRefine(opts, rates) && best?.selected) {
+    const product = best.selected.product;
+    const scale0 = Number(best.selected.scale);
+    const rate0 = Number(best.selected.rate);
+    const extraScales = neighborMids(scales, scale0);
+    const extraRates = neighborMids(rates, rate0);
+    for (const rate of extraRates) consider(scale0, product, rate);
+    for (const scale of extraScales) consider(scale, product, rate0);
+    for (let step = 0; step < Math.min(Number(opts.maxRefine) || REFINE_MAX_EXTRA, 4); step += 1) {
+      const moreRates = neighborMids([...rates, ...extraRates, rate0], best.selected.rate);
+      const moreScales = neighborMids([...scales, ...extraScales, scale0], best.selected.scale);
+      let added = false;
+      for (const rate of moreRates) {
+        const before = tried;
+        consider(best.selected.scale, product, rate);
+        if (tried > before) added = true;
+      }
+      for (const scale of moreScales) {
+        const before = tried;
+        consider(scale, product, best.selected.rate);
+        if (tried > before) added = true;
+      }
+      if (!added) break;
+    }
+  }
+  if (!best) {
+    return { candidatesTried: tried, objective: { met: false, positiveSaleCount: 0, activeSaleCount: 0, annualNetCash: -Infinity } };
+  }
+  best.candidatesTried = tried;
+  return best;
+}
+
+function sizeForPositiveCashflow(opts = {}) {
+  const caseOrBuilder = opts.definition ?? opts.caseOrBuilder;
+  if (!caseOrBuilder) throw new Error('sizeForPositiveCashflow needs a case definition or builder');
+  const probe = resolveDefinition(caseOrBuilder);
+  const hasAbundance = Boolean(converter(probe, 'brine-minerals'));
+  const fuels = fuelProductsOn(probe);
+  if (!hasAbundance && !fuels.length) {
+    throw new Error('sizeForPositiveCashflow supports abundance (brine minerals) or fuel (CH4/H2/methanol/ammonia) plants');
+  }
+
+  let best = null;
+  let tried = 0;
+  const familiesSearched = [];
+  const take = (result, family) => {
+    if (!result) return;
+    tried += Number(result.candidatesTried) || 0;
+    if (family) familiesSearched.push(family);
+    if (result.definition || result.objective) best = betterCashflowCandidate(best, result);
+  };
+  const tryFamily = (family, search) => {
+    try {
+      take(search(), family);
+    } catch (error) {
+      familiesSearched.push(family);
+      tried += 1;
+      if (!best) {
+        best = {
+          mode: 'positive-cashflow',
+          error: error.message,
+          objective: { met: false, positiveSaleCount: 0, activeSaleCount: 0, annualNetCash: -Infinity, formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).' },
+          warnings: [error.message],
+        };
+      }
+    }
+  };
+
+  if (hasAbundance) tryFamily('abundance', () => searchAbundanceCashflow(caseOrBuilder, opts));
+  if (fuels.length) tryFamily('fuel', () => searchFuelCashflow(caseOrBuilder, opts));
+  if (hasAbundance && jointFuelProducts(probe).length) {
+    tryFamily('joint', () => searchJointCashflow(caseOrBuilder, opts));
+  }
+
+  if (!best || !best.definition) {
+    throw new Error(best?.error || 'sizeForPositiveCashflow found no feasible co-product slate');
+  }
+  best.candidatesTried = tried;
+  best.familiesSearched = familiesSearched;
+  best.selected = selectedForSlate(best);
+  if (hasAbundance && best.definition) {
+    try {
+      stampPreSizingSeed(best.definition, baselineFromSeed(probe));
+    } catch {
+      /* fuel-only winners without a brine baseline keep the definition as solved */
+    }
+  }
+  if (!best.objective.met) {
+    const note = 'No cash-positive co-product slate under searched modes/scales';
+    if (!(best.warnings || []).includes(note)) best.warnings = [...(best.warnings || []), note];
+  }
+  return best;
+}
+
+return {
+  sizeToTarget,
+  sizeCoastalToMethane,
+  sizeToProduct,
+  sizeForPositiveCashflow,
+  ABUNDANCE_SCALES,
+  FUEL_RATES,
+  FAST_SCALES,
+  FAST_RATES,
+  ABSOLUTE_SCALE_CAP,
+};
+});

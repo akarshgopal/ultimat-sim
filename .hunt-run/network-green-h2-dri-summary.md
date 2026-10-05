@@ -73,4 +73,4 @@ Not edited: `cases/green-h2-dri.js`, `cases/green-mto.js`, `cases/green-ft.js`, 
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `58e3d50`.
+Feat `cc1e38f` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `cc1e38f`). `npm test` 531 pass / 0 fail. Prior checkout tip `58e3d50`.

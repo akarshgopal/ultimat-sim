@@ -91,3 +91,7 @@ Not edited: `cases/h2-dri.js`, `data/tea-screening.js`, `engine/units.js`, MECH 
 - No chlor-alkali, ASU, battery, DAC, or Network plant for this case.
 - World-scale Midrex CAPEX (cheaper than the small-plant 800 intensity) not a second pack.
 - Intake/outfall remain screening assumptions, not permits.
+
+## Tip
+
+Feat `39781da` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `39781da`). `npm test` 429 pass / 0 fail. Prior checkout tip `d92fcd4`.

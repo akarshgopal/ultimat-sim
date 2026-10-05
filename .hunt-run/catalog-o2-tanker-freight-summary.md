@@ -101,4 +101,4 @@ Not edited: packs, oxygen price, SEC, CAPEX, MECH undo/pump/blower, `cases/dac.j
 
 ## Tip
 
-Feat on `main` from checkout tip `e3ac2d6`. Pages live commit follows deploy.
+Feat `e20fb4e` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `e20fb4e`). `npm test` 535 pass / 0 fail. Prior checkout tip `e3ac2d6`.

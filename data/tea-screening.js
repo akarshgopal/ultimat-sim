@@ -57,6 +57,8 @@ const REW_POLYSI = 'https://www.renewableenergyworld.com/solar/advancements-in-t
 const FRAUNHOFER_POLYSI = 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf';
 const FRAUNHOFER_PV_REPORT = 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf';
 const USGS_AG = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-silver.pdf';
+const USGS_IRON_ORE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf';
+const USGS_STEEL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf';
 const NREL_DLE = 'https://doi.org/10.2172/1782801';
 const NREL_ATB = 'https://atb.nrel.gov/';
 const NREL_ATB_DOI = 'https://doi.org/10.25984/2377191';
@@ -266,6 +268,15 @@ const prices = {
       { label: 'NREL Solar Industry Update family (module ASP context ~$0.10–0.20/W; screening mid $0.15/W)', url: NREL_SOLAR_2025 },
     ]
   ),
+  steel: row(
+    0.40, '$/kg', 'screening', 'HBI / DRI iron band',
+    'Hot-briquetted / DRI iron mid of recent ~$350–450/t bands ($0.40/kg). Screening, not a Platts HBI contract and not an EAF melt-shop quote.',
+    [
+      { label: 'USGS MCS 2025 iron and steel (commodity-family context; screening HBI/DRI mid $0.40/kg of ~$350–450/t, not a Platts contract)', url: USGS_STEEL },
+      { label: 'USGS MCS 2025 iron ore (feed-family context; DRI product price is screening, not a mine quote)', url: USGS_IRON_ORE },
+      { label: 'World Bank commodity markets / pink sheet (metals family context; screening HBI/DRI mid of ~$350–450/t, not a contract)', url: WB_PINK },
+    ]
+  ),
 };
 
 const costs = {
@@ -373,6 +384,19 @@ const costs = {
     2.00, '$/kg', 'screening', 'solar EVA film band',
     'Solar EVA film ~$1.8–2.5/kg mid $2.00/kg. Screening, not a STR/Mitsui contract.',
     [{ label: 'Solar EVA encapsulant film screening mid $2.00/kg of ~$1.8–2.5/kg; not a STR/Mitsui contract', url: FRAUNHOFER_PV_REPORT }]
+  ),
+  'iron-ore': row(
+    0.10, '$/kg', 'screening', 'USGS MCS iron ore band',
+    'Hematite / Fe₂O₃ feed screening. USGS MCS iron ore ~$80–120/t mid → $0.10/kg (US mine unit values recently ~$89–115/t; 62% fines global spot ~$99–112/t sit in that band). Not a mine contract.',
+    [{ label: 'USGS MCS 2025 iron ore (US mine unit value / global fines family; screening mid $0.10/kg of ~$80–120/t, not a mine contract)', url: USGS_IRON_ORE }]
+  ),
+  'hydrogen-feed': row(
+    2.00, '$/kg', 'screening', 'industrial/grey–blue H2 purchase',
+    'Purchase at screening industrial/grey–blue blend H₂ ($2.00/kg). Not a DOE $1/kg goal, not full green electrolyzer LCOH, and not an electrolyzer demo.',
+    [
+      { label: 'IEA Global Hydrogen Review 2024 (industrial/grey–blue H₂ family; screening purchase $2.00/kg, not green LCOH and not a DOE $1/kg goal)', url: IEA_H2 },
+      { label: 'DOE hydrogen production electrolysis (family contrast only; this purchase is not an electrolyzer path)', url: DOE_H2 },
+    ]
   ),
 };
 
@@ -567,6 +591,17 @@ const packs = {
     evidence: [
       { label: 'Fraunhofer ISE Photovoltaics Report (module mass 11.6 kg/m² → 52.7 kg/kWp with ~220 W/m²; CAPEX intensity is screening OOM)', url: FRAUNHOFER_PV_REPORT },
       { label: 'NREL manufacturing cost / solar industry update family (module-fab CAPEX OOM; screening $0.10/W → 700 $/(kg/day))', url: NREL_SOLAR_2025 },
+    ],
+  }),
+  'hydrogen-dri': pack({
+    capexIntensity: 800, intensityUnit: '$/(kg Fe/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'small shaft/DRI island OOM',
+    note: 'installedCapex = 800 × capacity. ≈ $220k per annual tonne × 365/1000 rounded. Small shaft/DRI island OOM; world-scale Midrex cheaper; linear intensity; not a Midrex/HYBRIT/Tenova quote. SEC is the unit param 0.7 kWh/kg shaft electricity with purchased H₂, not this pack.',
+    evidence: [
+      { label: 'USGS MCS 2025 iron and steel (commodity-family context; screening DRI-island CAPEX intensity, not a Midrex quote)', url: USGS_STEEL },
+      { label: 'IEA Global Hydrogen Review 2024 (H₂-DRI family context; CAPEX intensity is screening OOM, not a plant quote)', url: IEA_H2 },
+      { label: 'DOE hydrogen for industry / electrolysis family (contrast only; this pack is a shaft island with purchased H₂, not an electrolyzer)', url: DOE_H2 },
     ],
   }),
   'iac-leach': pack({
@@ -800,6 +835,14 @@ const demand = {
     5e6, 'kg/year', 'screening', 'PV module screening regional ceiling',
     `5 kt/y screening offtake ceiling (~95 MWp/y at 52.7 kg/kWp). Tiny slice of the module market; not world production and not a contract. Fraunhofer module-mass family is BOM context — this ceiling is screening offtake. ${DEMAND_REGION}`,
     [{ label: 'Fraunhofer ISE Photovoltaics Report (module mass family; 5 kt/y ceiling is screening offtake, not production)', url: FRAUNHOFER_PV_REPORT }]
+  ),
+  steel: row(
+    5e8, 'kg/year', 'screening', 'HBI / DRI iron screening regional ceiling',
+    `500 kt/y screening offtake ceiling. Tiny slice of regional DRI/HBI iron; not world steel production and not a Platts HBI contract. USGS iron-ore / iron-and-steel PDFs are commodity-family context — this ceiling is screening offtake. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2025 iron and steel (commodity-family context; 500 kt/y DRI/HBI ceiling is screening offtake, not production)', url: USGS_STEEL },
+      { label: 'World Bank commodity markets / pink sheet (metals family context; offtake cap is screening)', url: WB_PINK },
+    ]
   ),
 };
 
@@ -1096,6 +1139,14 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     5e8, 'kg/year', 'screening', 'PV module China/Asia ceiling',
     'Conservative 500 kt/y China/Asia module ceiling (~9.5 GWp/y at 52.7 kg/kWp). China dominates module assembly. Screening offtake, not a production table and not a contract.',
     [{ label: 'Fraunhofer ISE Photovoltaics Report (module mass family; 500 kt/y China ceiling is screening offtake, not production)', url: FRAUNHOFER_PV_REPORT }]
+  ),
+  steel: row(
+    5e9, 'kg/year', 'screening', 'HBI / DRI iron China/Asia ceiling',
+    'Conservative 5 Mt/y China/Asia DRI/HBI ceiling. China dominates crude steel. USGS iron-and-steel PDF is commodity-family context. Screening offtake, not a production table and not a Platts HBI contract.',
+    [
+      { label: 'USGS MCS 2025 iron and steel (commodity-family context; 5 Mt/y China DRI/HBI ceiling is screening offtake, not production)', url: USGS_STEEL },
+      { label: 'World Bank commodity markets / pink sheet (metals family context; China ceiling is screening offtake)', url: WB_PINK },
+    ]
   ),
   'ndpr-oxide': row(
     2e6, 'kg/year', 'screening', 'NdPr oxide China/Asia ceiling; ionic-clay supply',

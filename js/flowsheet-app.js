@@ -97,7 +97,7 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module'],
+    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module', 'hydrogen-dri'],
     REE: ['iac-leach', 'ree-chromatography', 'ree-sx'],
     Bio: ['bioforge'],
   };
@@ -429,10 +429,16 @@
     },
     'hydrogen-dri': {
       label: 'Hydrogen DRI steel', capacity: 1000, rate: 100, activityUnit: 'kg Fe/day',
-      palette: { section: 'building', order: 13, glyph: 'Fe', tone: 'carbon', description: 'Iron oxide + H₂ + power → iron + water' },
+      palette: { section: 'building', order: 13, glyph: 'Fe', tone: 'carbon', description: 'Purchased hematite + H₂ → DRI Fe' },
       params: { electricityKWhPerKg: 0.7 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Direct electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg Fe' }],
-      references: [{ label: 'DOE hydrogen for industry', url: 'https://www.energy.gov/cmei/fuels/systems-development-and-integration-chemical-and-industrial-processes' }],
+      sourceNote: 'Screening H₂-DRI, 0.7 kWh/kg shaft electricity with purchased H₂, not Midrex. Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O. Not an electrolyzer path and not EAF.',
+      references: [
+        { label: 'USGS MCS 2025 iron ore', url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf' },
+        { label: 'USGS MCS 2025 iron and steel', url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf' },
+        { label: 'IEA Global Hydrogen Review 2024', url: 'https://www.iea.org/reports/global-hydrogen-review-2024' },
+        { label: 'DOE hydrogen production electrolysis (family contrast; purchased H₂, not electrolyzer)', url: 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electrolysis' },
+      ],
     },
     'titanium-kroll': {
       label: 'Titanium Kroll', capacity: 1000, rate: 100, activityUnit: 'kg Ti/day',
@@ -642,7 +648,7 @@
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
     concentrate: 'Concentrate', dytb: 'DyTb', lightReo: 'Light REO',
     dextrose: 'Dextrose', gluconic: 'Gluconic acid', hydrogenPeroxide: 'Hydrogen peroxide',
-    ironOre: 'Iron ore', steel: 'Iron / steel', titaniumTetrachloride: 'Titanium tetrachloride', titanium: 'Titanium', magnesiumChloride: 'Magnesium chloride',
+    ironOre: 'Iron ore', steel: 'Fe / Iron', titaniumTetrachloride: 'Titanium tetrachloride', titanium: 'Titanium', magnesiumChloride: 'Magnesium chloride',
   };
   const materialPresets = {
     air: { label: 'Ambient air', phase: 'gas', mol: { CO2: 428, O2: 211409, N2: 788163 } },
@@ -989,6 +995,7 @@
     'coastal-methane': () => loadCoastalMethane(0),
     'coastal-methanol': () => loadMethanolPlant(0),
     'silicon-alumina': () => loadSiliconAlumina(),
+    'h2-dri': () => loadH2Dri(),
     'ree-ionic': () => loadReeIonic(),
     'maglut-long-beach': () => loadMaglutLongBeach(),
     'ree-sx': () => loadReeSx(),
@@ -1412,6 +1419,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening module assembly on frozen Mejillones PV; Size-to-target → PV module; may be cash±; not bankable; not a cell fab.';
+    }
+  }
+
+  function loadH2Dri() {
+    setActiveDemo('h2-dri', 'Mejillones H₂-DRI (purchased ore+H₂)');
+    lastSizing = null;
+    if (typeof H2DriCase === 'undefined' || !H2DriCase.createH2DriCase) {
+      throw new Error('H₂-DRI case is not loaded');
+    }
+    loadCase(H2DriCase.createH2DriCase(), 'dri');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening H₂-DRI from purchased ore+H₂ on frozen Mejillones PV; may be cash±; not bankable; not green-H₂ path.';
     }
   }
 
@@ -4840,6 +4860,9 @@
     urea: 'Urea',
     Urea: 'Urea',
     'urea-product': 'Urea',
+    steel: 'Fe / Iron',
+    Fe: 'Fe / Iron',
+    dri: 'Fe / Iron',
     lithium: 'Lithium',
     LiCl: 'Lithium',
     Li2CO3: 'Lithium',
@@ -6798,7 +6821,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6929,6 +6952,7 @@
     'bayer-alumina': 'bayer-alumina',
     'aluminium-smelter': 'aluminium-smelter',
     'pv-module': 'pv-module',
+    'hydrogen-dri': 'hydrogen-dri',
     'iac-leach': 'iac-leach',
     'ree-chromatography': 'ree-chromatography',
     'ree-sx': 'ree-sx',
@@ -7748,7 +7772,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

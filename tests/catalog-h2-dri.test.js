@@ -122,7 +122,7 @@ test('Mejillones H2-DRI demo ~1000 kg Fe/day with CAPEX on dri + solar and finit
 test('Palette Crust lists hydrogen-dri after pv-module; Overview option mentions H₂-DRI / DRI', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll'\s*\]/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll'\s*\]/);
   assert.match(html, /id="loadH2Dri"/);
   assert.match(html, /Mejillones H₂-DRI \(purchased ore\+H₂\)/);
   assert.match(html, /cases\/h2-dri\.js/);

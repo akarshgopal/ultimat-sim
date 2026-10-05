@@ -32,6 +32,8 @@ const SUBSTANCES = Object.freeze({
   Al: { elements: { Al: 1 }, molarMassG: 26.9815385, charge: 0 },
   Si: { elements: { Si: 1 }, molarMassG: 28.0855, charge: 0 },
   SiO2: { elements: { Si: 1, O: 2 }, molarMassG: 60.0843, charge: 0 },
+  Na2CO3: { elements: { Na: 2, C: 1, O: 3 }, molarMassG: 105.9883, charge: 0 },
+  CaCO3: { elements: { Ca: 1, C: 1, O: 3 }, molarMassG: 100.0868, charge: 0 },
   CO: { elements: { C: 1, O: 1 }, molarMassG: 28.0104, charge: 0 },
   Fe2O3: { elements: { Fe: 2, O: 3 }, molarMassG: 159.687, charge: 0 },
   Fe: { elements: { Fe: 1 }, molarMassG: 55.845, charge: 0 },

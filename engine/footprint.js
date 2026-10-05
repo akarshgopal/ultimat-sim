@@ -70,6 +70,7 @@ const PROCESS_LABELS = Object.freeze({
   polysilicon: 'Polysilicon (Siemens)',
   'bayer-alumina': 'Bayer alumina',
   'pv-module': 'PV module (BOM)',
+  'float-glass': 'Float glass',
   'aluminium-smelter': 'Aluminium smelter',
   'hydrogen-dri': 'Hydrogen DRI',
   'titanium-kroll': 'Titanium Kroll',
@@ -451,6 +452,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Screening module-fab pad 4 m²/(kg module/h) (range 2–8); not a plot survey. Fraunhofer ISE Photovoltaics Report is the 11.6 kg/m² mass-share family, not a measured layout.',
         url: 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf',
+      }),
+    ]),
+  }),
+  'float-glass': Object.freeze({
+    id: 'float-glass',
+    label: PROCESS_LABELS['float-glass'],
+    basis: 'kgPerHour',
+    intensity: 4,
+    unitLabel: 'm²/(kg glass/h)',
+    range: Object.freeze([1, 12]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening float-line pad 4 m²/(kg glass/h) (range 1–12); not a plot survey. Glass for Europe LCA is the gate-to-gate mass/energy family, not a measured layout.',
+        url: 'https://glassforeurope.com/wp-content/uploads/2018/04/Life-Cycle-Assessment.pdf',
       }),
     ]),
   }),
@@ -875,6 +892,13 @@ function padPvModule(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padFloatGlass(node, solved) {
+  const spec = intensitySpec('float-glass');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padHydrogenDri(node, solved) {
   const spec = intensitySpec('hydrogen-dri');
   const activity = activityOf(solved, node.id);
@@ -967,6 +991,7 @@ const PROCESS_PADS = Object.freeze({
   'mg-si': padMgSi,
   polysilicon: padPolysilicon,
   'pv-module': padPvModule,
+  'float-glass': padFloatGlass,
   'hydrogen-dri': padHydrogenDri,
   'titanium-kroll': padTitaniumKroll,
   'bayer-alumina': padBayerAlumina,

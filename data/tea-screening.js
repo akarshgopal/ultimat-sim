@@ -50,6 +50,11 @@ const USGS_AL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-aluminum.pdf'
 const USGS_BAUXITE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-bauxite-alumina.pdf';
 const IAI_ALUMINA_ENERGY = 'https://international-aluminium.org/statistics/metallurgical-alumina-refining-energy-intensity/';
 const USGS_SILICA = 'https://www.usgs.gov/centers/national-minerals-information-center/silica-statistics-and-information';
+const USGS_SODA_ASH = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-soda-ash.pdf';
+const USGS_SAND_IND = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-sand-industrial.pdf';
+const USGS_STONE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-stone-crushed.pdf';
+const GFE_FLOAT_LCA = 'https://glassforeurope.com/wp-content/uploads/2018/04/Life-Cycle-Assessment.pdf';
+const BURROWS_PV_GLASS = 'https://doi.org/10.1016/j.solmat.2014.09.028';
 const DOE_AL = 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf';
 const MDPI_MGSI = 'https://www.mdpi.com/1996-1073/19/9/2023';
 const NREL_SOLAR_2025 = 'https://www.nrel.gov/docs/';
@@ -313,6 +318,14 @@ const prices = {
       { label: 'USGS MCS 2026 titanium (sponge US import unit-value family recently ~$11–13/kg; screening mid sits in the wider ~$6–12/kg band)', url: USGS_TI_2026 },
     ]
   ),
+  'float-glass': row(
+    0.45, '$/kg', 'screening', 'solar float/AR glass band',
+    'Solar float/AR glass ~$2.50–4.00/m² mid $3.25 / 7.8242 kg glass per m² (0.6745×11.6 Fraunhofer mass share) ≈ $0.42/kg → round $0.45/kg. Same screening band as the existing purchased-glass cost; this is the manufactured-glass sale, not a retune of that purchase. Not a Guardian/Xinyi quote and not a green premium.',
+    [
+      { label: 'Fraunhofer ISE Photovoltaics Report (glass mass share 0.6745 of 11.6 kg/m²; $/m² band is screening)', url: FRAUNHOFER_PV_REPORT },
+      { label: 'Glass for Europe LCA of float glass (commodity float family; sale uses the existing solar-glass screening band)', url: GFE_FLOAT_LCA },
+    ]
+  ),
 };
 
 const costs = {
@@ -360,6 +373,21 @@ const costs = {
     0.08, '$/kg', 'screening', 'silicon-grade quartzite lump',
     'Silicon-grade quartzite lump screening (~$80/t), above construction sand. Not a quarry quote.',
     [{ label: 'USGS silica / industrial sand statistics (family cite; screening $0.08/kg quartzite lump, not a quarry quote)', url: USGS_SILICA }]
+  ),
+  'silica-sand': row(
+    0.04, '$/kg', 'screening', 'USGS industrial sand 2025e',
+    'USGS MCS 2026 industrial sand and gravel average unit value 2025e $36/t → round $0.04/kg. Frac-sand-weighted industrial average, not a glass-sand contract and not the silicon-grade quartzite lump at $0.08/kg.',
+    [{ label: 'USGS MCS 2026 sand and gravel (industrial) — 2025e average unit value $36/t; screening glass-sand $0.04/kg, not a quarry quote', url: USGS_SAND_IND }]
+  ),
+  'soda-ash': row(
+    0.15, '$/kg', 'screening', 'USGS soda ash 2025e',
+    'USGS MCS 2026 soda ash average unit value of sales (natural source, f.o.b. mine or plant) 2025e $150/t → $0.15/kg. Not a Solvay/trona contract.',
+    [{ label: 'USGS MCS 2026 soda ash — 2025e f.o.b. mine/plant $150/t; screening $0.15/kg, not a contract', url: USGS_SODA_ASH }]
+  ),
+  limestone: row(
+    0.02, '$/kg', 'screening', 'USGS crushed stone 2025e',
+    'USGS MCS 2026 crushed stone average unit value 2025e $18.50/t → round $0.02/kg. Carbonate-stone proxy for GfE limestone+dolomite; not a chemical-lime contract and not USGS lime ~$260/t quicklime.',
+    [{ label: 'USGS MCS 2026 stone (crushed) — 2025e average unit value $18.50/t; screening limestone $0.02/kg, not a quarry quote', url: USGS_STONE }]
   ),
   'carbon-reductant': row(
     0.25, '$/kg', 'screening', 'SAF coal/coke/charcoal mix',
@@ -700,6 +728,16 @@ const packs = {
       { label: 'USGS MCS 2026 titanium (family context; CAPEX intensity is screening OOM, not a plant quote)', url: USGS_TI_2026 },
     ],
   }),
+  'float-glass': pack({
+    capexIntensity: 300, intensityUnit: '$/(kg glass/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'float-line TIC / capacity peer band',
+    note: 'installedCapex = 300 × capacity. Burrows & Fthenakis 2015: new Europe/NA float plant typically $150–200M for a 500–700 t/day line → $214–400/(kg/day); mid ~$300. World-scale 1000 t/day is cheaper (~$141–188/(kg/day) from their 192×1000 tpd / $27–36B doubling band). Linear small-plant intensity; not a Guardian/Xinyi quote and not a tin-bath detail. SEC is the unit param 2.5 kWh/kg (GfE 9.0 MJ/kg total-energy-as-electricity), not this pack.',
+    evidence: [
+      { label: 'Burrows & Fthenakis 2015 Solar Energy Materials & Solar Cells — new float plant $150–200M, typical line 500–700 t/day (DOI 10.1016/j.solmat.2014.09.028)', url: BURROWS_PV_GLASS, doi: '10.1016/j.solmat.2014.09.028' },
+      { label: 'Glass for Europe LCA of float glass (gate-to-gate SEC family; CAPEX intensity is the Burrows conversion, not a GfE CAPEX quote)', url: GFE_FLOAT_LCA },
+    ],
+  }),
   'iac-leach': pack({
     capexIntensity: 18250, intensityUnit: '$/(kg REO/day)',
     fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
@@ -962,6 +1000,14 @@ const demand = {
     [
       { label: 'USGS MCS 2025 titanium (commodity-family context; 20 kt/y sponge ceiling is screening offtake, not production)', url: USGS_TI },
       { label: 'USGS MCS 2026 titanium (family context; offtake cap is screening, not a TIMET contract)', url: USGS_TI_2026 },
+    ]
+  ),
+  'float-glass': row(
+    5e7, 'kg/year', 'screening', 'float / solar glass screening regional ceiling',
+    `50 kt/y screening offtake ceiling. Tiny slice of flat glass; a typical 500–700 t/day float line is ~180–255 kt/y. Not world production and not a Guardian/Xinyi contract. Glass for Europe / Burrows family is commodity context — this ceiling is screening offtake. ${DEMAND_REGION}`,
+    [
+      { label: 'Burrows & Fthenakis 2015 (float-line capacity family; 50 kt/y ceiling is screening offtake, not production)', url: BURROWS_PV_GLASS, doi: '10.1016/j.solmat.2014.09.028' },
+      { label: 'Glass for Europe LCA of float glass (commodity-family context; offtake cap is screening)', url: GFE_FLOAT_LCA },
     ]
   ),
 };
@@ -1274,6 +1320,14 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     [
       { label: 'USGS MCS 2025 titanium (commodity-family context; 100 kt/y China sponge ceiling is screening offtake, not production)', url: USGS_TI },
       { label: 'USGS MCS 2026 titanium (family context; China ceiling is screening offtake, not a TIMET contract)', url: USGS_TI_2026 },
+    ]
+  ),
+  'float-glass': row(
+    5e8, 'kg/year', 'screening', 'float / solar glass China/Asia ceiling',
+    'Conservative 500 kt/y China/Asia float/solar-glass ceiling. China dominates solar glass. Screening offtake, not a production table and not a Xinyi/Flat Glass Group contract.',
+    [
+      { label: 'Burrows & Fthenakis 2015 (float-line capacity family; 500 kt/y China ceiling is screening offtake, not production)', url: BURROWS_PV_GLASS, doi: '10.1016/j.solmat.2014.09.028' },
+      { label: 'Glass for Europe LCA of float glass (commodity-family context; China ceiling is screening offtake)', url: GFE_FLOAT_LCA },
     ]
   ),
   'ndpr-oxide': row(

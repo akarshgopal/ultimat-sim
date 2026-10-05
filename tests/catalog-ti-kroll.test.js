@@ -131,7 +131,7 @@ test('Mejillones Ti Kroll demo ~100 kg Ti/day with CAPEX on kroll + solar and fi
 test('Palette Crust lists titanium-kroll after hydrogen-dri; Overview option mentions Kroll / Ti', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll'\s*\]/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll'\s*\]/);
   assert.match(html, /id="loadTiKroll"/);
   assert.match(html, /Mejillones Ti Kroll \(purchased TiCl₄\+Mg\)/);
   assert.match(html, /cases\/ti-kroll\.js/);

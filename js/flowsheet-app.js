@@ -98,7 +98,7 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module', 'hydrogen-dri', 'titanium-kroll'],
+    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'float-glass', 'pv-module', 'hydrogen-dri', 'titanium-kroll'],
     REE: ['iac-leach', 'ree-chromatography', 'ree-sx'],
     Bio: ['bioforge'],
   };
@@ -358,6 +358,17 @@
       references: [
         { label: 'Fraunhofer ISE polysilicon electricity (SoG 60–71 kWh/kg family)', url: 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf' },
         { label: 'NREL Spring 2025 Solar Industry Update (SoG poly spot screening mid $6/kg)', url: 'https://www.nrel.gov/docs/' },
+      ],
+    },
+    'float-glass': {
+      label: 'Float glass', capacity: 1000, rate: 100, activityUnit: 'kg glass/day',
+      palette: { section: 'building', order: 13, glyph: 'FG', description: 'Sand + soda ash + limestone + power → glass' },
+      params: { electricityKWhPerKg: 2.5, sandKgPerKg: 0.65, sodaAshKgPerKg: 0.20, limestoneKgPerKg: 0.21 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity (total-energy proxy)', min: 0, max: 8, step: 0.1, unit: 'kWh/kg glass' }],
+      sourceNote: 'Screening float/solar glass. GfE 2011 LCA Table 1: sand 0.65, soda ash 0.20, limestone+dolomite 0.21 kg/kg. SEC 2.5 kWh/kg is 9.0 MJ/kg as electricity-as-total-energy (real float is heat-dominated). Not a tin-bath line, not a Guardian/Xinyi quote.',
+      references: [
+        { label: 'Glass for Europe LCA of float glass (Table 1 mass + 9.0 MJ/kg energy)', url: 'https://glassforeurope.com/wp-content/uploads/2018/04/Life-Cycle-Assessment.pdf' },
+        { label: 'Burrows & Fthenakis 2015 (float plant $150–200M / 500–700 t/day)', url: 'https://doi.org/10.1016/j.solmat.2014.09.028' },
       ],
     },
     'pv-module': {
@@ -663,6 +674,7 @@
     quartz: 'Quartzite', silicon: 'MG-Si', polysilicon: 'Poly-Si', carbonMonoxide: 'Carbon monoxide',
     bauxite: 'Bauxite', redMud: 'Red mud',
     silver: 'Ag paste', glass: 'Float glass', eva: 'EVA', module: 'Module',
+    sand: 'Silica sand', sodaAsh: 'Soda ash', limestone: 'Limestone',
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
     concentrate: 'Concentrate', dytb: 'DyTb', lightReo: 'Light REO',
     dextrose: 'Dextrose', gluconic: 'Gluconic acid', hydrogenPeroxide: 'Hydrogen peroxide',
@@ -687,6 +699,9 @@
     caustic: { label: 'Caustic soda', phase: 'liquid', mol: { NaOH: 1000 } },
     carbon: { label: 'Carbon anode', phase: 'solid', mol: { C: 1000 } },
     quartz: { label: 'Quartzite', phase: 'solid', mol: { SiO2: 1000 } },
+    'silica-sand': { label: 'Silica sand', phase: 'solid', mol: { SiO2: 1000 } },
+    'soda-ash': { label: 'Soda ash', phase: 'solid', mol: { Na2CO3: 1000 } },
+    limestone: { label: 'Limestone', phase: 'solid', mol: { CaCO3: 1000 } },
     silicon: { label: 'Metallurgical silicon', phase: 'solid', mol: { Si: 1000 } },
     ironOre: { label: 'Hematite concentrate', phase: 'solid', mol: { Fe2O3: 1000 } },
     titaniumTetrachloride: { label: 'Titanium tetrachloride', phase: 'liquid', mol: { TiCl4: 1000 } },
@@ -737,6 +752,9 @@
     caustic: { key: 'caustic', label: 'Caustic soda', profile: 'tank', glyph: 'NaOH' },
     carbon: { key: 'carbon', label: 'Carbon anode', profile: 'silo', glyph: 'silo' },
     quartz: { key: 'quartz', label: 'Quartzite', profile: 'silo', glyph: 'silo' },
+    'silica-sand': { key: 'silica-sand', label: 'Silica sand', profile: 'silo', glyph: 'SiO2' },
+    'soda-ash': { key: 'soda-ash', label: 'Soda ash', profile: 'silo', glyph: 'Na2' },
+    limestone: { key: 'limestone', label: 'Limestone', profile: 'silo', glyph: 'Ca' },
     ironOre: { key: 'ironOre', label: 'Hematite concentrate', profile: 'silo', glyph: 'silo' },
     magnesium: { key: 'magnesium', label: 'Magnesium', profile: 'silo', glyph: 'silo' },
     co2: { key: 'co2', label: 'Carbon dioxide', profile: 'stack', glyph: 'CO₂' },
@@ -762,7 +780,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'methanol', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'methanol', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'silica-sand', 'soda-ash', 'limestone', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -1014,6 +1032,7 @@
     'coastal-methane': () => loadCoastalMethane(0),
     'coastal-methanol': () => loadMethanolPlant(0),
     'silicon-alumina': () => loadSiliconAlumina(),
+    'float-glass': () => loadFloatGlass(),
     'h2-dri': () => loadH2Dri(),
     'green-h2-dri': () => loadGreenH2Dri(),
     'ti-kroll': () => loadTiKroll(),
@@ -1443,6 +1462,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening module assembly on frozen Mejillones PV; Size-to-target → PV module; may be cash±; not bankable; not a cell fab.';
+    }
+  }
+
+  function loadFloatGlass() {
+    setActiveDemo('float-glass', 'Mejillones float glass (sand+soda+limestone)');
+    lastSizing = null;
+    if (typeof FloatGlassCase === 'undefined' || !FloatGlassCase.createFloatGlassCase) {
+      throw new Error('Float glass case is not loaded');
+    }
+    loadCase(FloatGlassCase.createFloatGlassCase(), 'float-glass');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening float glass from purchased sand+soda+limestone on frozen Mejillones PV; may be cash±; not bankable; not a tin-bath line.';
     }
   }
 
@@ -3837,6 +3869,7 @@
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
       'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon',
       'bayer-alumina.bauxite': 'bauxite', 'bayer-alumina.caustic': 'caustic',
+      'float-glass.sand': 'silica-sand', 'float-glass.sodaAsh': 'soda-ash', 'float-glass.limestone': 'limestone',
       'pv-module.polysilicon': 'silicon', 'pv-module.silver': 'silver', 'pv-module.glass': 'float-glass', 'pv-module.eva': 'eva', 'pv-module.aluminium': 'aluminium',
       'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'iac-leach.clay': 'ionic-clay', 'iac-leach.lixiviant': 'ammonium-sulfate',
@@ -5440,7 +5473,7 @@
     if (unit === 'intake-pump' || unit === 'gas-blower') return 'pipe';
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
-    if (unit === 'mg-si' || unit === 'polysilicon') return 'furnace';
+    if (unit === 'mg-si' || unit === 'polysilicon' || unit === 'float-glass') return 'furnace';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'bayer-alumina' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
     if (unit === 'asu' || unit === 'ammonia' || unit === 'urea' || unit === 'mto' || unit === 'ft-liquids' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
@@ -6927,7 +6960,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto' || current.unit === 'ft-liquids') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'float-glass' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto' || current.unit === 'ft-liquids') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -7059,6 +7092,7 @@
     polysilicon: 'polysilicon',
     'bayer-alumina': 'bayer-alumina',
     'aluminium-smelter': 'aluminium-smelter',
+    'float-glass': 'float-glass',
     'pv-module': 'pv-module',
     'hydrogen-dri': 'hydrogen-dri',
     'titanium-kroll': 'titanium-kroll',
@@ -7881,7 +7915,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, loadFtLiquids, loadGreenMto, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadFloatGlass, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, loadFtLiquids, loadGreenMto, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

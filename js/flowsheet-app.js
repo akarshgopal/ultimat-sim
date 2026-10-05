@@ -274,7 +274,7 @@
       palette: { section: 'building', order: 8.5, glyph: 'Ur', tone: 'hydrogen', description: 'NH₃ + CO₂ → urea' },
       params: { electricityKWhPerKg: 0.8 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg urea' }],
-      sourceNote: 'Screening overall stoichiometry 2 NH₃ + CO₂ → urea + H₂O; not carbamate recycle and not granulation. Default 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated). Not a Stamicarbon SEC.',
+      sourceNote: 'Screening overall stoichiometry 2 NH₃ + CO₂ → urea + H₂O; not carbamate recycle and not granulation. Default 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated). NH₃ is purchased (urea) or on-site Haber from SWRO+PEM+ASU (green-urea). Not a Stamicarbon SEC.',
     },
     mto: {
       label: 'MTO (ethylene)', capacity: 1000, rate: 100, activityUnit: 'kg ethylene/day',
@@ -1035,6 +1035,7 @@
     'bioforge-marshall': () => loadBioforgeMarshall(),
     'green-ammonia': () => loadGreenAmmonia(),
     'urea': () => loadUrea(),
+    'green-urea': () => loadGreenUrea(),
     'mto': () => loadMto(),
     'ft-liquids': () => loadFtLiquids(),
     'green-mto': () => loadGreenMto(),
@@ -1586,6 +1587,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening urea from purchased feeds on frozen Walvis PV; Size-to-target → urea; may be cash±; not bankable; not green-NH₃ path.';
+    }
+  }
+
+  function loadGreenUrea() {
+    setActiveDemo('green-urea', 'Walvis Bay green urea (SWRO+PEM Haber→urea)');
+    lastSizing = null;
+    if (typeof GreenUreaCase === 'undefined' || !GreenUreaCase.createGreenUreaCase) {
+      throw new Error('Green urea case is not loaded');
+    }
+    loadCase(GreenUreaCase.createGreenUreaCase(), 'urea');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening seawater+sun → PEM H₂ + ASU N₂ → Haber NH₃ + purchased CO₂ → urea; not purchased NH₃; not DAC; not bankable.';
     }
   }
 
@@ -7853,7 +7867,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadFloatGlass, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, loadFtLiquids, loadGreenMto, loadGreenFt, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadFloatGlass, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadGreenUrea, loadMto, loadFtLiquids, loadGreenMto, loadGreenFt, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

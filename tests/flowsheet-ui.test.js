@@ -61,7 +61,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/ionic-clay-longnan.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/silicon.js', 'cases/network.js', 'cases/ree.js', 'cases/maglut.js', 'cases/ree-sx.js', 'cases/green-ammonia.js', 'cases/green-h2-dri.js', 'cases/mto.js', 'cases/ft-liquids.js', 'cases/green-mto.js', 'cases/green-ft.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/ionic-clay-longnan.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/silicon.js', 'cases/network.js', 'cases/ree.js', 'cases/maglut.js', 'cases/ree-sx.js', 'cases/green-ammonia.js', 'cases/green-h2-dri.js', 'cases/mto.js', 'cases/ft-liquids.js', 'cases/green-mto.js', 'cases/green-ft.js', 'cases/green-urea.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -509,6 +509,25 @@ test('Mejillones green FT overview case loads SWRO+PEM H2 into FT liquids', () =
   assert.ok(app.graph.nodes.some(node => node.unit === 'electrolyzer'));
   assert.match(context.__elements.get('overviewSiteName').textContent, /Mejillones/);
   assert.match(context.__elements.get('sizeToTargetStatus').textContent, /not purchased H₂/);
+  assert.ok(Number.isFinite(app.economics.annualNetCash));
+});
+
+test('Walvis Bay green urea overview case loads Haber NH3 into urea', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadGreenUrea();
+  assert.equal(app.site.id, 'namibia-walvis-bay-green-urea');
+  assert.equal(app.result.convergence.converged, true);
+  assert.ok(Math.abs(app.result.nodes.urea.activity - 1000) / 1000 < 0.01);
+  assert.ok(!app.graph.nodes.some(node => node.id === 'ammonia-feed'));
+  assert.ok(!app.graph.nodes.some(node => node.id === 'ammonia-product'));
+  assert.equal(app.graph.edges.find(edge => edge.to.node === 'urea' && edge.to.port === 'ammonia').from.node, 'ammonia');
+  assert.equal(app.graph.edges.find(edge => edge.to.node === 'ammonia' && edge.to.port === 'hydrogen').from.node, 'electrolyzer');
+  assert.ok(app.graph.nodes.some(node => node.unit === 'swro'));
+  assert.ok(app.graph.nodes.some(node => node.unit === 'electrolyzer'));
+  assert.ok(app.graph.nodes.some(node => node.unit === 'asu'));
+  assert.match(context.__elements.get('overviewSiteName').textContent, /Walvis Bay/);
+  assert.match(context.__elements.get('sizeToTargetStatus').textContent, /not purchased NH₃/);
   assert.ok(Number.isFinite(app.economics.annualNetCash));
 });
 

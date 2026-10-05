@@ -10,6 +10,8 @@ const SUBSTANCES = Object.freeze({
   CO2: { elements: { C: 1, O: 2 }, molarMassG: 44.0095, charge: 0 },
   CH4: { elements: { C: 1, H: 4 }, molarMassG: 16.04246, charge: 0 },
   C2H4: { elements: { C: 2, H: 4 }, molarMassG: 28.0532, charge: 0 },
+  // n=12 paraffin diesel/syncrude proxy (dodecane). Not a full FT slate.
+  C12H26: { elements: { C: 12, H: 26 }, molarMassG: 170.33484, charge: 0 },
   CH3OH: { elements: { C: 1, H: 4, O: 1 }, molarMassG: 32.04186, charge: 0 },
   N2: { elements: { N: 2 }, molarMassG: 28.0134, charge: 0 },
   'Na+': { elements: { Na: 1 }, molarMassG: 22.989769, charge: 1 },

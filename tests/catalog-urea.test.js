@@ -114,7 +114,7 @@ test('Walvis urea demo ~1000 kg/day with CAPEX on urea + solar and finite cash; 
 test('Palette Fuels lists urea after ammonia; Overview option mentions urea', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Fuels:\s*\[\s*'electrolyzer',\s*'sabatier',\s*'methanol',\s*'asu',\s*'ammonia',\s*'urea',\s*'mto'\s*\]/);
+  assert.match(source, /Fuels:\s*\[\s*'electrolyzer',\s*'sabatier',\s*'methanol',\s*'asu',\s*'ammonia',\s*'urea',\s*'mto',\s*'ft-liquids'\s*\]/);
   assert.match(html, /id="loadUrea"/);
   assert.match(html, /Walvis Bay urea \(purchased NH₃\+CO₂\)/);
   assert.match(html, /cases\/urea\.js/);

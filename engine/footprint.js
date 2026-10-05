@@ -65,6 +65,7 @@ const PROCESS_LABELS = Object.freeze({
   ammonia: 'Haber–Bosch',
   urea: 'Urea',
   mto: 'MTO',
+  'ft-liquids': 'FT liquids',
   'mg-si': 'MG-Si furnace',
   polysilicon: 'Polysilicon (Siemens)',
   'bayer-alumina': 'Bayer alumina',
@@ -354,6 +355,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Screening MTO island pad 3 m²/(kg ethylene/h) (range 1–8); not a plot survey and not a UOP layout. Chen 2022 MTO TEA is the CAPEX family, not a measured pad.',
         url: 'https://doi.org/10.1016/j.jtice.2021.07.039',
+      }),
+    ]),
+  }),
+  'ft-liquids': Object.freeze({
+    id: 'ft-liquids',
+    label: PROCESS_LABELS['ft-liquids'],
+    basis: 'kgPerHour',
+    intensity: 3,
+    unitLabel: 'm²/(kg liquid/h)',
+    range: Object.freeze([1, 8]),
+    floorM2: 30,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening FT-liquids island pad 3 m²/(kg liquid/h) (range 1–8); not a plot survey and not a Sasol/Shell layout. IEA Future of Hydrogen FT is the CAPEX family, not a measured pad.',
+        url: 'https://www.iea.org/reports/the-future-of-hydrogen',
       }),
     ]),
   }),
@@ -816,6 +833,13 @@ function padMto(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padFtLiquids(node, solved) {
+  const spec = intensitySpec('ft-liquids');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padMgSi(node, solved) {
   const spec = intensitySpec('mg-si');
   const activity = activityOf(solved, node.id);
@@ -939,6 +963,7 @@ const PROCESS_PADS = Object.freeze({
   ammonia: padAmmonia,
   urea: padUrea,
   mto: padMto,
+  'ft-liquids': padFtLiquids,
   'mg-si': padMgSi,
   polysilicon: padPolysilicon,
   'pv-module': padPvModule,

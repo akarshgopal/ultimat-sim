@@ -94,7 +94,7 @@
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
-    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia', 'urea', 'mto'],
+    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia', 'urea', 'mto', 'ft-liquids'],
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
@@ -282,6 +282,13 @@
       params: { electricityKWhPerKg: 4 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 12, step: 0.1, unit: 'kWh/kg ethylene' }],
       sourceNote: 'Screening overall stoichiometry 2 CH₃OH → C₂H₄ + 2 H₂O; SAPO-34 ethylene-maximizing proxy, propylene/C4 omitted. Default 4 kWh/kg is an electricity-as-total-energy proxy (real MTO is heat-dominated). Not a UOP SEC and not FT liquids.',
+    },
+    'ft-liquids': {
+      label: 'FT liquids (diesel)', capacity: 1000, rate: 100, activityUnit: 'kg liquid/day',
+      palette: { section: 'building', order: 8.8, glyph: 'FT', tone: 'methane', description: 'H₂ + CO₂ → diesel + water' },
+      params: { electricityKWhPerKg: 0.22 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 2, step: 0.01, unit: 'kWh/kg liquid' }],
+      sourceNote: 'Screening overall 12 CO₂ + 37 H₂ → C₁₂H₂₆ + 24 H₂O (n=12 paraffin diesel/syncrude proxy; RWGS folded into island). Default 0.22 kWh/kg is IEA 0.018 GJe/GJliquid × 43.0 MJ/kg (electricity of the FT island; real FT is heat/H₂ dominated). Not a Sasol/Shell SEC and not a green e-diesel stack.',
     },
     'brine-minerals': {
       label: 'Brine mineral train', capacity: 100000, rate: 1000, activityUnit: 'kg brine/day',
@@ -1017,6 +1024,7 @@
     'green-ammonia': () => loadGreenAmmonia(),
     'urea': () => loadUrea(),
     'mto': () => loadMto(),
+    'ft-liquids': () => loadFtLiquids(),
     'abundance-hub': () => loadAbundanceHub(),
     'zabuye-hub': () => loadZabuyeHub(),
     'demo-network': () => loadDemoNetwork(),
@@ -1567,6 +1575,19 @@
     }
   }
 
+  function loadFtLiquids() {
+    setActiveDemo('ft-liquids', 'Mejillones FT liquids (purchased H₂+CO₂→diesel)');
+    lastSizing = null;
+    if (typeof FtLiquidsCase === 'undefined' || !FtLiquidsCase.createFtLiquidsCase) {
+      throw new Error('FT liquids case is not loaded');
+    }
+    loadCase(FtLiquidsCase.createFtLiquidsCase(), 'ft-liquids');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening FT diesel from purchased H₂+CO₂ on frozen Mejillones PV; may be cash±; not bankable; not green e-diesel; RWGS folded; not full FT slate.';
+    }
+  }
+
   function formatSizingResidual(value) {
     const residual = Number(value);
     if (!Number.isFinite(residual)) return '—';
@@ -1615,6 +1636,7 @@
     if (product === 'module') return nodes.find(node => node.unit === 'pv-module')?.id;
     if (product === 'steel') return nodes.find(node => node.unit === 'hydrogen-dri')?.id;
     if (product === 'ethylene') return nodes.find(node => node.unit === 'mto')?.id;
+    if (product === 'diesel') return nodes.find(node => node.unit === 'ft-liquids')?.id;
     return nodes[0]?.id;
   }
 
@@ -4923,6 +4945,9 @@
     ethylene: 'Ethylene',
     C2H4: 'Ethylene',
     'ethylene-product': 'Ethylene',
+    diesel: 'Diesel',
+    C12H26: 'Diesel',
+    'diesel-product': 'Diesel',
     steel: 'Fe / Iron',
     Fe: 'Fe / Iron',
     dri: 'Fe / Iron',
@@ -5403,7 +5428,7 @@
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
     if (unit === 'mg-si' || unit === 'polysilicon') return 'furnace';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'bayer-alumina' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
-    if (unit === 'asu' || unit === 'ammonia' || unit === 'urea' || unit === 'mto' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
+    if (unit === 'asu' || unit === 'ammonia' || unit === 'urea' || unit === 'mto' || unit === 'ft-liquids' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
     return 'shed';
   }
@@ -5809,6 +5834,7 @@
       ammonia: '#6b7f9a',
       urea: '#7a8aa0',
       mto: '#b8924a',
+      'ft-liquids': '#a67c3a',
       battery: '#8a8f98',
       'solar-pv': '#c9a227',
       total: '#7a8fa3',
@@ -5831,6 +5857,7 @@
       ammonia: 'var(--h2)',
       urea: 'var(--h2)',
       mto: 'var(--methane)',
+      'ft-liquids': 'var(--methane)',
       battery: 'var(--text-muted)',
       'solar-pv': 'var(--warning)',
     }[unit] || 'var(--border-light)';
@@ -6886,7 +6913,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto' || current.unit === 'ft-liquids') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -7004,6 +7031,7 @@
     ammonia: 'ammonia',
     urea: 'urea',
     mto: 'mto',
+    'ft-liquids': 'ft-liquids',
     swro: 'swro',
     electrolyzer: 'electrolyzer',
     dac: 'dac',
@@ -7839,7 +7867,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, loadFtLiquids, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

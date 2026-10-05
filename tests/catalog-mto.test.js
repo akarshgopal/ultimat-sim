@@ -143,7 +143,7 @@ test('Palette Fuels lists mto after urea; Overview option mentions MTO; flowshee
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const uiTest = fs.readFileSync(path.join(__dirname, 'flowsheet-ui.test.js'), 'utf8');
-  assert.match(source, /Fuels:\s*\[\s*'electrolyzer',\s*'sabatier',\s*'methanol',\s*'asu',\s*'ammonia',\s*'urea',\s*'mto'\s*\]/);
+  assert.match(source, /Fuels:\s*\[\s*'electrolyzer',\s*'sabatier',\s*'methanol',\s*'asu',\s*'ammonia',\s*'urea',\s*'mto',\s*'ft-liquids'\s*\]/);
   assert.match(html, /id="loadMto"/);
   assert.match(html, /Mejillones MTO \(purchased MeOH→ethylene\)/);
   assert.match(html, /cases\/mto\.js/);

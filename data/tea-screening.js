@@ -83,6 +83,10 @@ const CHEN_MTO_2022 = 'https://doi.org/10.1016/j.jtice.2021.07.039';
 const ARGUS_ETHYLENE = 'https://www.argusmedia.com/-/media/project/argusmedia/mainsite/english/documents-and-files/sample-reports/argus-ethylene-and-derivatives.pdf';
 const IEA_ETHYLENE = 'https://www.iea.org/data-and-statistics/charts/annual-ethylene-capacitydemand-growth-and-regional-price-developments-2015-2020';
 const SINOPEC_MTO_YOKOGAWA = 'https://www.yokogawa.com/library/resources/references/stable-operation-and-proactive-maintenance-realized-at-new-coal-chemical-plant-in-china/';
+const IEA_H2_FUTURE = 'https://www.iea.org/reports/the-future-of-hydrogen';
+const IEA_H2_FUTURE_ANNEX = 'https://iea.blob.core.windows.net/assets/29b027e5-fefc-47df-aed0-456b1bb38844/IEA-The-Future-of-Hydrogen-Assumptions-Annex_CORR.pdf';
+const EIA_DIESEL = 'https://www.eia.gov/petroleum/gasdiesel/';
+const IPCC_FUEL_NCV = 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/2_Volume2/V2_1_Ch1_Introduction.pdf';
 const IEA_ELEC = 'https://www.iea.org/reports/electricity-2024';
 const IEA_ELEC_2026 = 'https://www.iea.org/reports/electricity-2026';
 const EIA_EPA = 'https://www.eia.gov/electricity/annual/';
@@ -195,6 +199,14 @@ const prices = {
     [
       { label: 'Argus Ethylene and Derivatives sample (USGC/Asia/Europe prints; screening mid $0.80/kg, not a contract)', url: ARGUS_ETHYLENE },
       { label: 'IEA ethylene regional price family (2015–2020 chart; screening mid, not a contract)', url: IEA_ETHYLENE },
+    ]
+  ),
+  diesel: row(
+    0.90, '$/kg', 'screening', 'commodity diesel/gasoil band',
+    'Screening mid of commodity diesel/gasoil ~$0.70–1.10/kg (EIA ULSD wholesale / World Bank pink-sheet gasoil family; ~$2.20–3.50/gal at ~3.2 kg/gal). Not a green e-diesel premium and not a contract.',
+    [
+      { label: 'EIA gasoline and diesel fuel update (ULSD wholesale family; screening mid $0.90/kg of ~$0.70–1.10/kg, not a contract)', url: EIA_DIESEL },
+      { label: 'World Bank commodity markets / pink sheet (gasoil family context; screening mid, not a contract)', url: WB_PINK },
     ]
   ),
   urea: row(
@@ -559,6 +571,17 @@ const packs = {
       { label: 'Yokogawa — Sinopec Zhongyuan S-MTO 600 kt/y olefins (capacity-family context; CAPEX intensity is the Chen 2022 conversion)', url: SINOPEC_MTO_YOKOGAWA },
     ],
   }),
+  'ft-liquids': pack({
+    capexIntensity: 443, intensityUnit: '$/(kg liquid/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'IEA Future of Hydrogen FT 890 USD/kWliquid',
+    note: 'installedCapex = 443 $/ (kg liquid/day) × capacity (scale exponent omitted). IEA G20 Hydrogen assumptions annex (2019, corr. 2020) Fischer-Tropsch CAPEX 890 USD2017/kW_liquid (today). Converted with IPCC/IEA diesel NCV 43.0 MJ/kg: 890 / (86400/43000) = $443/(kg liquid/day). Synthesis island including RWGS-in-island, not electrolyzer. IEA annual OPEX 4% of CAPEX (house fixedOm); IEA lifetime 30 y, house pack 20. Linear small-plant OOM. Not a Sasol/Shell quote and not a green-premium pack.',
+    evidence: [
+      { label: 'IEA The Future of Hydrogen (2019) — FT synthesis family; CAPEX 890 USD/kW_liquid in the assumptions annex', url: IEA_H2_FUTURE },
+      { label: 'IEA G20 Hydrogen assumptions annex (corr. Dec 2020) — FT CAPEX 890 USD2017/kW_liquid, electricity 0.018 GJe/GJliquid, OPEX 4%/y', url: IEA_H2_FUTURE_ANNEX },
+      { label: 'IPCC 2006 Guidelines Vol. 2 Table 1.2 — gas/diesel oil NCV 43.0 TJ/Gg used to convert $/kW_liquid → $/(kg/day)', url: IPCC_FUEL_NCV },
+    ],
+  }),
   swro: pack({
     capexIntensity: 1500, intensityUnit: '$/(m³/day)',
     fixedOmPercent: 3, variableOm: 0, assetLifeYears: 20,
@@ -844,6 +867,14 @@ const demand = {
       { label: 'Argus ethylene family (price context; offtake cap is screening, not a contract)', url: ARGUS_ETHYLENE },
     ]
   ),
+  diesel: row(
+    1e8, 'kg/year', 'screening', 'regional diesel/gasoil fuel ceiling',
+    `100 kt/y screening regional ceiling. World diesel/gasoil is ~1 Gt-class; this is a tiny offtake slice, not a rack contract. ${DEMAND_REGION}`,
+    [
+      { label: 'EIA gasoline and diesel fuel update (commodity-family context; 100 kt/y ceiling is screening offtake, not a contract)', url: EIA_DIESEL },
+      { label: 'World Bank commodity markets / pink sheet (gasoil family; offtake cap is screening, not a contract)', url: WB_PINK },
+    ]
+  ),
   hydrogen: row(
     1e8, 'kg/year', 'screening', 'IEA H2; green offtake',
     `100 kt/y regional green-H₂ ceiling. IEA global H₂ is ~95 Mt, mostly grey. Not a offtake contract.`,
@@ -936,7 +967,7 @@ const demand = {
 };
 
 const MINERAL_DEMAND_KEYS = Object.freeze(['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium']);
-const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide', 'urea', 'ethylene']);
+const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide', 'urea', 'ethylene', 'diesel']);
 
 function cloneDemandRow(item, extraNote, extra = {}) {
   const cloned = {
@@ -1269,6 +1300,14 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     [
       { label: 'IEA ethylene capacity/demand family (commodity context; 500 kt/y China ceiling is screening offtake, not a contract)', url: IEA_ETHYLENE },
       { label: 'Yokogawa — Sinopec Zhongyuan S-MTO 600 kt/y (China MTO capacity-family context; offtake cap is screening)', url: SINOPEC_MTO_YOKOGAWA },
+    ]
+  ),
+  diesel: row(
+    1e9, 'kg/year', 'screening', 'diesel/gasoil China/Asia ceiling',
+    'Conservative 1 Mt/y China/Asia diesel/gasoil ceiling. China is a large distillate market. EIA/World Bank gasoil family is commodity context. Screening offtake, not a contract and not a silent ME-Levant inherit.',
+    [
+      { label: 'EIA gasoline and diesel fuel update (commodity context; 1 Mt/y China ceiling is screening offtake, not a contract)', url: EIA_DIESEL },
+      { label: 'World Bank commodity markets / pink sheet (gasoil family; China ceiling is screening offtake)', url: WB_PINK },
     ]
   ),
 });

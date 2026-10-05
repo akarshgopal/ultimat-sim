@@ -575,6 +575,24 @@ const mto = reaction({
     water: { substance: 'H2O', molPerProductMol: 2, phase: 'liquid' },
   },
 });
+// Screening overall 12 CO2 + 37 H2 → C12H26 + 24 H2O. Classic FT paraffin n=12
+// (dodecane diesel/syncrude proxy) with RWGS folded: 12×(CO2 + H2 → CO + H2O)
+// then 12 CO + 25 H2 → C12H26 + 12 H2O. Not a standalone RWGS unit, not a full
+// FT slate (lights/waxes/hydrocracker omitted). Default 0.22 kWh/kg is the
+// electricity of the FT island from IEA Future of Hydrogen 0.018 GJe/GJliquid
+// × 43.0 MJ/kg diesel LHV (≈0.215; screening 0.22). Real FT is heat/H2 dominated;
+// H2 is a purchased feed. Not a Sasol/Shell SEC and not a green e-diesel stack.
+const ftLiquids = reaction({
+  product: 'C12H26', electricityKWhPerKg: 0.22,
+  inputs: {
+    hydrogen: { substance: 'H2', molPerProductMol: 37 },
+    co2: { substance: 'CO2', molPerProductMol: 12 },
+  },
+  outputs: {
+    diesel: { substance: 'C12H26', molPerProductMol: 1, phase: 'liquid' },
+    water: { substance: 'H2O', molPerProductMol: 24, phase: 'liquid' },
+  },
+});
 // CO2 + 3 H2 → CH3OH + H2O. 0.5 kWh/kg is screening synthesis/compression, not electrolysis.
 // Reject heat 0.43 kWh/kg is gas-phase enthalpy (~49 kJ/mol / 3.6 / 32.04); 250 °C is a screening reject T.
 const methanol = reaction({
@@ -1615,6 +1633,17 @@ const UNITS = Object.freeze({
       water: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: mto,
+  },
+  'ft-liquids': {
+    kind: 'converter',
+    ports: {
+      hydrogen: { direction: 'in', kind: 'material', required: true },
+      co2: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      diesel: { direction: 'out', kind: 'material', required: true },
+      water: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: ftLiquids,
   },
   'brine-minerals': {
     kind: 'converter',

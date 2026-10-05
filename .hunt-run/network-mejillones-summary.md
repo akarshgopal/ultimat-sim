@@ -53,3 +53,7 @@ Not edited: `cases/silicon.js`, `cases/green-ft.js`, `cases/float-glass.js`, `ca
 - No haul between basins (empty corridors on purpose).
 - Network demo still opens the Dead Sea mineral lead plant.
 - Silicon/PV BOM TEA is the existing Mejillones case; this tranche only composes it.
+
+## Tip
+
+Feat `8ace0d3` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `8ace0d3`). `npm test` 463 pass / 0 fail. Prior checkout tip `5f55c1a`.

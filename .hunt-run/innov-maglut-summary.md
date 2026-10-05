@@ -75,3 +75,7 @@ Installed CAPEX ≈ $289 k (chromatography island $273,750, solar ≈ $15,315). 
 - Water, acid, and reagent recycle ports.
 - Freight / offtake contracts.
 - California location factor (US West / California already aliases to texas, CAPEX× 1).
+
+## Tip
+
+Feat `f68ef45` on `main`. `npm test` 385 pass / 0 fail. Pages published: https://akarshgopal.github.io/ultimat-sim/

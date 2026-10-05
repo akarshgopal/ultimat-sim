@@ -60,3 +60,7 @@ Sign stays cash− (about 2× the 1000 demo). Maglut `createMaglutCase` cash sti
 
 - Network green-MTO plant (fuels+minerals demo still has green-FT, not green-MTO).
 - Phosphoric / MAP-DAP or chlor-alkali as a sized catalog product only with a public TIC.
+
+## Tip
+
+Feat `8d3d29f` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `8d3d29f`). `npm test` 529 pass / 0 fail. Prior checkout tip `ff569d0`.

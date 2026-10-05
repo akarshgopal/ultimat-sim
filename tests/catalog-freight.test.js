@@ -394,7 +394,7 @@ test('Leftover freight: Maglut/Dead Sea stay plant-gate; Walvis urea freighted; 
   assert.ok(Number.isFinite(network.annualNetCash), `network annualNetCash ${network.annualNetCash}`);
   const maglutPlant = network.plants.find(plant => plant.id === 'long-beach-maglut');
   assert.ok(Math.abs(maglutPlant.economics.annualNetCash - 1299) <= 5, `Maglut plant ${maglutPlant.economics.annualNetCash}`);
-  for (const id of ['mejillones-cement', 'mejillones-cu-ew', 'mejillones-float-glass', 'mejillones-green-ft', 'mejillones-green-mto', 'mejillones-green-h2-dri']) {
+  for (const id of ['mejillones-cement', 'mejillones-cu-ew', 'mejillones-float-glass', 'mejillones-green-ft', 'mejillones-green-mto', 'mejillones-green-h2-dri', 'mejillones-h2-dri']) {
     const plant = network.plants.find(item => item.id === id);
     assert.ok(plant, id);
     assert.ok(Number.isFinite(plant.economics.annualNetCash), `${id} annualNetCash ${plant.economics.annualNetCash}`);
@@ -451,7 +451,7 @@ test('inland-truck-short band is $0.01/kg; green-H2-DRI and purchased-H2 DRI iro
   assert.equal(freighted.length, 9);
 
   const network = evaluateNetwork(createFuelsAndMineralsNetwork(6));
-  assert.equal(network.plants.length, 11);
+  assert.equal(network.plants.length, 12);
   assert.ok(Number.isFinite(network.annualNetCash), `network annualNetCash ${network.annualNetCash}`);
   const maglutPlant = network.plants.find(plant => plant.id === 'long-beach-maglut');
   assert.ok(Math.abs(maglutPlant.economics.annualNetCash - 1299) <= 5, `Maglut plant ${maglutPlant.economics.annualNetCash}`);
@@ -460,6 +460,9 @@ test('inland-truck-short band is $0.01/kg; green-H2-DRI and purchased-H2 DRI iro
   assert.ok(greenH2DriPlant.economics.breakdown.freight > 0, `network green-H2-DRI freight ${greenH2DriPlant.economics.breakdown.freight}`);
   assert.ok(Number.isFinite(greenH2DriPlant.economics.annualNetCash), `network green-H2-DRI cash ${greenH2DriPlant.economics.annualNetCash}`);
   assert.ok(Math.abs(greenH2DriPlant.economics.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `network green-H2-DRI CAPEX ${greenH2DriPlant.economics.installedCapex}`);
+  const h2DriPlant = network.plants.find(plant => plant.id === 'mejillones-h2-dri');
+  assert.ok(h2DriPlant);
+  assert.ok(Number.isFinite(h2DriPlant.economics.annualNetCash), `network purchased H2-DRI cash ${h2DriPlant.economics.annualNetCash}`);
 });
 
 test('Mejillones purchased-H2 DRI iron-ore inland-truck-short 0.01; H2 chile-coast-container; steel bulk-dry-shortsea', () => {

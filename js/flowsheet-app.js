@@ -2745,7 +2745,7 @@
   }
 
   function loadDemoNetwork() {
-    setActiveDemo('demo-network', 'Fuels + minerals · cement / Cu / glass / green-FT / green-MTO / green-H2-DRI');
+    setActiveDemo('demo-network', 'Fuels + minerals · cement / Cu / glass / green-FT / green-MTO / green-H2-DRI / purchased H2-DRI');
     network = clone(NetworkCase.createFuelsAndMineralsNetwork(6));
     refreshNetwork();
     const id = mineralLeadPlantId()

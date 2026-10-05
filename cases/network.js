@@ -11,11 +11,12 @@
     typeof require === 'function' ? require('./float-glass') : root.FloatGlassCase,
     typeof require === 'function' ? require('./green-ft') : root.GreenFtCase,
     typeof require === 'function' ? require('./green-mto') : root.GreenMtoCase,
-    typeof require === 'function' ? require('./green-h2-dri') : root.GreenH2DriCase
+    typeof require === 'function' ? require('./green-h2-dri') : root.GreenH2DriCase,
+    typeof require === 'function' ? require('./h2-dri') : root.H2DriCase
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.NetworkCase = api;
-})(globalThis, (coastal, abundance, model, silicon, greenUrea, maglut, cement, cuEw, floatGlass, greenFt, greenMto, greenH2Dri) => {
+})(globalThis, (coastal, abundance, model, silicon, greenUrea, maglut, cement, cuEw, floatGlass, greenFt, greenMto, greenH2Dri, h2Dri) => {
 const { streamMassKg } = model;
 const tea = abundance.TEA;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.43&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
@@ -252,6 +253,7 @@ function createFuelsAndMineralsNetwork(month = 6) {
       { id: 'mejillones-green-ft', name: 'Mejillones green FT', definition: greenFt.createGreenFtCase() },
       { id: 'mejillones-green-mto', name: 'Mejillones green MTO', definition: greenMto.createGreenMtoCase() },
       { id: 'mejillones-green-h2-dri', name: 'Mejillones green H2-DRI', definition: greenH2Dri.createGreenH2DriCase() },
+      { id: 'mejillones-h2-dri', name: 'Mejillones H2-DRI (purchased)', definition: h2Dri.createH2DriCase() },
     ],
     corridors: [],
   };

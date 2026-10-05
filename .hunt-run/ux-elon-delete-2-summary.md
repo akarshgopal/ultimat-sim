@@ -2,7 +2,7 @@
 
 **Tip before:** `c2be082` (`docs(catalog-float-glass): mark Pages live`)
 **Product commit 1:** `a35790e` `refactor(ux-elon-delete-2): drop dead More-units palette, legacy gauges, duplicate Overview chips` — 5 files, **+16 / −143** (net **−127**)
-**Product commit 2:** leftover triplicate `escapeHtml` + unused CSS (this follow-up). Product UI only: `index.html`, `js/flowsheet-app.js`, `flowsheet.css`. Tests updated only where they asserted the deleted hollow bits. `style.css` had nothing dead.
+**Product commit 2:** `0a92bf5` `refactor(ux-elon-delete-2): collapse triplicate escapeHtml and unused CSS` — 3 files, **+9 / −21** (net **−12**). Product UI only: `index.html`, `js/flowsheet-app.js`, `flowsheet.css`. Tests updated only where they asserted the deleted hollow bits. `style.css` had nothing dead.
 
 YAGNI. Network never Empire. Screening honesty left in place (one Overview honesty line; one Economics banner). No TEA pack/price/SEC retune. No MECH undo/pump/blower. No case cash numbers. `refreshLiftEconomics` left alone (pump/blower).
 
@@ -56,4 +56,4 @@ YAGNI. Network never Empire. Screening honesty left in place (one Overview hones
 
 ## Tip
 
-Feat `a35790e` on `main`, plus this follow-up. Pages published: https://akarshgopal.github.io/ultimat-sim/. `npm test` 456 pass / 0 fail. Prior checkout tip `c2be082`.
+Feat `0a92bf5` on `main` (after `a35790e`). Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `0a92bf5`). `npm test` 456 pass / 0 fail. Prior checkout tip `c2be082`.

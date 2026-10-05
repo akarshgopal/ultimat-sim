@@ -41,6 +41,8 @@ const USGS_MG = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-com
 const USGS_MG_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-magnesium-compounds.pdf';
 const USGS_SI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-silicon.pdf';
 const USGS_AL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-aluminum.pdf';
+const USGS_BAUXITE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-bauxite-alumina.pdf';
+const IAI_ALUMINA_ENERGY = 'https://international-aluminium.org/statistics/metallurgical-alumina-refining-energy-intensity/';
 const USGS_SILICA = 'https://www.usgs.gov/centers/national-minerals-information-center/silica-statistics-and-information';
 const DOE_AL = 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf';
 const MDPI_MGSI = 'https://www.mdpi.com/1996-1073/19/9/2023';
@@ -293,6 +295,16 @@ const costs = {
     'Smelter-grade alumina ~$300–600/t mid ($0.45/kg). Screening, not a Bayer quote. Alumina is the Hall–Héroult feed.',
     [{ label: 'USGS MCS 2025 aluminum (alumina is the feed; screening mid $0.45/kg, not a Bayer quote)', url: USGS_AL }]
   ),
+  bauxite: row(
+    0.04, '$/kg', 'screening', 'USGS MCS bauxite import-unit family',
+    'USGS MCS bauxite-and-alumina crude dry bauxite import unit value ~$31–32/t (2024–2025e) inside a screening $30–50/t band; mid $0.04/kg. Not a mine contract and not a concession.',
+    [{ label: 'USGS MCS 2025 bauxite and alumina (crude dry bauxite import unit value ~$31–32/t; screening mid $0.04/kg of $30–50/t, not a mine contract)', url: USGS_BAUXITE }]
+  ),
+  'caustic-makeup': row(
+    0.45, '$/kg', 'screening', 'NaOH commodity band',
+    'Same $/kg as the existing caustic product price (NaOH ~$300–600/t mid $0.45/kg). Bayer makeup purchase, not a second invented price and not a caustic contract.',
+    [{ label: 'NaOH ~$300–600/t commodity band (screening mid $0.45/kg); same row as caustic product price', url: null }]
+  ),
   'ionic-clay': row(
     0.005, '$/kg', 'screening', 'soft ionic-clay mining OOM',
     'Soft ionic-clay mining ~$5/t ($0.005/kg). Quality screening. Deng & Kendall 2019 grade band context; not a contract and not a Serra Verde mining cost.',
@@ -462,6 +474,16 @@ const packs = {
     evidence: [
       { label: 'DOE aluminium industry roadmap (family; screening CAPEX intensity, not a vendor quote)', url: DOE_AL },
       { label: 'USGS MCS 2025 aluminum (primary-ingot context; not a smelter contract)', url: USGS_AL },
+    ],
+  }),
+  'bayer-alumina': pack({
+    capexIntensity: 500, intensityUnit: '$/(kg Al2O3/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'greenfield alumina refinery OOM',
+    note: 'installedCapex = 500 × capacity. ~$1370 per annual tonne × 365/1000 ≈ 500 $/(kg Al₂O₃/day). Greenfield alumina-refinery order-of-magnitude; linear small-plant intensity. Not a Hydro/Alcoa quote and not a full Bayer train. SEC is the unit param 3.5 kWh/kg (IAI total-energy-as-electricity proxy), not this pack.',
+    evidence: [
+      { label: 'IAI metallurgical alumina refining energy intensity (family ~10–12 GJ/t; CAPEX intensity is screening OOM, not an IAI CAPEX quote)', url: IAI_ALUMINA_ENERGY },
+      { label: 'USGS MCS 2025 bauxite and alumina (commodity context; screening CAPEX ~$1370/t-y → 500 $/(kg/day), not a refinery quote)', url: USGS_BAUXITE },
     ],
   }),
   polysilicon: pack({

@@ -145,7 +145,7 @@ test('Minaçu ionic-clay case solves at 100 kg recovered REO/day without electri
 test('Overview option text contains Minaçu and NdPr; palette has REE with iac-leach; Crust unchanged', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'aluminium-smelter',\s*'pv-module'\s*\]/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'pv-module'\s*\]/);
   assert.match(source, /REE:\s*\[\s*'iac-leach',\s*'ree-chromatography'\s*\]/);
   assert.match(html, /id="loadReeIonic"/);
   assert.match(html, /Minaçu ionic clay → NdPr \+ mixed REO/);

@@ -679,6 +679,92 @@ function pvModuleAssembly({ inlets, requestedActivity, capacity, params = {} }) 
   };
 }
 
+// Bayer alumina screening. Not a digester/precipitator/calciner train and not
+// red-mud chemistry. Intensities per kg smelter-grade Al2O3:
+//   Bauxite 2.0 kg (1 mol ≡ 1 kg ore proxy; grade handled by intensity)
+//   NaOH makeup 0.08 kg (not a full liquor-recycle model)
+//   electricity 3.5 kWh (IAI metallurgical-alumina energy ~10–12 GJ/t ≈ 2.8–3.3
+//     kWh/kg as a total-energy-as-electricity proxy; not a metered Bayer plant)
+// Red mud 1.0 kg leftover Bauxite so 2.0 ore → 1.0 alumina + 1.0 mud.
+// 0.08 kg NaOH is makeup consumed into liquor loss — not added to mud mass.
+// Activity = kg Al2O3 / day. No wasteHeat. Extra feed mol > 1e-12 throws.
+const BAYER_FEEDS = Object.freeze({
+  bauxite: { substance: 'Bauxite', kgPerKg: 2.0, param: 'bauxiteKgPerKg' },
+  caustic: { substance: 'NaOH', kgPerKg: 0.08, param: 'causticKgPerKg' },
+});
+const BAYER_RED_MUD_KG_PER_KG = 1.0;
+
+function bayerAlumina({ inlets, requestedActivity, capacity, params = {} }) {
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const sec = nonnegative(Number(params.electricityKWhPerKg ?? 3.5), 'electricityKWhPerKg');
+  const redMudKgPerKg = nonnegative(Number(params.redMudKgPerKg ?? BAYER_RED_MUD_KG_PER_KG), 'redMudKgPerKg');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const feeds = {};
+  const intensities = {};
+  for (const [port, spec] of Object.entries(BAYER_FEEDS)) {
+    const stream = validateStream(inlets[port], 'material');
+    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
+    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
+      throw new Error(`${port} must be pure ${spec.substance}`);
+    }
+    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
+    feeds[port] = stream;
+    intensities[port] = { substance: spec.substance, kgPerKg };
+  }
+  const kgOf = (port) => streamMassKg(feeds[port]);
+  const planned = Math.min(requested, installed);
+  const limits = { capacity: installed };
+  for (const [port, spec] of Object.entries(intensities)) {
+    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
+  }
+  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
+  const activity = Math.min(planned, ...Object.values(limits));
+  const streamKg = (port, kg) => {
+    const template = feeds[port];
+    const substance = intensities[port].substance;
+    return {
+      kind: 'material',
+      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
+      phase: template.phase,
+      T_C: template.T_C,
+      P_bar: template.P_bar,
+    };
+  };
+  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, planned * spec.kgPerKg),
+  ]));
+  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, activity * spec.kgPerKg),
+  ]));
+  const firstFeed = Object.values(feeds)[0];
+  const limitingValue = Math.min(...Object.values(limits));
+  return {
+    activity,
+    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
+    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    outlets: {
+      alumina: {
+        kind: 'material',
+        mol: { Al2O3: activity * 1000 / SUBSTANCES.Al2O3.molarMassG },
+        phase: 'solid',
+        T_C: firstFeed.T_C,
+        P_bar: firstFeed.P_bar,
+      },
+      redMud: {
+        kind: 'material',
+        mol: { Bauxite: activity * redMudKgPerKg * 1000 / SUBSTANCES.Bauxite.molarMassG },
+        phase: 'solid',
+        T_C: firstFeed.T_C,
+        P_bar: firstFeed.P_bar,
+      },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
 const hydrogenDri = reaction({
   product: 'Fe', electricityKWhPerKg: 0.7,
   inputs: { ironOre: { substance: 'Fe2O3', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
@@ -1429,6 +1515,17 @@ const UNITS = Object.freeze({
       bromine: { direction: 'out', kind: 'material', required: true }, salt: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: bromineRecovery,
+  },
+  'bayer-alumina': {
+    kind: 'converter',
+    ports: {
+      bauxite: { direction: 'in', kind: 'material', required: true },
+      caustic: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      alumina: { direction: 'out', kind: 'material', required: true },
+      redMud: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: bayerAlumina,
   },
   'aluminium-smelter': {
     kind: 'converter',

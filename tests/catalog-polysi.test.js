@@ -86,9 +86,9 @@ test('Mejillones poly-Si island still solves with module assembly and no MG-Si s
 test('palette source lists Crust with polysilicon between mg-si and aluminium-smelter', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'aluminium-smelter',\s*'pv-module'\s*\]/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'pv-module'\s*\]/);
   assert.match(html, /id="loadSiliconAlumina"/);
-  assert.match(html, /Mejillones PV BOM \(poly-Si \+ Al \+ Ag\/glass\/EVA\)/);
+  assert.match(html, /Mejillones PV BOM \(Bayer Al \+ poly-Si \+ Ag\/glass\/EVA\)/);
   assert.match(html, /cases\/silicon\.js/);
   const poly = PROCESS_INTENSITIES.polysilicon;
   assert.equal(poly.intensity, 10);

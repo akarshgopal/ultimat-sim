@@ -97,7 +97,7 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Crust: ['mg-si', 'polysilicon', 'aluminium-smelter', 'pv-module'],
+    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module'],
     REE: ['iac-leach', 'ree-chromatography'],
     Bio: ['bioforge'],
   };
@@ -298,6 +298,17 @@
       params: { electricityKWhPerKg: 0.2 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg Br₂' }],
       references: [{ label: 'USGS bromine production context', url: 'https://www.usgs.gov/centers/national-minerals-information-center/israel' }],
+    },
+    'bayer-alumina': {
+      label: 'Bayer alumina', capacity: 1000, rate: 100, activityUnit: 'kg Al₂O₃/day',
+      palette: { section: 'building', order: 12, glyph: 'Al2', description: 'Bauxite + caustic makeup + power → smelter-grade alumina' },
+      params: { electricityKWhPerKg: 3.5 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 1, max: 8, step: 0.1, unit: 'kWh/kg Al₂O₃' }],
+      sourceNote: 'Screening Bayer alumina: 2.0 kg bauxite + 0.08 kg NaOH makeup + 3.5 kWh/kg Al₂O₃. 3.5 kWh/kg is an IAI ~10–12 GJ/t total-energy-as-electricity proxy (≈3.33 kWh/kg at 12 GJ/t), not a metered Bayer plant. Red mud 1.0 kg leftover ore / kg alumina; caustic makeup is liquor loss, not a full recycle model. CAPEX from the tea-screening bayer-alumina pack (~$1370/t-y → 500 $/(kg/day)). Not a Hydro/Alcoa quote.',
+      references: [
+        { label: 'IAI metallurgical alumina refining energy intensity (~10–12 GJ/t family)', url: 'https://international-aluminium.org/statistics/metallurgical-alumina-refining-energy-intensity/' },
+        { label: 'USGS MCS 2025 bauxite and alumina', url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-bauxite-alumina.pdf' },
+      ],
     },
     'aluminium-smelter': {
       label: 'Aluminium smelter', capacity: 1000, rate: 100, activityUnit: 'kg Al/day',
@@ -585,6 +596,8 @@
     concentratePurchase: 'Concentrate purchase',
     quartzPurchase: 'Quartz purchase',
     aluminaPurchase: 'Alumina purchase',
+    bauxitePurchase: 'Bauxite purchase',
+    causticPurchase: 'Caustic purchase',
     silverPurchase: 'Silver purchase',
     glassPurchase: 'Glass purchase',
     evaPurchase: 'EVA purchase',
@@ -599,6 +612,7 @@
     lithium: 'Lithium chloride', bromide: 'Sodium bromide', magnesium: 'Magnesium chloride', potash: 'Potash', gypsum: 'Gypsum', salt: 'Salt', raffinate: 'Raffinate',
     caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Al frame', carbonDioxide: 'Carbon dioxide',
     quartz: 'Quartzite', silicon: 'MG-Si', polysilicon: 'Poly-Si', carbonMonoxide: 'Carbon monoxide',
+    bauxite: 'Bauxite', redMud: 'Red mud',
     silver: 'Ag paste', glass: 'Float glass', eva: 'EVA', module: 'Module',
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
     concentrate: 'Concentrate', dytb: 'DyTb', lightReo: 'Light REO',
@@ -618,6 +632,8 @@
     bromide: { label: 'Sodium bromide', phase: 'solid', mol: { NaBr: 1000 } },
     chlorine: { label: 'Chlorine', phase: 'gas', mol: { Cl2: 1000 } },
     alumina: { label: 'Alumina', phase: 'solid', mol: { Al2O3: 1000 } },
+    bauxite: { label: 'Bauxite', phase: 'solid', mol: { Bauxite: 1000 } },
+    caustic: { label: 'Caustic soda', phase: 'liquid', mol: { NaOH: 1000 } },
     carbon: { label: 'Carbon anode', phase: 'solid', mol: { C: 1000 } },
     quartz: { label: 'Quartzite', phase: 'solid', mol: { SiO2: 1000 } },
     silicon: { label: 'Metallurgical silicon', phase: 'solid', mol: { Si: 1000 } },
@@ -666,6 +682,8 @@
     salt: { key: 'salt', label: 'Sodium chloride', profile: 'silo', glyph: 'silo' },
     bromide: { key: 'bromide', label: 'Sodium bromide', profile: 'silo', glyph: 'silo' },
     alumina: { key: 'alumina', label: 'Alumina', profile: 'silo', glyph: 'silo' },
+    bauxite: { key: 'bauxite', label: 'Bauxite', profile: 'silo', glyph: 'Bx' },
+    caustic: { key: 'caustic', label: 'Caustic soda', profile: 'tank', glyph: 'NaOH' },
     carbon: { key: 'carbon', label: 'Carbon anode', profile: 'silo', glyph: 'silo' },
     quartz: { key: 'quartz', label: 'Quartzite', profile: 'silo', glyph: 'silo' },
     ironOre: { key: 'ironOre', label: 'Hematite concentrate', profile: 'silo', glyph: 'silo' },
@@ -692,7 +710,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -1356,7 +1374,7 @@
   }
 
   function loadSiliconAlumina() {
-    setActiveDemo('silicon-alumina', 'Mejillones PV BOM (poly-Si + Al + Ag/glass/EVA)');
+    setActiveDemo('silicon-alumina', 'Mejillones PV BOM (Bayer Al + poly-Si + Ag/glass/EVA)');
     lastSizing = null;
     if (typeof SiliconCase === 'undefined' || !SiliconCase.createSiliconCase) {
       throw new Error('Silicon case is not loaded');
@@ -3648,6 +3666,7 @@
       'chlor-alkali.salt': 'salt',
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
       'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon',
+      'bayer-alumina.bauxite': 'bauxite', 'bayer-alumina.caustic': 'caustic',
       'pv-module.polysilicon': 'silicon', 'pv-module.silver': 'silver', 'pv-module.glass': 'float-glass', 'pv-module.eva': 'eva', 'pv-module.aluminium': 'aluminium',
       'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'iac-leach.clay': 'ionic-clay', 'iac-leach.lixiviant': 'ammonium-sulfate',
@@ -5228,7 +5247,7 @@
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
     if (unit === 'mg-si' || unit === 'polysilicon') return 'furnace';
-    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
+    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'bayer-alumina' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
     if (unit === 'asu' || unit === 'ammonia' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
     return 'shed';
@@ -6708,7 +6727,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'bioforge') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'bioforge') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6835,6 +6854,7 @@
     'solar-pv': 'solar-pv',
     'mg-si': 'mg-si',
     polysilicon: 'polysilicon',
+    'bayer-alumina': 'bayer-alumina',
     'aluminium-smelter': 'aluminium-smelter',
     'pv-module': 'pv-module',
     'iac-leach': 'iac-leach',

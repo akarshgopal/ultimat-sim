@@ -68,6 +68,10 @@ const SUBSTANCES = Object.freeze({
   FloatGlass: { elements: { Si: 1, O: 2 }, molarMassG: 60.0843, charge: 0 },
   // 1 mol ≡ 1 kg finished module mass; not a molecule.
   PVmodule: { elements: { Si: 1 }, molarMassG: 1000, charge: 0 },
+  // 1 mol ≡ 1 kg screening bauxite ore. Al content / gangue / gibbsite vs boehmite
+  // are handled by Bayer intensity (2.0 kg ore / kg Al₂O₃), not a mineralogy model.
+  // Distinct from Al2O3 so purchased alumina and ore cannot be confused.
+  Bauxite: { elements: { Al: 1 }, molarMassG: 1000, charge: 0 },
 });
 
 function validateStream(stream, expectedKind) {

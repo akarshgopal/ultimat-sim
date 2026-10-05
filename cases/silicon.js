@@ -19,9 +19,11 @@ const EVA_KG_PER_DAY = MODULE_KG_PER_DAY * 0.0669;
 const FEED_MARGIN = 1.05;
 const USGS_SI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-silicon.pdf';
 const USGS_AL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-aluminum.pdf';
+const USGS_BAUXITE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-bauxite-alumina.pdf';
 const USGS_AG = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-silver.pdf';
 const USGS_SILICA = 'https://www.usgs.gov/centers/national-minerals-information-center/silica-statistics-and-information';
 const DOE_AL = 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf';
+const IAI_ALUMINA_ENERGY = 'https://international-aluminium.org/statistics/metallurgical-alumina-refining-energy-intensity/';
 const FRAUNHOFER_POLYSI = 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf';
 const FRAUNHOFER_PV = 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf';
 const REW_POLYSI = 'https://www.renewableenergyworld.com/solar/advancements-in-the-commercial-production-of-polysilicon/';
@@ -51,17 +53,20 @@ function material(substance, kg, phase = 'solid') {
 function createSiliconCase() {
   const quartzKg = SI_KG_PER_DAY * SUBSTANCES.SiO2.molarMassG / SUBSTANCES.Si.molarMassG * FEED_MARGIN;
   const reductantKg = SI_KG_PER_DAY * 2 * SUBSTANCES.C.molarMassG / SUBSTANCES.Si.molarMassG * FEED_MARGIN;
-  const aluminaKg = AL_KG_PER_DAY * 0.5 * SUBSTANCES.Al2O3.molarMassG / SUBSTANCES.Al.molarMassG * FEED_MARGIN;
+  const aluminaKgPerDay = AL_KG_PER_DAY * 0.5 * SUBSTANCES.Al2O3.molarMassG / SUBSTANCES.Al.molarMassG;
+  const bauxiteKg = aluminaKgPerDay * 2.0 * FEED_MARGIN;
+  const causticKg = aluminaKgPerDay * 0.08 * FEED_MARGIN;
   const anodeKg = AL_KG_PER_DAY * 0.75 * SUBSTANCES.C.molarMassG / SUBSTANCES.Al.molarMassG * FEED_MARGIN;
   const silverKg = AG_KG_PER_DAY * FEED_MARGIN;
   const glassKg = GLASS_KG_PER_DAY * FEED_MARGIN;
   const evaKg = EVA_KG_PER_DAY * FEED_MARGIN;
-  const kWhPerDay = SI_KG_PER_DAY * 12 + POLY_KG_PER_DAY * 65 + AL_KG_PER_DAY * 14 + MODULE_KG_PER_DAY * 0.05;
+  const kWhPerDay = SI_KG_PER_DAY * 12 + POLY_KG_PER_DAY * 65 + aluminaKgPerDay * 3.5 + AL_KG_PER_DAY * 14 + MODULE_KG_PER_DAY * 0.05;
   const solarKWp = kWhPerDay / DAILY_PV_ED * 1.02;
   const electricityKWh = solarKWp * DAILY_PV_ED;
   const quartz = material('SiO2', quartzKg);
   const reductant = material('C', reductantKg);
-  const alumina = material('Al2O3', aluminaKg);
+  const bauxite = material('Bauxite', bauxiteKg);
+  const caustic = material('NaOH', causticKg, 'liquid');
   const anode = material('C', anodeKg);
   const silver = material('Ag', silverKg);
   const glass = material('FloatGlass', glassKg);
@@ -73,7 +78,8 @@ function createSiliconCase() {
       nodes: [
         { id: 'quartz', unit: 'material-source', sourcePreset: 'quartz', params: { stream: quartz }, economics: tea.bindCost('quartz') },
         { id: 'reductant', unit: 'material-source', sourcePreset: 'carbon', params: { stream: reductant }, economics: tea.bindCost('carbon-reductant') },
-        { id: 'alumina', unit: 'material-source', sourcePreset: 'alumina', params: { stream: alumina }, economics: tea.bindCost('alumina') },
+        { id: 'bauxite', unit: 'material-source', sourcePreset: 'bauxite', params: { stream: bauxite }, economics: tea.bindCost('bauxite') },
+        { id: 'caustic', unit: 'material-source', sourcePreset: 'caustic', params: { stream: caustic }, economics: tea.bindCost('caustic-makeup') },
         { id: 'anode', unit: 'material-source', sourcePreset: 'carbon', params: { stream: anode }, economics: tea.bindCost('carbon-anode') },
         { id: 'silver', unit: 'material-source', sourcePreset: 'silver', params: { stream: silver }, economics: tea.bindCost('silver') },
         { id: 'glass', unit: 'material-source', sourcePreset: 'float-glass', params: { stream: glass }, economics: tea.bindCost('float-glass') },
@@ -82,16 +88,20 @@ function createSiliconCase() {
         { id: 'power-bus', unit: 'electrical-bus' },
         { id: 'mg-si', unit: 'mg-si', capacity: SI_KG_PER_DAY, params: { electricityKWhPerKg: 12 }, economics: tea.bindCapexPack('mg-si', { capacity: SI_KG_PER_DAY, region: REGION }) },
         { id: 'polysilicon', unit: 'polysilicon', capacity: POLY_KG_PER_DAY, params: { electricityKWhPerKg: 65 }, economics: tea.bindCapexPack('polysilicon', { capacity: POLY_KG_PER_DAY, region: REGION }) },
+        { id: 'bayer-alumina', unit: 'bayer-alumina', capacity: aluminaKgPerDay, params: { electricityKWhPerKg: 3.5 }, economics: tea.bindCapexPack('bayer-alumina', { capacity: aluminaKgPerDay, region: REGION }) },
         { id: 'aluminium-smelter', unit: 'aluminium-smelter', capacity: AL_KG_PER_DAY, params: { electricityKWhPerKg: 14 }, economics: tea.bindCapexPack('aluminium-smelter', { capacity: AL_KG_PER_DAY, region: REGION }) },
         { id: 'pv-module', unit: 'pv-module', capacity: MODULE_KG_PER_DAY, params: { electricityKWhPerKg: 0.05 }, economics: tea.bindCapexPack('pv-module', { capacity: MODULE_KG_PER_DAY, region: REGION }) },
         { id: 'module', unit: 'material-sink', economics: tea.bindSale('pv-module', { region: REGION }) },
         { id: 'carbonMonoxide', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'carbonDioxide', unit: 'material-sink', economics: { disposition: 'vent' } },
+        { id: 'redMud', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [
         { from: { node: 'quartz', port: 'out' }, to: { node: 'mg-si', port: 'quartz' } },
         { from: { node: 'reductant', port: 'out' }, to: { node: 'mg-si', port: 'carbon' } },
-        { from: { node: 'alumina', port: 'out' }, to: { node: 'aluminium-smelter', port: 'alumina' } },
+        { from: { node: 'bauxite', port: 'out' }, to: { node: 'bayer-alumina', port: 'bauxite' } },
+        { from: { node: 'caustic', port: 'out' }, to: { node: 'bayer-alumina', port: 'caustic' } },
+        { from: { node: 'bayer-alumina', port: 'alumina' }, to: { node: 'aluminium-smelter', port: 'alumina' } },
         { from: { node: 'anode', port: 'out' }, to: { node: 'aluminium-smelter', port: 'carbon' } },
         { from: { node: 'silver', port: 'out' }, to: { node: 'pv-module', port: 'silver' } },
         { from: { node: 'glass', port: 'out' }, to: { node: 'pv-module', port: 'glass' } },
@@ -99,6 +109,7 @@ function createSiliconCase() {
         { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'mg-si', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'polysilicon', port: 'electricity' } },
+        { from: { node: 'power-bus', port: 'out' }, to: { node: 'bayer-alumina', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'aluminium-smelter', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'pv-module', port: 'electricity' } },
         { from: { node: 'mg-si', port: 'silicon' }, to: { node: 'polysilicon', port: 'silicon' } },
@@ -107,16 +118,18 @@ function createSiliconCase() {
         { from: { node: 'pv-module', port: 'module' }, to: { node: 'module', port: 'in' } },
         { from: { node: 'mg-si', port: 'carbonMonoxide' }, to: { node: 'carbonMonoxide', port: 'in' } },
         { from: { node: 'aluminium-smelter', port: 'carbonDioxide' }, to: { node: 'carbonDioxide', port: 'in' } },
+        { from: { node: 'bayer-alumina', port: 'redMud' }, to: { node: 'redMud', port: 'in' } },
       ],
     },
     operation: {
       setpoints: {
         'mg-si': SI_KG_PER_DAY,
         polysilicon: POLY_KG_PER_DAY,
+        'bayer-alumina': aluminaKgPerDay,
         'aluminium-smelter': AL_KG_PER_DAY,
         'pv-module': MODULE_KG_PER_DAY,
       },
-      priorities: { 'power-bus': ['mg-si', 'polysilicon', 'aluminium-smelter', 'pv-module'] },
+      priorities: { 'power-bus': ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module'] },
     },
   };
   const node = id => definition.graph.nodes.find(item => item.id === id);
@@ -124,7 +137,8 @@ function createSiliconCase() {
   node('power').siteResource = 'electricity';
   node('quartz').siteResource = 'quartz';
   node('reductant').siteResource = 'reductant';
-  node('alumina').siteResource = 'alumina';
+  node('bauxite').siteResource = 'bauxite';
+  node('caustic').siteResource = 'caustic';
   node('anode').siteResource = 'anode';
   node('silver').siteResource = 'silver';
   node('glass').siteResource = 'glass';
@@ -141,7 +155,7 @@ function createSiliconCase() {
       electricity: {
         stream: clone(node('power').params.stream),
         quality: 'literature-estimate',
-        evidence: 'PVGIS-ERA5 annual average 5.27 kWh/kWp·day (E_y 1923.52 from frozen data/pvgis-mejillones.json) × array sized to the MG-Si + Siemens-style poly-Si + Al + module-assembly load with 2% margin. Not a SEN interconnection or port lease.',
+        evidence: 'PVGIS-ERA5 annual average 5.27 kWh/kWp·day (E_y 1923.52 from frozen data/pvgis-mejillones.json) × array sized to the MG-Si + Siemens-style poly-Si + Bayer alumina + Al + module-assembly load with 2% margin. Not a SEN interconnection or port lease.',
       },
       quartz: {
         stream: clone(node('quartz').params.stream),
@@ -153,10 +167,15 @@ function createSiliconCase() {
         quality: 'user-assumption',
         evidence: 'Purchased carbon reductant (coal/coke/charcoal mix) assumed available; not a concession or port lease.',
       },
-      alumina: {
-        stream: clone(node('alumina').params.stream),
+      bauxite: {
+        stream: clone(node('bauxite').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased smelter-grade alumina assumed available; not a concession or port lease and not a Bayer plant.',
+        evidence: 'Purchased bauxite assumed available at screening $0.04/kg; not a concession or port lease. Bayer island is screening, not a concession.',
+      },
+      caustic: {
+        stream: clone(node('caustic').params.stream),
+        quality: 'user-assumption',
+        evidence: 'Purchased NaOH makeup assumed available at the existing caustic commodity band; not a concession or port lease.',
       },
       anode: {
         stream: clone(node('anode').params.stream),
@@ -194,14 +213,17 @@ function createSiliconCase() {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports', [
         { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: 'https://en.wikipedia.org/wiki/Mejillones' },
       ]),
-      brineConcession: right('concession', 'unverified', 'No brine; purchased quartzite/alumina/carbon/Ag/glass/EVA are not a mineral concession', [
+      brineConcession: right('concession', 'unverified', 'No brine; purchased quartzite/bauxite/caustic/carbon/Ag/glass/EVA are not a mineral concession', [
         { label: 'USGS silica statistics (commodity context, not a concession)', url: USGS_SILICA },
       ]),
       quartzPurchase: right('purchase', 'assumed', 'Purchased quartzite assumed available; not a quarry quote or port lease', [
         { label: 'USGS silica statistics (commodity context, not a contract)', url: USGS_SILICA },
       ]),
-      aluminaPurchase: right('purchase', 'assumed', 'Purchased smelter-grade alumina assumed available; not a Bayer plant or port lease', [
-        { label: 'USGS MCS 2025 aluminum (alumina feed context, not a contract)', url: USGS_AL },
+      bauxitePurchase: right('purchase', 'assumed', 'Purchased bauxite assumed available; Bayer screening is not a concession or port lease', [
+        { label: 'USGS MCS 2025 bauxite and alumina (commodity context, not a mine contract)', url: USGS_BAUXITE },
+      ]),
+      causticPurchase: right('purchase', 'assumed', 'Purchased NaOH makeup assumed available at the existing caustic band; not a caustic contract or port lease', [
+        { label: 'NaOH commodity band (same $/kg as caustic product price; not a contract)', url: null },
       ]),
       silverPurchase: right('purchase', 'assumed', 'Purchased silver paste assumed available at USGS bullion; not a paste contract or port lease', [
         { label: 'USGS MCS 2026 silver (bullion 2025e $38/troy oz; not a paste contract)', url: USGS_AG },
@@ -223,9 +245,11 @@ function createSiliconCase() {
       { label: 'Fraunhofer ISE Photovoltaics Report — module mass 11.6 kg/m² shares (Si/Ag/glass/EVA/Al); remaining ~10% BOM omitted', url: FRAUNHOFER_PV },
       { label: 'USGS MCS 2026 silver bullion 2025e $38/troy oz → 1221.73 $/kg', url: USGS_AG },
       { label: 'USGS MCS 2025 aluminum ingot', url: USGS_AL },
+      { label: 'USGS MCS 2025 bauxite and alumina (crude dry bauxite import unit value family)', url: USGS_BAUXITE },
+      { label: 'IAI metallurgical alumina refining energy intensity (~10–12 GJ/t family; screening 3.5 kWh/kg total-energy-as-electricity proxy)', url: IAI_ALUMINA_ENERGY },
       { label: 'DOE aluminium industry roadmap', url: DOE_AL },
     ],
-    notes: 'Screening crustal quartz → MG-Si (SiO2+2C→Si+2CO, 12 kWh/kg) → Siemens-style poly-Si (65 kWh/kg, Fraunhofer SoG 60–71 band mid; 1.05 mol MG-Si / mol product) + purchased Ag/glass/EVA + Hall–Héroult Al (14 kWh/kg) → screening module assembly (Fraunhofer 2021 mass shares on 11.6 kg/m²; remaining ~10% backsheet/J-box/cables omitted). Sale is finished module at screening $2.85/kg ($0.15/W), not USGS silicon metal and not a poly/Al offtake. Not a cell fab, not TOPCon, not a TCS/HCl plant model, not FBR, not bankable. Purchased quartzite, alumina, carbon, Ag, glass, and EVA are not a concession or port lease. Chile CAPEX× 1.05 applies to furnaces, poly island, module line, and solar. Screening, not bankable.',
+    notes: 'Screening crustal quartz → MG-Si (SiO2+2C→Si+2CO, 12 kWh/kg) → Siemens-style poly-Si (65 kWh/kg, Fraunhofer SoG 60–71 band mid; 1.05 mol MG-Si / mol product) + purchased Ag/glass/EVA + crustal bauxite → Bayer screening alumina (2.0 kg ore + 0.08 kg NaOH makeup + 3.5 kWh/kg total-energy-as-electricity proxy; not a full Bayer train) → Hall–Héroult Al (14 kWh/kg) → screening module assembly (Fraunhofer 2021 mass shares on 11.6 kg/m²; remaining ~10% backsheet/J-box/cables omitted). Sale is finished module at screening $2.85/kg ($0.15/W), not USGS silicon metal and not a poly/Al/alumina offtake. Not a cell fab, not TOPCon, not a TCS/HCl plant model, not FBR, not bankable. Purchased quartzite, bauxite, caustic makeup, carbon, Ag, glass, and EVA are not a concession or port lease. Chile CAPEX× 1.05 applies to furnaces, Bayer island, poly island, module line, and solar. Screening, not bankable.',
   };
   return definition;
 }

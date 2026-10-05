@@ -132,9 +132,9 @@ test('Mejillones PV BOM case solves at 1000 kg module/day without electricity bi
 test('palette Crust lists pv-module after aluminium-smelter; Overview mentions BOM or module', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'aluminium-smelter',\s*'pv-module'\s*\]/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'pv-module'\s*\]/);
   assert.match(html, /id="loadSiliconAlumina"/);
-  assert.match(html, /Mejillones PV BOM \(poly-Si \+ Al \+ Ag\/glass\/EVA\)/);
+  assert.match(html, /Mejillones PV BOM \(Bayer Al \+ poly-Si \+ Ag\/glass\/EVA\)/);
   assert.match(source, /screening module assembly on frozen Mejillones PV/);
   assert.match(html, /cases\/silicon\.js/);
   const pad = PROCESS_INTENSITIES['pv-module'];

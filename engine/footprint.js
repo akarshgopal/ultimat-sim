@@ -65,6 +65,7 @@ const PROCESS_LABELS = Object.freeze({
   ammonia: 'Haber–Bosch',
   'mg-si': 'MG-Si furnace',
   polysilicon: 'Polysilicon (Siemens)',
+  'bayer-alumina': 'Bayer alumina',
   'pv-module': 'PV module (BOM)',
   'aluminium-smelter': 'Aluminium smelter',
   'iac-leach': 'Ionic-clay REE',
@@ -348,6 +349,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Screening Hall–Héroult pad 6 m²/(kg Al/h) (range 3–10); not a measured plot. USGS MCS aluminum is commodity context, not a surveyed smelter layout.',
         url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-aluminum.pdf',
+      }),
+    ]),
+  }),
+  'bayer-alumina': Object.freeze({
+    id: 'bayer-alumina',
+    label: PROCESS_LABELS['bayer-alumina'],
+    basis: 'kgPerHour',
+    intensity: 12,
+    unitLabel: 'm²/(kg alumina/h)',
+    range: Object.freeze([6, 24]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening Bayer alumina pad 12 m²/(kg alumina/h) (range 6–24); not a plot survey. IAI metallurgical-alumina energy intensity is the ~10–12 GJ/t family, not a measured layout.',
+        url: 'https://international-aluminium.org/statistics/metallurgical-alumina-refining-energy-intensity/',
       }),
     ]),
   }),
@@ -710,6 +727,13 @@ function padAluminiumSmelter(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padBayerAlumina(node, solved) {
+  const spec = intensitySpec('bayer-alumina');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padPolysilicon(node, solved) {
   const spec = intensitySpec('polysilicon');
   const activity = activityOf(solved, node.id);
@@ -792,6 +816,7 @@ const PROCESS_PADS = Object.freeze({
   'mg-si': padMgSi,
   polysilicon: padPolysilicon,
   'pv-module': padPvModule,
+  'bayer-alumina': padBayerAlumina,
   'aluminium-smelter': padAluminiumSmelter,
   'iac-leach': padIacLeach,
   'ree-chromatography': padReeChromatography,

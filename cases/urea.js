@@ -51,8 +51,8 @@ function createUreaCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'ammonia-feed', unit: 'material-source', sourcePreset: 'ammonia', params: { stream: ammonia }, economics: tea.bindCost('ammonia-feed') },
-        { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed') },
+        { id: 'ammonia-feed', unit: 'material-source', sourcePreset: 'ammonia', params: { stream: ammonia }, economics: tea.bindCost('ammonia-feed', { freight: 'chile-coast-container' }) },
+        { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed', { freight: 'chile-coast-container' }) },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -62,7 +62,7 @@ function createUreaCase() {
           params: { electricityKWhPerKg: SEC_UREA },
           economics: tea.bindCapexPack('urea', { capacity: UREA_KG_PER_DAY, region: REGION }),
         },
-        { id: 'urea-product', unit: 'material-sink', economics: tea.bindSale('urea', { region: REGION }) },
+        { id: 'urea-product', unit: 'material-sink', economics: tea.bindSale('urea', { region: REGION, freight: 'bulk-dry-shortsea' }) },
         { id: 'process-water', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [
@@ -101,12 +101,12 @@ function createUreaCase() {
       ammonia: {
         stream: clone(node('ammonia-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased fertilizer NH₃ assumed available at screening $0.45/kg (mirrors the ammonia sale price). Not a green-NH₃ electrolyzer path and not a fertilizer contract.',
+        evidence: 'Purchased fertilizer NH₃ assumed available at screening $0.45/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; not a Maersk quote). chile-coast-container is the existing container family band (not a Chile-origin claim for Walvis). Not a green-NH₃ electrolyzer path and not a fertilizer contract.',
       },
       co2: {
         stream: clone(node('co2-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased industrial CO₂ assumed available at screening $0.05/kg. Not DAC full chain and not a merchant-gas contract.',
+        evidence: 'Purchased industrial CO₂ assumed available at screening $0.05/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; not a Maersk quote). chile-coast-container is the existing container family band (not a Chile-origin claim for Walvis). Not DAC full chain and not a merchant-gas contract.',
       },
     },
     meteo: {
@@ -138,7 +138,7 @@ function createUreaCase() {
       { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context', url: USGS_N },
       { label: 'World Bank commodity markets / pink sheet (urea family ~$350–450/t; screening mid $0.40/kg, not a Black Sea contract)', url: WB_PINK },
     ],
-    notes: 'Purchased NH₃+CO₂ → screening urea at the Walvis map point. Not the green-NH₃ electrolyzer path (that demo stays separate). Overall stoich 2 NH₃ + CO₂ → urea + H₂O only; not carbamate recycle and not granulation. SEC 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated). Cash sign whatever falls out. Not bankable. Southern Africa CAPEX× 0.95.',
+    notes: 'Purchased NH₃+CO₂ → screening urea at the Walvis map point. Not the green-NH₃ electrolyzer path (that demo stays separate). Overall stoich 2 NH₃ + CO₂ → urea + H₂O only; not carbamate recycle and not granulation. SEC 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated). Sale is screening urea $0.40/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (bulk fertilizer offtake OOM; not a Namport quote; screening FOB vs landed). Purchased fertilizer NH₃ and industrial CO₂ carry screening chile-coast-container freight $0.08/kg (existing container family band; not a Chile-origin claim for Walvis). Not a logistics model. Cash sign whatever falls out. Not bankable. Southern Africa CAPEX× 0.95 unchanged.',
   };
   return definition;
 }

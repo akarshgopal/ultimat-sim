@@ -83,7 +83,9 @@ test('green urea graph is on-site Haber NH3, not purchased ammonia-feed', () => 
   assert.ok(definition.graph.nodes.some(node => node.id === 'asu' && node.unit === 'asu'));
   assert.ok(definition.graph.nodes.some(node => node.id === 'co2-feed' && node.sourcePreset === 'co2'));
   assert.equal(definition.graph.nodes.find(node => node.id === 'co2-feed').economics.unitCost, 0.05);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'urea-product').economics.unitPrice, 0.4);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'urea-product').economics.gateUnitPrice, 0.4);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'urea-product').economics.unitPrice, 0.4 - 0.03);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'urea-product').economics.freightId, 'bulk-dry-shortsea');
   assert.ok(!definition.graph.nodes.some(node => node.unit === 'dac' || String(node.unit).startsWith('dac-')));
   assert.ok(!definition.graph.nodes.some(node => node.unit === 'intake-pump'));
   assert.ok(!definition.graph.nodes.some(node => node.unit === 'gas-blower'));

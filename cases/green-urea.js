@@ -107,7 +107,7 @@ function createGreenUreaCase() {
       nodes: [
         { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: tea.bindCost('seawater') },
         { id: 'air', unit: 'material-source', sourcePreset: 'air', params: { stream: air }, economics: { unitCost: 0 } },
-        { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed') },
+        { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed', { freight: 'chile-coast-container' }) },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -145,7 +145,7 @@ function createGreenUreaCase() {
           params: { electricityKWhPerKg: SEC_UREA },
           economics: tea.bindCapexPack('urea', { capacity: UREA_KG_PER_DAY, region: REGION }),
         },
-        { id: 'urea-product', unit: 'material-sink', economics: tea.bindSale('urea', { region: REGION }) },
+        { id: 'urea-product', unit: 'material-sink', economics: tea.bindSale('urea', { region: REGION, freight: 'bulk-dry-shortsea' }) },
         { id: 'electrolyzer-oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen', { region: REGION }) },
         { id: 'asu-oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen', { region: REGION }) },
         { id: 'brine', unit: 'material-sink', economics: { disposition: 'vent' } },
@@ -214,7 +214,7 @@ function createGreenUreaCase() {
       co2: {
         stream: clone(node('co2-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased industrial CO₂ assumed available at screening $0.05/kg. Not DAC full chain and not a merchant-gas contract.',
+        evidence: 'Purchased industrial CO₂ assumed available at screening $0.05/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; not a Maersk quote). chile-coast-container is the existing container family band (not a Chile-origin claim for Walvis). Not DAC full chain and not a merchant-gas contract.',
       },
     },
     meteo: {
@@ -266,7 +266,7 @@ function createGreenUreaCase() {
       { label: 'World Bank commodity markets / pink sheet (urea family ~$350–450/t; screening mid $0.40/kg, not a Black Sea contract)', url: WB_PINK },
       { label: 'IEA Direct Air Capture 2022 (family contrast only; this purchase is industrial CO₂, not DAC)', url: IEA_DAC },
     ],
-    notes: 'On-site SWRO + PEM H₂ + ASU N₂ → Haber NH₃ + purchased industrial CO₂ → screening urea at the Walvis map point. Not purchased NH₃ (that remains cases/urea.js). Not NH₃-sale (that remains cases/green-ammonia.js). Not DAC full chain. Overall stoich 2 NH₃ + CO₂ → urea + H₂O only; not carbamate recycle and not granulation. SEC 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated). Electrolyzer 52 kWh/kg H₂ dominates energy. Cash sign whatever falls out. Not bankable. Not a green premium. Southern Africa CAPEX× 0.95.',
+    notes: 'On-site SWRO + PEM H₂ + ASU N₂ → Haber NH₃ + purchased industrial CO₂ → screening urea at the Walvis map point. Not purchased NH₃ (that remains cases/urea.js). Not NH₃-sale (that remains cases/green-ammonia.js). Not DAC full chain. Overall stoich 2 NH₃ + CO₂ → urea + H₂O only; not carbamate recycle and not granulation. SEC 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated). Electrolyzer 52 kWh/kg H₂ dominates energy. Sale is screening urea $0.40/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (bulk fertilizer offtake OOM; not a Namport quote; screening FOB vs landed). Purchased industrial CO₂ carries screening chile-coast-container freight $0.08/kg (existing container family band; not a Chile-origin claim for Walvis). Seawater intake, air, and electrolyzer-oxygen sale stay plant-gate (local intake; YAGNI byproduct). NH₃ is on-site Haber — no NH₃ purchase freight. Not a logistics model. Cash sign whatever falls out. Not bankable. Not a green premium. Southern Africa CAPEX× 0.95 unchanged.',
   };
   return definition;
 }

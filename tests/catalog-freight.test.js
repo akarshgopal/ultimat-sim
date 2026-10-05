@@ -18,6 +18,7 @@ const { createCuEwCase } = require('../cases/cu-ew');
 const { createFloatGlassCase } = require('../cases/float-glass');
 const { createFtLiquidsCase } = require('../cases/ft-liquids');
 const { createGreenFtCase } = require('../cases/green-ft');
+const { createGreenUreaCase } = require('../cases/green-urea');
 const { createFuelsAndMineralsNetwork } = require('../cases/network');
 
 // Prior CATALOG-FREIGHT-BOM tip (module + bauxite + Ag/glass/EVA), solved createSiliconCase.
@@ -29,6 +30,9 @@ const PRIOR_CU_EW_INSTALLED_CAPEX = 1234597;
 const PRIOR_FLOAT_GLASS_INSTALLED_CAPEX = 823065;
 const PRIOR_FT_LIQUIDS_INSTALLED_CAPEX = 509860;
 const PRIOR_GREEN_FT_INSTALLED_CAPEX = 6641032;
+// Plant-gate CAPEX baselines recorded tip 9b89454 (freight does not change CAPEX).
+const PRIOR_UREA_INSTALLED_CAPEX = 1281460;
+const PRIOR_GREEN_UREA_INSTALLED_CAPEX = 3855897;
 
 function kgStream(kg) {
   return {
@@ -162,7 +166,7 @@ test('Mejillones QCC freight: quartz/carbon 0.03, caustic 0.08; BOM/module uncha
   assert.match(source, /breakdown\?\.freight/);
 });
 
-test('Mejillones QCC freight: CAPEX matches BOM tip, cash finite, Maglut/SX/Minaçu/urea unchanged', () => {
+test('Mejillones QCC freight: CAPEX matches BOM tip, cash finite, Maglut/SX/Minaçu unchanged', () => {
   const definition = createSiliconCase();
   const solved = solveOperation(definition);
   const cash = evaluateEconomics(definition, solved);
@@ -189,7 +193,7 @@ test('Mejillones QCC freight: CAPEX matches BOM tip, cash finite, Maglut/SX/Mina
   const ureaDef = createUreaCase();
   const ureaCash = evaluateEconomics(ureaDef, solveOperation(ureaDef));
   assert.ok(Number.isFinite(ureaCash.annualNetCash), `urea annualNetCash ${ureaCash.annualNetCash}`);
-  assert.equal(ureaCash.breakdown.freight, 0);
+  assert.ok(ureaCash.breakdown.freight > 0, `urea freight ${ureaCash.breakdown.freight}`);
 });
 
 function nodeEcon(definition, id) {
@@ -307,7 +311,50 @@ test('Mejillones green FT leftover freight: CO2+diesel 0.08; seawater plant-gate
   assert.ok(cash.annualNetCash < 0, `green-ft expected cash−, got ${cash.annualNetCash}`);
 });
 
-test('Leftover freight: Maglut/Dead Sea/urea stay plant-gate; silicon 9 streams; network finite', () => {
+test('Walvis urea leftover freight: NH3+CO2 chile-coast-container 0.08; urea sale bulk-dry-shortsea 0.03', () => {
+  const { definition, cash } = solvedCash(createUreaCase);
+  const ammonia = nodeEcon(definition, 'ammonia-feed');
+  const co2 = nodeEcon(definition, 'co2-feed');
+  const sale = nodeEcon(definition, 'urea-product');
+  assert.equal(ammonia.freightId, 'chile-coast-container');
+  assert.equal(ammonia.freightUsdPerKg, 0.08);
+  assert.equal(ammonia.unitCost, 0.45);
+  assert.equal(co2.freightId, 'chile-coast-container');
+  assert.equal(co2.freightUsdPerKg, 0.08);
+  assert.equal(co2.unitCost, 0.05);
+  assert.equal(sale.freightId, 'bulk-dry-shortsea');
+  assert.equal(sale.freightUsdPerKg, 0.03);
+  assert.equal(sale.gateUnitPrice, 0.4);
+  assert.equal(sale.unitPrice, 0.4 - 0.03);
+  assert.ok(Math.abs(cash.installedCapex - PRIOR_UREA_INSTALLED_CAPEX) <= 1, `urea CAPEX ${cash.installedCapex}`);
+  assert.ok(cash.breakdown.freight > 0, `urea freight ${cash.breakdown.freight}`);
+  assert.ok(Number.isFinite(cash.annualNetCash), `urea annualNetCash ${cash.annualNetCash}`);
+});
+
+test('Walvis green urea leftover freight: CO2 0.08; urea sale 0.03; seawater plant-gate', () => {
+  const { definition, cash } = solvedCash(createGreenUreaCase);
+  const co2 = nodeEcon(definition, 'co2-feed');
+  const seawater = nodeEcon(definition, 'seawater');
+  const sale = nodeEcon(definition, 'urea-product');
+  const oxygen = nodeEcon(definition, 'electrolyzer-oxygen');
+  assert.equal(co2.freightId, 'chile-coast-container');
+  assert.equal(co2.freightUsdPerKg, 0.08);
+  assert.equal(co2.unitCost, 0.05);
+  assert.equal(seawater.freightUsdPerKg, undefined);
+  assert.equal(seawater.freightId, undefined);
+  assert.equal(sale.freightId, 'bulk-dry-shortsea');
+  assert.equal(sale.freightUsdPerKg, 0.03);
+  assert.equal(sale.gateUnitPrice, 0.4);
+  assert.equal(sale.unitPrice, 0.4 - 0.03);
+  assert.equal(oxygen.freightUsdPerKg, undefined);
+  assert.equal(oxygen.freightId, undefined);
+  assert.ok(Math.abs(cash.installedCapex - PRIOR_GREEN_UREA_INSTALLED_CAPEX) <= 1, `green-urea CAPEX ${cash.installedCapex}`);
+  assert.ok(cash.breakdown.freight > 0, `green-urea freight ${cash.breakdown.freight}`);
+  assert.ok(Number.isFinite(cash.annualNetCash), `green-urea annualNetCash ${cash.annualNetCash}`);
+  assert.ok(cash.annualNetCash < 0, `green-urea expected cash−, got ${cash.annualNetCash}`);
+});
+
+test('Leftover freight: Maglut/Dead Sea stay plant-gate; Walvis urea freighted; silicon 9 streams; network finite', () => {
   const maglutCash = evaluateEconomics(createMaglutCase(), solveOperation(createMaglutCase()));
   assert.equal(maglutCash.breakdown.freight, 0);
   assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
@@ -315,8 +362,11 @@ test('Leftover freight: Maglut/Dead Sea/urea stay plant-gate; silicon 9 streams;
   const deadSeaCash = evaluateEconomics(createAbundanceCase(), solveOperation(createAbundanceCase()));
   assert.equal(deadSeaCash.breakdown.freight, 0);
 
+  const sxCash = evaluateEconomics(createReeSxCase(), solveOperation(createReeSxCase()));
+  assert.equal(sxCash.breakdown.freight, 0);
+
   const ureaCash = evaluateEconomics(createUreaCase(), solveOperation(createUreaCase()));
-  assert.equal(ureaCash.breakdown.freight, 0);
+  assert.ok(ureaCash.breakdown.freight > 0, `urea freight ${ureaCash.breakdown.freight}`);
   assert.ok(Number.isFinite(ureaCash.annualNetCash));
 
   const silicon = createSiliconCase();
@@ -335,4 +385,8 @@ test('Leftover freight: Maglut/Dead Sea/urea stay plant-gate; silicon 9 streams;
     assert.ok(plant, id);
     assert.ok(Number.isFinite(plant.economics.annualNetCash), `${id} annualNetCash ${plant.economics.annualNetCash}`);
   }
+  const walvisGreen = network.plants.find(plant => plant.id === 'walvis-green-urea');
+  assert.ok(walvisGreen);
+  assert.ok(Number.isFinite(walvisGreen.economics.annualNetCash), `walvis-green-urea annualNetCash ${walvisGreen.economics.annualNetCash}`);
+  assert.ok(walvisGreen.economics.breakdown.freight > 0, `walvis-green-urea freight ${walvisGreen.economics.breakdown.freight}`);
 });

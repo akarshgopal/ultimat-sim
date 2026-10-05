@@ -61,7 +61,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/ionic-clay-longnan.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/silicon.js', 'cases/maglut.js', 'cases/green-urea.js', 'cases/float-glass.js', 'cases/cement.js', 'cases/cu-ew.js', 'cases/network.js', 'cases/ree.js', 'cases/ree-sx.js', 'cases/green-ammonia.js', 'cases/green-h2-dri.js', 'cases/mto.js', 'cases/ft-liquids.js', 'cases/green-mto.js', 'cases/green-ft.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
+  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/ionic-clay-longnan.js', 'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/silicon.js', 'cases/maglut.js', 'cases/green-urea.js', 'cases/float-glass.js', 'cases/cement.js', 'cases/cu-ew.js', 'cases/green-ft.js', 'cases/network.js', 'cases/ree.js', 'cases/ree-sx.js', 'cases/green-ammonia.js', 'cases/green-h2-dri.js', 'cases/mto.js', 'cases/ft-liquids.js', 'cases/green-mto.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -224,11 +224,11 @@ test('site panel reports location-aware footprint instead of 1.6 ha/MWp', () => 
   assert.match(context.__elements.get('siteFootprintPads').innerHTML, /Electrolyzer|DAC|Sabatier|SWRO/i);
 });
 
-test('fuels plus minerals network rolls up eight sited plants', () => {
+test('fuels plus minerals network rolls up nine sited plants', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;
   app.loadDemoNetwork();
-  assert.equal(app.network.plants.length, 8);
+  assert.equal(app.network.plants.length, 9);
   assert.ok(app.network.slate.CH4 > 0);
   assert.ok(app.network.slate.NH3 > 0);
   assert.ok(app.network.slate.PVmodule > 0);
@@ -236,6 +236,7 @@ test('fuels plus minerals network rolls up eight sited plants', () => {
   assert.ok(app.network.slate.PortlandCement > 0);
   assert.ok(app.network.slate.Cu > 0);
   assert.ok(app.network.slate.FloatGlass > 0);
+  assert.ok(app.network.slate.C12H26 > 0);
   assert.match(context.__elements.get('networkProducts').innerHTML, /CH4/);
   assert.match(context.__elements.get('networkProducts').innerHTML, /lead/);
   assert.match(context.__elements.get('networkPlants').innerHTML, /Almería solar methane/);
@@ -246,6 +247,7 @@ test('fuels plus minerals network rolls up eight sited plants', () => {
   assert.match(context.__elements.get('networkPlants').innerHTML, /Mejillones cement/);
   assert.match(context.__elements.get('networkPlants').innerHTML, /Mejillones copper SX-EW/);
   assert.match(context.__elements.get('networkPlants').innerHTML, /Mejillones float glass/);
+  assert.match(context.__elements.get('networkPlants').innerHTML, /Mejillones green FT/);
   assert.match(context.__elements.get('networkPlants').innerHTML, /footprint/);
   assert.match(context.__elements.get('networkMetrics').innerHTML, /Land/);
   assert.match(context.__elements.get('networkStatus').textContent, /site footprint/);

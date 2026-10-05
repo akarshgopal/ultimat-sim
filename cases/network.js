@@ -8,11 +8,12 @@
     typeof require === 'function' ? require('./maglut') : root.MaglutCase,
     typeof require === 'function' ? require('./cement') : root.CementCase,
     typeof require === 'function' ? require('./cu-ew') : root.CuEwCase,
-    typeof require === 'function' ? require('./float-glass') : root.FloatGlassCase
+    typeof require === 'function' ? require('./float-glass') : root.FloatGlassCase,
+    typeof require === 'function' ? require('./green-ft') : root.GreenFtCase
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.NetworkCase = api;
-})(globalThis, (coastal, abundance, model, silicon, greenUrea, maglut, cement, cuEw, floatGlass) => {
+})(globalThis, (coastal, abundance, model, silicon, greenUrea, maglut, cement, cuEw, floatGlass, greenFt) => {
 const { streamMassKg } = model;
 const tea = abundance.TEA;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.43&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
@@ -246,6 +247,7 @@ function createFuelsAndMineralsNetwork(month = 6) {
       { id: 'mejillones-cement', name: 'Mejillones cement', definition: cement.createCementCase() },
       { id: 'mejillones-cu-ew', name: 'Mejillones copper SX-EW', definition: cuEw.createCuEwCase() },
       { id: 'mejillones-float-glass', name: 'Mejillones float glass', definition: floatGlass.createFloatGlassCase() },
+      { id: 'mejillones-green-ft', name: 'Mejillones green FT', definition: greenFt.createGreenFtCase() },
     ],
     corridors: [],
   };

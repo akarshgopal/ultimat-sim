@@ -330,7 +330,7 @@ test('Leftover freight: Maglut/Dead Sea/urea stay plant-gate; silicon 9 streams;
   assert.ok(Number.isFinite(network.annualNetCash), `network annualNetCash ${network.annualNetCash}`);
   const maglutPlant = network.plants.find(plant => plant.id === 'long-beach-maglut');
   assert.ok(Math.abs(maglutPlant.economics.annualNetCash - 1299) <= 5, `Maglut plant ${maglutPlant.economics.annualNetCash}`);
-  for (const id of ['mejillones-cement', 'mejillones-cu-ew', 'mejillones-float-glass']) {
+  for (const id of ['mejillones-cement', 'mejillones-cu-ew', 'mejillones-float-glass', 'mejillones-green-ft']) {
     const plant = network.plants.find(item => item.id === id);
     assert.ok(plant, id);
     assert.ok(Number.isFinite(plant.economics.annualNetCash), `${id} annualNetCash ${plant.economics.annualNetCash}`);

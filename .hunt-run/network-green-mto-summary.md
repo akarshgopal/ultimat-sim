@@ -71,4 +71,4 @@ Not edited: `cases/green-mto.js`, `cases/green-ft.js`, `cases/cement.js`, `cases
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `c0813b3`.
+Feat `8769874` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `8769874`). `npm test` 529 pass / 0 fail. Prior checkout tip `c0813b3`.

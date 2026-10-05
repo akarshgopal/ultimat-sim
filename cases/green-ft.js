@@ -83,7 +83,7 @@ function createGreenFtCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed') },
+        { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed', { freight: 'chile-coast-container' }) },
         { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: seawaterCost },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
@@ -108,7 +108,7 @@ function createGreenFtCase() {
           params: { electricityKWhPerKg: SEC_FT },
           economics: tea.bindCapexPack('ft-liquids', { capacity: DIESEL_KG_PER_DAY, region: REGION }),
         },
-        { id: 'diesel-product', unit: 'material-sink', economics: tea.bindSale('diesel', { region: REGION }) },
+        { id: 'diesel-product', unit: 'material-sink', economics: tea.bindSale('diesel', { region: REGION, freight: 'chile-coast-container' }) },
         { id: 'electrolyzer-oxygen', unit: 'material-sink', economics: tea.bindSale('oxygen', { region: REGION }) },
         { id: 'brine', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'waterReject', unit: 'material-sink', economics: { disposition: 'vent' } },
@@ -157,7 +157,7 @@ function createGreenFtCase() {
       co2: {
         stream: clone(node('co2-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased industrial CO₂ assumed available at screening $0.05/kg. Not DAC full chain (coastal methanol.js remains the DAC demo) and not a merchant-gas contract. RWGS is folded into the FT island.',
+        evidence: 'Purchased industrial CO₂ assumed available at screening $0.05/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; not a Maersk quote). Not DAC full chain (coastal methanol.js remains the DAC demo) and not a merchant-gas contract. RWGS is folded into the FT island.',
       },
       seawater: {
         stream: clone(node('seawater').params.stream),
@@ -212,7 +212,7 @@ function createGreenFtCase() {
       { label: 'IEA Global Hydrogen Review 2024 (electrolytic H₂ family context; this demo is on-site PEM, not a purchased grey/blue H₂ contract)', url: IEA_H2 },
       { label: 'DOE hydrogen production electrolysis (PEM/alkaline family; screening 52 kWh/kg H₂, not a vendor meter)', url: DOE_H2 },
     ],
-    notes: 'On-site SWRO + PEM H₂ + purchased industrial CO₂ → screening diesel/syncrude proxy (n=12 paraffin C₁₂H₂₆) at Mejillones. Not purchased H₂ (that remains cases/ft-liquids.js). Not DAC (coastal methanol.js remains the DAC demo). Overall stoich 12 CO₂ + 37 H₂ → C₁₂H₂₆ + 24 H₂O folds RWGS into the island; not a standalone RWGS unit and not a full FT slate. SEC 0.22 kWh/kg is IEA 0.018 GJe/GJliquid × 43.0 MJ/kg (electricity of the FT island; real FT is heat/H₂ dominated). Electrolyzer 52 kWh/kg H₂ dominates energy. Cash sign whatever falls out. Not bankable. Not a green e-diesel premium. Chile CAPEX× 1.05. Sell O₂ at screening $0.05/kg.',
+    notes: 'On-site SWRO + PEM H₂ + purchased industrial CO₂ → screening diesel/syncrude proxy (n=12 paraffin C₁₂H₂₆) at Mejillones. Not purchased H₂ (that remains cases/ft-liquids.js). Not DAC (coastal methanol.js remains the DAC demo). Overall stoich 12 CO₂ + 37 H₂ → C₁₂H₂₆ + 24 H₂O folds RWGS into the island; not a standalone RWGS unit and not a full FT slate. SEC 0.22 kWh/kg is IEA 0.018 GJe/GJliquid × 43.0 MJ/kg (electricity of the FT island; real FT is heat/H₂ dominated). Electrolyzer 52 kWh/kg H₂ dominates energy. Sale is screening diesel $0.90/kg plant-gate, net of screening chile-coast-container freight $0.08/kg (not a Maersk quote; screening FOB vs landed). Purchased industrial CO₂ carries screening chile-coast-container freight $0.08/kg. Seawater intake and electrolyzer-oxygen sale stay plant-gate (local intake; YAGNI byproduct). Not a logistics model. Cash sign whatever falls out. Not bankable. Not a green e-diesel premium. Chile CAPEX× 1.05 unchanged. Sell O₂ at screening $0.05/kg.',
   };
   return definition;
 }

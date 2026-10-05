@@ -56,8 +56,8 @@ function createFtLiquidsCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'hydrogen-feed', unit: 'material-source', sourcePreset: 'hydrogen', params: { stream: hydrogen }, economics: tea.bindCost('hydrogen-feed') },
-        { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed') },
+        { id: 'hydrogen-feed', unit: 'material-source', sourcePreset: 'hydrogen', params: { stream: hydrogen }, economics: tea.bindCost('hydrogen-feed', { freight: 'chile-coast-container' }) },
+        { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed', { freight: 'chile-coast-container' }) },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -67,7 +67,7 @@ function createFtLiquidsCase() {
           params: { electricityKWhPerKg: SEC_FT },
           economics: tea.bindCapexPack('ft-liquids', { capacity: DIESEL_KG_PER_DAY, region: REGION }),
         },
-        { id: 'diesel-product', unit: 'material-sink', economics: tea.bindSale('diesel', { region: REGION }) },
+        { id: 'diesel-product', unit: 'material-sink', economics: tea.bindSale('diesel', { region: REGION, freight: 'chile-coast-container' }) },
         { id: 'process-water', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [
@@ -106,12 +106,12 @@ function createFtLiquidsCase() {
       hydrogen: {
         stream: clone(node('hydrogen-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased industrial/grey–blue H₂ assumed available at screening $2.00/kg. Not an electrolyzer path and not a DOE $1/kg goal.',
+        evidence: 'Purchased industrial/grey–blue H₂ assumed available at screening $2.00/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; not a Maersk quote). Not an electrolyzer path and not a DOE $1/kg goal.',
       },
       co2: {
         stream: clone(node('co2-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased industrial CO₂ assumed available at screening $0.05/kg. RWGS is folded into the FT island (not a standalone RWGS unit and not DAC).',
+        evidence: 'Purchased industrial CO₂ assumed available at screening $0.05/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; not a Maersk quote). RWGS is folded into the FT island (not a standalone RWGS unit and not DAC).',
       },
     },
     meteo: {
@@ -146,7 +146,7 @@ function createFtLiquidsCase() {
       { label: 'World Bank commodity markets / pink sheet (gasoil family; screening mid, not a contract)', url: WB_PINK },
       { label: 'IEA Global Hydrogen Review 2024 (H₂ purchase at screening $2.00/kg; not green LCOH)', url: IEA_H2 },
     ],
-    notes: 'Purchased H₂ + purchased industrial CO₂ → screening diesel/syncrude proxy (n=12 paraffin C₁₂H₂₆) at the Mejillones map point. Overall stoich 12 CO₂ + 37 H₂ → C₁₂H₂₆ + 24 H₂O folds RWGS into the island; not a standalone RWGS unit, not DAC, not an electrolyzer path, not a full FT slate. SEC 0.22 kWh/kg is IEA 0.018 GJe/GJliquid × 43.0 MJ/kg (electricity of the FT island; real FT is heat/H₂ dominated). Cash sign whatever falls out. Not bankable. Not a green e-diesel premium. Atacama/Chile CAPEX× 1.05 on ft-liquids island + solar-pv.',
+    notes: 'Purchased H₂ + purchased industrial CO₂ → screening diesel/syncrude proxy (n=12 paraffin C₁₂H₂₆) at the Mejillones map point. Overall stoich 12 CO₂ + 37 H₂ → C₁₂H₂₆ + 24 H₂O folds RWGS into the island; not a standalone RWGS unit, not DAC, not an electrolyzer path, not a full FT slate. SEC 0.22 kWh/kg is IEA 0.018 GJe/GJliquid × 43.0 MJ/kg (electricity of the FT island; real FT is heat/H₂ dominated). Sale is screening diesel $0.90/kg plant-gate, net of screening chile-coast-container freight $0.08/kg (not a Maersk quote; screening FOB vs landed). Purchased H₂ and industrial CO₂ carry screening chile-coast-container freight $0.08/kg. Not a logistics model. Cash sign whatever falls out. Not bankable. Not a green e-diesel premium. Atacama/Chile CAPEX× 1.05 on ft-liquids island + solar-pv unchanged.',
   };
   return definition;
 }

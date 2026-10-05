@@ -74,7 +74,9 @@ test('green FT graph is on-site PEM hydrogen, not purchased hydrogen-feed', () =
   assert.ok(definition.graph.nodes.some(node => node.id === 'electrolyzer' && node.unit === 'electrolyzer'));
   assert.ok(definition.graph.nodes.some(node => node.id === 'co2-feed' && node.sourcePreset === 'co2'));
   assert.equal(definition.graph.nodes.find(node => node.id === 'co2-feed').economics.unitCost, 0.05);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'diesel-product').economics.unitPrice, 0.9);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'diesel-product').economics.gateUnitPrice, 0.9);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'diesel-product').economics.unitPrice, 0.9 - 0.08);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'diesel-product').economics.freightId, 'chile-coast-container');
   assert.ok(!definition.graph.nodes.some(node => node.unit === 'dac' || String(node.unit).startsWith('dac-')));
   assert.ok(!definition.graph.nodes.some(node => node.unit === 'intake-pump'));
   assert.ok(!definition.graph.nodes.some(node => node.unit === 'gas-blower'));

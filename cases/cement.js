@@ -59,8 +59,8 @@ function createCementCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'limestone-feed', unit: 'material-source', sourcePreset: 'limestone', params: { stream: limestone }, economics: tea.bindCost('limestone') },
-        { id: 'clay-feed', unit: 'material-source', sourcePreset: 'kiln-clay', params: { stream: clay }, economics: tea.bindCost('kiln-clay') },
+        { id: 'limestone-feed', unit: 'material-source', sourcePreset: 'limestone', params: { stream: limestone }, economics: tea.bindCost('limestone', { freight: 'bulk-dry-shortsea' }) },
+        { id: 'clay-feed', unit: 'material-source', sourcePreset: 'kiln-clay', params: { stream: clay }, economics: tea.bindCost('kiln-clay', { freight: 'bulk-dry-shortsea' }) },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -70,7 +70,7 @@ function createCementCase() {
           params: { electricityKWhPerKg: SEC_CEMENT },
           economics: tea.bindCapexPack('cement', { capacity: CEMENT_KG_PER_DAY, region: REGION }),
         },
-        { id: 'cement-product', unit: 'material-sink', economics: tea.bindSale('cement', { region: REGION }) },
+        { id: 'cement-product', unit: 'material-sink', economics: tea.bindSale('cement', { region: REGION, freight: 'bulk-dry-shortsea' }) },
         { id: 'process-co2', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [
@@ -109,12 +109,12 @@ function createCementCase() {
       limestone: {
         stream: clone(node('limestone-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased carbonate stone assumed available at screening $0.02/kg (USGS crushed stone 2025e $18.50/t). Not a chemical-lime contract and not a quarry concession.',
+        evidence: 'Purchased carbonate stone assumed available at screening $0.02/kg plant-gate plus screening bulk-dry-shortsea freight $0.03/kg (~$30/t; not a voyage quote). USGS crushed stone 2025e $18.50/t. Not a chemical-lime contract and not a quarry concession.',
       },
       'kiln-clay': {
         stream: clone(node('clay-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased clay/shale/silica kiln feed as SiO2 proxy at screening $0.02/kg (USGS crushed-stone family). Not kaolin and not a clay-pit concession.',
+        evidence: 'Purchased clay/shale/silica kiln feed as SiO2 proxy at screening $0.02/kg plant-gate plus screening bulk-dry-shortsea freight $0.03/kg (~$30/t; not a voyage quote). USGS crushed-stone family. Not kaolin and not a clay-pit concession.',
       },
     },
     meteo: {
@@ -152,7 +152,7 @@ function createCementCase() {
       { label: 'Samarkand Cement 3 Mt/yr kiln US$313m', url: SAMARKAND_CEMENT_TIC },
       { label: 'Dugong Cimentos 1.8 Mt/yr integrated US$330m', url: DUGONG_CEMENT_TIC },
     ],
-    notes: 'Purchased limestone + clay/silica (SiO2 kiln-feed proxy) → screening grey clinker as a Portland-cement proxy at the Mejillones map point. Product is clinker; gypsum ~4–5% (EN 197-1 CEM I) omitted. Sale is USGS mill portland/blended $0.16/kg, not a clinker export quote. IPCC 0.52 kg process CO2/kg clinker; limestone 1.183 kg/kg and clay 0.337 kg/kg close the dry mass (BREF 1.57 t raw/t clinker is wet-raw). SEC 1.05 kWh/kg is an electricity-as-total-energy proxy for IEA ~3.4 GJ/t clinker thermal plus ~100 kWh/t cement electricity; real kiln is heat-dominated. Pack $60/(kg cement/day) mid of published dry-process grey plant TICs (~$35–90). Fuel carbon is not emitted because energy is the electricity proxy. Not a wet-process kiln, not blended CEM II/III, not CCUS, not a quarry. Cash sign whatever falls out. Not bankable. Chile CAPEX× 1.05.',
+    notes: 'Purchased limestone + clay/silica (SiO2 kiln-feed proxy) → screening grey clinker as a Portland-cement proxy at the Mejillones map point. Product is clinker; gypsum ~4–5% (EN 197-1 CEM I) omitted. Sale is USGS mill portland/blended $0.16/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (bulk commodity offtake; not a voyage quote; screening FOB vs landed). Purchased limestone and kiln-clay carry screening bulk-dry-shortsea freight $0.03/kg. Not a logistics model. IPCC 0.52 kg process CO2/kg clinker; limestone 1.183 kg/kg and clay 0.337 kg/kg close the dry mass (BREF 1.57 t raw/t clinker is wet-raw). SEC 1.05 kWh/kg is an electricity-as-total-energy proxy for IEA ~3.4 GJ/t clinker thermal plus ~100 kWh/t cement electricity; real kiln is heat-dominated. Pack $60/(kg cement/day) mid of published dry-process grey plant TICs (~$35–90). Fuel carbon is not emitted because energy is the electricity proxy. Not a wet-process kiln, not blended CEM II/III, not CCUS, not a quarry. Cash sign whatever falls out. Not bankable. Chile CAPEX× 1.05 unchanged.',
   };
   return definition;
 }

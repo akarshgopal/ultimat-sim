@@ -53,7 +53,7 @@ function createCuEwCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'pls-feed', unit: 'material-source', sourcePreset: 'pls-copper', params: { stream: pls }, economics: tea.bindCost('pls-copper') },
+        { id: 'pls-feed', unit: 'material-source', sourcePreset: 'pls-copper', params: { stream: pls }, economics: tea.bindCost('pls-copper', { freight: 'chile-coast-container' }) },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -63,7 +63,7 @@ function createCuEwCase() {
           params: { electricityKWhPerKg: SEC_CU_EW },
           economics: tea.bindCapexPack('copper-ew', { capacity: CATHODE_KG_PER_DAY, region: REGION }),
         },
-        { id: 'cathode-product', unit: 'material-sink', economics: tea.bindSale('copper-cathode', { region: REGION }) },
+        { id: 'cathode-product', unit: 'material-sink', economics: tea.bindSale('copper-cathode', { region: REGION, freight: 'chile-coast-container' }) },
       ],
       edges: [
         { from: { node: 'pls-feed', port: 'out' }, to: { node: 'copper-ew', port: 'pls' } },
@@ -98,7 +98,7 @@ function createCuEwCase() {
       'pls-copper': {
         stream: clone(node('pls-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased contained copper in pregnant leach solution at 96.5% of USGS MCS 2026 LME grade A cash 2025e $9.70/kg → $9.36/kg. Ore/PLS payable basis, not a TC/RC smelter ticket and not a heap-ore FOB.',
+        evidence: 'Purchased contained copper in pregnant leach solution at 96.5% of USGS MCS 2026 LME grade A cash 2025e $9.70/kg → $9.36/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; liquid chemical / concentrate-style screening OOM, not a PLS truck model and not a heap-haul quote). Ore/PLS payable basis, not a TC/RC smelter ticket and not a heap-ore FOB.',
       },
     },
     meteo: {
@@ -130,7 +130,7 @@ function createCuEwCase() {
       { label: 'Gunnison Open Pit PEA 2024 (M3) — SX-EW plant $145M / 175 Mlb/y', url: GUNNISON_PEA_2024 },
       { label: 'Copper electrowinning practice — typical 1900–2000 kWh/t Cu', url: CU_EW_SEC_PRACTICE },
     ],
-    notes: 'Purchased contained copper in pregnant leach solution → LME-grade cathode at the Mejillones map point. Heap leach, mine, and pad are out of scope; the island is SX-EW only (PLS in, cathode out). Faraday Cu²⁺ + 2e⁻ → Cu; acid regenerates to raffinate (inventory, not a sale). O₂ unlabeled. Mass 1.00 kg contained Cu / kg cathode. SEC 2.2 kWh/kg is industrial EW+SX island electricity (Jenkins ~1.9–2.0; industrial 1.8–2.5; Marimaca SX/TF/EW 2.28), not a heat-as-electricity proxy. Pack $750/(kg Cu/day) mid of published SX-EW plant line items (~$630–880). Sale is USGS MCS 2026 LME grade A cash 2025e $9.70/kg; PLS payable 96.5% of that band. Cash sign whatever falls out. Not bankable. Chile CAPEX× 1.05.',
+    notes: 'Purchased contained copper in pregnant leach solution → LME-grade cathode at the Mejillones map point. Heap leach, mine, and pad are out of scope; the island is SX-EW only (PLS in, cathode out). Faraday Cu²⁺ + 2e⁻ → Cu; acid regenerates to raffinate (inventory, not a sale). O₂ unlabeled. Mass 1.00 kg contained Cu / kg cathode. SEC 2.2 kWh/kg is industrial EW+SX island electricity (Jenkins ~1.9–2.0; industrial 1.8–2.5; Marimaca SX/TF/EW 2.28), not a heat-as-electricity proxy. Pack $750/(kg Cu/day) mid of published SX-EW plant line items (~$630–880). Sale is USGS MCS 2026 LME grade A cash 2025e $9.70/kg plant-gate, net of screening chile-coast-container freight $0.08/kg (not a Maersk quote; screening FOB vs landed). Purchased contained Cu in PLS carries screening chile-coast-container freight $0.08/kg (liquid chemical / concentrate-style screening OOM, not a PLS truck model and not a heap-haul quote). Not a logistics model. PLS payable 96.5% of that band. Cash sign whatever falls out. Not bankable. Chile CAPEX× 1.05 unchanged.',
   };
   return definition;
 }

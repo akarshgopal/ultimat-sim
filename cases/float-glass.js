@@ -59,9 +59,9 @@ function createFloatGlassCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'sand-feed', unit: 'material-source', sourcePreset: 'silica-sand', params: { stream: sand }, economics: tea.bindCost('silica-sand') },
-        { id: 'soda-feed', unit: 'material-source', sourcePreset: 'soda-ash', params: { stream: sodaAsh }, economics: tea.bindCost('soda-ash') },
-        { id: 'limestone-feed', unit: 'material-source', sourcePreset: 'limestone', params: { stream: limestone }, economics: tea.bindCost('limestone') },
+        { id: 'sand-feed', unit: 'material-source', sourcePreset: 'silica-sand', params: { stream: sand }, economics: tea.bindCost('silica-sand', { freight: 'bulk-dry-shortsea' }) },
+        { id: 'soda-feed', unit: 'material-source', sourcePreset: 'soda-ash', params: { stream: sodaAsh }, economics: tea.bindCost('soda-ash', { freight: 'chile-coast-container' }) },
+        { id: 'limestone-feed', unit: 'material-source', sourcePreset: 'limestone', params: { stream: limestone }, economics: tea.bindCost('limestone', { freight: 'bulk-dry-shortsea' }) },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -71,7 +71,7 @@ function createFloatGlassCase() {
           params: { electricityKWhPerKg: SEC_GLASS },
           economics: tea.bindCapexPack('float-glass', { capacity: GLASS_KG_PER_DAY, region: REGION }),
         },
-        { id: 'glass', unit: 'material-sink', economics: tea.bindSale('float-glass', { region: REGION }) },
+        { id: 'glass', unit: 'material-sink', economics: tea.bindSale('float-glass', { region: REGION, freight: 'bulk-dry-shortsea' }) },
         { id: 'process-co2', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [
@@ -112,17 +112,17 @@ function createFloatGlassCase() {
       'silica-sand': {
         stream: clone(node('sand-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased industrial silica sand assumed available at screening $0.04/kg (USGS MCS 2026 industrial sand 2025e $36/t). Not a glass-sand contract and not silicon-grade quartzite.',
+        evidence: 'Purchased industrial silica sand assumed available at screening $0.04/kg plant-gate plus screening bulk-dry-shortsea freight $0.03/kg (~$30/t; not a voyage quote). USGS MCS 2026 industrial sand 2025e $36/t. Not a glass-sand contract and not silicon-grade quartzite.',
       },
       'soda-ash': {
         stream: clone(node('soda-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased soda ash assumed available at screening $0.15/kg (USGS MCS 2026 2025e $150/t f.o.b.). Not a Solvay/trona contract.',
+        evidence: 'Purchased soda ash assumed available at screening $0.15/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; not a Maersk quote). USGS MCS 2026 2025e $150/t f.o.b. Not a Solvay/trona contract.',
       },
       limestone: {
         stream: clone(node('limestone-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased carbonate stone (GfE limestone+dolomite folded) assumed available at screening $0.02/kg (USGS crushed stone 2025e $18.50/t). Not a chemical-lime contract.',
+        evidence: 'Purchased carbonate stone (GfE limestone+dolomite folded) assumed available at screening $0.02/kg plant-gate plus screening bulk-dry-shortsea freight $0.03/kg (~$30/t; not a voyage quote). USGS crushed stone 2025e $18.50/t. Not a chemical-lime contract.',
       },
     },
     meteo: {
@@ -160,7 +160,7 @@ function createFloatGlassCase() {
       { label: 'USGS MCS 2026 soda ash — 2025e $150/t', url: USGS_SODA_ASH },
       { label: 'USGS MCS 2026 crushed stone — 2025e $18.50/t', url: USGS_STONE },
     ],
-    notes: 'Purchased silica sand + soda ash + limestone (dolomite folded into limestone as GfE carbonate 0.21 kg/kg) → screening float/solar glass at the Mejillones map point. Not a full float line (tin bath / lehr / coating YAGNI). SEC 2.5 kWh/kg is an electricity-as-total-energy proxy for GfE 9.0 MJ/kg (NG 6.1 + HFO 2.1 + grid 0.80); real float is heat-dominated. CO2 is the three-feed mass remainder 0.06 kg/kg, vented; GfE 0.70 kg CO2/kg includes fuel carbon which is not emitted because energy is the electricity proxy. Cullet/feldspar/sulfate omitted. Sale is the existing solar-glass screening $0.45/kg — the PV-module purchased-glass cost is not retuned. Cash sign whatever falls out. Not bankable. Chile CAPEX× 1.05.',
+    notes: 'Purchased silica sand + soda ash + limestone (dolomite folded into limestone as GfE carbonate 0.21 kg/kg) → screening float/solar glass at the Mejillones map point. Not a full float line (tin bath / lehr / coating YAGNI). SEC 2.5 kWh/kg is an electricity-as-total-energy proxy for GfE 9.0 MJ/kg (NG 6.1 + HFO 2.1 + grid 0.80); real float is heat-dominated. CO2 is the three-feed mass remainder 0.06 kg/kg, vented; GfE 0.70 kg CO2/kg includes fuel carbon which is not emitted because energy is the electricity proxy. Cullet/feldspar/sulfate omitted. Sale is the existing solar-glass screening $0.45/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (not a voyage quote; screening FOB vs landed) — the PV-module purchased-glass cost is not retuned. Purchased silica sand and limestone carry screening bulk-dry-shortsea freight $0.03/kg; soda ash carries screening chile-coast-container freight $0.08/kg. Not a logistics model. Cash sign whatever falls out. Not bankable. Chile CAPEX× 1.05 unchanged.',
   };
   return definition;
 }

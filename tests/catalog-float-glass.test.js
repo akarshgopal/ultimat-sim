@@ -90,7 +90,9 @@ test('Mejillones float-glass demo 1000 kg/day with CAPEX on line + solar and fin
   assert.equal(definition.graph.nodes.find(node => node.id === 'sand-feed').economics.unitCost, 0.04);
   assert.equal(definition.graph.nodes.find(node => node.id === 'soda-feed').economics.unitCost, 0.15);
   assert.equal(definition.graph.nodes.find(node => node.id === 'limestone-feed').economics.unitCost, 0.02);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'glass').economics.unitPrice, 0.45);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'glass').economics.gateUnitPrice, 0.45);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'glass').economics.unitPrice, 0.45 - 0.03);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'glass').economics.freightId, 'bulk-dry-shortsea');
   assert.equal(definition.graph.nodes.find(node => node.id === 'process-co2').economics.disposition, 'vent');
   assert.equal(definition.site.latitude, -23.1);
   assert.equal(definition.site.longitude, -70.448);

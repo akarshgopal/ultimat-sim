@@ -102,7 +102,9 @@ test('Mejillones FT liquids demo ~1000 kg diesel/day with CAPEX on ft-liquids + 
   assert.equal(power.economics.unitCost, undefined);
   assert.equal(definition.graph.nodes.find(node => node.id === 'hydrogen-feed').economics.unitCost, 2);
   assert.equal(definition.graph.nodes.find(node => node.id === 'co2-feed').economics.unitCost, 0.05);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'diesel-product').economics.unitPrice, 0.9);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'diesel-product').economics.gateUnitPrice, 0.9);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'diesel-product').economics.unitPrice, 0.9 - 0.08);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'diesel-product').economics.freightId, 'chile-coast-container');
   assert.equal(definition.graph.nodes.find(node => node.id === 'process-water').economics.disposition, 'vent');
   assert.equal(definition.site.id, 'chile-mejillones-ft-liquids');
   assert.equal(definition.site.latitude, -23.1);

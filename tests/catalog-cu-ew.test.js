@@ -98,7 +98,9 @@ test('Mejillones copper SX-EW demo 1000 kg/day with Chile 1.05 CAPEX + solar and
   assert.ok(solarCapex > 0, `solar CAPEX ${solarCapex}`);
   assert.equal(power.economics.unitCost, undefined);
   assert.equal(definition.graph.nodes.find(node => node.id === 'pls-feed').economics.unitCost, 9.36);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'cathode-product').economics.unitPrice, 9.70);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'cathode-product').economics.gateUnitPrice, 9.70);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'cathode-product').economics.unitPrice, 9.62);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'cathode-product').economics.freightId, 'chile-coast-container');
   assert.equal(definition.site.latitude, -23.1);
   assert.equal(definition.site.longitude, -70.448);
   assert.equal(definition.site.region, 'Atacama/Chile');
@@ -122,7 +124,8 @@ test('Mejillones copper SX-EW demo 1000 kg/day with Chile 1.05 CAPEX + solar and
   const cement = createCementCase();
   const cementCash = evaluateEconomics(cement, solveOperation(cement));
   assert.ok(Number.isFinite(cementCash.annualNetCash), `cement annualNetCash=${cementCash.annualNetCash}`);
-  assert.equal(cement.graph.nodes.find(node => node.id === 'cement-product').economics.unitPrice, 0.16);
+  assert.equal(cement.graph.nodes.find(node => node.id === 'cement-product').economics.gateUnitPrice, 0.16);
+  assert.equal(cement.graph.nodes.find(node => node.id === 'cement-product').economics.unitPrice, 0.13);
 
   const glass = createFloatGlassCase();
   const glassCash = evaluateEconomics(glass, solveOperation(glass));

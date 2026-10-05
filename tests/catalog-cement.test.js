@@ -87,7 +87,9 @@ test('Mejillones cement demo 1000 kg/day with CAPEX on line + solar and finite c
   assert.equal(power.economics.unitCost, undefined);
   assert.equal(definition.graph.nodes.find(node => node.id === 'limestone-feed').economics.unitCost, 0.02);
   assert.equal(definition.graph.nodes.find(node => node.id === 'clay-feed').economics.unitCost, 0.02);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'cement-product').economics.unitPrice, 0.16);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'cement-product').economics.gateUnitPrice, 0.16);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'cement-product').economics.unitPrice, 0.13);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'cement-product').economics.freightId, 'bulk-dry-shortsea');
   assert.equal(definition.graph.nodes.find(node => node.id === 'process-co2').economics.disposition, 'vent');
   assert.equal(definition.site.latitude, -23.1);
   assert.equal(definition.site.longitude, -70.448);
@@ -114,7 +116,8 @@ test('Mejillones cement demo 1000 kg/day with CAPEX on line + solar and finite c
   const glass = createFloatGlassCase();
   const glassCash = evaluateEconomics(glass, solveOperation(glass));
   assert.ok(Number.isFinite(glassCash.annualNetCash), `float-glass annualNetCash=${glassCash.annualNetCash}`);
-  assert.equal(glass.graph.nodes.find(node => node.id === 'glass').economics.unitPrice, 0.45);
+  assert.equal(glass.graph.nodes.find(node => node.id === 'glass').economics.gateUnitPrice, 0.45);
+  assert.equal(glass.graph.nodes.find(node => node.id === 'glass').economics.unitPrice, 0.45 - 0.03);
 
   const h2dri = createH2DriCase();
   const h2driCash = evaluateEconomics(h2dri, solveOperation(h2dri));

@@ -59,4 +59,4 @@ Not edited: `engine/size.js`, `cases/green-h2-dri.js`, `cases/h2-dri.js`, `data/
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `0508c2d`.
+Feat `3bb0fe8` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `3bb0fe8`). `npm test` 531 pass / 0 fail. Prior checkout tip `0508c2d`.

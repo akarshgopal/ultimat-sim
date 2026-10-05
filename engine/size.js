@@ -16,7 +16,7 @@ const { cascadeHeat } = heat;
 // Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
 // this module is the separate design calculation that chooses those capacities.
 //
-// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium)
+// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass)
 //   -> strategy estimates converter duties and source budgets
 //   -> T-feasible cascade before purchasing heat on every path with
 //      sinks/sources; residual heat is electric resistance COP=1 for PV;
@@ -75,6 +75,10 @@ const PRODUCT_ALIASES = {
   titanium: 'titanium',
   ti: 'titanium',
   sponge: 'titanium',
+  // Canonical float/solar-glass product is `float-glass` (tea sale key; Mejillones island).
+  'float-glass': 'float-glass',
+  glass: 'float-glass',
+  'solar-glass': 'float-glass',
 };
 const PV_MODULE_CHAIN_UNITS = Object.freeze([
   'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module',
@@ -2391,6 +2395,125 @@ function sizeTitanium(definition, target, opts) {
   });
 }
 
+function floatGlassSink(definition, glassNode) {
+  return reactionProductSink(definition, glassNode, 'glass')
+    || nodeBy(definition, node => (
+      (node.id === 'glass' || node.id === 'float-glass' || node.id === 'solar-glass'
+        || node.id === 'float-glass-product')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function floatGlassChain(definition) {
+  const floatGlass = converter(definition, 'float-glass');
+  if (!floatGlass) throw new Error('sizeToProduct needs a float-glass block to size float-glass demand');
+  const sink = floatGlassSink(definition, floatGlass);
+  if (!sink) throw new Error('sizeToProduct needs a glass sink');
+  const sources = collectMaterialSourcesFeeding(definition, floatGlass.id, new Set());
+  return { floatGlass, sink, converters: [floatGlass], sources };
+}
+
+function baselineFloatGlassDuties(definition) {
+  const chain = floatGlassChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    glassKg: converterDuties[chain.floatGlass.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function floatGlassProcessElectricityKWh(definition, baseline, scale) {
+  const floatGlass = converter(definition, 'float-glass');
+  if (!floatGlass || !(baseline.converterDuties[floatGlass.id] > 0)) return 0;
+  const listed = Number(floatGlass.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 2.5;
+  return baseline.converterDuties[floatGlass.id] * scale * sec;
+}
+
+function sizeFloatGlass(definition, target, opts) {
+  const chain = floatGlassChain(definition);
+  const baseline = baselineFloatGlassDuties(definition);
+  if (!(baseline.glassKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size float-glass: float-glass has no baseline capacity');
+  }
+  let yieldPerScale = baseline.glassKg > 0 ? baseline.glassKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'float-glass',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const glassKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? glassKg / yieldPerScale : 0;
+        const processElectricityKWh = floatGlassProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          'float-glass': glassKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: glassKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['float-glass', 'float-glass'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties['float-glass']),
+        relativeGap(activity(solved, chain.floatGlass), duties['float-glass']),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          'float-glass': duties['float-glass'],
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
 function sizeMinerals(definition, product, target, opts) {
   const minerals = converter(definition, 'brine-minerals');
   if (!minerals) throw new Error('sizeToProduct needs a brine-minerals block to size lithium or salt demand');
@@ -2488,7 +2611,7 @@ function normalizeProduct(product) {
   const key = String(product ?? '').trim().toLowerCase();
   const normalized = PRODUCT_ALIASES[key];
   if (!normalized) {
-    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, or titanium');
+    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, or float-glass');
   }
   return normalized;
 }
@@ -2514,6 +2637,7 @@ function sizeToProduct(opts = {}) {
   if (product === 'diesel') return sizeDiesel(definition, rate, loopOpts);
   if (product === 'urea') return sizeUrea(definition, rate, loopOpts);
   if (product === 'titanium') return sizeTitanium(definition, rate, loopOpts);
+  if (product === 'float-glass') return sizeFloatGlass(definition, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 

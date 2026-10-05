@@ -91,6 +91,7 @@
   const SIZE_PRODUCT_LABELS = {
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
     module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel', urea: 'urea', titanium: 'titanium',
+    'float-glass': 'float glass',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -1467,7 +1468,7 @@
     loadCase(FloatGlassCase.createFloatGlassCase(), 'float-glass');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening float glass from purchased sand+soda+limestone on frozen Mejillones PV; may be cash±; not bankable; not a tin-bath line.';
+      status.textContent = 'screening float glass from purchased sand+soda+limestone on frozen Mejillones PV; Size-to-target → float glass; may be cash±; not bankable; not a tin-bath line.';
     }
   }
 
@@ -1691,6 +1692,7 @@
     if (product === 'diesel') return nodes.find(node => node.unit === 'ft-liquids')?.id;
     if (product === 'urea') return nodes.find(node => node.unit === 'urea')?.id;
     if (product === 'titanium') return nodes.find(node => node.unit === 'titanium-kroll')?.id;
+    if (product === 'float-glass') return nodes.find(node => node.unit === 'float-glass')?.id;
     return nodes[0]?.id;
   }
 

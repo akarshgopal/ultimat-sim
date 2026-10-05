@@ -64,4 +64,4 @@ Not edited: `data/tea-screening.js` (band already exists), `cases/green-h2-dri.j
 
 ## Tip
 
-Feat pending on `main`. Pages pending. Prior checkout tip `cbf46a0`.
+Feat `156813f` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `156813f`). `npm test` 532 pass / 0 fail. Prior checkout tip `cbf46a0`.

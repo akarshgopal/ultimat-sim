@@ -2745,7 +2745,7 @@
   }
 
   function loadDemoNetwork() {
-    setActiveDemo('demo-network', 'Fuels + minerals · Walvis / Long Beach');
+    setActiveDemo('demo-network', 'Fuels + minerals · cement / Cu / glass');
     network = clone(NetworkCase.createFuelsAndMineralsNetwork(6));
     refreshNetwork();
     const id = mineralLeadPlantId()

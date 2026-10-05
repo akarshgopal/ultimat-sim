@@ -203,9 +203,9 @@ test('Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, the
   assert.ok(footprint.totalHa > 0);
 });
 
-test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea, Long Beach Maglut, and money', () => {
+test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea, Long Beach Maglut, cement, Cu, glass, and money', () => {
   const definition = createFuelsAndMineralsNetwork(6);
-  assert.equal(definition.plants.length, 5);
+  assert.equal(definition.plants.length, 8);
   assert.equal(definition.plants[0].id, 'dead-sea-minerals');
   assert.equal(definition.plants[1].id, 'almeria-fuels');
   assert.equal(definition.plants[2].id, 'mejillones-silicon');
@@ -214,13 +214,22 @@ test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea,
   assert.equal(definition.plants[3].definition.site.id, 'namibia-walvis-bay-green-urea');
   assert.equal(definition.plants[4].id, 'long-beach-maglut');
   assert.equal(definition.plants[4].definition.site.id, 'us-long-beach');
+  assert.equal(definition.plants[5].id, 'mejillones-cement');
+  assert.equal(definition.plants[5].definition.site.id, 'chile-mejillones-cement');
+  assert.equal(definition.plants[6].id, 'mejillones-cu-ew');
+  assert.equal(definition.plants[6].definition.site.id, 'chile-mejillones-cu-ew');
+  assert.equal(definition.plants[7].id, 'mejillones-float-glass');
+  assert.equal(definition.plants[7].definition.site.id, 'chile-mejillones-float-glass');
   const result = evaluateNetwork(definition);
-  assert.equal(result.plants.length, 5);
+  assert.equal(result.plants.length, 8);
   assert.ok(result.slate.CH4 > 0);
   assert.ok(result.slate.NH3 > 0);
   assert.ok(result.slate.Br2 > 0);
   assert.ok(result.slate.PVmodule > 0);
   assert.ok(result.slate.Urea > 0);
+  assert.ok(result.slate.PortlandCement > 0);
+  assert.ok(result.slate.Cu > 0);
+  assert.ok(result.slate.FloatGlass > 0);
   assert.ok(result.landHa > 0);
   const rolledLand = result.plants.reduce((sum, plant) => sum + plant.footprint.totalHa, 0);
   assert.ok(Math.abs(result.landHa - rolledLand) < 1e-12);
@@ -243,6 +252,18 @@ test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea,
   const maglut = createMaglutCase();
   const maglutCash = evaluateEconomics(maglut, solveOperation(maglut));
   assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
+  const cementPlant = result.plants.find(plant => plant.id === 'mejillones-cement');
+  assert.ok(cementPlant);
+  assert.equal(cementPlant.definition.site.id, 'chile-mejillones-cement');
+  assert.ok(Number.isFinite(cementPlant.economics.annualNetCash));
+  const cuPlant = result.plants.find(plant => plant.id === 'mejillones-cu-ew');
+  assert.ok(cuPlant);
+  assert.equal(cuPlant.definition.site.id, 'chile-mejillones-cu-ew');
+  assert.ok(Number.isFinite(cuPlant.economics.annualNetCash));
+  const glassPlant = result.plants.find(plant => plant.id === 'mejillones-float-glass');
+  assert.ok(glassPlant);
+  assert.equal(glassPlant.definition.site.id, 'chile-mejillones-float-glass');
+  assert.ok(Number.isFinite(glassPlant.economics.annualNetCash));
 });
 
 test('corridor excludes transferred origin sale from slate and revenue', () => {

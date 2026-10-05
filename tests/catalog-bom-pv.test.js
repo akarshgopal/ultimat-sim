@@ -111,7 +111,9 @@ test('Mejillones PV BOM case solves at 1000 kg module/day without electricity bi
   assert.doesNotMatch(limited, /electricity/i);
   const moduleSink = definition.graph.nodes.find(node => node.id === 'module');
   assert.equal(moduleSink.economics.disposition, 'sale');
-  assert.equal(moduleSink.economics.unitPrice, 2.85);
+  assert.equal(moduleSink.economics.gateUnitPrice, 2.85);
+  assert.equal(moduleSink.economics.unitPrice, 2.77);
+  assert.equal(moduleSink.economics.freightUsdPerKg, 0.08);
   assert.ok(!definition.graph.nodes.some(node => node.economics?.unitCost === 0.04 && node.unit === 'electricity-source'));
   const power = definition.graph.nodes.find(node => node.id === 'power').economics;
   assert.equal(power.unitCost, undefined);

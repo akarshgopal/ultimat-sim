@@ -51,7 +51,7 @@ test('generic methane-like graph folds source, converter, sale, and disposal eco
   assert.ok(Math.abs(result.annualizedCapex - annualizedCapex) < 1e-9);
   assert.ok(Math.abs(result.annualNetCash - (-7140 - annualizedCapex)) < 1e-9);
   assert.deepEqual(result.breakdown, {
-    sourcePurchases: 1825, fixedOM: 50, variableOM: 7300, disposalCost: 365, productRevenue: 2400,
+    sourcePurchases: 1825, fixedOM: 50, variableOM: 7300, disposalCost: 365, productRevenue: 2400, freight: 0,
   });
   assert.deepEqual(result.cashFlows, [-1000, -7140, -7140], 'DCF years 1..N stay operating cash, not annualized');
   assert.equal(result.sinks.find(sink => sink.id === 'methane').deliveredAmount, 800);

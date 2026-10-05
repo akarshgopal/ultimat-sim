@@ -25,7 +25,7 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
   let installedCapex = 0;
   let annualRevenue = 0;
   let annualOperatingCost = 0;
-  const breakdown = { sourcePurchases: 0, fixedOM: 0, variableOM: 0, disposalCost: 0, productRevenue: 0 };
+  const breakdown = { sourcePurchases: 0, fixedOM: 0, variableOM: 0, disposalCost: 0, productRevenue: 0, freight: 0 };
 
   for (const node of nodes) {
     const result = nodeResults[node.id] || {};
@@ -36,9 +36,13 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
     };
     if (economics.unitCost != null) {
       const amount = nativeAmount(result.supplied || firstOutgoingStream(streams, node.id));
-      const cost = amount * periodDays * number(economics.unitCost);
+      const freightUsdPerKg = number(economics.freightUsdPerKg, 0);
+      const material = amount * periodDays * number(economics.unitCost);
+      const freight = amount * periodDays * freightUsdPerKg;
+      const cost = material + freight;
       annualOperatingCost += cost;
       breakdown.sourcePurchases += cost;
+      breakdown.freight += freight;
     }
 
     const capexRate = number(economics.capexRate, 0);
@@ -70,7 +74,10 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
       const annualAmount = amount * periodDays;
       const demand = finiteNonnegative(economics.annualDemandLimit) ? economics.annualDemandLimit : Infinity;
       const sold = economics.disposition === 'sale' ? Math.min(annualAmount, demand) : 0;
-      const revenue = sold * number(economics.unitPrice, 0);
+      const unitPrice = number(economics.unitPrice, 0);
+      const freightUsdPerKg = number(economics.freightUsdPerKg, 0);
+      const revenue = sold * unitPrice;
+      const annualFreight = sold * freightUsdPerKg;
       const disposal = economics.disposition === 'disposal'
         ? annualAmount * number(economics.disposalCost, 0)
         : 0;
@@ -78,6 +85,7 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
       annualOperatingCost += disposal;
       breakdown.productRevenue += revenue;
       breakdown.disposalCost += disposal;
+      breakdown.freight += annualFreight;
       sinks.push({
         id: node.id,
         disposition: economics.disposition,
@@ -86,7 +94,10 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
         deliveredAmount: sold,
         annualRevenue: revenue,
         annualDisposalCost: disposal,
-        unitPrice: number(economics.unitPrice, 0),
+        annualFreight,
+        unitPrice,
+        gateUnitPrice: economics.gateUnitPrice != null ? number(economics.gateUnitPrice) : unitPrice,
+        freightUsdPerKg,
         quality: economics.quality || null,
         source: economics.source || null,
         note: economics.note || null,

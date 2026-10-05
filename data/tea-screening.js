@@ -21,6 +21,12 @@
 // not plant contracts. Fuels/chemicals outside a cited regional series copy me-levant
 // only with inherit:'me-levant' plus a note — never a silent copy. bindSale(key, { region })
 // / getDemandForRegion(region) map SITE_PRESETS.region strings onto those tables.
+// Optional screening freight $/kg (`freightBands` / `getFreight(id)`): bindSale / bindCost
+// extra.freight attaches a cited transport adder. Default binds stay plant-gate
+// (freightUsdPerKg absent). bindCost keeps unitCost as material; economics adds
+// freightUsdPerKg into purchases and breakdown.freight. bindSale nets seller-paid
+// freight from unitPrice (gateUnitPrice keeps the plant-gate). Screening FOB vs
+// landed — not a routing/GIS model and not a carrier contract.
 // Screening, not bankable quotes.
 
 function row(value, unit, quality, source, note, evidence) {
@@ -71,6 +77,8 @@ const EIA_EPA = 'https://www.eia.gov/electricity/annual/';
 const TT_GCMI = 'https://publications.turnerandtownsend.com/global-construction-market-intelligence-2026/methodology';
 const IRENA_COSTS_2024 = 'https://www.irena.org/Publications/2025/Jun/Renewable-Power-Generation-Costs-in-2024';
 const WB_ICP = 'https://www.worldbank.org/en/programs/icp/brief/ICP2021';
+const UNCTAD_TRANSPORT = 'https://unctad.org/publication/trade-and-transport-dataset';
+const WB_FREIGHT_LOGISTICS = 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf';
 const DEFAULT_DEMAND_REGION_ID = 'me-levant';
 const DEMAND_REGION_LABELS = {
   'me-levant': 'Dead Sea / Levant screening offtake (Red Sea and Arabian Sea inherit). Not a plant offtake contract.',
@@ -344,6 +352,30 @@ const costs = {
     2.00, '$/kg', 'screening', 'solar EVA film band',
     'Solar EVA film ~$1.8–2.5/kg mid $2.00/kg. Screening, not a STR/Mitsui contract.',
     [{ label: 'Solar EVA encapsulant film screening mid $2.00/kg of ~$1.8–2.5/kg; not a STR/Mitsui contract', url: FRAUNHOFER_PV_REPORT }]
+  ),
+};
+
+const freightBands = {
+  'chile-coast-container': row(
+    0.08, '$/kg', 'screening', 'UNCTAD / World Bank maritime freight family',
+    'Chile coastal plant → Pacific container offtake OOM (~$80/t). Screening, not a Maersk quote and not inland truck.',
+    [
+      { label: 'UNCTAD Trade-and-Transport Dataset (maritime freight family; screening container OOM $80/t, not a voyage quote)', url: UNCTAD_TRANSPORT },
+      { label: 'World Bank freight logistics (family cite; screening, not a carrier contract)', url: WB_FREIGHT_LOGISTICS },
+    ]
+  ),
+  'bulk-dry-shortsea': row(
+    0.03, '$/kg', 'screening', 'UNCTAD / World Bank bulk short-sea family',
+    'Short-sea / dry-bulk screening OOM (~$30/t). Not a voyage quote and not inland truck.',
+    [
+      { label: 'UNCTAD Trade-and-Transport Dataset (bulk/short-sea family; screening ~$30/t, not a voyage quote)', url: UNCTAD_TRANSPORT },
+      { label: 'World Bank freight logistics (family cite; screening, not a carrier contract)', url: WB_FREIGHT_LOGISTICS },
+    ]
+  ),
+  none: row(
+    0, '$/kg', 'cited', 'plant-gate',
+    'Plant-gate: no screening freight adder. Cited as $0/kg transport.',
+    [{ label: 'Plant-gate prices; freight adder none ($0/kg)', url: null }]
   ),
 };
 
@@ -1238,6 +1270,31 @@ function must(map, key, kind) {
   return found;
 }
 
+function getFreight(id) {
+  return must(freightBands, id, 'freight');
+}
+
+function attachFreight(bound, extra, role) {
+  const freightId = extra && extra.freight;
+  if (freightId == null || freightId === '') return bound;
+  const band = getFreight(freightId);
+  const freightUsdPerKg = Number(band.value) || 0;
+  bound.freightUsdPerKg = freightUsdPerKg;
+  bound.freightId = freightId;
+  if (Array.isArray(band.evidence) && band.evidence.length) {
+    bound.evidence = [...(bound.evidence || []), ...band.evidence];
+  }
+  if (role === 'sale') {
+    const gate = Number(bound.unitPrice) || 0;
+    bound.gateUnitPrice = gate;
+    bound.unitPrice = Math.max(0, gate - freightUsdPerKg);
+    bound.note = `${bound.note} Screening seller-paid freight ${freightId} $${freightUsdPerKg}/kg nets plant-gate $${gate}/kg to $${bound.unitPrice}/kg (screening FOB vs landed; not a carrier contract).`;
+  } else {
+    bound.note = `${bound.note} Screening inbound freight ${freightId} $${freightUsdPerKg}/kg on top of plant-gate unitCost (not a carrier contract).`;
+  }
+  return bound;
+}
+
 function installedCapexFromPack(pack, capacity) {
   const intensity = Number(pack.capexIntensity);
   const size = Number(capacity);
@@ -1499,7 +1556,7 @@ function bindSale(key, extra = {}) {
     demandRegionId: resolveDemandRegion(region),
   };
   if (cap.inherit) bound.inherit = cap.inherit;
-  return bound;
+  return attachFreight(bound, extra, 'sale');
 }
 
 function bindSaleForRegion(region) {
@@ -1508,13 +1565,13 @@ function bindSaleForRegion(region) {
 
 function bindCost(key, extra = {}) {
   const item = getCostForRegion(key, extra && extra.region);
-  return {
+  return attachFreight({
     unitCost: item.value,
     quality: item.quality,
     source: item.source,
     note: item.note,
     evidence: item.evidence,
-  };
+  }, extra, 'cost');
 }
 
 function bindCapex(key, extra = {}) {
@@ -1598,6 +1655,7 @@ function abundanceEvidence(region) {
 return {
   prices,
   costs,
+  freightBands,
   capex,
   packs,
   demand,
@@ -1623,6 +1681,7 @@ return {
   getCostForRegion,
   getPriceForRegion,
   getCapexMultiplierForRegion,
+  getFreight,
   resolveTankFluidClass,
   getTankFluidSpec,
   estimateDensityKgM3FromSalinity,

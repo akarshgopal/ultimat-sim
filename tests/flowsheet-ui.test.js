@@ -421,6 +421,18 @@ test('Overview hero shows screening notice and cited solar yield without screeni
   assert.match(land, /ha|m²/);
 });
 
+test('Mejillones PV BOM overview shows screening freight honesty and an economics freight line', () => {
+  const context = loadApp();
+  const app = context.__FLOWSHEET_APP__;
+  app.loadSiliconAlumina();
+  assert.match(context.__elements.get('overviewOfftake').textContent, /Screening freight applied on 2 streams/);
+  assert.match(context.__elements.get('overviewOfftake').textContent, /not a carrier contract/i);
+  assert.equal(context.__elements.get('overviewOfftake').hidden, false);
+  assert.match(context.__elements.get('economicsOfftake').textContent, /plant-gate elsewhere/);
+  assert.equal(context.__elements.get('economicsOfftake').hidden, false);
+  assert.match(context.__elements.get('economicsOps').innerHTML, /Freight/);
+});
+
 test('coastal methanol demo loads Mejillones plant and sizes methanol', () => {
   const context = loadApp();
   const app = context.__FLOWSHEET_APP__;

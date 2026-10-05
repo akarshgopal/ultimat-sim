@@ -78,7 +78,7 @@ function createSiliconCase() {
       nodes: [
         { id: 'quartz', unit: 'material-source', sourcePreset: 'quartz', params: { stream: quartz }, economics: tea.bindCost('quartz') },
         { id: 'reductant', unit: 'material-source', sourcePreset: 'carbon', params: { stream: reductant }, economics: tea.bindCost('carbon-reductant') },
-        { id: 'bauxite', unit: 'material-source', sourcePreset: 'bauxite', params: { stream: bauxite }, economics: tea.bindCost('bauxite') },
+        { id: 'bauxite', unit: 'material-source', sourcePreset: 'bauxite', params: { stream: bauxite }, economics: tea.bindCost('bauxite', { freight: 'bulk-dry-shortsea' }) },
         { id: 'caustic', unit: 'material-source', sourcePreset: 'caustic', params: { stream: caustic }, economics: tea.bindCost('caustic-makeup') },
         { id: 'anode', unit: 'material-source', sourcePreset: 'carbon', params: { stream: anode }, economics: tea.bindCost('carbon-anode') },
         { id: 'silver', unit: 'material-source', sourcePreset: 'silver', params: { stream: silver }, economics: tea.bindCost('silver') },
@@ -91,7 +91,7 @@ function createSiliconCase() {
         { id: 'bayer-alumina', unit: 'bayer-alumina', capacity: aluminaKgPerDay, params: { electricityKWhPerKg: 3.5 }, economics: tea.bindCapexPack('bayer-alumina', { capacity: aluminaKgPerDay, region: REGION }) },
         { id: 'aluminium-smelter', unit: 'aluminium-smelter', capacity: AL_KG_PER_DAY, params: { electricityKWhPerKg: 14 }, economics: tea.bindCapexPack('aluminium-smelter', { capacity: AL_KG_PER_DAY, region: REGION }) },
         { id: 'pv-module', unit: 'pv-module', capacity: MODULE_KG_PER_DAY, params: { electricityKWhPerKg: 0.05 }, economics: tea.bindCapexPack('pv-module', { capacity: MODULE_KG_PER_DAY, region: REGION }) },
-        { id: 'module', unit: 'material-sink', economics: tea.bindSale('pv-module', { region: REGION }) },
+        { id: 'module', unit: 'material-sink', economics: tea.bindSale('pv-module', { region: REGION, freight: 'chile-coast-container' }) },
         { id: 'carbonMonoxide', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'carbonDioxide', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'redMud', unit: 'material-sink', economics: { disposition: 'vent' } },
@@ -170,7 +170,7 @@ function createSiliconCase() {
       bauxite: {
         stream: clone(node('bauxite').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased bauxite assumed available at screening $0.04/kg; not a concession or port lease. Bayer island is screening, not a concession.',
+        evidence: 'Purchased bauxite assumed available at screening $0.04/kg plant-gate plus screening bulk-dry-shortsea freight $0.03/kg (~$30/t; not a voyage quote). Not a concession or port lease. Bayer island is screening, not a concession.',
       },
       caustic: {
         stream: clone(node('caustic').params.stream),
@@ -249,7 +249,7 @@ function createSiliconCase() {
       { label: 'IAI metallurgical alumina refining energy intensity (~10–12 GJ/t family; screening 3.5 kWh/kg total-energy-as-electricity proxy)', url: IAI_ALUMINA_ENERGY },
       { label: 'DOE aluminium industry roadmap', url: DOE_AL },
     ],
-    notes: 'Screening crustal quartz → MG-Si (SiO2+2C→Si+2CO, 12 kWh/kg) → Siemens-style poly-Si (65 kWh/kg, Fraunhofer SoG 60–71 band mid; 1.05 mol MG-Si / mol product) + purchased Ag/glass/EVA + crustal bauxite → Bayer screening alumina (2.0 kg ore + 0.08 kg NaOH makeup + 3.5 kWh/kg total-energy-as-electricity proxy; not a full Bayer train) → Hall–Héroult Al (14 kWh/kg) → screening module assembly (Fraunhofer 2021 mass shares on 11.6 kg/m²; remaining ~10% backsheet/J-box/cables omitted). Sale is finished module at screening $2.85/kg ($0.15/W), not USGS silicon metal and not a poly/Al/alumina offtake. Not a cell fab, not TOPCon, not a TCS/HCl plant model, not FBR, not bankable. Purchased quartzite, bauxite, caustic makeup, carbon, Ag, glass, and EVA are not a concession or port lease. Chile CAPEX× 1.05 applies to furnaces, Bayer island, poly island, module line, and solar. Screening, not bankable.',
+    notes: 'Screening crustal quartz → MG-Si (SiO2+2C→Si+2CO, 12 kWh/kg) → Siemens-style poly-Si (65 kWh/kg, Fraunhofer SoG 60–71 band mid; 1.05 mol MG-Si / mol product) + purchased Ag/glass/EVA + crustal bauxite → Bayer screening alumina (2.0 kg ore + 0.08 kg NaOH makeup + 3.5 kWh/kg total-energy-as-electricity proxy; not a full Bayer train) → Hall–Héroult Al (14 kWh/kg) → screening module assembly (Fraunhofer 2021 mass shares on 11.6 kg/m²; remaining ~10% backsheet/J-box/cables omitted). Sale is finished module at screening $2.85/kg ($0.15/W) plant-gate, net of screening Chile-coast container freight $0.08/kg to ocean offtake (not a Maersk quote; screening FOB vs landed). Purchased bauxite carries screening short-sea/bulk freight $0.03/kg; Ag, glass, EVA, quartz, carbon, and caustic stay plant-gate this tranche. Not a logistics model. Not USGS silicon metal and not a poly/Al/alumina offtake. Not a cell fab, not TOPCon, not a TCS/HCl plant model, not FBR, not bankable. Purchased quartzite, bauxite, caustic makeup, carbon, Ag, glass, and EVA are not a concession or port lease. Chile CAPEX× 1.05 applies to furnaces, Bayer island, poly island, module line, and solar (unchanged). Screening, not bankable.',
   };
   return definition;
 }

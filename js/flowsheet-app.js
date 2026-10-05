@@ -4616,11 +4616,19 @@
     const bound = graph.nodes.find(node => node.economics?.demandRegionId)?.economics.demandRegionId || null;
     const asiaSite = siteRegionId === 'asia-china';
     const asiaBound = bound === 'asia-china';
-    if (!asiaSite && !asiaBound) return '';
-    if (asiaSite && bound && bound !== 'asia-china') {
-      return 'This site screens prices on the China/Asia offtake table, not a silent ME-Levant inherit. The open plant still uses another region\'s prices. Not a plant contract.';
+    const parts = [];
+    if (asiaSite || asiaBound) {
+      if (asiaSite && bound && bound !== 'asia-china') {
+        parts.push('This site screens prices on the China/Asia offtake table, not a silent ME-Levant inherit. The open plant still uses another region\'s prices. Not a plant contract.');
+      } else {
+        parts.push(ASIA_OFFTAKE_NOTE);
+      }
     }
-    return ASIA_OFFTAKE_NOTE;
+    const freightStreams = graph.nodes.filter(node => Number(node.economics?.freightUsdPerKg) > 0).length;
+    if (freightStreams > 0) {
+      parts.push(`Screening freight applied on ${freightStreams} streams (not a carrier contract; plant-gate elsewhere).`);
+    }
+    return parts.join(' ');
   }
 
   function renderOfftakeHonesty() {
@@ -7468,11 +7476,16 @@
     const ops = document.getElementById('economicsOps');
     if (ops) {
       const operating = Number(currentEconomics.annualOperatingCash);
-      ops.innerHTML = metricRows([
+      const freight = Number(currentEconomics.breakdown?.freight) || 0;
+      const opsRows = [
         ['Revenue<small>per year</small>', formatUncertainMoney(currentEconomics.annualRevenue, moneyQuality), { quality: moneyQuality }],
         ['OPEX<small>per year</small>', formatUncertainMoney(currentEconomics.annualOperatingCost, moneyQuality), { quality: moneyQuality }],
-        ['Operating cash<small>R − OPEX</small>', formatUncertainMoney(operating, moneyQuality), { quality: moneyQuality, tone: operating < 0 ? 'negative' : operating > 0 ? 'positive' : '' }],
-      ]);
+      ];
+      if (freight > 0) {
+        opsRows.push(['Freight<small>per year</small>', formatUncertainMoney(freight, moneyQuality), { quality: moneyQuality }]);
+      }
+      opsRows.push(['Operating cash<small>R − OPEX</small>', formatUncertainMoney(operating, moneyQuality), { quality: moneyQuality, tone: operating < 0 ? 'negative' : operating > 0 ? 'positive' : '' }]);
+      ops.innerHTML = metricRows(opsRows);
     }
     const metrics = document.getElementById('economicsMetrics');
     if (metrics) {

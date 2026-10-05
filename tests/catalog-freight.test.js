@@ -1,0 +1,115 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+
+const { evaluateEconomics } = require('../engine/economics');
+const { solveOperation } = require('../engine/solve');
+const tea = require('../data/tea-screening.js');
+const { createSiliconCase } = require('../cases/silicon');
+const { createMaglutCase } = require('../cases/maglut');
+const { createAbundanceCase } = require('../cases/abundance');
+
+function kgStream(kg) {
+  return {
+    kind: 'material',
+    mol: { H2O: kg * 1000 / 18.01528 },
+    phase: 'liquid',
+    T_C: 25,
+    P_bar: 1,
+  };
+}
+
+test('bindCost without freight stays plant-gate; freight absent', () => {
+  const plain = tea.bindCost('bauxite');
+  const empty = tea.bindCost('bauxite', {});
+  assert.deepEqual(plain, empty);
+  assert.equal(plain.unitCost, tea.costs.bauxite.value);
+  assert.equal(plain.unitCost, 0.04);
+  assert.equal(plain.freightUsdPerKg, undefined);
+  assert.equal(plain.freightId, undefined);
+  assert.equal('freightUsdPerKg' in plain, false);
+  assert.equal(tea.getFreight('none').value, 0);
+  assert.equal(tea.getFreight('none').quality, 'cited');
+});
+
+test('bindCost chile-coast-container adds 0.08 $/kg freight into purchases', () => {
+  const bound = tea.bindCost('bauxite', { freight: 'chile-coast-container' });
+  assert.equal(bound.unitCost, 0.04);
+  assert.equal(bound.freightUsdPerKg, 0.08);
+  assert.equal(bound.freightId, 'chile-coast-container');
+  assert.equal(tea.getFreight('chile-coast-container').value, 0.08);
+  const stream = kgStream(1);
+  const cash = evaluateEconomics({
+    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    graph: { nodes: [{ id: 'src', unit: 'material-source', economics: bound }] },
+  }, { nodes: { src: { supplied: stream } } });
+  assert.equal(cash.breakdown.sourcePurchases, (0.04 + 0.08) * 365);
+  assert.equal(cash.breakdown.freight, 0.08 * 365);
+  assert.ok(cash.breakdown.freight > 0);
+  assert.equal(cash.annualOperatingCost, cash.breakdown.sourcePurchases);
+});
+
+test('bindSale freight nets gate − 0.08; Maglut and Dead Sea stay plant-gate', () => {
+  const sale = tea.bindSale('pv-module', { freight: 'chile-coast-container' });
+  assert.equal(sale.gateUnitPrice, 2.85);
+  assert.equal(sale.unitPrice, 2.77);
+  assert.equal(sale.freightUsdPerKg, 0.08);
+  assert.match(sale.note, /FOB vs landed/i);
+  const stream = kgStream(1);
+  const cash = evaluateEconomics({
+    economics: { periodDays: 365 },
+    graph: { nodes: [{ id: 'sale', unit: 'material-sink', economics: sale }] },
+  }, { nodes: { sale: { received: stream } } });
+  assert.equal(cash.annualRevenue, 2.77 * 365);
+  assert.equal(cash.sinks[0].annualFreight, 0.08 * 365);
+  assert.equal(cash.breakdown.freight, 0.08 * 365);
+
+  const plantGate = tea.bindSale('pv-module');
+  assert.equal(plantGate.unitPrice, 2.85);
+  assert.equal(plantGate.freightUsdPerKg, undefined);
+  assert.equal(plantGate.gateUnitPrice, undefined);
+
+  const maglut = createMaglutCase();
+  const ndpr = maglut.graph.nodes.find(node => node.id === 'ndpr');
+  assert.equal(ndpr.economics.unitPrice, 69);
+  assert.ok(!(ndpr.economics.freightUsdPerKg > 0));
+  const maglutCash = evaluateEconomics(maglut, solveOperation(maglut));
+  assert.equal(maglutCash.breakdown.freight, 0);
+  assert.ok(Number.isFinite(maglutCash.annualNetCash));
+
+  const deadSea = createAbundanceCase();
+  const lithium = deadSea.graph.nodes.find(node => node.id === 'lithium');
+  assert.equal(lithium.economics.unitPrice, 14);
+  assert.ok(!(lithium.economics.freightUsdPerKg > 0));
+  const deadSeaCash = evaluateEconomics(deadSea, solveOperation(deadSea));
+  assert.equal(deadSeaCash.breakdown.freight, 0);
+});
+
+test('Mejillones module freight 0.08 and bauxite 0.03; annualNetCash finite', () => {
+  const definition = createSiliconCase();
+  const moduleSink = definition.graph.nodes.find(node => node.id === 'module');
+  const bauxite = definition.graph.nodes.find(node => node.id === 'bauxite');
+  const quartz = definition.graph.nodes.find(node => node.id === 'quartz');
+  const silver = definition.graph.nodes.find(node => node.id === 'silver');
+  assert.equal(moduleSink.economics.freightUsdPerKg, 0.08);
+  assert.equal(moduleSink.economics.freightId, 'chile-coast-container');
+  assert.equal(moduleSink.economics.gateUnitPrice, 2.85);
+  assert.equal(moduleSink.economics.unitPrice, 2.77);
+  assert.equal(bauxite.economics.freightUsdPerKg, 0.03);
+  assert.equal(bauxite.economics.freightId, 'bulk-dry-shortsea');
+  assert.equal(bauxite.economics.unitCost, 0.04);
+  assert.ok(!(quartz.economics.freightUsdPerKg > 0));
+  assert.ok(!(silver.economics.freightUsdPerKg > 0));
+  const solved = solveOperation(definition);
+  assert.equal(solved.convergence.converged, true);
+  const cash = evaluateEconomics(definition, solved);
+  assert.ok(Number.isFinite(cash.annualNetCash));
+  assert.ok(Number.isFinite(cash.annualRevenue));
+  assert.ok(cash.breakdown.freight > 0);
+  const moduleFreight = cash.sinks.find(sink => sink.id === 'module');
+  assert.ok(moduleFreight.annualFreight > 0);
+  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  assert.match(source, /Screening freight applied on \$\{freightStreams\} streams/);
+  assert.match(source, /breakdown\?\.freight/);
+});

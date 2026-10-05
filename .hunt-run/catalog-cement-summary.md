@@ -133,4 +133,4 @@ Cement activity 1000 kg/day. Not electricity-limited. Maglut cash ≈ 1299 (±5)
 
 ## Tip
 
-Feat on `main` after this file. Pages: https://akarshgopal.github.io/ultimat-sim/. `npm test` 498 pass / 0 fail. Prior checkout tip `712a560`.
+Feat `4c4790d` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `4c4790d`). `npm test` 498 pass / 0 fail. Prior checkout tip `712a560`.

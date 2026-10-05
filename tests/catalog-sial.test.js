@@ -102,7 +102,7 @@ test('Mejillones MG-Si + Al case still solves with module assembly and no MG-Si 
 test('palette source lists Crust in default categories and hides gallery metals/desal', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll'\s*\]/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'cement',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll'\s*\]/);
   assert.doesNotMatch(source, /PALETTE_MORE_UNITS/);
   assert.doesNotMatch(source, /More units/);
   assert.doesNotMatch(source, /PALETTE_DEFAULT_OPEN = new Set\(\[[^\]]*Crust/);

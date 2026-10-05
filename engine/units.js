@@ -899,6 +899,95 @@ function floatGlass({ inlets, requestedActivity, capacity, params = {} }) {
   };
 }
 
+// Grey dry-process cement / clinker screening. Not a wet kiln, not blended CEM II/III,
+// not CCUS. Activity = kg Portland-cement proxy / day.
+// IPCC 2006 Vol. 3 Ch. 2 default 0.52 t process CO2 / t clinker (65% CaO + 2% CKD).
+// Limestone 1.183 kg/kg is that CO2 × CaCO3/CO2 (100.0868/44.0095). Clay/silica
+// 0.337 kg/kg is the non-carbonate remainder so 1 kg product closes
+// (1.183+0.337−0.520=1.000). BREF ~1.57 t raw/t clinker is wet-raw including
+// moisture/dust — screening is dry close. Clay port is SiO2 as shale/clay/silica
+// kiln feed, not kaolinite dehydroxylation. Gypsum ~4–5% (EN 197-1 CEM I) omitted
+// (YAGNI); product is clinker sold at USGS portland mill value, labeled as such.
+// SEC 1.05 kWh/kg is IEA ~3.4 GJ/t clinker thermal (0.944 kWh/kg) + GCCA/IEA
+// ~100 kWh/t cement electricity as electricity-as-total-energy — real kiln is
+// heat-dominated. No wasteHeat. Extra feed mol > 1e-12 throws.
+const CEMENT_FEEDS = Object.freeze({
+  limestone: { substance: 'CaCO3', kgPerKg: 1.183, param: 'limestoneKgPerKg' },
+  clay: { substance: 'SiO2', kgPerKg: 0.337, param: 'clayKgPerKg' },
+});
+
+function cementKiln({ inlets, requestedActivity, capacity, params = {} }) {
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const sec = nonnegative(Number(params.electricityKWhPerKg ?? 1.05), 'electricityKWhPerKg');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const feeds = {};
+  const intensities = {};
+  for (const [port, spec] of Object.entries(CEMENT_FEEDS)) {
+    const stream = validateStream(inlets[port], 'material');
+    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
+    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
+      throw new Error(`${port} must be pure ${spec.substance}`);
+    }
+    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
+    feeds[port] = stream;
+    intensities[port] = { substance: spec.substance, kgPerKg };
+  }
+  const kgOf = (port) => streamMassKg(feeds[port]);
+  const planned = Math.min(requested, installed);
+  const limits = { capacity: installed };
+  for (const [port, spec] of Object.entries(intensities)) {
+    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
+  }
+  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
+  const activity = Math.min(planned, ...Object.values(limits));
+  const streamKg = (port, kg) => {
+    const template = feeds[port];
+    const substance = intensities[port].substance;
+    return {
+      kind: 'material',
+      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
+      phase: template.phase,
+      T_C: template.T_C,
+      P_bar: template.P_bar,
+    };
+  };
+  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, planned * spec.kgPerKg),
+  ]));
+  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, activity * spec.kgPerKg),
+  ]));
+  const firstFeed = Object.values(feeds)[0];
+  const feedKgPerKg = Object.values(intensities).reduce((sum, spec) => sum + spec.kgPerKg, 0);
+  const co2KgPerKg = Math.max(0, feedKgPerKg - 1);
+  const limitingValue = Math.min(...Object.values(limits));
+  return {
+    activity,
+    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
+    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    outlets: {
+      cement: {
+        kind: 'material',
+        mol: { PortlandCement: activity * 1000 / SUBSTANCES.PortlandCement.molarMassG },
+        phase: 'solid',
+        T_C: firstFeed.T_C,
+        P_bar: firstFeed.P_bar,
+      },
+      carbonDioxide: {
+        kind: 'material',
+        mol: { CO2: activity * co2KgPerKg * 1000 / SUBSTANCES.CO2.molarMassG },
+        phase: 'gas',
+        T_C: firstFeed.T_C,
+        P_bar: firstFeed.P_bar,
+      },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
 const hydrogenDri = reaction({
   product: 'Fe', electricityKWhPerKg: 0.7,
   inputs: { ironOre: { substance: 'Fe2O3', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
@@ -1818,6 +1907,17 @@ const UNITS = Object.freeze({
       carbonDioxide: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: floatGlass,
+  },
+  cement: {
+    kind: 'converter',
+    ports: {
+      limestone: { direction: 'in', kind: 'material', required: true },
+      clay: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      cement: { direction: 'out', kind: 'material', required: true },
+      carbonDioxide: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: cementKiln,
   },
   'hydrogen-dri': {
     kind: 'converter',

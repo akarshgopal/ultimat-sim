@@ -99,7 +99,7 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'float-glass', 'pv-module', 'hydrogen-dri', 'titanium-kroll'],
+    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'float-glass', 'cement', 'pv-module', 'hydrogen-dri', 'titanium-kroll'],
     REE: ['iac-leach', 'ree-chromatography', 'ree-sx'],
     Bio: ['bioforge'],
   };
@@ -369,6 +369,18 @@
       references: [
         { label: 'Glass for Europe LCA of float glass (Table 1 mass + 9.0 MJ/kg energy)', url: 'https://glassforeurope.com/wp-content/uploads/2018/04/Life-Cycle-Assessment.pdf' },
         { label: 'Burrows & Fthenakis 2015 (float plant $150–200M / 500–700 t/day)', url: 'https://doi.org/10.1016/j.solmat.2014.09.028' },
+      ],
+    },
+    cement: {
+      label: 'Cement kiln', capacity: 1000, rate: 100, activityUnit: 'kg cement/day',
+      palette: { section: 'building', order: 13, glyph: 'Cm', description: 'Limestone + clay/silica + power → cement' },
+      params: { electricityKWhPerKg: 1.05, limestoneKgPerKg: 1.183, clayKgPerKg: 0.337 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity (total-energy proxy)', min: 0, max: 4, step: 0.05, unit: 'kWh/kg cement' }],
+      sourceNote: 'Screening dry-process grey clinker as a Portland-cement proxy. IPCC 0.52 kg process CO2/kg; limestone 1.183 + clay/SiO2 0.337 kg/kg. SEC 1.05 kWh/kg is IEA 3.4 GJ/t clinker + ~100 kWh/t cement as electricity-as-total-energy (real kiln is heat-dominated). Gypsum ~5% omitted. Not a wet kiln, not CEM II, not CCUS.',
+      references: [
+        { label: 'IPCC 2006 Vol. 3 Ch. 2 — 0.52 t process CO2 / t clinker', url: 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/3_Volume3/V3_2_Ch2_Mineral_Industry.pdf' },
+        { label: 'IEA Cement — thermal ~3.4–3.5 GJ/t clinker; electricity ~105 kWh/t cement', url: 'https://web.archive.org/web/20230528230323/https://www.iea.org/reports/cement' },
+        { label: 'USGS MCS 2026 cement — mill unit value 2025e $160/t', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-cement.pdf' },
       ],
     },
     'pv-module': {
@@ -661,6 +673,8 @@
     evaPurchase: 'EVA purchase',
     ammoniaPurchase: 'Ammonia purchase',
     co2Purchase: 'CO₂ purchase',
+    limestonePurchase: 'Limestone purchase',
+    clayPurchase: 'Clay purchase',
   };
   const portNames = {
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
@@ -675,6 +689,7 @@
     bauxite: 'Bauxite', redMud: 'Red mud',
     silver: 'Ag paste', glass: 'Float glass', eva: 'EVA', module: 'Module',
     sand: 'Silica sand', sodaAsh: 'Soda ash', limestone: 'Limestone',
+    cement: 'Portland cement',
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
     concentrate: 'Concentrate', dytb: 'DyTb', lightReo: 'Light REO',
     dextrose: 'Dextrose', gluconic: 'Gluconic acid', hydrogenPeroxide: 'Hydrogen peroxide',
@@ -702,6 +717,8 @@
     'silica-sand': { label: 'Silica sand', phase: 'solid', mol: { SiO2: 1000 } },
     'soda-ash': { label: 'Soda ash', phase: 'solid', mol: { Na2CO3: 1000 } },
     limestone: { label: 'Limestone', phase: 'solid', mol: { CaCO3: 1000 } },
+    'kiln-clay': { label: 'Kiln clay / silica', phase: 'solid', mol: { SiO2: 1000 } },
+    cement: { label: 'Portland cement', phase: 'solid', mol: { PortlandCement: 1000 } },
     silicon: { label: 'Metallurgical silicon', phase: 'solid', mol: { Si: 1000 } },
     ironOre: { label: 'Hematite concentrate', phase: 'solid', mol: { Fe2O3: 1000 } },
     titaniumTetrachloride: { label: 'Titanium tetrachloride', phase: 'liquid', mol: { TiCl4: 1000 } },
@@ -755,6 +772,8 @@
     'silica-sand': { key: 'silica-sand', label: 'Silica sand', profile: 'silo', glyph: 'SiO2' },
     'soda-ash': { key: 'soda-ash', label: 'Soda ash', profile: 'silo', glyph: 'Na2' },
     limestone: { key: 'limestone', label: 'Limestone', profile: 'silo', glyph: 'Ca' },
+    'kiln-clay': { key: 'kiln-clay', label: 'Kiln clay / silica', profile: 'silo', glyph: 'Cy' },
+    cement: { key: 'cement', label: 'Portland cement', profile: 'silo', glyph: 'Cm' },
     ironOre: { key: 'ironOre', label: 'Hematite concentrate', profile: 'silo', glyph: 'silo' },
     magnesium: { key: 'magnesium', label: 'Magnesium', profile: 'silo', glyph: 'silo' },
     co2: { key: 'co2', label: 'Carbon dioxide', profile: 'stack', glyph: 'CO₂' },
@@ -780,7 +799,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'methanol', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'silica-sand', 'soda-ash', 'limestone', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'methanol', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'silica-sand', 'soda-ash', 'limestone', 'kiln-clay', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -1026,6 +1045,7 @@
     'coastal-methanol': () => loadMethanolPlant(0),
     'silicon-alumina': () => loadSiliconAlumina(),
     'float-glass': () => loadFloatGlass(),
+    cement: () => loadCement(),
     'h2-dri': () => loadH2Dri(),
     'green-h2-dri': () => loadGreenH2Dri(),
     'ti-kroll': () => loadTiKroll(),
@@ -1470,6 +1490,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening float glass from purchased sand+soda+limestone on frozen Mejillones PV; Size-to-target → float glass; may be cash±; not bankable; not a tin-bath line.';
+    }
+  }
+
+  function loadCement() {
+    setActiveDemo('cement', 'Mejillones cement (limestone+clay)');
+    lastSizing = null;
+    if (typeof CementCase === 'undefined' || !CementCase.createCementCase) {
+      throw new Error('Cement case is not loaded');
+    }
+    loadCase(CementCase.createCementCase(), 'cement');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening grey cement from purchased limestone+clay on frozen Mejillones PV; may be cash±; not bankable; not a wet kiln.';
     }
   }
 
@@ -3888,6 +3921,7 @@
       'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon',
       'bayer-alumina.bauxite': 'bauxite', 'bayer-alumina.caustic': 'caustic',
       'float-glass.sand': 'silica-sand', 'float-glass.sodaAsh': 'soda-ash', 'float-glass.limestone': 'limestone',
+      'cement.limestone': 'limestone', 'cement.clay': 'kiln-clay',
       'pv-module.polysilicon': 'silicon', 'pv-module.silver': 'silver', 'pv-module.glass': 'float-glass', 'pv-module.eva': 'eva', 'pv-module.aluminium': 'aluminium',
       'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'iac-leach.clay': 'ionic-clay', 'iac-leach.lixiviant': 'ammonium-sulfate',
@@ -5031,6 +5065,9 @@
     NaOH: 'Caustic',
     gypsum: 'Gypsum',
     CaSO4: 'Gypsum',
+    cement: 'Portland cement',
+    PortlandCement: 'Portland cement',
+    'cement-product': 'Portland cement',
     oxygen: 'Oxygen',
     O2: 'Oxygen',
     'poly-silicon': 'Poly-Si',
@@ -5468,7 +5505,7 @@
     if (unit === 'intake-pump' || unit === 'gas-blower') return 'pipe';
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
-    if (unit === 'mg-si' || unit === 'polysilicon' || unit === 'float-glass') return 'furnace';
+    if (unit === 'mg-si' || unit === 'polysilicon' || unit === 'float-glass' || unit === 'cement') return 'furnace';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'bayer-alumina' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
     if (unit === 'asu' || unit === 'ammonia' || unit === 'urea' || unit === 'mto' || unit === 'ft-liquids' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
@@ -6912,7 +6949,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'float-glass' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto' || current.unit === 'ft-liquids') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'float-glass' || current.unit === 'cement' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto' || current.unit === 'ft-liquids') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -7045,6 +7082,7 @@
     'bayer-alumina': 'bayer-alumina',
     'aluminium-smelter': 'aluminium-smelter',
     'float-glass': 'float-glass',
+    cement: 'cement',
     'pv-module': 'pv-module',
     'hydrogen-dri': 'hydrogen-dri',
     'titanium-kroll': 'titanium-kroll',

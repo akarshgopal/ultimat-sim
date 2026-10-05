@@ -1164,7 +1164,7 @@ test('process chrome reads as a flowsheet, with hollow More units off the defaul
   assert.doesNotMatch(palette.slice(Math.max(0, crust - 80), crust), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, ree - 80), ree), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, bio - 80), bio), /\bopen\b/);
-  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'float-glass', 'pv-module', 'hydrogen-dri', 'titanium-kroll', 'iac-leach', 'ree-chromatography', 'ree-sx', 'bioforge', 'ammonia', 'urea', 'mto', 'ft-liquids']) {
+  for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'float-glass', 'cement', 'pv-module', 'hydrogen-dri', 'titanium-kroll', 'iac-leach', 'ree-chromatography', 'ree-sx', 'bioforge', 'ammonia', 'urea', 'mto', 'ft-liquids']) {
     assert.ok(palette.includes(`data-unit="${unit}"`), unit);
   }
   for (const unit of ['med', 'msf', 'nuclear-electricity', 'solar-thermal', 'thermal-storage']) {

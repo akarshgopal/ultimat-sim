@@ -53,6 +53,15 @@ const USGS_SILICA = 'https://www.usgs.gov/centers/national-minerals-information-
 const USGS_SODA_ASH = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-soda-ash.pdf';
 const USGS_SAND_IND = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-sand-industrial.pdf';
 const USGS_STONE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-stone-crushed.pdf';
+const USGS_CEMENT = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-cement.pdf';
+const IPCC_CEMENT_CO2 = 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/3_Volume3/V3_2_Ch2_Mineral_Industry.pdf';
+const IEA_CEMENT_ARCHIVE = 'https://web.archive.org/web/20230528230323/https://www.iea.org/reports/cement';
+const ECRA_CEMENT_2022 = 'https://api.ecra-online.org/fileadmin/files/tp/ECRA_Technology_Papers_2022.pdf';
+const IEA_ETSAP_CEMENT = 'https://iea-etsap.org/E-TechDS/PDF/I03_cement_June_2010_GS-gct.pdf';
+const CEMENT_CAPEX_BENCH = 'https://www.cementequipment.org/cement-technical-package/package-tools/76038938-capex-of-cement-companies/';
+const CEMEX_SOLID_TIC = 'https://mb.com.ph/2022/02/12/solid-cement-to-pursue-323-m-expansion/';
+const SAMARKAND_CEMENT_TIC = 'https://www.globalcement.com/news/item/16382-china-energy-international-group-samarkand-cement-installs-kiln-at-upcoming-samarkand-cement-plant';
+const DUGONG_CEMENT_TIC = 'https://www.globalcement.com/news/11756-dugong-cimentos-announces-upcoming-1-8mt-yr-integrated-cement-plant-in-mozambique';
 const GFE_FLOAT_LCA = 'https://glassforeurope.com/wp-content/uploads/2018/04/Life-Cycle-Assessment.pdf';
 const BURROWS_PV_GLASS = 'https://doi.org/10.1016/j.solmat.2014.09.028';
 const DOE_AL = 'https://www.energy.gov/sites/prod/files/2013/11/f4/al_roadmap.pdf';
@@ -326,6 +335,13 @@ const prices = {
       { label: 'Glass for Europe LCA of float glass (commodity float family; sale uses the existing solar-glass screening band)', url: GFE_FLOAT_LCA },
     ]
   ),
+  cement: row(
+    0.16, '$/kg', 'screening', 'USGS MCS 2026 cement mill unit value 2025e',
+    'USGS MCS 2026 cement average mill unit value 2025e $160/t → $0.16/kg. Portland, blended, and masonry mill value f.o.b. plant; 2021–24 prints $127 / $139 / $152 / $160. Screening grey cement sale, not a bagged retail quote and not a clinker export contract. Gypsum ~5% is omitted from the unit so this mill value is a CEM I / portland proxy on a clinker island.',
+    [
+      { label: 'USGS MCS 2026 cement — average mill unit value 2025e $160/t; screening $0.16/kg, not a bagged retail quote', url: USGS_CEMENT },
+    ]
+  ),
 };
 
 const costs = {
@@ -388,6 +404,11 @@ const costs = {
     0.02, '$/kg', 'screening', 'USGS crushed stone 2025e',
     'USGS MCS 2026 crushed stone average unit value 2025e $18.50/t → round $0.02/kg. Carbonate-stone proxy for GfE limestone+dolomite; not a chemical-lime contract and not USGS lime ~$260/t quicklime.',
     [{ label: 'USGS MCS 2026 stone (crushed) — 2025e average unit value $18.50/t; screening limestone $0.02/kg, not a quarry quote', url: USGS_STONE }]
+  ),
+  'kiln-clay': row(
+    0.02, '$/kg', 'screening', 'USGS crushed stone / common clay family',
+    'Kiln clay/shale/silica corrective screening $0.02/kg, same bulk-quarry family as crushed stone 2025e $18.50/t. Not kaolin, not glass-sand ($0.04), and not a retune of limestone.',
+    [{ label: 'USGS MCS 2026 stone (crushed) — 2025e $18.50/t; screening kiln-clay/shale $0.02/kg, not a clay-pit contract', url: USGS_STONE }]
   ),
   'carbon-reductant': row(
     0.25, '$/kg', 'screening', 'SAF coal/coke/charcoal mix',
@@ -738,6 +759,23 @@ const packs = {
       { label: 'Glass for Europe LCA of float glass (gate-to-gate SEC family; CAPEX intensity is the Burrows conversion, not a GfE CAPEX quote)', url: GFE_FLOAT_LCA },
     ],
   }),
+  cement: pack({
+    capexIntensity: 60, intensityUnit: '$/(kg cement/day)',
+    capexIntensityBand: { low: 35, mid: 60, high: 90 },
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'dry-process grey cement / clinker plant TIC peer band',
+    note: 'installedCapex = 60 × capacity. $/(kg/day) = 0.365 × TIC $M / Mtpa. Published dry-process grey integrated/clinker plants cluster ~$32–79: Dugongo Nacala $192M/2.2 Mtpa cement $32; Samarkand $313M/3 Mtpa $38; PPC Riebeeck $159M/1.5 Mtpa $39 (brownfield); Bamburi Matuga $250M/1.6 Mtpa clinker $57; Cemex Solid original $235M/1.5 Mtpa $57 (2nd line); Dugong Matutuíne $330M/1.8 Mtpa $67; Cemex Solid revised $323M/1.5 $79. Independent industry greenfield $120–250/t-y clinker → $44–91/(kg/day). Screening mid $60. India+40 MW CPP plants and EPC-only equipment contracts excluded. Linear small-plant intensity; 1000 kg/day is not a 5,000 tpd line. SEC is the unit param 1.05 kWh/kg (electricity-as-total-energy), not this pack. Not a quarry concession and not CCUS.',
+    evidence: [
+      { label: 'Industry greenfield dry-process $120–250 per tonne of annual clinker capacity (quarry-to-pack) → $44–91/(kg/day)', url: CEMENT_CAPEX_BENCH },
+      { label: 'Cemex Solid Cement (Antipolo) integrated line 1.5 Mtpa cement; project cost revised $235M → $323M (PSE disclosure) → $57–79/(kg/day)', url: CEMEX_SOLID_TIC },
+      { label: 'Samarkand Cement 3 Mt/yr kiln, plant US$313m → $38/(kg/day); OPC M-400/M-500', url: SAMARKAND_CEMENT_TIC },
+      { label: 'Dugong Cimentos Matutuíne 1.8 Mt/yr integrated, US$330m → $67/(kg/day)', url: DUGONG_CEMENT_TIC },
+      { label: 'IEA-ETSAP cement brief — dry 5-stage preheater/precalciner 1 Mtpa ~€263/t-y (2010 €) as a Western-Europe supporting point, not the pack mid', url: IEA_ETSAP_CEMENT },
+      { label: 'IPCC 2006 Vol. 3 Ch. 2 — default 0.52 t process CO2 / t clinker (mass-close family; not a CAPEX quote)', url: IPCC_CEMENT_CO2 },
+      { label: 'IEA Cement (archived) — thermal ~3.4–3.5 GJ/t clinker; electricity ~105 kWh/t cement (SEC family; CAPEX is the TIC peer band)', url: IEA_CEMENT_ARCHIVE },
+      { label: 'ECRA Technology Papers 2022 — GCCA GNR 2019 grey clinker 3,460 MJ/t; cement electricity ~102 kWh/t (SEC family)', url: ECRA_CEMENT_2022 },
+    ],
+  }),
   'iac-leach': pack({
     capexIntensity: 18250, intensityUnit: '$/(kg REO/day)',
     fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
@@ -1008,6 +1046,13 @@ const demand = {
     [
       { label: 'Burrows & Fthenakis 2015 (float-line capacity family; 50 kt/y ceiling is screening offtake, not production)', url: BURROWS_PV_GLASS, doi: '10.1016/j.solmat.2014.09.028' },
       { label: 'Glass for Europe LCA of float glass (commodity-family context; offtake cap is screening)', url: GFE_FLOAT_LCA },
+    ]
+  ),
+  cement: row(
+    5e8, 'kg/year', 'screening', 'USGS cement screening regional ceiling',
+    `500 kt/y screening offtake ceiling. Tiny slice of grey cement; a typical 1.5 Mtpa dry line is ~1.5 Mt/y. USGS MCS 2026 US portland/blended/masonry 2025e ~84 Mt and world ~4 Gt are commodity context — this ceiling is screening offtake, not a mill contract. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2026 cement (commodity-family context; 500 kt/y ceiling is screening offtake, not production)', url: USGS_CEMENT },
     ]
   ),
 };
@@ -1328,6 +1373,13 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     [
       { label: 'Burrows & Fthenakis 2015 (float-line capacity family; 500 kt/y China ceiling is screening offtake, not production)', url: BURROWS_PV_GLASS, doi: '10.1016/j.solmat.2014.09.028' },
       { label: 'Glass for Europe LCA of float glass (commodity-family context; China ceiling is screening offtake)', url: GFE_FLOAT_LCA },
+    ]
+  ),
+  cement: row(
+    5e9, 'kg/year', 'screening', 'USGS cement China/Asia ceiling',
+    'Conservative 5 Mt/y China/Asia grey-cement ceiling. USGS MCS 2026 China cement 2024 ~1.9 Gt — this ceiling is a tiny slice, not production and not a mill contract.',
+    [
+      { label: 'USGS MCS 2026 cement (commodity-family context; 5 Mt/y China ceiling is screening offtake, not production)', url: USGS_CEMENT },
     ]
   ),
   'ndpr-oxide': row(

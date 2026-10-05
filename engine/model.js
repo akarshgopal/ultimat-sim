@@ -72,6 +72,9 @@ const SUBSTANCES = Object.freeze({
   EVA: { elements: { C: 4, H: 6, O: 2 }, molarMassG: 86.09, charge: 0 },
   // Soda-lime screening proxy. Distinct key from SiO2 even though mass matches; quartz stays SiO2.
   FloatGlass: { elements: { Si: 1, O: 2 }, molarMassG: 60.0843, charge: 0 },
+  // 1 mol ≡ 1 kg screening grey clinker / CEM I Portland proxy. Gypsum ~5% omitted.
+  // Not Bogue mineralogy (C3S/C2S/C3A/C4AF). Distinct from CaCO3 limestone feed.
+  PortlandCement: { elements: { Ca: 1 }, molarMassG: 1000, charge: 0 },
   // 1 mol ≡ 1 kg finished module mass; not a molecule.
   PVmodule: { elements: { Si: 1 }, molarMassG: 1000, charge: 0 },
   // 1 mol ≡ 1 kg screening bauxite ore. Al content / gangue / gibbsite vs boehmite

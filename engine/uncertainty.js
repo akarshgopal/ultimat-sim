@@ -56,6 +56,7 @@ const UNIT_INTENSITY_QUALITY = Object.freeze({
   polysilicon: 'screening',
   'pv-module': 'screening',
   'float-glass': 'screening',
+  cement: 'screening',
   'bayer-alumina': 'screening',
   'iac-leach': 'screening',
   'ree-chromatography': 'screening',

@@ -65,4 +65,4 @@ Not edited: `cases/h2-dri.js`, `cases/cement.js`, `cases/cu-ew.js`, `cases/float
 
 ## Tip
 
-Feat pending on `main`. Pages pending. Prior checkout tip `b2da51c`.
+Feat `9c080bb` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `9c080bb`). `npm test` 532 pass / 0 fail. Prior checkout tip `b2da51c`.

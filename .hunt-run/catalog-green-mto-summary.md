@@ -97,3 +97,7 @@ Not edited: `cases/mto.js`, `cases/methanol.js`, `data/tea-screening.js`, `engin
 - `sizeToProduct` ethylene still resizes the purchased-MeOH MTO island, not this green stack.
 - No intake-pump / gas-blower on this path (MECH untouched).
 - Not a UOP/Honeywell licensed flowsheet.
+
+## Tip
+
+Feat `2b18116` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `2b18116`). `npm test` 452 pass / 0 fail. Prior checkout tip `e4aea42`.

@@ -90,7 +90,7 @@
   let siteMapLayersReady = false;
   const SIZE_PRODUCT_LABELS = {
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
-    module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel',
+    module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel', urea: 'urea',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -1584,7 +1584,7 @@
     loadCase(UreaCase.createUreaCase(), 'urea');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening urea from purchased feeds on frozen Walvis PV; may be cash±; not bankable; not green-NH₃ path.';
+      status.textContent = 'screening urea from purchased feeds on frozen Walvis PV; Size-to-target → urea; may be cash±; not bankable; not green-NH₃ path.';
     }
   }
 
@@ -1689,6 +1689,7 @@
     if (product === 'steel') return nodes.find(node => node.unit === 'hydrogen-dri')?.id;
     if (product === 'ethylene') return nodes.find(node => node.unit === 'mto')?.id;
     if (product === 'diesel') return nodes.find(node => node.unit === 'ft-liquids')?.id;
+    if (product === 'urea') return nodes.find(node => node.unit === 'urea')?.id;
     return nodes[0]?.id;
   }
 

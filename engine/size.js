@@ -16,7 +16,7 @@ const { cascadeHeat } = heat;
 // Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
 // this module is the separate design calculation that chooses those capacities.
 //
-// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel)
+// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea)
 //   -> strategy estimates converter duties and source budgets
 //   -> T-feasible cascade before purchasing heat on every path with
 //      sinks/sources; residual heat is electric resistance COP=1 for PV;
@@ -70,6 +70,8 @@ const PRODUCT_ALIASES = {
   diesel: 'diesel',
   ft: 'diesel',
   syncrude: 'diesel',
+  urea: 'urea',
+  'co(nh2)2': 'urea',
 };
 const PV_MODULE_CHAIN_UNITS = Object.freeze([
   'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module',
@@ -2073,6 +2075,45 @@ function dieselProcessElectricityKWh(definition, baseline, scale) {
   return baseline.converterDuties[ftNode.id] * scale * sec;
 }
 
+function ureaSink(definition, ureaNode) {
+  return reactionProductSink(definition, ureaNode, 'urea')
+    || nodeBy(definition, node => (
+      (node.id === 'urea' || node.id === 'urea-product') && String(node.unit).includes('sink')
+    ));
+}
+
+function ureaChain(definition) {
+  const ureaNode = converter(definition, 'urea');
+  if (!ureaNode) throw new Error('sizeToProduct needs a urea block to size urea demand');
+  const sink = ureaSink(definition, ureaNode);
+  if (!sink) throw new Error('sizeToProduct needs a urea sink');
+  const sources = collectMaterialSourcesFeeding(definition, ureaNode.id, new Set());
+  return { urea: ureaNode, sink, converters: [ureaNode], sources };
+}
+
+function baselineUreaDuties(definition) {
+  const chain = ureaChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    ureaKg: converterDuties[chain.urea.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function ureaProcessElectricityKWh(definition, baseline, scale) {
+  const ureaNode = converter(definition, 'urea');
+  if (!ureaNode || !(baseline.converterDuties[ureaNode.id] > 0)) return 0;
+  const listed = Number(ureaNode.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 0.8;
+  return baseline.converterDuties[ureaNode.id] * scale * sec;
+}
+
 function sizeDiesel(definition, target, opts) {
   const chain = dieselChain(definition);
   const baseline = baselineDieselDuties(definition);
@@ -2143,6 +2184,84 @@ function sizeDiesel(definition, target, opts) {
           achieved,
           scale: duties.scale,
           diesel: duties.diesel,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
+function sizeUrea(definition, target, opts) {
+  const chain = ureaChain(definition);
+  const baseline = baselineUreaDuties(definition);
+  if (!(baseline.ureaKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size urea: urea has no baseline capacity');
+  }
+  let yieldPerScale = baseline.ureaKg > 0 ? baseline.ureaKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'urea',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const ureaKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? ureaKg / yieldPerScale : 0;
+        const processElectricityKWh = ureaProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          urea: ureaKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: ureaKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['urea', 'urea'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.urea),
+        relativeGap(activity(solved, chain.urea), duties.urea),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          urea: duties.urea,
           achievedElectricityKWh: electricityConsumed(solved),
           ...heatMeasureExtras(solved, duties),
         }),
@@ -2248,7 +2367,7 @@ function normalizeProduct(product) {
   const key = String(product ?? '').trim().toLowerCase();
   const normalized = PRODUCT_ALIASES[key];
   if (!normalized) {
-    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, or diesel');
+    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, or urea');
   }
   return normalized;
 }
@@ -2272,6 +2391,7 @@ function sizeToProduct(opts = {}) {
   if (product === 'steel') return sizeSteel(definition, rate, loopOpts);
   if (product === 'ethylene') return sizeEthylene(definition, rate, loopOpts);
   if (product === 'diesel') return sizeDiesel(definition, rate, loopOpts);
+  if (product === 'urea') return sizeUrea(definition, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 

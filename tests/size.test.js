@@ -302,6 +302,11 @@ test('sizeToProduct aliases diesel/ft', () => {
   assert.equal(sizeToProduct({ product: 'ft', rate: 2000, caseOrBuilder: createFtLiquidsCase }).product, 'diesel');
 });
 
+test('sizeToProduct aliases urea/CO(NH2)2', () => {
+  const { createUreaCase } = require('../cases/urea');
+  assert.equal(sizeToProduct({ product: 'CO(NH2)2', rate: 2000, caseOrBuilder: createUreaCase }).product, 'urea');
+});
+
 test('H2 sizing cascades an explicit hot source onto MED heat', () => {
   const withCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant() });
   const withoutCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant(), heatCredit: false });

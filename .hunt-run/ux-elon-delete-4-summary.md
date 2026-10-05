@@ -1,7 +1,7 @@
 # UX-ELON-DELETE-4
 
 **Tip before:** `a9a1dc8` (`docs(catalog-dri-freight-leftovers): mark Pages live`)
-**Product commit:** pending `refactor(ux-elon-delete-4): drop unused sale-label aliases, duplicate size/CSS branches`
+**Product commit:** `56fb9b8` `refactor(ux-elon-delete-4): drop unused sale-label aliases, duplicate size/CSS branches` — 3 files, **+66 / −50** (product UI **+18 / −50**, net **−32**). Product UI only: `js/flowsheet-app.js`, `flowsheet.css`. Tests unchanged (none asserted the deleted bits). `index.html` / `style.css` had nothing dead.
 
 YAGNI. Network never Empire. Screening honesty left in place (one Overview honesty line; one Economics banner; offtake honesty on Overview + Economics). No TEA pack/price/SEC/CAPEX/freight retune. No MECH undo/pump/blower (`refreshLiftEconomics` and `undoLastDelete` left alone). No case cash numbers. Catalog chemistry untouched. `cases/dac.js` not deleted. Did not retry Ni/soda-ash/Ag/TiCl4/Zn/Pb/phosphoric/chlor-alkali/Li-metal.
 
@@ -45,4 +45,4 @@ None. Deleted symbols were not asserted.
 
 ## Tip
 
-Feat pending on `main`. Pages pending. Prior checkout tip `a9a1dc8`.
+Feat `56fb9b8` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `56fb9b8`). `npm test` 534 pass / 0 fail. Maglut annualNetCash 1298.91 (≈1299). Prior checkout tip `a9a1dc8`.

@@ -16,7 +16,7 @@ const { cascadeHeat } = heat;
 // Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
 // this module is the separate design calculation that chooses those capacities.
 //
-// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass, cement, copper)
+// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass, cement, copper, ndpr)
 //   -> strategy estimates converter duties and source budgets
 //   -> T-feasible cascade before purchasing heat on every path with
 //      sinks/sources; residual heat is electric resistance COP=1 for PV;
@@ -94,6 +94,16 @@ const PRODUCT_ALIASES = {
   cathode: 'copper',
   'cu-ew': 'copper',
   'copper-cathode': 'copper',
+  // Canonical separated NdPr-oxide product is `ndpr` (Maglut ree-chromatography;
+  // tea sale key `ndpr-oxide-separated`). Aliases nd-pr / ndpr-oxide /
+  // ndpr-oxide-separated / nd2o3 / maglut still size that NdPr sink, not a
+  // mixed un-separated oxide contract.
+  ndpr: 'ndpr',
+  'nd-pr': 'ndpr',
+  'ndpr-oxide': 'ndpr',
+  'ndpr-oxide-separated': 'ndpr',
+  nd2o3: 'ndpr',
+  maglut: 'ndpr',
 };
 const PV_MODULE_CHAIN_UNITS = Object.freeze([
   'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module',
@@ -2833,6 +2843,142 @@ function sizeCopper(definition, target, opts) {
   });
 }
 
+const NDPR_SEPARATOR_UNITS = Object.freeze(['ree-chromatography', 'ree-sx']);
+
+function ndprSink(definition, separator) {
+  return reactionProductSink(definition, separator, 'ndpr')
+    || nodeBy(definition, node => (
+      (node.id === 'ndpr' || node.id === 'ndpr-oxide' || node.id === 'ndpr-oxide-separated'
+        || node.id === 'nd2o3')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function ndprChain(definition) {
+  const separators = definition.graph.nodes.filter(node => NDPR_SEPARATOR_UNITS.includes(node.unit));
+  if (separators.length > 1) {
+    throw new Error('sizeToProduct cannot size ndpr: multiple REE separators');
+  }
+  const chrom = separators[0];
+  if (!chrom) throw new Error('sizeToProduct needs a ree-chromatography block to size ndpr demand');
+  const sink = ndprSink(definition, chrom);
+  if (!sink) throw new Error('sizeToProduct needs an ndpr sink');
+  const sources = collectMaterialSourcesFeeding(definition, chrom.id, new Set());
+  return { chrom, sink, converters: [chrom], sources };
+}
+
+function baselineNdprDuties(definition) {
+  const chain = ndprChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    reoKg: converterDuties[chain.chrom.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function ndprProcessElectricityKWh(definition, baseline, scale) {
+  return ratioChainElectricityKWh(definition, baseline, scale, node => (
+    converterSecKWh(
+      node,
+      ['electricityKWhPerKgReo', 'electricityKWhPerKg'],
+      node.unit === 'ree-sx' ? 5.3 : 5,
+    )
+  ));
+}
+
+function sizeNdpr(definition, target, opts) {
+  const chain = ndprChain(definition);
+  const baseline = baselineNdprDuties(definition);
+  if (!(baseline.reoKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size ndpr: ree-chromatography has no baseline capacity');
+  }
+  let yieldPerScale = 1;
+  if (target > 0) {
+    const baselineNdpr = sinkMassKg(solveOperation(definition), chain.sink);
+    if (!(baselineNdpr > 0)) {
+      throw new Error('sizeToProduct cannot size ndpr: ndpr sink has no baseline product');
+    }
+    yieldPerScale = baselineNdpr;
+  }
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'ndpr',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const ndprKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? ndprKg / yieldPerScale : 0;
+        const processElectricityKWh = ndprProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          ndpr: ndprKg,
+          reo: baseline.reoKg * scale,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: ndprKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['ndpr', 'ndpr'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.ndpr),
+        relativeGap(activity(solved, chain.chrom), duties.reo),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          ndpr: duties.ndpr,
+          reo: duties.reo,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
 function sizeMinerals(definition, product, target, opts) {
   const minerals = converter(definition, 'brine-minerals');
   if (!minerals) throw new Error('sizeToProduct needs a brine-minerals block to size lithium or salt demand');
@@ -2930,7 +3076,7 @@ function normalizeProduct(product) {
   const key = String(product ?? '').trim().toLowerCase();
   const normalized = PRODUCT_ALIASES[key];
   if (!normalized) {
-    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass, cement, or copper');
+    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass, cement, copper, or ndpr');
   }
   return normalized;
 }
@@ -2959,6 +3105,7 @@ function sizeToProduct(opts = {}) {
   if (product === 'float-glass') return sizeFloatGlass(definition, rate, loopOpts);
   if (product === 'cement') return sizeCement(definition, rate, loopOpts);
   if (product === 'copper') return sizeCopper(definition, rate, loopOpts);
+  if (product === 'ndpr') return sizeNdpr(definition, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 

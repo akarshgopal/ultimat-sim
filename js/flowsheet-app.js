@@ -91,7 +91,7 @@
   const SIZE_PRODUCT_LABELS = {
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
     module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel', urea: 'urea', titanium: 'titanium',
-    'float-glass': 'float glass', cement: 'cement', copper: 'copper',
+    'float-glass': 'float glass', cement: 'cement', copper: 'copper', ndpr: 'ndpr',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -1595,7 +1595,7 @@
     loadCase(MaglutCase.createMaglutCase(), 'chrom');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'Long Beach map point only; ARC-1-style chromatography; proxy SEC/CAPEX; company-reported recovery not a Maglut quote; screening; not bankable.';
+      status.textContent = 'Long Beach map point only; ARC-1-style chromatography; Size-to-target → ndpr; proxy SEC/CAPEX; company-reported recovery not a Maglut quote; screening; not bankable.';
     }
   }
 
@@ -1770,6 +1770,9 @@
     if (product === 'float-glass') return nodes.find(node => node.unit === 'float-glass')?.id;
     if (product === 'cement') return nodes.find(node => node.unit === 'cement')?.id;
     if (product === 'copper') return nodes.find(node => node.unit === 'copper-ew')?.id;
+    if (product === 'ndpr') {
+      return nodes.find(node => node.unit === 'ree-chromatography' || node.unit === 'ree-sx')?.id;
+    }
     return nodes[0]?.id;
   }
 

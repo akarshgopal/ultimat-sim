@@ -561,6 +561,7 @@ test('size product menus list methanol and ammonia', () => {
   assert.match(html, /value="float-glass">float glass</);
   assert.match(html, /value="cement">cement</);
   assert.match(html, /value="copper">copper</);
+  assert.match(html, /value="ndpr">ndpr</);
   assert.doesNotMatch(html, /id="processSizeProduct"/);
   assert.doesNotMatch(html, /id="processSizeForCashflow"/);
   assert.doesNotMatch(html, /id="processDemoMenu"/);

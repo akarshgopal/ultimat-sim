@@ -327,6 +327,11 @@ test('sizeToProduct aliases copper/cu/cathode/cu-ew', () => {
   assert.equal(sizeToProduct({ product: 'cu', rate: 2000, caseOrBuilder: createCuEwCase }).product, 'copper');
 });
 
+test('sizeToProduct aliases ndpr/nd-pr/nd2o3/maglut', () => {
+  const { createMaglutCase } = require('../cases/maglut');
+  assert.equal(sizeToProduct({ product: 'maglut', rate: 0.6, caseOrBuilder: createMaglutCase }).product, 'ndpr');
+});
+
 test('H2 sizing cascades an explicit hot source onto MED heat', () => {
   const withCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant() });
   const withoutCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant(), heatCredit: false });

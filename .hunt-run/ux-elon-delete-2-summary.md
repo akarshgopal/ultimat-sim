@@ -1,7 +1,7 @@
 # UX-ELON-DELETE-2
 
 **Tip before:** `c2be082` (`docs(catalog-float-glass): mark Pages live`)
-**Product commit:** `refactor(ux-elon-delete-2): drop dead More-units palette, legacy gauges, duplicate Overview chips`
+**Product commit:** `a35790e` `refactor(ux-elon-delete-2): drop dead More-units palette, legacy gauges, duplicate Overview chips`
 **Line delta:** 5 files, **+16 / −143** (net **−127**). Product UI only: `index.html`, `js/flowsheet-app.js`, `flowsheet.css`. Tests updated only where they asserted the deleted hollow bits. `style.css` had nothing dead.
 
 YAGNI. Network never Empire. Screening honesty left in place (one Overview honesty line; one Economics banner). No TEA pack/price/SEC retune. No MECH undo/pump/blower. No case cash numbers. `refreshLiftEconomics` left alone (pump/blower).
@@ -50,3 +50,7 @@ YAGNI. Network never Empire. Screening honesty left in place (one Overview hones
 - `refreshLiftEconomics` unused helper (MECH).
 - Economics “screening / not a PPA” copy is distinct sentences, not the same line 3+ times.
 - README still says “default More palette” in one historical sentence (docs, not UI).
+
+## Tip
+
+Feat `a35790e` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `a35790e`). `npm test` 456 pass / 0 fail. Prior checkout tip `c2be082`.

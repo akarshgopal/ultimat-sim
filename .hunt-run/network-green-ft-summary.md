@@ -71,4 +71,4 @@ Not edited: `cases/green-ft.js`, `cases/cement.js`, `cases/cu-ew.js`, `cases/flo
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `bb2b159`. Zn/Pb skip (hollow CAPEX); fallback is this 9-plant compose.
+Feat `0fe916a` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `0fe916a`). `npm test` 520 pass / 0 fail. Prior checkout tip `bb2b159`. Zn/Pb skip (hollow CAPEX); fallback is this 9-plant compose.

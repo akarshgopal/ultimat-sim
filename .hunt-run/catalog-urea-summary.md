@@ -84,4 +84,4 @@ Green ammonia `createGreenAmmoniaCase` still loads with finite `annualNetCash`. 
 
 ## Tip
 
-Feat SHA pending deploy. Pages URL pending. Prior checkout tip `d44729c`.
+Feat `d9e962c` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `d9e962c`). `npm test` 407 pass / 0 fail. Prior checkout tip `d44729c`.

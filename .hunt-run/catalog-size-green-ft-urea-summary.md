@@ -84,4 +84,4 @@ Sign stays cash− (about 2× the 1000 demo). Maglut `createMaglutCase` cash sti
 
 ## Tip
 
-Feat pending push. Pages URL pending deploy.
+Feat `e924fe7` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `e924fe7`). `npm test` 526 pass / 0 fail. Prior checkout tip `f089cf8`.

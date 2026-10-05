@@ -82,4 +82,4 @@ Unit stoich in `engine/units.js` was already present and was not changed.
 
 ## Tip
 
-Prior checkout tip `6742ad6`. `npm test` 418 pass / 0 fail.
+Feat `acc4eaf` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `acc4eaf`). `npm test` 418 pass / 0 fail. Prior checkout tip `6742ad6`.

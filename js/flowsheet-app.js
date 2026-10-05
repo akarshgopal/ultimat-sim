@@ -91,7 +91,7 @@
   const SIZE_PRODUCT_LABELS = {
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
     module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel', urea: 'urea', titanium: 'titanium',
-    'float-glass': 'float glass',
+    'float-glass': 'float glass', cement: 'cement',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -1502,7 +1502,7 @@
     loadCase(CementCase.createCementCase(), 'cement');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening grey cement from purchased limestone+clay on frozen Mejillones PV; may be cash±; not bankable; not a wet kiln.';
+      status.textContent = 'screening grey cement from purchased limestone+clay on frozen Mejillones PV; Size-to-target → cement; may be cash±; not bankable; not a wet kiln.';
     }
   }
 
@@ -1740,6 +1740,7 @@
     if (product === 'urea') return nodes.find(node => node.unit === 'urea')?.id;
     if (product === 'titanium') return nodes.find(node => node.unit === 'titanium-kroll')?.id;
     if (product === 'float-glass') return nodes.find(node => node.unit === 'float-glass')?.id;
+    if (product === 'cement') return nodes.find(node => node.unit === 'cement')?.id;
     return nodes[0]?.id;
   }
 

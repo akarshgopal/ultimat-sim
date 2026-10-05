@@ -317,6 +317,11 @@ test('sizeToProduct aliases float-glass/glass/solar-glass', () => {
   assert.equal(sizeToProduct({ product: 'glass', rate: 2000, caseOrBuilder: createFloatGlassCase }).product, 'float-glass');
 });
 
+test('sizeToProduct aliases cement/clinker/cem-i/portland', () => {
+  const { createCementCase } = require('../cases/cement');
+  assert.equal(sizeToProduct({ product: 'clinker', rate: 2000, caseOrBuilder: createCementCase }).product, 'cement');
+});
+
 test('H2 sizing cascades an explicit hot source onto MED heat', () => {
   const withCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant() });
   const withoutCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant(), heatCredit: false });

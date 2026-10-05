@@ -16,7 +16,7 @@ const { cascadeHeat } = heat;
 // Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
 // this module is the separate design calculation that chooses those capacities.
 //
-// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass)
+// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass, cement)
 //   -> strategy estimates converter duties and source budgets
 //   -> T-feasible cascade before purchasing heat on every path with
 //      sinks/sources; residual heat is electric resistance COP=1 for PV;
@@ -79,6 +79,13 @@ const PRODUCT_ALIASES = {
   'float-glass': 'float-glass',
   glass: 'float-glass',
   'solar-glass': 'float-glass',
+  // Canonical grey-cement product is `cement` (tea sale key; Mejillones island).
+  // The kiln product is clinker (gypsum ~4–5% omitted); aliases clinker / cem-i / portland
+  // still size the `cement` sale key, not a separate clinker contract.
+  cement: 'cement',
+  clinker: 'cement',
+  'cem-i': 'cement',
+  portland: 'cement',
 };
 const PV_MODULE_CHAIN_UNITS = Object.freeze([
   'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module',
@@ -2514,6 +2521,125 @@ function sizeFloatGlass(definition, target, opts) {
   });
 }
 
+function cementSink(definition, cementNode) {
+  return reactionProductSink(definition, cementNode, 'cement')
+    || nodeBy(definition, node => (
+      (node.id === 'cement' || node.id === 'clinker' || node.id === 'portland'
+        || node.id === 'cement-product' || node.id === 'cem-i')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function cementChain(definition) {
+  const cementNode = converter(definition, 'cement');
+  if (!cementNode) throw new Error('sizeToProduct needs a cement block to size cement demand');
+  const sink = cementSink(definition, cementNode);
+  if (!sink) throw new Error('sizeToProduct needs a cement sink');
+  const sources = collectMaterialSourcesFeeding(definition, cementNode.id, new Set());
+  return { cement: cementNode, sink, converters: [cementNode], sources };
+}
+
+function baselineCementDuties(definition) {
+  const chain = cementChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    cementKg: converterDuties[chain.cement.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function cementProcessElectricityKWh(definition, baseline, scale) {
+  const cementNode = converter(definition, 'cement');
+  if (!cementNode || !(baseline.converterDuties[cementNode.id] > 0)) return 0;
+  const listed = Number(cementNode.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 1.05;
+  return baseline.converterDuties[cementNode.id] * scale * sec;
+}
+
+function sizeCement(definition, target, opts) {
+  const chain = cementChain(definition);
+  const baseline = baselineCementDuties(definition);
+  if (!(baseline.cementKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size cement: cement has no baseline capacity');
+  }
+  let yieldPerScale = baseline.cementKg > 0 ? baseline.cementKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'cement',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const cementKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? cementKg / yieldPerScale : 0;
+        const processElectricityKWh = cementProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          cement: cementKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: cementKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['cement', 'cement'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.cement),
+        relativeGap(activity(solved, chain.cement), duties.cement),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          cement: duties.cement,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
 function sizeMinerals(definition, product, target, opts) {
   const minerals = converter(definition, 'brine-minerals');
   if (!minerals) throw new Error('sizeToProduct needs a brine-minerals block to size lithium or salt demand');
@@ -2611,7 +2737,7 @@ function normalizeProduct(product) {
   const key = String(product ?? '').trim().toLowerCase();
   const normalized = PRODUCT_ALIASES[key];
   if (!normalized) {
-    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, or float-glass');
+    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium, float-glass, or cement');
   }
   return normalized;
 }
@@ -2638,6 +2764,7 @@ function sizeToProduct(opts = {}) {
   if (product === 'urea') return sizeUrea(definition, rate, loopOpts);
   if (product === 'titanium') return sizeTitanium(definition, rate, loopOpts);
   if (product === 'float-glass') return sizeFloatGlass(definition, rate, loopOpts);
+  if (product === 'cement') return sizeCement(definition, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 

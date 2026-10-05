@@ -128,7 +128,7 @@ test('Mejillones cement demo 1000 kg/day with CAPEX on line + solar and finite c
 test('Palette Crust lists cement after float-glass; Overview option mentions cement', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'cement',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll'\s*\]/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'cement',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll',\s*'copper-ew'\s*\]/);
   assert.match(html, /id="loadCement"/);
   assert.match(html, /Mejillones cement \(limestone\+clay\)/);
   assert.match(html, /cases\/cement\.js/);

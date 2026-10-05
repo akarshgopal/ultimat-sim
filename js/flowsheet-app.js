@@ -99,7 +99,7 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'float-glass', 'cement', 'pv-module', 'hydrogen-dri', 'titanium-kroll'],
+    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'float-glass', 'cement', 'pv-module', 'hydrogen-dri', 'titanium-kroll', 'copper-ew'],
     REE: ['iac-leach', 'ree-chromatography', 'ree-sx'],
     Bio: ['bioforge'],
   };
@@ -381,6 +381,18 @@
         { label: 'IPCC 2006 Vol. 3 Ch. 2 — 0.52 t process CO2 / t clinker', url: 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/3_Volume3/V3_2_Ch2_Mineral_Industry.pdf' },
         { label: 'IEA Cement — thermal ~3.4–3.5 GJ/t clinker; electricity ~105 kWh/t cement', url: 'https://web.archive.org/web/20230528230323/https://www.iea.org/reports/cement' },
         { label: 'USGS MCS 2026 cement — mill unit value 2025e $160/t', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-cement.pdf' },
+      ],
+    },
+    'copper-ew': {
+      label: 'Copper SX-EW', capacity: 1000, rate: 100, activityUnit: 'kg Cu/day',
+      palette: { section: 'building', order: 13, glyph: 'Cu', description: 'PLS copper + power → LME cathode' },
+      params: { electricityKWhPerKg: 2.2, plsKgPerKg: 1.0 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electrowinning electricity', min: 1, max: 4, step: 0.05, unit: 'kWh/kg Cu' }],
+      sourceNote: 'Screening heap-leach SX-EW island: purchased contained Cu in PLS → LME-grade cathode. Faraday 1.00 kg Cu / kg cathode; acid regenerates to raffinate (inventory). SEC 2.2 kWh/kg is industrial EW+SX island electricity (1.8–2.5 kWh/kg; Marimaca 2.28). Heap/mine/pad out of scope. Not a smelter and not electrorefining.',
+      references: [
+        { label: 'USGS MCS 2026 copper — LME grade A cash 2025e 440 ¢/lb', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-copper.pdf' },
+        { label: 'Copper electrowinning practice — typical 1900–2000 kWh/t Cu', url: 'https://pressbooks.bccampus.ca/hydrometallurgy/chapter/copper-electrowinning-practice/' },
+        { label: 'Marimaca Oxide DFS — SX/TF/EW 50 kt/y cathode nameplate', url: 'https://marimaca.com/wp-content/uploads/2026/07/25-10-09-Marimaca-Oxide-Deposit-NI-43-101-Technical-Report-Feasibility-Study_FINAL.pdf' },
       ],
     },
     'pv-module': {
@@ -690,6 +702,7 @@
     silver: 'Ag paste', glass: 'Float glass', eva: 'EVA', module: 'Module',
     sand: 'Silica sand', sodaAsh: 'Soda ash', limestone: 'Limestone',
     cement: 'Portland cement',
+    pls: 'PLS copper', cathode: 'Cu cathode',
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
     concentrate: 'Concentrate', dytb: 'DyTb', lightReo: 'Light REO',
     dextrose: 'Dextrose', gluconic: 'Gluconic acid', hydrogenPeroxide: 'Hydrogen peroxide',
@@ -719,6 +732,7 @@
     limestone: { label: 'Limestone', phase: 'solid', mol: { CaCO3: 1000 } },
     'kiln-clay': { label: 'Kiln clay / silica', phase: 'solid', mol: { SiO2: 1000 } },
     cement: { label: 'Portland cement', phase: 'solid', mol: { PortlandCement: 1000 } },
+    'pls-copper': { label: 'PLS copper', phase: 'liquid', mol: { Cu: 1000 } },
     silicon: { label: 'Metallurgical silicon', phase: 'solid', mol: { Si: 1000 } },
     ironOre: { label: 'Hematite concentrate', phase: 'solid', mol: { Fe2O3: 1000 } },
     titaniumTetrachloride: { label: 'Titanium tetrachloride', phase: 'liquid', mol: { TiCl4: 1000 } },
@@ -774,6 +788,7 @@
     limestone: { key: 'limestone', label: 'Limestone', profile: 'silo', glyph: 'Ca' },
     'kiln-clay': { key: 'kiln-clay', label: 'Kiln clay / silica', profile: 'silo', glyph: 'Cy' },
     cement: { key: 'cement', label: 'Portland cement', profile: 'silo', glyph: 'Cm' },
+    'pls-copper': { key: 'pls-copper', label: 'PLS copper', profile: 'tank', glyph: 'Cu' },
     ironOre: { key: 'ironOre', label: 'Hematite concentrate', profile: 'silo', glyph: 'silo' },
     magnesium: { key: 'magnesium', label: 'Magnesium', profile: 'silo', glyph: 'silo' },
     co2: { key: 'co2', label: 'Carbon dioxide', profile: 'stack', glyph: 'CO₂' },
@@ -799,7 +814,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'methanol', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'silica-sand', 'soda-ash', 'limestone', 'kiln-clay', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'methanol', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'silica-sand', 'soda-ash', 'limestone', 'kiln-clay', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva', 'pls-copper'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -1046,6 +1061,7 @@
     'silicon-alumina': () => loadSiliconAlumina(),
     'float-glass': () => loadFloatGlass(),
     cement: () => loadCement(),
+    'cu-ew': () => loadCuEw(),
     'h2-dri': () => loadH2Dri(),
     'green-h2-dri': () => loadGreenH2Dri(),
     'ti-kroll': () => loadTiKroll(),
@@ -1503,6 +1519,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening grey cement from purchased limestone+clay on frozen Mejillones PV; Size-to-target → cement; may be cash±; not bankable; not a wet kiln.';
+    }
+  }
+
+  function loadCuEw() {
+    setActiveDemo('cu-ew', 'Mejillones copper SX-EW (purchased PLS)');
+    lastSizing = null;
+    if (typeof CuEwCase === 'undefined' || !CuEwCase.createCuEwCase) {
+      throw new Error('Copper SX-EW case is not loaded');
+    }
+    loadCase(CuEwCase.createCuEwCase(), 'cu-ew');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening SX-EW cathode from purchased PLS copper on frozen Mejillones PV; may be cash±; not bankable; not a mine or heap pad.';
     }
   }
 
@@ -3923,6 +3952,7 @@
       'bayer-alumina.bauxite': 'bauxite', 'bayer-alumina.caustic': 'caustic',
       'float-glass.sand': 'silica-sand', 'float-glass.sodaAsh': 'soda-ash', 'float-glass.limestone': 'limestone',
       'cement.limestone': 'limestone', 'cement.clay': 'kiln-clay',
+      'copper-ew.pls': 'pls-copper',
       'pv-module.polysilicon': 'silicon', 'pv-module.silver': 'silver', 'pv-module.glass': 'float-glass', 'pv-module.eva': 'eva', 'pv-module.aluminium': 'aluminium',
       'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'iac-leach.clay': 'ionic-clay', 'iac-leach.lixiviant': 'ammonium-sulfate',
@@ -5069,6 +5099,10 @@
     cement: 'Portland cement',
     PortlandCement: 'Portland cement',
     'cement-product': 'Portland cement',
+    'copper-cathode': 'Copper cathode',
+    Cu: 'Copper cathode',
+    cathode: 'Copper cathode',
+    'cathode-product': 'Copper cathode',
     oxygen: 'Oxygen',
     O2: 'Oxygen',
     'poly-silicon': 'Poly-Si',
@@ -5507,7 +5541,7 @@
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
     if (unit === 'mg-si' || unit === 'polysilicon' || unit === 'float-glass' || unit === 'cement') return 'furnace';
-    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'bayer-alumina' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
+    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'bayer-alumina' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module' || unit === 'copper-ew') return 'cell';
     if (unit === 'asu' || unit === 'ammonia' || unit === 'urea' || unit === 'mto' || unit === 'ft-liquids' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
     return 'shed';
@@ -6950,7 +6984,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'float-glass' || current.unit === 'cement' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto' || current.unit === 'ft-liquids') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'float-glass' || current.unit === 'cement' || current.unit === 'copper-ew' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto' || current.unit === 'ft-liquids') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -7084,6 +7118,7 @@
     'aluminium-smelter': 'aluminium-smelter',
     'float-glass': 'float-glass',
     cement: 'cement',
+    'copper-ew': 'copper-ew',
     'pv-module': 'pv-module',
     'hydrogen-dri': 'hydrogen-dri',
     'titanium-kroll': 'titanium-kroll',

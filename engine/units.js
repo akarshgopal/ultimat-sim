@@ -988,6 +988,82 @@ function cementKiln({ inlets, requestedActivity, capacity, params = {} }) {
   };
 }
 
+// Heap-leach SX-EW screening island: purchased Cu-in-PLS → LME-grade cathode.
+// Not a mine, not a heap pad, not a smelter, not electrorefining of anodes.
+// Faraday: Cu²⁺ + 2e⁻ → Cu; anode H₂O → ½O₂ + 2H⁺. Acid regenerates to raffinate
+// (returned / not a sale). O₂ vents unlabeled (YAGNI). Screening mass is 1.00 kg
+// contained Cu in PLS per kg cathode (closed electrolyte; raffinate Cu is inventory,
+// not a second product). SEC 2.2 kWh/kg is industrial EW+SX island electricity
+// (Jenkins ~1.9–2.0 kWh/kg; industrial 1.8–2.5; Marimaca SX/TF/EW 2.28; Minerals
+// 2025 ~2.2 MWh/t) — electricity-dominated, not a heat-as-electricity proxy.
+// Extra feed mol > 1e-12 throws. Pure Cu required.
+const COPPER_EW_FEEDS = Object.freeze({
+  pls: { substance: 'Cu', kgPerKg: 1.0, param: 'plsKgPerKg' },
+});
+
+function copperEw({ inlets, requestedActivity, capacity, params = {} }) {
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const sec = nonnegative(Number(params.electricityKWhPerKg ?? 2.2), 'electricityKWhPerKg');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const feeds = {};
+  const intensities = {};
+  for (const [port, spec] of Object.entries(COPPER_EW_FEEDS)) {
+    const stream = validateStream(inlets[port], 'material');
+    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
+    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
+      throw new Error(`${port} must be pure ${spec.substance}`);
+    }
+    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
+    feeds[port] = stream;
+    intensities[port] = { substance: spec.substance, kgPerKg };
+  }
+  const kgOf = (port) => streamMassKg(feeds[port]);
+  const planned = Math.min(requested, installed);
+  const limits = { capacity: installed };
+  for (const [port, spec] of Object.entries(intensities)) {
+    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
+  }
+  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
+  const activity = Math.min(planned, ...Object.values(limits));
+  const streamKg = (port, kg) => {
+    const template = feeds[port];
+    const substance = intensities[port].substance;
+    return {
+      kind: 'material',
+      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
+      phase: template.phase,
+      T_C: template.T_C,
+      P_bar: template.P_bar,
+    };
+  };
+  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, planned * spec.kgPerKg),
+  ]));
+  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, activity * spec.kgPerKg),
+  ]));
+  const firstFeed = Object.values(feeds)[0];
+  const limitingValue = Math.min(...Object.values(limits));
+  return {
+    activity,
+    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
+    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    outlets: {
+      cathode: {
+        kind: 'material',
+        mol: { Cu: activity * 1000 / SUBSTANCES.Cu.molarMassG },
+        phase: 'solid',
+        T_C: firstFeed.T_C,
+        P_bar: firstFeed.P_bar,
+      },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
 const hydrogenDri = reaction({
   product: 'Fe', electricityKWhPerKg: 0.7,
   inputs: { ironOre: { substance: 'Fe2O3', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
@@ -1918,6 +1994,15 @@ const UNITS = Object.freeze({
       carbonDioxide: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: cementKiln,
+  },
+  'copper-ew': {
+    kind: 'converter',
+    ports: {
+      pls: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      cathode: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: copperEw,
   },
   'hydrogen-dri': {
     kind: 'converter',

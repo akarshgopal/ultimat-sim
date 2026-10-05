@@ -54,6 +54,12 @@ const USGS_SODA_ASH = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-soda-as
 const USGS_SAND_IND = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-sand-industrial.pdf';
 const USGS_STONE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-stone-crushed.pdf';
 const USGS_CEMENT = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-cement.pdf';
+const USGS_COPPER = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-copper.pdf';
+const SANTA_CRUZ_PFS_2026 = 'https://www.sec.gov/Archives/edgar/data/1879016/000110465926109810/tm2625798d1_ex99-1.htm';
+const MARIMACA_DFS_2025 = 'https://marimaca.com/wp-content/uploads/2026/07/25-10-09-Marimaca-Oxide-Deposit-NI-43-101-Technical-Report-Feasibility-Study_FINAL.pdf';
+const EL_PILAR_FS_2022 = 'https://www.sec.gov/Archives/edgar/data/1001838/000155837022002995/scco-20211231ex9692df9bd.pdf';
+const GUNNISON_PEA_2024 = 'https://minedocs.com/27/Gunnison-PEA-11012024.pdf';
+const CU_EW_SEC_PRACTICE = 'https://pressbooks.bccampus.ca/hydrometallurgy/chapter/copper-electrowinning-practice/';
 const IPCC_CEMENT_CO2 = 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/3_Volume3/V3_2_Ch2_Mineral_Industry.pdf';
 const IEA_CEMENT_ARCHIVE = 'https://web.archive.org/web/20230528230323/https://www.iea.org/reports/cement';
 const ECRA_CEMENT_2022 = 'https://api.ecra-online.org/fileadmin/files/tp/ECRA_Technology_Papers_2022.pdf';
@@ -342,6 +348,13 @@ const prices = {
       { label: 'USGS MCS 2026 cement — average mill unit value 2025e $160/t; screening $0.16/kg, not a bagged retail quote', url: USGS_CEMENT },
     ]
   ),
+  'copper-cathode': row(
+    9.70, '$/kg', 'screening', 'USGS MCS 2026 LME grade A cash 2025e',
+    'USGS MCS 2026 copper LME grade A cash annual average 2025e 440 ¢/lb → $4.40/lb → $9.70/kg. Chile/LME cathode, not the US producer COMEX+premium 2025e 490 ¢/lb ($10.80/kg) and not a COMEX spot. Screening LME-grade SX-EW cathode sale, not a brand premium and not a 2026 spot print.',
+    [
+      { label: 'USGS MCS 2026 copper — LME grade A cash 2025e 440 ¢/lb; screening $9.70/kg, not a COMEX+premium contract', url: USGS_COPPER },
+    ]
+  ),
 };
 
 const costs = {
@@ -409,6 +422,13 @@ const costs = {
     0.02, '$/kg', 'screening', 'USGS crushed stone / common clay family',
     'Kiln clay/shale/silica corrective screening $0.02/kg, same bulk-quarry family as crushed stone 2025e $18.50/t. Not kaolin, not glass-sand ($0.04), and not a retune of limestone.',
     [{ label: 'USGS MCS 2026 stone (crushed) — 2025e $18.50/t; screening kiln-clay/shale $0.02/kg, not a clay-pit contract', url: USGS_STONE }]
+  ),
+  'pls-copper': row(
+    9.36, '$/kg', 'screening', 'contained Cu in PLS at 96.5% of USGS LME 2025e',
+    'Purchased contained copper in pregnant leach solution at 96.5% of USGS MCS 2026 LME grade A cash 2025e $9.70/kg → $9.36/kg. Standard copper contained-metal payable (96.5%, 1% min deduction) applied as ore/PLS payable basis — PLS is not seaborne concentrate and this is not a TC/RC smelter ticket (2025 benchmark TC $21.25/t is the smelter path). Not a heap-ore FOB and not a retune of the cathode sale.',
+    [
+      { label: 'USGS MCS 2026 copper — LME grade A cash 2025e 440 ¢/lb; 96.5% payable on contained Cu in PLS → screening $9.36/kg', url: USGS_COPPER },
+    ]
   ),
   'carbon-reductant': row(
     0.25, '$/kg', 'screening', 'SAF coal/coke/charcoal mix',
@@ -776,6 +796,21 @@ const packs = {
       { label: 'ECRA Technology Papers 2022 — GCCA GNR 2019 grey clinker 3,460 MJ/t; cement electricity ~102 kWh/t (SEC family)', url: ECRA_CEMENT_2022 },
     ],
   }),
+  'copper-ew': pack({
+    capexIntensity: 750, intensityUnit: '$/(kg Cu/day)',
+    capexIntensityBand: { low: 600, mid: 750, high: 900 },
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'SX-EW plant line-item TIC / cathode capacity peer band',
+    note: 'installedCapex = 750 × capacity. $/(kg/day) = TIC / (tpy × 1000/365). Published SX-EW plant line items with t/y cathode cluster ~$630–880: Ivanhoe Santa Cruz 2026 PFS SX/EW $132M / 76 kt/y design $634; Gunnison 2024 PEA SX-EW plant $145M / 175 Mlb/y $667; Gunnison 2026 PEA SX+TF+EW $170M / 175 Mlb/y $782; Southern Copper El Pilar 2022 FS SX+TF+EW $75.6M / 31,752 t/y $869; Marimaca 2025 DFS SX/TF/EW $121M / 50 kt/y $883. Screening mid $750. Direct SX-EW area costs, not mine/heap/crushing and not allocated project-wide EPCM. Florence remaining $67M excluded (sunk equipment). Whole-project TICs excluded. Linear small-plant intensity; 1000 kg/day is not a 50 kt/y tankhouse. SEC is the unit param 2.2 kWh/kg, not this pack. Not a smelter and not a heap pad.',
+    evidence: [
+      { label: 'Ivanhoe Electric Santa Cruz S-K 1300 PFS 2026 — SX/EW $132M initial, design 76 kt/y cathode → $634/(kg/day)', url: SANTA_CRUZ_PFS_2026 },
+      { label: 'Marimaca Oxide Deposit NI 43-101 DFS 2025 — SX/TF/EW $121M, 50 kt/y cathode → $883/(kg/day)', url: MARIMACA_DFS_2025 },
+      { label: 'Southern Copper El Pilar S-K 1300 FS 2022 — SX $24.2M + tank farm $11.7M + EW $39.8M = $75.6M, EW design 31,752 t/y → $869/(kg/day)', url: EL_PILAR_FS_2022 },
+      { label: 'Gunnison Open Pit PEA 2024 (M3) — SX-EW plant $145M (SX + tank farm + EW + reagents), 175 Mlb/y → $667/(kg/day)', url: GUNNISON_PEA_2024 },
+      { label: 'USGS MCS 2026 copper — LME grade A cash 2025e 440 ¢/lb (sale family; CAPEX is the SX-EW line-item band)', url: USGS_COPPER },
+      { label: 'Copper electrowinning practice — typical 1900–2000 kWh/t Cu (SEC family; CAPEX is the TIC peer band)', url: CU_EW_SEC_PRACTICE },
+    ],
+  }),
   'iac-leach': pack({
     capexIntensity: 18250, intensityUnit: '$/(kg REO/day)',
     fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
@@ -1053,6 +1088,14 @@ const demand = {
     `500 kt/y screening offtake ceiling. Tiny slice of grey cement; a typical 1.5 Mtpa dry line is ~1.5 Mt/y. USGS MCS 2026 US portland/blended/masonry 2025e ~84 Mt and world ~4 Gt are commodity context — this ceiling is screening offtake, not a mill contract. ${DEMAND_REGION}`,
     [
       { label: 'USGS MCS 2026 cement (commodity-family context; 500 kt/y ceiling is screening offtake, not production)', url: USGS_CEMENT },
+    ]
+  ),
+  'copper-cathode': row(
+    5e7, 'kg/year', 'screening', 'SX-EW cathode screening regional ceiling',
+    `50 kt/y screening offtake ceiling. One Marimaca-class SX-EW nameplate; USGS MCS 2026 Chile refined copper 2025e ~1.7 Mt and world refinery ~29 Mt are commodity context — this ceiling is screening offtake, not a cathode contract. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2026 copper (commodity-family context; 50 kt/y cathode ceiling is screening offtake, not production)', url: USGS_COPPER },
+      { label: 'Marimaca Oxide DFS — 50 kt/y cathode nameplate (capacity family; offtake cap is screening)', url: MARIMACA_DFS_2025 },
     ]
   ),
 };
@@ -1380,6 +1423,13 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     'Conservative 5 Mt/y China/Asia grey-cement ceiling. USGS MCS 2026 China cement 2024 ~1.9 Gt — this ceiling is a tiny slice, not production and not a mill contract.',
     [
       { label: 'USGS MCS 2026 cement (commodity-family context; 5 Mt/y China ceiling is screening offtake, not production)', url: USGS_CEMENT },
+    ]
+  ),
+  'copper-cathode': row(
+    5e8, 'kg/year', 'screening', 'SX-EW cathode China/Asia ceiling',
+    'Conservative 500 kt/y China/Asia refined-copper ceiling. USGS MCS 2026 China refinery 2025e ~14 Mt — this ceiling is a tiny slice, not production and not a cathode contract.',
+    [
+      { label: 'USGS MCS 2026 copper (commodity-family context; 500 kt/y China cathode ceiling is screening offtake, not production)', url: USGS_COPPER },
     ]
   ),
   'ndpr-oxide': row(

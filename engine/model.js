@@ -68,6 +68,9 @@ const SUBSTANCES = Object.freeze({
   H2O2: { elements: { H: 2, O: 2 }, molarMassG: 34.01468, charge: 0 },
   C6H12O7: { elements: { C: 6, H: 12, O: 7 }, molarMassG: 196.1554, charge: 0 },
   Ag: { elements: { Ag: 1 }, molarMassG: 107.8682, charge: 0 },
+  // Metal-equivalent copper: PLS feed (liquid) and LME cathode (solid) share Cu.
+  // SX-EW plates Cu²⁺; screening treats contained Cu as this substance (1 mol = 63.546 g).
+  Cu: { elements: { Cu: 1 }, molarMassG: 63.546, charge: 0 },
   // Encapsulant film mass proxy, not a polymer chain model.
   EVA: { elements: { C: 4, H: 6, O: 2 }, molarMassG: 86.09, charge: 0 },
   // Soda-lime screening proxy. Distinct key from SiO2 even though mass matches; quartz stays SiO2.

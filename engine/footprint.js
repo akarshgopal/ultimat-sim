@@ -72,6 +72,7 @@ const PROCESS_LABELS = Object.freeze({
   'pv-module': 'PV module (BOM)',
   'float-glass': 'Float glass',
   cement: 'Cement kiln',
+  'copper-ew': 'Copper SX-EW',
   'aluminium-smelter': 'Aluminium smelter',
   'hydrogen-dri': 'Hydrogen DRI',
   'titanium-kroll': 'Titanium Kroll',
@@ -485,6 +486,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Screening dry-process cement-island pad 4 m²/(kg cement/h) (range 1–12); not a plot survey and not a quarry. USGS MCS cement is commodity context, not a measured kiln layout.',
         url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-cement.pdf',
+      }),
+    ]),
+  }),
+  'copper-ew': Object.freeze({
+    id: 'copper-ew',
+    label: PROCESS_LABELS['copper-ew'],
+    basis: 'kgPerHour',
+    intensity: 4,
+    unitLabel: 'm²/(kg Cu/h)',
+    range: Object.freeze([1, 12]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening SX-EW tankhouse pad 4 m²/(kg Cu/h) (range 1–12); not a plot survey and not a heap pad. USGS MCS copper is commodity context, not a measured tankhouse layout.',
+        url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-copper.pdf',
       }),
     ]),
   }),
@@ -923,6 +940,13 @@ function padCement(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padCopperEw(node, solved) {
+  const spec = intensitySpec('copper-ew');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padHydrogenDri(node, solved) {
   const spec = intensitySpec('hydrogen-dri');
   const activity = activityOf(solved, node.id);
@@ -1017,6 +1041,7 @@ const PROCESS_PADS = Object.freeze({
   'pv-module': padPvModule,
   'float-glass': padFloatGlass,
   cement: padCement,
+  'copper-ew': padCopperEw,
   'hydrogen-dri': padHydrogenDri,
   'titanium-kroll': padTitaniumKroll,
   'bayer-alumina': padBayerAlumina,

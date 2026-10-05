@@ -95,3 +95,7 @@ Not edited: `cases/ft-liquids.js`, `data/tea-screening.js`, `engine/units.js`, M
 - `sizeToProduct` diesel still resizes the purchased-H₂ FT island, not this green stack.
 - No intake-pump / gas-blower on this path (MECH untouched).
 - Not a Sasol/Shell licensed flowsheet.
+
+## Tip
+
+Feat `24c41b1` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `24c41b1`). `npm test` 463 pass / 0 fail. Prior checkout tip `0a72b2b`.

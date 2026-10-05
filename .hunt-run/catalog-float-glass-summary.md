@@ -100,3 +100,7 @@ Glass activity 1000 kg/day. Not electricity-limited. Maglut cash ≈ 1299 (±5) 
 - World-scale float CAPEX (cheaper than the small-plant $300 intensity) is not a second pack.
 - No intake-pump / gas-blower on this path (MECH untouched).
 - Not a Guardian/Xinyi licensed flowsheet.
+
+## Tip
+
+Feat `d5a9dc0` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `d5a9dc0`). `npm test` 456 pass / 0 fail. Prior checkout tip `7df6040`.

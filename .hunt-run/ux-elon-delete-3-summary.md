@@ -1,7 +1,7 @@
 # UX-ELON-DELETE-3
 
 **Tip before:** `dd22b3f` (`docs(network-cement-cu-glass): mark Pages live`)
-**Product commit:** `refactor(ux-elon-delete-3): drop unused CSS vars, dead labels, duplicate branches` — 3 files, **+3 / −12** (net **−9**). Product UI only: `js/flowsheet-app.js`, `flowsheet.css`, `style.css`. Tests unchanged (none asserted the deleted bits). `index.html` had nothing dead.
+**Product commit:** `f3ac067` `refactor(ux-elon-delete-3): drop unused CSS vars, dead labels, duplicate branches` — 4 files, **+46 / −12** (product UI **+3 / −12**, net **−9**). Product UI only: `js/flowsheet-app.js`, `flowsheet.css`, `style.css`. Tests unchanged (none asserted the deleted bits). `index.html` had nothing dead.
 
 YAGNI. Network never Empire. Screening honesty left in place (one Overview honesty line; one Economics banner; offtake honesty on Overview + Economics). No TEA pack/price/SEC retune. No MECH undo/pump/blower (`refreshLiftEconomics` and `undoLastDelete` left alone). No case cash numbers. Catalog chemistry untouched. `cases/dac.js` not deleted.
 
@@ -40,4 +40,4 @@ None. Deleted symbols were not asserted.
 
 ## Tip
 
-Feat SHA and Pages URL filled after push/deploy.
+Feat `f3ac067` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `f3ac067`). `npm test` 508 pass / 0 fail. Maglut annualNetCash 1298.91 (≈1299). Prior checkout tip `dd22b3f`.

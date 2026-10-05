@@ -2,11 +2,12 @@
   const api = factory(
     typeof require === 'function' ? require('./coastal') : root.CoastalCase,
     typeof require === 'function' ? require('./abundance') : root.AbundanceCase,
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel
+    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
+    typeof require === 'function' ? require('./silicon') : root.SiliconCase
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.NetworkCase = api;
-})(globalThis, (coastal, abundance, model) => {
+})(globalThis, (coastal, abundance, model, silicon) => {
 const { streamMassKg } = model;
 const tea = abundance.TEA;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.43&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
@@ -234,6 +235,7 @@ function createFuelsAndMineralsNetwork(month = 6) {
     plants: [
       { id: 'dead-sea-minerals', name: 'Dead Sea brine and ammonia', definition: siteDeadSeaAbundance() },
       { id: 'almeria-fuels', name: 'Almería solar methane', definition: coastal.createCoastalCase(month) },
+      { id: 'mejillones-silicon', name: 'Mejillones silicon and PV', definition: silicon.createSiliconCase() },
     ],
     corridors: [],
   };

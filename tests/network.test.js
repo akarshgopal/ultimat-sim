@@ -10,8 +10,10 @@ const {
 const { estimateSolarLandHa, estimateFootprint } = require('../engine/footprint');
 const { createFuelsAndMineralsNetwork, siteDeadSeaAbundance, siteZabuyeAbundance, DAILY_PV, DEAD_SEA_PV, ZABUYE_PV, ZABUYE_DAILY_PV } = require('../cases/network');
 const { solveOperation } = require('../engine/solve');
+const { evaluateEconomics } = require('../engine/economics');
 const { sizeForPositiveCashflow } = require('../engine/size');
 const { streamMassKg } = require('../engine/model');
+const { createMaglutCase } = require('../cases/maglut');
 const pvgisZabuye = require('../data/pvgis-zabuye.json');
 const pvgisSites = require('../data/pvgis-sites');
 
@@ -201,15 +203,19 @@ test('Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, the
   assert.ok(footprint.totalHa > 0);
 });
 
-test('fuels plus minerals network rolls up CH4, NH3, and money', () => {
+test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, and money', () => {
   const definition = createFuelsAndMineralsNetwork(6);
+  assert.equal(definition.plants.length, 3);
   assert.equal(definition.plants[0].id, 'dead-sea-minerals');
   assert.equal(definition.plants[1].id, 'almeria-fuels');
+  assert.equal(definition.plants[2].id, 'mejillones-silicon');
+  assert.equal(definition.plants[2].definition.site.id, 'chile-mejillones');
   const result = evaluateNetwork(definition);
-  assert.equal(result.plants.length, 2);
+  assert.equal(result.plants.length, 3);
   assert.ok(result.slate.CH4 > 0);
   assert.ok(result.slate.NH3 > 0);
   assert.ok(result.slate.Br2 > 0);
+  assert.ok(result.slate.PVmodule > 0);
   assert.ok(result.landHa > 0);
   const rolledLand = result.plants.reduce((sum, plant) => sum + plant.footprint.totalHa, 0);
   assert.ok(Math.abs(result.landHa - rolledLand) < 1e-12);
@@ -218,12 +224,16 @@ test('fuels plus minerals network rolls up CH4, NH3, and money', () => {
   assert.ok(result.plants.every(plant => plant.footprint && plant.footprint.totalHa > 0));
   assert.ok(result.installedCapex > result.plants[0].economics.installedCapex);
   assert.ok(Number.isFinite(result.npv));
+  assert.ok(Number.isFinite(result.annualNetCash));
   assert.ok(Number.isFinite(result.annualizedCapex) && result.annualizedCapex > 0);
   assert.equal(result.annualOperatingCash, result.annualRevenue - result.annualOperatingCost);
   assert.ok(Math.abs(result.annualNetCash - (result.annualRevenue - result.annualOperatingCost - result.annualizedCapex)) < 1e-6);
   assert.equal(result.cashFlows[0], -result.installedCapex);
   assert.equal(result.cashFlows[1], result.annualOperatingCash);
   assert.equal(result.corridors.length, 0);
+  const maglut = createMaglutCase();
+  const maglutCash = evaluateEconomics(maglut, solveOperation(maglut));
+  assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
 });
 
 test('corridor excludes transferred origin sale from slate and revenue', () => {

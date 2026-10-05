@@ -106,4 +106,4 @@ Not edited: `cases/urea.js`, `cases/green-ammonia.js`, `data/tea-screening.js`, 
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `d24bdd4`.
+Feat `00df808` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `00df808`). `npm test` 494 pass / 0 fail. Prior checkout tip `d24bdd4`.

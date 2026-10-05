@@ -90,7 +90,7 @@
   let siteMapLayersReady = false;
   const SIZE_PRODUCT_LABELS = {
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
-    module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel', urea: 'urea',
+    module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel', urea: 'urea', titanium: 'titanium',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -1506,7 +1506,7 @@
     loadCase(TiKrollCase.createTiKrollCase(), 'kroll');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening Kroll from purchased TiCl₄+Mg metal on frozen Mejillones PV; may be cash±; not bankable; not TIMET.';
+      status.textContent = 'screening Kroll from purchased TiCl₄+Mg metal on frozen Mejillones PV; Size-to-target → titanium; may be cash±; not bankable; not TIMET; not chloride rutile.';
     }
   }
 
@@ -1690,6 +1690,7 @@
     if (product === 'ethylene') return nodes.find(node => node.unit === 'mto')?.id;
     if (product === 'diesel') return nodes.find(node => node.unit === 'ft-liquids')?.id;
     if (product === 'urea') return nodes.find(node => node.unit === 'urea')?.id;
+    if (product === 'titanium') return nodes.find(node => node.unit === 'titanium-kroll')?.id;
     return nodes[0]?.id;
   }
 

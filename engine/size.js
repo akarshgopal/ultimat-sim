@@ -16,7 +16,7 @@ const { cascadeHeat } = heat;
 // Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
 // this module is the separate design calculation that chooses those capacities.
 //
-// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea)
+// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, titanium)
 //   -> strategy estimates converter duties and source budgets
 //   -> T-feasible cascade before purchasing heat on every path with
 //      sinks/sources; residual heat is electric resistance COP=1 for PV;
@@ -72,6 +72,9 @@ const PRODUCT_ALIASES = {
   syncrude: 'diesel',
   urea: 'urea',
   'co(nh2)2': 'urea',
+  titanium: 'titanium',
+  ti: 'titanium',
+  sponge: 'titanium',
 };
 const PV_MODULE_CHAIN_UNITS = Object.freeze([
   'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module',
@@ -2270,6 +2273,124 @@ function sizeUrea(definition, target, opts) {
   });
 }
 
+function titaniumSink(definition, krollNode) {
+  return reactionProductSink(definition, krollNode, 'titanium')
+    || nodeBy(definition, node => (
+      (node.id === 'titanium' || node.id === 'titanium-product' || node.id === 'sponge')
+      && String(node.unit).includes('sink')
+    ));
+}
+
+function titaniumChain(definition) {
+  const kroll = converter(definition, 'titanium-kroll');
+  if (!kroll) throw new Error('sizeToProduct needs a titanium-kroll block to size titanium demand');
+  const sink = titaniumSink(definition, kroll);
+  if (!sink) throw new Error('sizeToProduct needs a titanium sink');
+  const sources = collectMaterialSourcesFeeding(definition, kroll.id, new Set());
+  return { kroll, sink, converters: [kroll], sources };
+}
+
+function baselineTitaniumDuties(definition) {
+  const chain = titaniumChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    titaniumKg: converterDuties[chain.kroll.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function titaniumProcessElectricityKWh(definition, baseline, scale) {
+  const kroll = converter(definition, 'titanium-kroll');
+  if (!kroll || !(baseline.converterDuties[kroll.id] > 0)) return 0;
+  const listed = Number(kroll.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 8;
+  return baseline.converterDuties[kroll.id] * scale * sec;
+}
+
+function sizeTitanium(definition, target, opts) {
+  const chain = titaniumChain(definition);
+  const baseline = baselineTitaniumDuties(definition);
+  if (!(baseline.titaniumKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size titanium: titanium-kroll has no baseline capacity');
+  }
+  let yieldPerScale = baseline.titaniumKg > 0 ? baseline.titaniumKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'titanium',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const titaniumKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? titaniumKg / yieldPerScale : 0;
+        const processElectricityKWh = titaniumProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          titanium: titaniumKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: titaniumKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['titanium', 'titanium'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.titanium),
+        relativeGap(activity(solved, chain.kroll), duties.titanium),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          titanium: duties.titanium,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
 function sizeMinerals(definition, product, target, opts) {
   const minerals = converter(definition, 'brine-minerals');
   if (!minerals) throw new Error('sizeToProduct needs a brine-minerals block to size lithium or salt demand');
@@ -2367,7 +2488,7 @@ function normalizeProduct(product) {
   const key = String(product ?? '').trim().toLowerCase();
   const normalized = PRODUCT_ALIASES[key];
   if (!normalized) {
-    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, or urea');
+    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel, urea, or titanium');
   }
   return normalized;
 }
@@ -2392,6 +2513,7 @@ function sizeToProduct(opts = {}) {
   if (product === 'ethylene') return sizeEthylene(definition, rate, loopOpts);
   if (product === 'diesel') return sizeDiesel(definition, rate, loopOpts);
   if (product === 'urea') return sizeUrea(definition, rate, loopOpts);
+  if (product === 'titanium') return sizeTitanium(definition, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 

@@ -73,4 +73,4 @@ Maglut `createMaglutCase` on the same run: `annualNetCash` **1298.9104525152143*
 
 ## Tip
 
-Pending the feat commit and Pages publish.
+Feat `39009b4` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `39009b4`). `npm test` 402 pass / 0 fail before the feat commit.

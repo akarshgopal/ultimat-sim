@@ -71,4 +71,4 @@ Purchased: quartz $0.08, reductant $0.25, alumina $0.45, anode $0.50, silver $12
 
 ## Tip
 
-Feat SHA and Pages URL after deploy.
+Feat `463c076` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `463c076`). `npm test` 389 pass / 0 fail.

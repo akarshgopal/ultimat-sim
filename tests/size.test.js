@@ -322,6 +322,11 @@ test('sizeToProduct aliases cement/clinker/cem-i/portland', () => {
   assert.equal(sizeToProduct({ product: 'clinker', rate: 2000, caseOrBuilder: createCementCase }).product, 'cement');
 });
 
+test('sizeToProduct aliases copper/cu/cathode/cu-ew', () => {
+  const { createCuEwCase } = require('../cases/cu-ew');
+  assert.equal(sizeToProduct({ product: 'cu', rate: 2000, caseOrBuilder: createCuEwCase }).product, 'copper');
+});
+
 test('H2 sizing cascades an explicit hot source onto MED heat', () => {
   const withCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant() });
   const withoutCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant(), heatCredit: false });

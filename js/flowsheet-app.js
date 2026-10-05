@@ -91,7 +91,7 @@
   const SIZE_PRODUCT_LABELS = {
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
     module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel', urea: 'urea', titanium: 'titanium',
-    'float-glass': 'float glass', cement: 'cement',
+    'float-glass': 'float glass', cement: 'cement', copper: 'copper',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -1530,7 +1530,7 @@
     loadCase(CuEwCase.createCuEwCase(), 'cu-ew');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening SX-EW cathode from purchased PLS copper on frozen Mejillones PV; may be cash±; not bankable; not a mine or heap pad.';
+      status.textContent = 'screening SX-EW cathode from purchased PLS copper on frozen Mejillones PV; Size-to-target → copper; may be cash±; not bankable; not a mine or heap pad.';
     }
   }
 
@@ -1769,6 +1769,7 @@
     if (product === 'titanium') return nodes.find(node => node.unit === 'titanium-kroll')?.id;
     if (product === 'float-glass') return nodes.find(node => node.unit === 'float-glass')?.id;
     if (product === 'cement') return nodes.find(node => node.unit === 'cement')?.id;
+    if (product === 'copper') return nodes.find(node => node.unit === 'copper-ew')?.id;
     return nodes[0]?.id;
   }
 

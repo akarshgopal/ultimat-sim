@@ -281,7 +281,7 @@
       palette: { section: 'building', order: 8.7, glyph: 'MTO', tone: 'methane', description: '2 CH₃OH → ethylene + water' },
       params: { electricityKWhPerKg: 4 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 12, step: 0.1, unit: 'kWh/kg ethylene' }],
-      sourceNote: 'Screening overall stoichiometry 2 CH₃OH → C₂H₄ + 2 H₂O; SAPO-34 ethylene-maximizing proxy, propylene/C4 omitted. Default 4 kWh/kg is an electricity-as-total-energy proxy (real MTO is heat-dominated). Not a UOP SEC and not FT liquids.',
+      sourceNote: 'Screening overall stoichiometry 2 CH₃OH → C₂H₄ + 2 H₂O; SAPO-34 ethylene-maximizing proxy, propylene/C4 omitted. Default 4 kWh/kg is an electricity-as-total-energy proxy (real MTO is heat-dominated). MeOH is purchased (mto) or on-site SWRO+PEM+MeOH (green-mto). Not a UOP SEC and not FT liquids.',
     },
     'ft-liquids': {
       label: 'FT liquids (diesel)', capacity: 1000, rate: 100, activityUnit: 'kg liquid/day',
@@ -1025,6 +1025,7 @@
     'urea': () => loadUrea(),
     'mto': () => loadMto(),
     'ft-liquids': () => loadFtLiquids(),
+    'green-mto': () => loadGreenMto(),
     'abundance-hub': () => loadAbundanceHub(),
     'zabuye-hub': () => loadZabuyeHub(),
     'demo-network': () => loadDemoNetwork(),
@@ -1585,6 +1586,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening FT diesel from purchased H₂+CO₂ on frozen Mejillones PV; may be cash±; not bankable; not green e-diesel; RWGS folded; not full FT slate.';
+    }
+  }
+
+  function loadGreenMto() {
+    setActiveDemo('green-mto', 'Mejillones green MTO (SWRO+PEM MeOH→ethylene)');
+    lastSizing = null;
+    if (typeof GreenMtoCase === 'undefined' || !GreenMtoCase.createGreenMtoCase) {
+      throw new Error('Green MTO case is not loaded');
+    }
+    loadCase(GreenMtoCase.createGreenMtoCase(), 'mto');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening seawater+sun → PEM H₂ + purchased CO₂ → MeOH → ethylene; not purchased MeOH; not DAC; not bankable.';
     }
   }
 
@@ -7867,7 +7881,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, loadFtLiquids, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, loadFtLiquids, loadGreenMto, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

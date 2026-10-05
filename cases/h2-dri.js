@@ -20,6 +20,8 @@ const DOE_H2 = 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electr
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
 const NS_TRUCK_RATES = 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf';
+const UNCTAD_TRANSPORT = 'https://unctad.org/publication/trade-and-transport-dataset';
+const WB_FREIGHT_LOGISTICS = 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf';
 
 function right(kind, status, note, evidence) {
   return {
@@ -55,7 +57,7 @@ function createH2DriCase() {
     graph: {
       nodes: [
         { id: 'iron-ore', unit: 'material-source', sourcePreset: 'ironOre', params: { stream: hematite }, economics: tea.bindCost('iron-ore', { freight: 'inland-truck-short' }) },
-        { id: 'hydrogen-feed', unit: 'material-source', sourcePreset: 'hydrogen', params: { stream: hydrogen }, economics: tea.bindCost('hydrogen-feed') },
+        { id: 'hydrogen-feed', unit: 'material-source', sourcePreset: 'hydrogen', params: { stream: hydrogen }, economics: tea.bindCost('hydrogen-feed', { freight: 'chile-coast-container' }) },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -65,7 +67,7 @@ function createH2DriCase() {
           params: { electricityKWhPerKg: SEC_DRI },
           economics: tea.bindCapexPack('hydrogen-dri', { capacity: FE_KG_PER_DAY, region: REGION }),
         },
-        { id: 'steel', unit: 'material-sink', economics: tea.bindSale('steel', { region: REGION }) },
+        { id: 'steel', unit: 'material-sink', economics: tea.bindSale('steel', { region: REGION, freight: 'bulk-dry-shortsea' }) },
         { id: 'process-water', unit: 'material-sink', economics: { disposition: 'vent' } },
       ],
       edges: [
@@ -109,7 +111,7 @@ function createH2DriCase() {
       hydrogen: {
         stream: clone(node('hydrogen-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased industrial/grey–blue H₂ assumed available at screening $2.00/kg. FEED_MARGIN 1.05 on the stoich 1.5 mol H₂ / mol Fe. Not an electrolyzer path and not a DOE $1/kg goal.',
+        evidence: 'Purchased industrial/grey–blue H₂ assumed available at screening $2.00/kg plant-gate plus screening chile-coast-container freight $0.08/kg (~$80/t; UNCTAD/WB container family; not a Maersk quote, not a tube-trailer/pipeline quote, and not a carrier contract). FEED_MARGIN 1.05 on the stoich 1.5 mol H₂ / mol Fe. Not an electrolyzer path and not a DOE $1/kg goal.',
       },
     },
     meteo: {
@@ -131,8 +133,10 @@ function createH2DriCase() {
         { label: 'USGS MCS 2025 iron ore (commodity context, not a mine contract)', url: USGS_IRON_ORE },
         { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (screening inland-truck-short $0.01/kg; not a mine-haul quote)', url: NS_TRUCK_RATES },
       ]),
-      hydrogenPurchase: right('purchase', 'assumed', 'Purchased industrial/grey–blue H₂ assumed available at screening $2.00/kg; not an electrolyzer path', [
+      hydrogenPurchase: right('purchase', 'assumed', 'Purchased industrial/grey–blue H₂ assumed available at screening $2.00/kg plus screening chile-coast-container freight $0.08/kg; not an electrolyzer path, not a tube-trailer/pipeline quote', [
         { label: 'IEA Global Hydrogen Review 2024 (industrial/grey–blue family; screening purchase, not green LCOH)', url: IEA_H2 },
+        { label: 'UNCTAD Trade-and-Transport Dataset (maritime freight family; screening container OOM $80/t, not a voyage quote)', url: UNCTAD_TRANSPORT },
+        { label: 'World Bank freight logistics (family cite; screening, not a carrier contract)', url: WB_FREIGHT_LOGISTICS },
       ]),
     },
     evidence: [
@@ -144,8 +148,11 @@ function createH2DriCase() {
       { label: 'World Bank commodity markets / pink sheet (metals family; screening HBI/DRI mid, not a Platts contract)', url: WB_PINK },
       { label: 'IEA Global Hydrogen Review 2024 (industrial/grey–blue H₂ family; screening purchase $2.00/kg)', url: IEA_H2 },
       { label: 'DOE hydrogen production electrolysis (family contrast only; this demo is purchased H₂, not an electrolyzer)', url: DOE_H2 },
+      { label: 'UNCTAD Trade-and-Transport Dataset (maritime freight family; screening container OOM $80/t, not a voyage quote)', url: UNCTAD_TRANSPORT },
+      { label: 'UNCTAD Trade-and-Transport Dataset (bulk/short-sea family; screening ~$30/t, not a voyage quote)', url: UNCTAD_TRANSPORT },
+      { label: 'World Bank freight logistics (family cite; screening, not a carrier contract)', url: WB_FREIGHT_LOGISTICS },
     ],
-    notes: 'Purchased hematite + purchased H₂ → screening DRI Fe at Mejillones. Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O with FEED_MARGIN 1.05 on purchases. Not an electrolyzer/green-H₂ path. SEC 0.7 kWh/kg is shaft electricity only. Purchased iron-ore carries screening inland-truck-short freight $0.01/kg (~$10/t short-haul gravel/bulk family; not a mine-haul quote, not a carrier contract, and not a distance/GIS model). Purchased H₂ and steel sale stay plant-gate this tranche. Chile CAPEX× 1.05 unchanged. Cash sign whatever falls out. Not Midrex. Not EAF. Not bankable. Chile CAPEX× 1.05 applies to the DRI island and solar.',
+    notes: 'Purchased hematite + purchased H₂ → screening DRI Fe at Mejillones. Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O with FEED_MARGIN 1.05 on purchases. Not an electrolyzer/green-H₂ path. SEC 0.7 kWh/kg is shaft electricity only. Purchased iron-ore carries screening inland-truck-short freight $0.01/kg (~$10/t short-haul gravel/bulk family; not a mine-haul quote, not a carrier contract, and not a distance/GIS model). Purchased H₂ carries screening chile-coast-container freight $0.08/kg (~$80/t; UNCTAD/WB container family; not a Maersk quote, not a tube-trailer/pipeline quote, and not a carrier contract). Sale is screening HBI/DRI $0.40/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (UNCTAD/WB bulk short-sea family; DRI/HBI ships as dry bulk, same band as cement/urea/float-glass offtake; not a voyage quote; screening FOB vs landed). Not a logistics model. Chile CAPEX× 1.05 unchanged. Cash sign whatever falls out. Not Midrex. Not EAF. Not bankable. Chile CAPEX× 1.05 applies to the DRI island and solar.',
   };
   return definition;
 }

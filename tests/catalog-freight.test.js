@@ -39,6 +39,9 @@ const PRIOR_GREEN_UREA_INSTALLED_CAPEX = 3855897;
 const PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX = 1740403;
 // Plant-gate CAPEX baseline recorded tip 483d438 (freight does not change CAPEX).
 const PRIOR_H2_DRI_INSTALLED_CAPEX = 982258;
+// Iron-ore inland-truck-only freight recorded tip 4b2e3c7 (this leftover adds H2 container + steel shortsea).
+const PRIOR_H2_DRI_BREAKDOWN_FREIGHT = 5218.53;
+const PRIOR_GREEN_H2_DRI_BREAKDOWN_FREIGHT = 5218.53;
 
 function kgStream(kg) {
   return {
@@ -424,11 +427,11 @@ test('inland-truck-short band is $0.01/kg; green-H2-DRI and purchased-H2 DRI iro
   assert.equal(ore.unitCost, 0.10);
   assert.equal(seawater.freightUsdPerKg, undefined);
   assert.equal(seawater.freightId, undefined);
-  assert.equal(steel.freightUsdPerKg, undefined);
-  assert.equal(steel.freightId, undefined);
+  assert.equal(steel.freightId, 'bulk-dry-shortsea');
+  assert.equal(steel.freightUsdPerKg, 0.03);
   assert.equal(oxygen.freightUsdPerKg, undefined);
   assert.equal(oxygen.freightId, undefined);
-  assert.ok(cash.breakdown.freight > 0, `green-H2-DRI freight ${cash.breakdown.freight}`);
+  assert.ok(cash.breakdown.freight > PRIOR_GREEN_H2_DRI_BREAKDOWN_FREIGHT, `green-H2-DRI freight ${cash.breakdown.freight}`);
   assert.ok(Math.abs(cash.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `green-H2-DRI CAPEX ${cash.installedCapex}`);
   assert.ok(Number.isFinite(cash.annualNetCash), `green-H2-DRI annualNetCash ${cash.annualNetCash}`);
   assert.ok(true, `green-H2-DRI cash lines R=${cash.annualRevenue} OPEX=${cash.annualOperatingCost} freight=${cash.breakdown.freight} net=${cash.annualNetCash} installed=${cash.installedCapex}`);
@@ -459,7 +462,7 @@ test('inland-truck-short band is $0.01/kg; green-H2-DRI and purchased-H2 DRI iro
   assert.ok(Math.abs(greenH2DriPlant.economics.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `network green-H2-DRI CAPEX ${greenH2DriPlant.economics.installedCapex}`);
 });
 
-test('Mejillones purchased-H2 DRI iron-ore inland-truck-short 0.01; H2 and steel plant-gate', () => {
+test('Mejillones purchased-H2 DRI iron-ore inland-truck-short 0.01; H2 chile-coast-container; steel bulk-dry-shortsea', () => {
   const { definition, cash } = solvedCash(createH2DriCase);
   const ore = nodeEcon(definition, 'iron-ore');
   const hydrogen = nodeEcon(definition, 'hydrogen-feed');
@@ -467,15 +470,16 @@ test('Mejillones purchased-H2 DRI iron-ore inland-truck-short 0.01; H2 and steel
   assert.equal(ore.freightId, 'inland-truck-short');
   assert.equal(ore.freightUsdPerKg, 0.01);
   assert.equal(ore.unitCost, 0.10);
-  assert.equal(hydrogen.freightUsdPerKg, undefined);
-  assert.equal(hydrogen.freightId, undefined);
-  assert.equal(steel.freightUsdPerKg, undefined);
-  assert.equal(steel.freightId, undefined);
-  assert.ok(cash.breakdown.freight > 0, `h2-dri freight ${cash.breakdown.freight}`);
+  assert.equal(hydrogen.freightId, 'chile-coast-container');
+  assert.equal(hydrogen.freightUsdPerKg, 0.08);
+  assert.equal(hydrogen.unitCost, 2);
+  assert.equal(steel.freightId, 'bulk-dry-shortsea');
+  assert.equal(steel.freightUsdPerKg, 0.03);
+  assert.equal(steel.gateUnitPrice, 0.4);
+  assert.equal(steel.unitPrice, 0.4 - 0.03);
+  assert.ok(cash.breakdown.freight > PRIOR_H2_DRI_BREAKDOWN_FREIGHT, `h2-dri freight ${cash.breakdown.freight}`);
   assert.ok(Math.abs(cash.installedCapex - PRIOR_H2_DRI_INSTALLED_CAPEX) <= 1, `h2-dri CAPEX ${cash.installedCapex}`);
   assert.ok(Number.isFinite(cash.annualNetCash), `h2-dri annualNetCash ${cash.annualNetCash}`);
-  // Ore inbound $0.01/kg; more cash− than plant-gate ~−93017. Sign recorded, not forced.
-  assert.ok(cash.annualNetCash < -93017, `h2-dri expected more cash− than −93017, got ${cash.annualNetCash}`);
   assert.ok(true, `h2-dri cash lines R=${cash.annualRevenue} OPEX=${cash.annualOperatingCost} freight=${cash.breakdown.freight} net=${cash.annualNetCash} installed=${cash.installedCapex}`);
 
   const maglutCash = evaluateEconomics(createMaglutCase(), solveOperation(createMaglutCase()));
@@ -489,4 +493,40 @@ test('Mejillones purchased-H2 DRI iron-ore inland-truck-short 0.01; H2 and steel
   assert.equal(nodeEcon(cement, 'limestone-feed').freightId, 'inland-truck-short');
   assert.equal(nodeEcon(cement, 'clay-feed').freightId, 'inland-truck-short');
   assert.equal(nodeEcon(cement, 'cement-product').freightId, 'bulk-dry-shortsea');
+});
+
+test('Mejillones DRI leftover freight: purchased H2 chile-coast-container 0.08; steel sale bulk-dry-shortsea 0.03; green O2/seawater plant-gate', () => {
+  const h2 = solvedCash(createH2DriCase);
+  const hydrogen = nodeEcon(h2.definition, 'hydrogen-feed');
+  const h2Ore = nodeEcon(h2.definition, 'iron-ore');
+  const h2Steel = nodeEcon(h2.definition, 'steel');
+  assert.equal(hydrogen.freightId, 'chile-coast-container');
+  assert.equal(hydrogen.freightUsdPerKg, 0.08);
+  assert.equal(h2Ore.freightId, 'inland-truck-short');
+  assert.equal(h2Ore.freightUsdPerKg, 0.01);
+  assert.equal(h2Steel.freightId, 'bulk-dry-shortsea');
+  assert.equal(h2Steel.freightUsdPerKg, 0.03);
+  assert.ok(Math.abs(h2.cash.installedCapex - PRIOR_H2_DRI_INSTALLED_CAPEX) <= 1, `h2-dri CAPEX ${h2.cash.installedCapex}`);
+  assert.ok(h2.cash.breakdown.freight > PRIOR_H2_DRI_BREAKDOWN_FREIGHT, `h2-dri freight ${h2.cash.breakdown.freight}`);
+  assert.ok(Number.isFinite(h2.cash.annualNetCash), `h2-dri annualNetCash ${h2.cash.annualNetCash}`);
+
+  const green = solvedCash(createGreenH2DriCase);
+  const greenSteel = nodeEcon(green.definition, 'steel');
+  const oxygen = nodeEcon(green.definition, 'electrolyzer-oxygen');
+  const seawater = nodeEcon(green.definition, 'seawater');
+  const greenOre = nodeEcon(green.definition, 'iron-ore');
+  assert.equal(greenSteel.freightId, 'bulk-dry-shortsea');
+  assert.equal(greenSteel.freightUsdPerKg, 0.03);
+  assert.equal(oxygen.freightId, undefined);
+  assert.equal(oxygen.freightUsdPerKg, undefined);
+  assert.equal(seawater.freightId, undefined);
+  assert.equal(seawater.freightUsdPerKg, undefined);
+  assert.equal(greenOre.freightId, 'inland-truck-short');
+  assert.ok(Math.abs(green.cash.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `green-H2-DRI CAPEX ${green.cash.installedCapex}`);
+  assert.ok(green.cash.breakdown.freight > PRIOR_GREEN_H2_DRI_BREAKDOWN_FREIGHT, `green-H2-DRI freight ${green.cash.breakdown.freight}`);
+  assert.ok(Number.isFinite(green.cash.annualNetCash), `green-H2-DRI annualNetCash ${green.cash.annualNetCash}`);
+
+  const maglutCash = evaluateEconomics(createMaglutCase(), solveOperation(createMaglutCase()));
+  assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
+  assert.equal(maglutCash.breakdown.freight, 0);
 });

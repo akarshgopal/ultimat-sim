@@ -87,7 +87,10 @@ test('Mejillones H2-DRI demo ~1000 kg Fe/day with CAPEX on dri + solar and finit
   assert.equal(power.economics.unitCost, undefined);
   assert.equal(definition.graph.nodes.find(node => node.id === 'iron-ore').economics.unitCost, 0.10);
   assert.equal(definition.graph.nodes.find(node => node.id === 'hydrogen-feed').economics.unitCost, 2.00);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'steel').economics.unitPrice, 0.4);
+  // Steel sale nets bulk-dry-shortsea $0.03/kg (catalog-dri-freight-leftovers); gate stays $0.40.
+  assert.equal(definition.graph.nodes.find(node => node.id === 'steel').economics.gateUnitPrice, 0.4);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'steel').economics.unitPrice, 0.4 - 0.03);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'steel').economics.freightId, 'bulk-dry-shortsea');
   assert.equal(definition.graph.nodes.find(node => node.id === 'process-water').economics.disposition, 'vent');
   assert.equal(definition.site.latitude, -23.1);
   assert.equal(definition.site.longitude, -70.448);

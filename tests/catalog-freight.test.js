@@ -20,6 +20,7 @@ const { createFtLiquidsCase } = require('../cases/ft-liquids');
 const { createGreenFtCase } = require('../cases/green-ft');
 const { createGreenUreaCase } = require('../cases/green-urea');
 const { createGreenH2DriCase } = require('../cases/green-h2-dri');
+const { createH2DriCase } = require('../cases/h2-dri');
 const { createFuelsAndMineralsNetwork } = require('../cases/network');
 
 // Prior CATALOG-FREIGHT-BOM tip (module + bauxite + Ag/glass/EVA), solved createSiliconCase.
@@ -36,6 +37,8 @@ const PRIOR_UREA_INSTALLED_CAPEX = 1281460;
 const PRIOR_GREEN_UREA_INSTALLED_CAPEX = 3855897;
 // Plant-gate CAPEX baseline recorded tip b2da51c Network table (freight does not change CAPEX).
 const PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX = 1740403;
+// Plant-gate CAPEX baseline recorded tip 483d438 (freight does not change CAPEX).
+const PRIOR_H2_DRI_INSTALLED_CAPEX = 982258;
 
 function kgStream(kg) {
   return {
@@ -404,7 +407,7 @@ test('Leftover freight: Maglut/Dead Sea stay plant-gate; Walvis urea freighted; 
   assert.ok(Number.isFinite(greenH2Dri.economics.annualNetCash), `green-H2-DRI annualNetCash ${greenH2Dri.economics.annualNetCash}`);
 });
 
-test('inland-truck-short band is $0.01/kg; green-H2-DRI iron-ore (cement quarry feeds covered by leftover cement test)', () => {
+test('inland-truck-short band is $0.01/kg; green-H2-DRI and purchased-H2 DRI iron-ore (cement quarry feeds covered by leftover cement test)', () => {
   assert.equal(tea.getFreight('inland-truck-short').value, 0.01);
   assert.equal(tea.getFreight('inland-truck-short').unit, '$/kg');
   assert.equal(tea.getFreight('inland-truck-short').quality, 'screening');
@@ -454,4 +457,36 @@ test('inland-truck-short band is $0.01/kg; green-H2-DRI iron-ore (cement quarry 
   assert.ok(greenH2DriPlant.economics.breakdown.freight > 0, `network green-H2-DRI freight ${greenH2DriPlant.economics.breakdown.freight}`);
   assert.ok(Number.isFinite(greenH2DriPlant.economics.annualNetCash), `network green-H2-DRI cash ${greenH2DriPlant.economics.annualNetCash}`);
   assert.ok(Math.abs(greenH2DriPlant.economics.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `network green-H2-DRI CAPEX ${greenH2DriPlant.economics.installedCapex}`);
+});
+
+test('Mejillones purchased-H2 DRI iron-ore inland-truck-short 0.01; H2 and steel plant-gate', () => {
+  const { definition, cash } = solvedCash(createH2DriCase);
+  const ore = nodeEcon(definition, 'iron-ore');
+  const hydrogen = nodeEcon(definition, 'hydrogen-feed');
+  const steel = nodeEcon(definition, 'steel');
+  assert.equal(ore.freightId, 'inland-truck-short');
+  assert.equal(ore.freightUsdPerKg, 0.01);
+  assert.equal(ore.unitCost, 0.10);
+  assert.equal(hydrogen.freightUsdPerKg, undefined);
+  assert.equal(hydrogen.freightId, undefined);
+  assert.equal(steel.freightUsdPerKg, undefined);
+  assert.equal(steel.freightId, undefined);
+  assert.ok(cash.breakdown.freight > 0, `h2-dri freight ${cash.breakdown.freight}`);
+  assert.ok(Math.abs(cash.installedCapex - PRIOR_H2_DRI_INSTALLED_CAPEX) <= 1, `h2-dri CAPEX ${cash.installedCapex}`);
+  assert.ok(Number.isFinite(cash.annualNetCash), `h2-dri annualNetCash ${cash.annualNetCash}`);
+  // Ore inbound $0.01/kg; more cash− than plant-gate ~−93017. Sign recorded, not forced.
+  assert.ok(cash.annualNetCash < -93017, `h2-dri expected more cash− than −93017, got ${cash.annualNetCash}`);
+  assert.ok(true, `h2-dri cash lines R=${cash.annualRevenue} OPEX=${cash.annualOperatingCost} freight=${cash.breakdown.freight} net=${cash.annualNetCash} installed=${cash.installedCapex}`);
+
+  const maglutCash = evaluateEconomics(createMaglutCase(), solveOperation(createMaglutCase()));
+  assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
+  assert.equal(maglutCash.breakdown.freight, 0);
+
+  const greenOre = nodeEcon(createGreenH2DriCase(), 'iron-ore');
+  assert.equal(greenOre.freightId, 'inland-truck-short');
+  assert.equal(greenOre.freightUsdPerKg, 0.01);
+  const cement = createCementCase();
+  assert.equal(nodeEcon(cement, 'limestone-feed').freightId, 'inland-truck-short');
+  assert.equal(nodeEcon(cement, 'clay-feed').freightId, 'inland-truck-short');
+  assert.equal(nodeEcon(cement, 'cement-product').freightId, 'bulk-dry-shortsea');
 });

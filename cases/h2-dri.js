@@ -19,6 +19,7 @@ const IEA_H2 = 'https://www.iea.org/reports/global-hydrogen-review-2024';
 const DOE_H2 = 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electrolysis';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
+const NS_TRUCK_RATES = 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf';
 
 function right(kind, status, note, evidence) {
   return {
@@ -53,7 +54,7 @@ function createH2DriCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'iron-ore', unit: 'material-source', sourcePreset: 'ironOre', params: { stream: hematite }, economics: tea.bindCost('iron-ore') },
+        { id: 'iron-ore', unit: 'material-source', sourcePreset: 'ironOre', params: { stream: hematite }, economics: tea.bindCost('iron-ore', { freight: 'inland-truck-short' }) },
         { id: 'hydrogen-feed', unit: 'material-source', sourcePreset: 'hydrogen', params: { stream: hydrogen }, economics: tea.bindCost('hydrogen-feed') },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
@@ -103,7 +104,7 @@ function createH2DriCase() {
       ironOre: {
         stream: clone(node('iron-ore').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased hematite (Fe₂O₃) assumed available at screening $0.10/kg plant-gate. FEED_MARGIN 1.05 on the stoich 0.5 mol Fe₂O₃ / mol Fe. Not a mine contract or port lease.',
+        evidence: 'Purchased hematite (Fe₂O₃) assumed available at screening $0.10/kg plant-gate plus screening inland-truck-short freight $0.01/kg (~$10/t; ~50–100 km gravel/bulk family). Not a mine-haul quote, not a carrier contract, and not a distance/GIS model. FEED_MARGIN 1.05 on the stoich 0.5 mol Fe₂O₃ / mol Fe. Not a mine contract or port lease.',
       },
       hydrogen: {
         stream: clone(node('hydrogen-feed').params.stream),
@@ -126,8 +127,9 @@ function createH2DriCase() {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports. Plant uses on-site PV sized to the DRI shaft SEC.', [
         { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: MEJILLONES_URL },
       ]),
-      ironOrePurchase: right('purchase', 'assumed', 'Purchased hematite assumed available at screening $0.10/kg; not a mine contract or port lease', [
+      ironOrePurchase: right('purchase', 'assumed', 'Purchased hematite assumed available at screening $0.10/kg plus screening inland-truck-short freight $0.01/kg; not a mine-haul quote, not a mine contract or port lease', [
         { label: 'USGS MCS 2025 iron ore (commodity context, not a mine contract)', url: USGS_IRON_ORE },
+        { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (screening inland-truck-short $0.01/kg; not a mine-haul quote)', url: NS_TRUCK_RATES },
       ]),
       hydrogenPurchase: right('purchase', 'assumed', 'Purchased industrial/grey–blue H₂ assumed available at screening $2.00/kg; not an electrolyzer path', [
         { label: 'IEA Global Hydrogen Review 2024 (industrial/grey–blue family; screening purchase, not green LCOH)', url: IEA_H2 },
@@ -137,12 +139,13 @@ function createH2DriCase() {
       { label: 'Mejillones industrial geography', url: MEJILLONES_URL },
       { label: 'Solar: PVGIS-ERA5, 2005–2023 monthly; annual E_y 1923.52 kWh/kWp, E_d 5.27', url: PVGIS_URL },
       { label: 'USGS MCS 2025 iron ore (hematite feed family; screening $0.10/kg of ~$80–120/t)', url: USGS_IRON_ORE },
+      { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (screening inland-truck-short $0.01/kg on iron-ore; not a mine-haul quote)', url: NS_TRUCK_RATES },
       { label: 'USGS MCS 2025 iron and steel (HBI/DRI family; screening $0.40/kg of ~$350–450/t)', url: USGS_STEEL },
       { label: 'World Bank commodity markets / pink sheet (metals family; screening HBI/DRI mid, not a Platts contract)', url: WB_PINK },
       { label: 'IEA Global Hydrogen Review 2024 (industrial/grey–blue H₂ family; screening purchase $2.00/kg)', url: IEA_H2 },
       { label: 'DOE hydrogen production electrolysis (family contrast only; this demo is purchased H₂, not an electrolyzer)', url: DOE_H2 },
     ],
-    notes: 'Purchased hematite + purchased H₂ → screening DRI Fe at Mejillones. Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O with FEED_MARGIN 1.05 on purchases. Not an electrolyzer/green-H₂ path. SEC 0.7 kWh/kg is shaft electricity only. Cash sign whatever falls out. Not Midrex. Not EAF. Not bankable. Chile CAPEX× 1.05 applies to the DRI island and solar.',
+    notes: 'Purchased hematite + purchased H₂ → screening DRI Fe at Mejillones. Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O with FEED_MARGIN 1.05 on purchases. Not an electrolyzer/green-H₂ path. SEC 0.7 kWh/kg is shaft electricity only. Purchased iron-ore carries screening inland-truck-short freight $0.01/kg (~$10/t short-haul gravel/bulk family; not a mine-haul quote, not a carrier contract, and not a distance/GIS model). Purchased H₂ and steel sale stay plant-gate this tranche. Chile CAPEX× 1.05 unchanged. Cash sign whatever falls out. Not Midrex. Not EAF. Not bankable. Chile CAPEX× 1.05 applies to the DRI island and solar.',
   };
   return definition;
 }

@@ -4155,7 +4155,7 @@
         code: 'limited',
         text: short,
         detail: causeText || short,
-        action: declared ? 'port' : (root?.code === 'logistics' ? 'process' : 'process'),
+        action: declared ? 'port' : 'process',
         port: declared ? port : undefined,
         nodeId: current.id,
       };
@@ -5059,34 +5059,24 @@
     NH3: 'Ammonia',
     CH4: 'Methane',
     Br2: 'Bromine',
-    H2: 'Hydrogen',
     CH3OH: 'Methanol',
-    Li: 'Lithium',
     NaCl: 'Salt',
     'ammonia-product': 'Ammonia',
-    ammonia: 'Ammonia',
     methane: 'Methane',
     bromine: 'Bromine',
-    hydrogen: 'Hydrogen',
-    methanol: 'Methanol',
-    urea: 'Urea',
     Urea: 'Urea',
     'urea-product': 'Urea',
-    ethylene: 'Ethylene',
     C2H4: 'Ethylene',
     'ethylene-product': 'Ethylene',
-    diesel: 'Diesel',
     C12H26: 'Diesel',
     'diesel-product': 'Diesel',
     steel: 'Fe / Iron',
     Fe: 'Fe / Iron',
-    dri: 'Fe / Iron',
     lithium: 'Lithium',
     LiCl: 'Lithium',
     salt: 'Salt',
     'recovered-salt': 'Salt',
     'sabatier-water': 'Sabatier water',
-    water: 'Water',
     potash: 'Potash',
     KCl: 'Potash',
     magnesium: 'Magnesium',
@@ -5095,28 +5085,17 @@
     NaOH: 'Caustic',
     gypsum: 'Gypsum',
     CaSO4: 'Gypsum',
-    cement: 'Portland cement',
     PortlandCement: 'Portland cement',
     'cement-product': 'Portland cement',
-    'copper-cathode': 'Copper cathode',
     Cu: 'Copper cathode',
-    cathode: 'Copper cathode',
     'cathode-product': 'Copper cathode',
     oxygen: 'Oxygen',
     O2: 'Oxygen',
-    'poly-silicon': 'Poly-Si',
-    polysilicon: 'Poly-Si',
     module: 'PV module',
-    'pv-module': 'PV module',
     PVmodule: 'PV module',
     ndpr: 'NdPr oxide',
-    'ndpr-oxide': 'NdPr oxide',
-    'ndpr-oxide-separated': 'NdPr oxide',
-    otherReo: 'Other REO',
     'other-reo': 'Other REO',
     dytb: 'DyTb oxide',
-    'dytb-oxide': 'DyTb oxide',
-    lightReo: 'Light REO',
     'light-reo': 'Light REO',
   };
 
@@ -6316,41 +6295,31 @@
       item.url ? `<a href="${item.url}" target="_blank" rel="noreferrer">${item.label}</a>` : item.label
     )).join(' · ');
     const sizeText = (() => {
-      if (lastSizing?.mode === 'positive-cashflow') {
+      if (!lastSizing) return null;
+      const heatNote = lastSizing.heatCoveredKWh != null || lastSizing.heatResidualKWh != null
+        ? ` · heat covered ${formatNumber(lastSizing.heatCoveredKWh || 0)} / residual ${formatNumber(lastSizing.heatResidualKWh || 0)} kWh`
+        : '';
+      if (lastSizing.mode === 'positive-cashflow') {
         const obj = lastSizing.objective || {};
         const selected = lastSizing.selected || {};
         const slate = selected.slateMode || selected.product || 'slate';
         const scale = selected.scale != null ? ` · scale ${selected.scale}×` : (selected.rate != null ? ` · ${selected.rate} kg/day` : '');
         const metNote = obj.met && !balancesNeedAttention() ? '' : ' · objective not met';
-        const heatNote = lastSizing.heatCoveredKWh != null || lastSizing.heatResidualKWh != null
-          ? ` · heat covered ${formatNumber(lastSizing.heatCoveredKWh || 0)} / residual ${formatNumber(lastSizing.heatResidualKWh || 0)} kWh`
-          : '';
         return `${obj.activeSaleCount ?? obj.positiveSaleCount ?? 0} positive-sale products · net cash ${formatCashflowMoney(obj.annualNetCash)} · ${slate}${scale}${heatNote}${metNote}`;
       }
-      if (lastSizing) {
-        const iters = lastSizing.iterations;
-        const capNote = lastSizing.history?.some(step => step.capped) ? ' · cap-limited' : '';
-        const convergeNote = lastSizing.converged ? '' : ' · not converged';
-        const unverified = (lastSizing.warnings || lastSizing.solved?.warnings || [])
-          .filter(message => String(message).includes('unverified site right'));
-        const rightsNote = unverified.length
-          ? ` · ${unverified.length} unverified site right${unverified.length === 1 ? '' : 's'}`
-          : '';
-        const product = SIZE_PRODUCT_LABELS[lastSizing.product] || lastSizing.product || 'CH₄';
-        const heatNote = lastSizing.heatCoveredKWh != null || lastSizing.heatResidualKWh != null
-          ? ` · heat covered ${formatNumber(lastSizing.heatCoveredKWh || 0)} / residual ${formatNumber(lastSizing.heatResidualKWh || 0)} kWh`
-          : '';
-        return `${product} · ${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${heatNote}${capNote}${convergeNote}${rightsNote}`;
-      }
-      return null;
+      const iters = lastSizing.iterations;
+      const capNote = lastSizing.history?.some(step => step.capped) ? ' · cap-limited' : '';
+      const convergeNote = lastSizing.converged ? '' : ' · not converged';
+      const unverified = (lastSizing.warnings || lastSizing.solved?.warnings || [])
+        .filter(message => String(message).includes('unverified site right'));
+      const rightsNote = unverified.length
+        ? ` · ${unverified.length} unverified site right${unverified.length === 1 ? '' : 's'}`
+        : '';
+      const product = SIZE_PRODUCT_LABELS[lastSizing.product] || lastSizing.product || 'CH₄';
+      return `${product} · ${iters} iteration${iters === 1 ? '' : 's'} · residual ${formatSizingResidual(lastSizing.residual)}${heatNote}${capNote}${convergeNote}${rightsNote}`;
     })();
-    if (sizeText) {
-      const sizeStatus = document.getElementById('sizeToTargetStatus');
-      if (sizeStatus) sizeStatus.textContent = sizeText;
-    } else {
-      const overview = document.getElementById('sizeToTargetStatus');
-      if (overview) overview.textContent = 'Single-product physics tool.';
-    }
+    const sizeStatus = document.getElementById('sizeToTargetStatus');
+    if (sizeStatus) sizeStatus.textContent = sizeText || 'Single-product physics tool.';
   }
 
   function renderSiteTruth() {

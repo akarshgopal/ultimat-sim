@@ -2514,7 +2514,6 @@ label output + .quality-chip {
     grid-template-columns: 1fr;
   }
   .overview-strip { grid-template-areas: "identity" "gate" "honesty"; }
-  .network-body { grid-template-columns: 1fr; }
   .overview-cases { margin-left: 0; }
   .overview-cases select { min-width: 0; width: 100%; }
   .tea-gate {

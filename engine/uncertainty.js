@@ -58,6 +58,7 @@ const UNIT_INTENSITY_QUALITY = Object.freeze({
   'bayer-alumina': 'screening',
   'iac-leach': 'screening',
   'ree-chromatography': 'screening',
+  'ree-sx': 'screening',
   bioforge: 'screening',
   'hydrogen-dri': 'assumption',
   'titanium-kroll': 'assumption',

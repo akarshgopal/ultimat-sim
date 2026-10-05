@@ -98,7 +98,7 @@
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
     Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module'],
-    REE: ['iac-leach', 'ree-chromatography'],
+    REE: ['iac-leach', 'ree-chromatography', 'ree-sx'],
     Bio: ['bioforge'],
   };
   const PALETTE_MORE_UNITS = [
@@ -389,6 +389,22 @@
         { label: 'Andersson et al. IECR 2014 MCSGP DOI', url: 'https://doi.org/10.1021/ie5023223' },
         { label: 'NETL IX LCI OSTI', url: 'https://www.osti.gov/servlets/purl/1509123' },
         { label: 'Honaker / NETL 2020 coal-to-REE PDF', url: 'https://www.netl.doe.gov/sites/default/files/2020-10/20VPRREE_Honaker_2.pdf' },
+      ],
+    },
+    'ree-sx': {
+      label: 'REE SX (peer)', capacity: 10, rate: 10, activityUnit: 'kg REO/day',
+      palette: { section: 'building', order: 13, glyph: 'SX', description: 'Peer solvent extraction · mixed REO → NdPr + DyTb + light REO' },
+      params: { recovery: 0.95, electricityKWhPerKgReo: 5.3 },
+      controls: [
+        { key: 'recovery', label: 'Recovery', min: 0, max: 1, step: 0.01 },
+        { key: 'electricityKWhPerKgReo', label: 'Electricity', min: 0, max: 15, step: 0.1, unit: 'kWh/kg REO' },
+      ],
+      sourceNote: 'Peer solvent-extraction screening, not Maglut chromatography and not a Lynas/MP Materials quote. Recovery 0.95 is a commercial SX mid (~90–98%). SEC 5.3 kWh/kg is the Talens Peiró & Villalba JOM 2013 SX electricity mid (15.6–22.7 GJ/t REM). CAPEX pack is $120k/t-y. Purity is not simulated. Screening, not bankable.',
+      references: [
+        { label: 'Talens Peiró & Villalba JOM 2013 SX electricity', url: 'https://link.springer.com/article/10.1007/s11837-013-0719-8' },
+        { label: 'Honaker / NETL 2020 coal-to-REE PDF', url: 'https://www.netl.doe.gov/sites/default/files/2020-10/20VPRREE_Honaker_2.pdf' },
+        { label: 'USGS MCS 2026 rare earths', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+        { label: 'ORNL MSX — membrane SX scale context only', url: 'https://www.ornl.gov/publication/process-scale-energy-efficient-membrane-solvent-extraction-process-rare-earth-recycling' },
       ],
     },
     bioforge: {
@@ -964,6 +980,7 @@
     'silicon-alumina': () => loadSiliconAlumina(),
     'ree-ionic': () => loadReeIonic(),
     'maglut-long-beach': () => loadMaglutLongBeach(),
+    'ree-sx': () => loadReeSx(),
     'bioforge-marshall': () => loadBioforgeMarshall(),
     'green-ammonia': () => loadGreenAmmonia(),
     'abundance-hub': () => loadAbundanceHub(),
@@ -1409,6 +1426,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'Long Beach map point only; ARC-1-style chromatography; proxy SEC/CAPEX; company-reported recovery not a Maglut quote; screening; not bankable.';
+    }
+  }
+
+  function loadReeSx() {
+    setActiveDemo('ree-sx', 'Long Beach peer SX (not Maglut)');
+    lastSizing = null;
+    if (typeof ReeSxCase === 'undefined' || !ReeSxCase.createReeSxCase) {
+      throw new Error('REE SX case is not loaded');
+    }
+    loadCase(ReeSxCase.createReeSxCase(), 'sx');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'peer SX screening on frozen Long Beach PV; may be cash±; not Maglut; not bankable.';
     }
   }
 
@@ -3671,6 +3701,7 @@
       'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'iac-leach.clay': 'ionic-clay', 'iac-leach.lixiviant': 'ammonium-sulfate',
       'ree-chromatography.concentrate': 'mixed-reo',
+      'ree-sx.concentrate': 'mixed-reo',
       'bioforge.dextrose': 'dextrose', 'bioforge.oxygen': 'oxygen', 'bioforge.water': 'water',
       'titanium-kroll.titaniumTetrachloride': 'titaniumTetrachloride', 'titanium-kroll.magnesium': 'magnesium',
     }[`${unit}.${port}`] || 'water';
@@ -6735,7 +6766,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'bioforge') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6867,6 +6898,7 @@
     'pv-module': 'pv-module',
     'iac-leach': 'iac-leach',
     'ree-chromatography': 'ree-chromatography',
+    'ree-sx': 'ree-sx',
     bioforge: 'bioforge',
   };
 
@@ -7683,7 +7715,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadReeIonic, loadMaglutLongBeach, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

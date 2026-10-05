@@ -70,6 +70,7 @@ const PROCESS_LABELS = Object.freeze({
   'aluminium-smelter': 'Aluminium smelter',
   'iac-leach': 'Ionic-clay REE',
   'ree-chromatography': 'ARC-1 chromatography',
+  'ree-sx': 'REE SX (peer)',
   bioforge: 'Bioforge',
 });
 
@@ -432,6 +433,26 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  'ree-sx': Object.freeze({
+    id: 'ree-sx',
+    label: PROCESS_LABELS['ree-sx'],
+    basis: 'kgPerHour',
+    intensity: 20,
+    unitLabel: 'm²/(kg REO/h)',
+    range: Object.freeze([10, 40]),
+    floorM2: 50,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening SX mixer-settler pad ~20 m²/(kg REO/h) (range 10–40), larger than the chromatography claim. Not a plot survey. Talens Peiró JOM 2013 is SX electricity, not a measured layout.',
+        url: 'https://link.springer.com/article/10.1007/s11837-013-0719-8',
+      }),
+      Object.freeze({
+        label: 'Honaker / NETL 2020 coal-to-REE plant (full-plant context; pad intensity is screening, not a surveyed layout)',
+        url: 'https://www.netl.doe.gov/sites/default/files/2020-10/20VPRREE_Honaker_2.pdf',
+      }),
+    ]),
+  }),
   bioforge: Object.freeze({
     id: 'bioforge',
     label: PROCESS_LABELS.bioforge,
@@ -762,6 +783,13 @@ function padReeChromatography(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padReeSx(node, solved) {
+  const spec = intensitySpec('ree-sx');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padBioforge(node, solved) {
   const spec = intensitySpec('bioforge');
   const activity = activityOf(solved, node.id);
@@ -820,6 +848,7 @@ const PROCESS_PADS = Object.freeze({
   'aluminium-smelter': padAluminiumSmelter,
   'iac-leach': padIacLeach,
   'ree-chromatography': padReeChromatography,
+  'ree-sx': padReeSx,
   bioforge: padBioforge,
   'material-buffer': padBuffer,
   'intake-pump': padIntakePump,

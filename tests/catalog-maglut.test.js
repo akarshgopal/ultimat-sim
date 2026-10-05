@@ -147,7 +147,7 @@ test('Overview option, palette, proxy sentence, and chromatography footprint', (
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.ok(source.includes(PROXY_SENTENCE));
   assert.ok(teaSource.includes(PROXY_SENTENCE));
-  assert.match(source, /REE:\s*\[\s*'iac-leach',\s*'ree-chromatography'\s*\]/);
+  assert.match(source, /REE:\s*\[\s*'iac-leach',\s*'ree-chromatography',\s*'ree-sx'\s*\]/);
   assert.match(html, /id="loadMaglutLongBeach"/);
   assert.match(html, /Long Beach ARC-1 chromatography → NdPr \+ DyTb/);
   assert.match(html, /cases\/maglut\.js/);

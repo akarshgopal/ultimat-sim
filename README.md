@@ -38,7 +38,7 @@ Metallurgical-grade silicon is a carbothermic SAF block (`mg-si`): SiO₂ + 2 C 
 
 Ionic-clay REE (`iac-leach`) is one leach+precip+calcine screening block on the Deng & Kendall 2019 Longnan (Jiangxi) listed-oxide basket, placed on a Minaçu, Goiás map point. Nd+Pr are a co-product; the rest is one mixed-REO sale. Separated USGS quotes are discounted by payability 0.70 because SX is not in the model. Tm is unpriced. Not a mineral concession and not Serra Verde.
 
-Maglut ARC-1-style REE chromatography screening (`ree-chromatography`) is a Long Beach purchased-concentrate proxy (SEC/CAPEX are screening bands, **not** a Maglut quote — Maglut has not published kWh/kg or CAPEX). Solugen Bioforge gluconic + H₂O₂ screening is in the Bioforge section below.
+Maglut ARC-1-style REE chromatography screening (`ree-chromatography`) is a Long Beach purchased-concentrate proxy (SEC/CAPEX are screening bands, **not** a Maglut quote — Maglut has not published kWh/kg or CAPEX). Peer SX screening (`ree-sx`) at the same Long Beach map point uses Talens SEC 5.3 kWh/kg and a $120k/t-y pack, distinct from Maglut chromatography and Minaçu leach. Solugen Bioforge gluconic + H₂O₂ screening is in the Bioforge section below.
 
 ## Bioforge gluconic acid (screening)
 

@@ -975,6 +975,83 @@ function reeChromatography({ inlets, requestedActivity, capacity, params = {} })
   };
 }
 
+// peer solvent-extraction screening · not Maglut chromatography · not a Lynas/MP Materials quote · purity not simulated.
+// Purchased listed-oxide concentrate in; NdPr / DyTb / light REO out. No wasteHeat.
+// No extractant, solvent, water, or acid ports — solvent makeup is second-order vs DyTb payability.
+// Recovery 0.95 is a commercial SX screening mid (~90–98%), not Maglut’s 0.914.
+// SEC 5.3 kWh/kg is the Talens Peiró & Villalba JOM 2013 SX electricity mid
+// (15.6–22.7 GJ/t REM = 4.33–6.31 kWh/kg → 5.32, rounded 5.3). Native SX number.
+function reeSx({ inlets, requestedActivity, capacity, params = {} }) {
+  const concentrate = validateStream(inlets.concentrate, 'material');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const recovery = Number(params.recovery ?? 0.95);
+  const sec = nonnegative(Number(params.electricityKWhPerKgReo ?? 5.3), 'electricityKWhPerKgReo');
+  if (!Number.isFinite(recovery) || recovery < 0 || recovery > 1) {
+    throw new Error('recovery must be between 0 and 1');
+  }
+  for (const oxide of IAC_LISTED_OXIDES) {
+    if (!Object.hasOwn(concentrate.mol, oxide)) {
+      throw new Error(`ree-sx concentrate must contain ${oxide}`);
+    }
+  }
+  if (Object.entries(concentrate.mol).some(([substance, mol]) => (
+    !IAC_LISTED_OXIDES.includes(substance) && mol > 1e-12
+  ))) {
+    throw new Error('ree-sx concentrate must be listed-oxide equivalent (no extra substances)');
+  }
+
+  const oxideMassKg = oxide => (concentrate.mol[oxide] || 0) * SUBSTANCES[oxide].molarMassG / 1000;
+  const listedMass = IAC_LISTED_OXIDES.reduce((sum, oxide) => sum + oxideMassKg(oxide), 0);
+  const concentrateLimit = listedMass * recovery;
+  const planned = Math.min(requested, installed);
+  const limits = {
+    capacity: installed,
+    concentrate: concentrateLimit,
+    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
+  };
+  const activity = Math.min(planned, ...Object.values(limits));
+  const feedFraction = concentrateLimit > 0 ? activity / concentrateLimit : 0;
+  const requestedFraction = concentrateLimit > 0 ? planned / concentrateLimit : 0;
+  const consumedFeed = scaleStream(concentrate, feedFraction);
+
+  const ndprMol = {};
+  const dytbMol = {};
+  const lightMol = {};
+  const raffinateMol = {};
+  for (const oxide of IAC_LISTED_OXIDES) {
+    const available = consumedFeed.mol[oxide] || 0;
+    const recovered = available * recovery;
+    raffinateMol[oxide] = available - recovered;
+    if (IAC_NDPR_OXIDES.includes(oxide)) ndprMol[oxide] = recovered;
+    else if (IAC_DYTB_OXIDES.includes(oxide)) dytbMol[oxide] = recovered;
+    else lightMol[oxide] = recovered;
+  }
+  const limitingValue = Math.min(...Object.values(limits));
+
+  return {
+    activity,
+    requestedInputs: {
+      concentrate: scaleStream(concentrate, requestedFraction),
+      electricity: { kind: 'electricity', kWh: planned * sec },
+    },
+    consumed: {
+      concentrate: consumedFeed,
+      electricity: { kind: 'electricity', kWh: activity * sec },
+    },
+    outlets: {
+      ndpr: { kind: 'material', mol: ndprMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+      dytb: { kind: 'material', mol: dytbMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+      lightReo: { kind: 'material', mol: lightMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+      raffinate: { kind: 'material', mol: raffinateMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
 function energyStorage(kind) {
   return ({ inlets, requestedActivity, capacity, params = {} }) => {
     const input = validateStream(inlets.in, kind);
@@ -1604,6 +1681,18 @@ const UNITS = Object.freeze({
       raffinate: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: reeChromatography,
+  },
+  'ree-sx': {
+    kind: 'converter',
+    ports: {
+      concentrate: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      ndpr: { direction: 'out', kind: 'material', required: true },
+      dytb: { direction: 'out', kind: 'material', required: true },
+      lightReo: { direction: 'out', kind: 'material', required: true },
+      raffinate: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: reeSx,
   },
   bioforge: {
     kind: 'converter',

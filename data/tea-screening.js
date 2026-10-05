@@ -562,6 +562,18 @@ const packs = {
       { label: 'Mining Technology — Maglut chromatography rare-earth processing US (press, not a kWh/kg or CAPEX quote)', url: 'https://www.mining-technology.com/news/maglut-chromatography-rare-earth-processing-us/' },
     ],
   }),
+  'ree-sx': pack({
+    capexIntensity: 43800, intensityUnit: '$/(kg separated REO/day)',
+    fixedOmPercent: 4, variableOm: 0.05, assetLifeYears: 20,
+    quality: 'screening', source: 'peer SX separation-island screening',
+    note: 'installedCapex = 43800 × capacity. Peer SX separation-island screening. $120,000 per annual tonne × 365/1000 = 43800 $/(kg separated REO/day). Point $120,000/t-y sits above the Maglut chromatography proxy ($75,000/t-y, pack ree-chromatography) and below the Honaker/NETL 2020 full coal-to-REE plant (~$153,000/t-y). Maglut press claims a relative cost advantage versus SX — this pack is the more expensive peer, not a Maglut undercut. Linear small-plant intensity. Not a Lynas/MP Materials/Mountain Pass quote. Not bankable. SEC is the unit param 5.3 kWh/kg (Talens Peiró & Villalba JOM 2013 SX electricity mid of 15.6–22.7 GJ/t REM = 4.33–6.31 kWh/kg → 5.3), not this pack. US West / California aliases to texas so CAPEX× stays 1.',
+    evidence: [
+      { label: 'Talens Peiró & Villalba JOM 2013 — SX electricity 15.6–22.7 GJ/t REM (native SEC mid 5.3 kWh/kg, not this CAPEX)', url: 'https://link.springer.com/article/10.1007/s11837-013-0719-8' },
+      { label: 'Honaker / NETL 2020 full coal-to-REE plant (~$153,000/t-y upper peer; this pack is $120,000/t-y separation-island screening)', url: 'https://www.netl.doe.gov/sites/default/files/2020-10/20VPRREE_Honaker_2.pdf' },
+      { label: 'USGS Mineral Commodity Summaries 2026 — Rare earths (separated-oxide price context, not a plant quote)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' },
+      { label: 'ORNL MSX — membrane solvent extraction scale context only; not this CAPEX', url: 'https://www.ornl.gov/publication/process-scale-energy-efficient-membrane-solvent-extraction-process-rare-earth-recycling' },
+    ],
+  }),
   bioforge: pack({
     capexIntensity: 438, intensityUnit: '$/(kg gluconic/day)',
     fixedOmPercent: 4, variableOm: 0, assetLifeYears: 20,

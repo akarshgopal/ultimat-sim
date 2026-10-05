@@ -2682,7 +2682,7 @@
   }
 
   function loadDemoNetwork() {
-    setActiveDemo('demo-network', 'Fuels + minerals · Mejillones');
+    setActiveDemo('demo-network', 'Fuels + minerals · Walvis / Long Beach');
     network = clone(NetworkCase.createFuelsAndMineralsNetwork(6));
     refreshNetwork();
     const id = mineralLeadPlantId()

@@ -203,19 +203,24 @@ test('Zabuye brine hub uses the cited carbonate assay and frozen PVGIS-ERA5, the
   assert.ok(footprint.totalHa > 0);
 });
 
-test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, and money', () => {
+test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, Walvis urea, Long Beach Maglut, and money', () => {
   const definition = createFuelsAndMineralsNetwork(6);
-  assert.equal(definition.plants.length, 3);
+  assert.equal(definition.plants.length, 5);
   assert.equal(definition.plants[0].id, 'dead-sea-minerals');
   assert.equal(definition.plants[1].id, 'almeria-fuels');
   assert.equal(definition.plants[2].id, 'mejillones-silicon');
   assert.equal(definition.plants[2].definition.site.id, 'chile-mejillones');
+  assert.equal(definition.plants[3].id, 'walvis-green-urea');
+  assert.equal(definition.plants[3].definition.site.id, 'namibia-walvis-bay-green-urea');
+  assert.equal(definition.plants[4].id, 'long-beach-maglut');
+  assert.equal(definition.plants[4].definition.site.id, 'us-long-beach');
   const result = evaluateNetwork(definition);
-  assert.equal(result.plants.length, 3);
+  assert.equal(result.plants.length, 5);
   assert.ok(result.slate.CH4 > 0);
   assert.ok(result.slate.NH3 > 0);
   assert.ok(result.slate.Br2 > 0);
   assert.ok(result.slate.PVmodule > 0);
+  assert.ok(result.slate.Urea > 0);
   assert.ok(result.landHa > 0);
   const rolledLand = result.plants.reduce((sum, plant) => sum + plant.footprint.totalHa, 0);
   assert.ok(Math.abs(result.landHa - rolledLand) < 1e-12);
@@ -231,6 +236,10 @@ test('fuels plus minerals network rolls up CH4, NH3, Mejillones PV, and money', 
   assert.equal(result.cashFlows[0], -result.installedCapex);
   assert.equal(result.cashFlows[1], result.annualOperatingCash);
   assert.equal(result.corridors.length, 0);
+  assert.deepEqual(definition.corridors, []);
+  const maglutPlant = result.plants.find(plant => plant.id === 'long-beach-maglut');
+  assert.ok(maglutPlant);
+  assert.ok(Math.abs(maglutPlant.economics.annualNetCash - 1299) <= 5, `Maglut plant annualNetCash ${maglutPlant.economics.annualNetCash}`);
   const maglut = createMaglutCase();
   const maglutCash = evaluateEconomics(maglut, solveOperation(maglut));
   assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);

@@ -57,3 +57,7 @@ Sign stays cash− (1000 vs 2000 is about 2×). Maglut `createMaglutCase` cash s
 - Chloride process from rutile (TiO₂ + C + 2 Cl₂ → TiCl₄ + CO₂) not modeled; TiCl₄ stays a purchased feed.
 - Mg recycle electrolysis credit (MgCl₂ → Mg + Cl₂) not wired; demo vents MgCl₂ with no credit.
 - Demo 2% solar seed margin is not copied into the sizer (methanol / urea convention).
+
+## Tip
+
+Feat `d46797a` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `d46797afb7ab`). `npm test` 481 pass / 0 fail. Prior checkout tip `d7d895f`.

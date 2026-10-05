@@ -79,7 +79,7 @@ function createGreenH2DriCase() {
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: {
       nodes: [
-        { id: 'iron-ore', unit: 'material-source', sourcePreset: 'ironOre', params: { stream: hematite }, economics: tea.bindCost('iron-ore', { region: REGION }) },
+        { id: 'iron-ore', unit: 'material-source', sourcePreset: 'ironOre', params: { stream: hematite }, economics: tea.bindCost('iron-ore', { region: REGION, freight: 'inland-truck-short' }) },
         { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: seawaterCost },
         { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
         { id: 'power-bus', unit: 'electrical-bus' },
@@ -153,7 +153,7 @@ function createGreenH2DriCase() {
       ironOre: {
         stream: clone(node('iron-ore').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased hematite (Fe₂O₃) assumed available at screening $0.10/kg plant-gate. FEED_MARGIN 1.05 on the stoich 0.5 mol Fe₂O₃ / mol Fe. Not a mine contract or port lease.',
+        evidence: 'Purchased hematite (Fe₂O₃) assumed available at screening $0.10/kg plant-gate plus screening inland-truck-short freight $0.01/kg (~$10/t; ~50–100 km gravel/bulk family). Not a mine-haul quote, not a carrier contract, and not a distance/GIS model. FEED_MARGIN 1.05 on the stoich 0.5 mol Fe₂O₃ / mol Fe. Not a mine contract or port lease.',
       },
       seawater: {
         stream: clone(node('seawater').params.stream),
@@ -185,8 +185,9 @@ function createGreenH2DriCase() {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports. Plant uses on-site PV sized to SWRO + PEM + DRI shaft.', [
         { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: MEJILLONES_URL },
       ]),
-      ironOrePurchase: right('purchase', 'assumed', 'Purchased hematite assumed available at screening $0.10/kg; not a mine contract or port lease', [
+      ironOrePurchase: right('purchase', 'assumed', 'Purchased hematite assumed available at screening $0.10/kg plus screening inland-truck-short freight $0.01/kg; not a mine-haul quote, not a mine contract or port lease', [
         { label: 'USGS MCS 2025 iron ore (commodity context, not a mine contract)', url: USGS_IRON_ORE },
+        { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (screening inland-truck-short $0.01/kg; not a mine-haul quote)', url: 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf' },
       ]),
       seawaterIntake: right('intake', 'assumed', 'Pacific access is a screening assumption, not a Mejillones intake permit', [
         { label: 'Millero et al. 2008 assay context for the assumed intake volume', url: MILLERO_URL },
@@ -199,6 +200,7 @@ function createGreenH2DriCase() {
       { label: 'Mejillones industrial geography', url: MEJILLONES_URL },
       { label: 'Solar: PVGIS-ERA5, 2005–2023 monthly; annual E_y 1923.52 kWh/kWp, E_d 5.27', url: PVGIS_URL },
       { label: 'USGS MCS 2025 iron ore (hematite feed family; screening $0.10/kg of ~$80–120/t)', url: USGS_IRON_ORE },
+      { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (screening inland-truck-short $0.01/kg on iron-ore; not a mine-haul quote)', url: 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf' },
       { label: 'USGS MCS 2025 iron and steel (HBI/DRI family; screening $0.40/kg of ~$350–450/t)', url: USGS_STEEL },
       { label: 'World Bank commodity markets / pink sheet (metals family; screening HBI/DRI mid, not a Platts contract)', url: WB_PINK },
       { label: 'Millero et al. 2008, Deep-Sea Research I: reference composition of seawater at S=35 (DOI)', url: MILLERO_URL },
@@ -206,7 +208,7 @@ function createGreenH2DriCase() {
       { label: 'IEA Global Hydrogen Review 2024 (electrolytic H₂ family context; this demo is on-site PEM, not a purchased grey/blue H₂ contract)', url: IEA_H2 },
       { label: 'DOE hydrogen production electrolysis (PEM/alkaline family; screening 52 kWh/kg H₂, not a vendor meter)', url: DOE_H2 },
     ],
-    notes: 'On-site SWRO + PEM H₂ → screening DRI Fe at Mejillones. Not purchased grey/blue H₂ (that remains cases/h2-dri.js). Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O, same as hydrogen-dri. SEC 0.7 kWh/kg is shaft electricity only; electrolyzer 52 kWh/kg H₂ dominates energy. Cash sign whatever falls out. Not Midrex. Not EAF. Not bankable. Chile CAPEX× 1.05. Sell O₂ at screening $0.05/kg. No green-steel premium.',
+    notes: 'On-site SWRO + PEM H₂ → screening DRI Fe at Mejillones. Not purchased grey/blue H₂ (that remains cases/h2-dri.js). Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O, same as hydrogen-dri. SEC 0.7 kWh/kg is shaft electricity only; electrolyzer 52 kWh/kg H₂ dominates energy. Purchased iron-ore carries screening inland-truck-short freight $0.01/kg (~$10/t short-haul gravel/bulk family; not a mine-haul quote, not a carrier contract, and not a distance/GIS model). Seawater intake, steel sale, and electrolyzer-oxygen sale stay plant-gate this tranche. Chile CAPEX× 1.05 unchanged. Cash sign whatever falls out. Not Midrex. Not EAF. Not bankable. Sell O₂ at screening $0.05/kg. No green-steel premium.',
   };
   return definition;
 }

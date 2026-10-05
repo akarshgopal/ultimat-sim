@@ -19,6 +19,7 @@ const { createFloatGlassCase } = require('../cases/float-glass');
 const { createFtLiquidsCase } = require('../cases/ft-liquids');
 const { createGreenFtCase } = require('../cases/green-ft');
 const { createGreenUreaCase } = require('../cases/green-urea');
+const { createGreenH2DriCase } = require('../cases/green-h2-dri');
 const { createFuelsAndMineralsNetwork } = require('../cases/network');
 
 // Prior CATALOG-FREIGHT-BOM tip (module + bauxite + Ag/glass/EVA), solved createSiliconCase.
@@ -33,6 +34,8 @@ const PRIOR_GREEN_FT_INSTALLED_CAPEX = 6641032;
 // Plant-gate CAPEX baselines recorded tip 9b89454 (freight does not change CAPEX).
 const PRIOR_UREA_INSTALLED_CAPEX = 1281460;
 const PRIOR_GREEN_UREA_INSTALLED_CAPEX = 3855897;
+// Plant-gate CAPEX baseline recorded tip b2da51c Network table (freight does not change CAPEX).
+const PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX = 1740403;
 
 function kgStream(kg) {
   return {
@@ -151,7 +154,7 @@ test('Mejillones QCC freight: quartz/carbon 0.03, caustic 0.08; BOM/module uncha
   assert.equal(caustic.economics.unitCost, tea.costs['caustic-makeup'].value);
   assert.deepEqual(
     Object.keys(tea.freightBands).sort(),
-    ['bulk-dry-shortsea', 'chile-coast-container', 'none'],
+    ['bulk-dry-shortsea', 'chile-coast-container', 'inland-truck-short', 'none'],
   );
   const solved = solveOperation(definition);
   assert.equal(solved.convergence.converged, true);
@@ -389,4 +392,61 @@ test('Leftover freight: Maglut/Dead Sea stay plant-gate; Walvis urea freighted; 
   assert.ok(walvisGreen);
   assert.ok(Number.isFinite(walvisGreen.economics.annualNetCash), `walvis-green-urea annualNetCash ${walvisGreen.economics.annualNetCash}`);
   assert.ok(walvisGreen.economics.breakdown.freight > 0, `walvis-green-urea freight ${walvisGreen.economics.breakdown.freight}`);
+
+  const greenH2Dri = network.plants.find(plant => plant.id === 'mejillones-green-h2-dri');
+  assert.ok(greenH2Dri);
+  assert.ok(greenH2Dri.economics.breakdown.freight > 0, `green-H2-DRI freight ${greenH2Dri.economics.breakdown.freight}`);
+  assert.ok(Number.isFinite(greenH2Dri.economics.annualNetCash), `green-H2-DRI annualNetCash ${greenH2Dri.economics.annualNetCash}`);
+});
+
+test('inland-truck-short band is $0.01/kg; green-H2-DRI iron-ore only', () => {
+  assert.equal(tea.getFreight('inland-truck-short').value, 0.01);
+  assert.equal(tea.getFreight('inland-truck-short').unit, '$/kg');
+  assert.equal(tea.getFreight('inland-truck-short').quality, 'screening');
+  assert.match(tea.getFreight('inland-truck-short').source, /Nova Scotia Public Works/i);
+  assert.equal(tea.freightBands['inland-truck-short'].value, 0.01);
+
+  const { definition, cash } = solvedCash(createGreenH2DriCase);
+  const ore = nodeEcon(definition, 'iron-ore');
+  const seawater = nodeEcon(definition, 'seawater');
+  const steel = nodeEcon(definition, 'steel');
+  const oxygen = nodeEcon(definition, 'electrolyzer-oxygen');
+  assert.equal(ore.freightId, 'inland-truck-short');
+  assert.equal(ore.freightUsdPerKg, 0.01);
+  assert.equal(ore.unitCost, 0.10);
+  assert.equal(seawater.freightUsdPerKg, undefined);
+  assert.equal(seawater.freightId, undefined);
+  assert.equal(steel.freightUsdPerKg, undefined);
+  assert.equal(steel.freightId, undefined);
+  assert.equal(oxygen.freightUsdPerKg, undefined);
+  assert.equal(oxygen.freightId, undefined);
+  assert.ok(cash.breakdown.freight > 0, `green-H2-DRI freight ${cash.breakdown.freight}`);
+  assert.ok(Math.abs(cash.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `green-H2-DRI CAPEX ${cash.installedCapex}`);
+  assert.ok(Number.isFinite(cash.annualNetCash), `green-H2-DRI annualNetCash ${cash.annualNetCash}`);
+  assert.ok(true, `green-H2-DRI cash lines R=${cash.annualRevenue} OPEX=${cash.annualOperatingCost} freight=${cash.breakdown.freight} net=${cash.annualNetCash} installed=${cash.installedCapex}`);
+
+  const maglutCash = evaluateEconomics(createMaglutCase(), solveOperation(createMaglutCase()));
+  assert.equal(maglutCash.breakdown.freight, 0);
+  assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
+
+  const deadSeaCash = evaluateEconomics(createAbundanceCase(), solveOperation(createAbundanceCase()));
+  assert.equal(deadSeaCash.breakdown.freight, 0);
+
+  const ureaCash = evaluateEconomics(createUreaCase(), solveOperation(createUreaCase()));
+  assert.ok(ureaCash.breakdown.freight > 0, `urea freight ${ureaCash.breakdown.freight}`);
+
+  const silicon = createSiliconCase();
+  const freighted = silicon.graph.nodes.filter(node => Number(node.economics?.freightUsdPerKg) > 0);
+  assert.equal(freighted.length, 9);
+
+  const network = evaluateNetwork(createFuelsAndMineralsNetwork(6));
+  assert.equal(network.plants.length, 11);
+  assert.ok(Number.isFinite(network.annualNetCash), `network annualNetCash ${network.annualNetCash}`);
+  const maglutPlant = network.plants.find(plant => plant.id === 'long-beach-maglut');
+  assert.ok(Math.abs(maglutPlant.economics.annualNetCash - 1299) <= 5, `Maglut plant ${maglutPlant.economics.annualNetCash}`);
+  const greenH2DriPlant = network.plants.find(plant => plant.id === 'mejillones-green-h2-dri');
+  assert.ok(greenH2DriPlant);
+  assert.ok(greenH2DriPlant.economics.breakdown.freight > 0, `network green-H2-DRI freight ${greenH2DriPlant.economics.breakdown.freight}`);
+  assert.ok(Number.isFinite(greenH2DriPlant.economics.annualNetCash), `network green-H2-DRI cash ${greenH2DriPlant.economics.annualNetCash}`);
+  assert.ok(Math.abs(greenH2DriPlant.economics.installedCapex - PRIOR_GREEN_H2_DRI_INSTALLED_CAPEX) <= 1, `network green-H2-DRI CAPEX ${greenH2DriPlant.economics.installedCapex}`);
 });

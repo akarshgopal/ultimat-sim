@@ -551,6 +551,13 @@ const freightBands = {
       { label: 'World Bank freight logistics (family cite; screening, not a carrier contract)', url: WB_FREIGHT_LOGISTICS },
     ]
   ),
+  'inland-truck-short': row(
+    0.01, '$/kg', 'screening', 'Nova Scotia Public Works bulk gravel short-haul family',
+    'Short-haul inland truck screening OOM (~$10/t; ~50–100 km gravel/bulk). Not a carrier contract, not a voyage quote, and not a distance/GIS model. Distinct from bulk-dry-shortsea (ocean).',
+    [
+      { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (cumulative CAD $/t by distance; screening ~$10/t ≈ $0.01/kg USD OOM for ~50–100 km)', url: 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf' },
+    ]
+  ),
   none: row(
     0, '$/kg', 'cited', 'plant-gate',
     'Plant-gate: no screening freight adder. Cited as $0/kg transport.',

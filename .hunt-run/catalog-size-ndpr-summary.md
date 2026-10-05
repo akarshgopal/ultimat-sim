@@ -63,4 +63,4 @@ Exact 2× lines: `annualRevenue` 360225.8360234399; `annualOperatingCost` 298732
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `227ab8b`.
+Feat `8cfeb01` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `8cfeb01`). `npm test` 541 pass / 0 fail. Prior checkout tip `227ab8b`.

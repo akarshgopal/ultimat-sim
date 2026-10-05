@@ -78,4 +78,4 @@ Installed CAPEX ≈ $289 k (chromatography island $273,750, solar ≈ $15,315). 
 
 ## Tip
 
-Feat `f68ef45` on `main`. `npm test` 385 pass / 0 fail. Pages published: https://akarshgopal.github.io/ultimat-sim/
+Feat `f68ef45`, docs `8c94184` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `8c94184`). `npm test` 385 pass / 0 fail before the docs note.

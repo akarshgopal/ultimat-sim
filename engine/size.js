@@ -1984,8 +1984,22 @@ function ethyleneChain(definition) {
   if (!mtoNode) throw new Error('sizeToProduct needs an mto block to size ethylene demand');
   const sink = ethyleneSink(definition, mtoNode);
   if (!sink) throw new Error('sizeToProduct needs an ethylene sink');
-  const sources = collectMaterialSourcesFeeding(definition, mtoNode.id, new Set());
-  return { mto: mtoNode, sink, converters: [mtoNode], sources };
+  const meohFeed = sourceFeeding(definition, mtoNode.id, 'methanol');
+  const methanol = meohFeed?.unit === 'methanol' ? meohFeed : null;
+  const h2Feed = methanol ? sourceFeeding(definition, methanol.id, 'hydrogen') : null;
+  const electrolyzer = h2Feed?.unit === 'electrolyzer'
+    ? h2Feed
+    : (methanol ? converter(definition, 'electrolyzer') : null);
+  const swro = electrolyzer ? converter(definition, 'swro') : null;
+  const converters = [mtoNode, methanol, electrolyzer, swro].filter(Boolean);
+  const seen = new Set();
+  const sources = collectMaterialSourcesFeeding(definition, mtoNode.id, seen);
+  if (methanol) {
+    for (const extra of collectMaterialSourcesFeeding(definition, methanol.id, seen)) sources.push(extra);
+  }
+  const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
+  if (seawater) sources.push(seawater);
+  return { mto: mtoNode, sink, methanol, electrolyzer, swro, converters, sources };
 }
 
 function baselineEthyleneDuties(definition) {
@@ -2004,11 +2018,12 @@ function baselineEthyleneDuties(definition) {
 }
 
 function ethyleneProcessElectricityKWh(definition, baseline, scale) {
-  const mtoNode = converter(definition, 'mto');
-  if (!mtoNode || !(baseline.converterDuties[mtoNode.id] > 0)) return 0;
-  const listed = Number(mtoNode.params?.electricityKWhPerKg);
-  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 4;
-  return baseline.converterDuties[mtoNode.id] * scale * sec;
+  return ratioChainElectricityKWh(definition, baseline, scale, node => {
+    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
+    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
+    if (node.unit === 'methanol') return converterSecKWh(node, ['electricityKWhPerKg'], 0.5);
+    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'mto' ? 4 : 0);
+  });
 }
 
 function sizeEthylene(definition, target, opts) {

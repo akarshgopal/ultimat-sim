@@ -1699,7 +1699,7 @@
     loadCase(GreenMtoCase.createGreenMtoCase(), 'mto');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening seawater+sun → PEM H₂ + purchased CO₂ → MeOH → ethylene; not purchased MeOH; not DAC; not bankable.';
+      status.textContent = 'screening seawater+sun → PEM H₂ + purchased CO₂ → MeOH → ethylene; Size-to-target → ethylene resizes this stack; not purchased MeOH; not DAC; not bankable.';
     }
   }
 

@@ -66,4 +66,4 @@ Not edited: `cases/cement.js`, `cases/cu-ew.js`, `cases/float-glass.js`, `cases/
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `cae257a`.
+Feat `17cc6f8` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `17cc6f8`). `npm test` 508 pass / 0 fail. Prior checkout tip `cae257a`.

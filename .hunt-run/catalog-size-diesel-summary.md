@@ -56,3 +56,7 @@ Sign stays cash− (about 2× the 1000 demo). Maglut `createMaglutCase` cash sti
 - Size urea / titanium.
 - Full FT slate (naphtha/wax/LPG).
 - Demo 2% solar seed margin is not copied into the sizer (methanol / ethylene convention).
+
+## Tip
+
+Feat `3323d11` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `3323d11`). `npm test` 469 pass / 0 fail. Prior checkout tip `42a610a`.

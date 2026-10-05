@@ -60,3 +60,7 @@ Exact 1000 default matches freight-qcc tip (`annualNetCash` 246695.07377732982).
 - Inland freight / Asia-origin premium.
 - Cell fab / TOPCon / bankable module line.
 - Demo 2% solar seed margin is not copied into the sizer (methanol convention).
+
+## Tip
+
+Feat `ce2de4c` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `ce2de4c`). `npm test` 414 pass / 0 fail. Prior checkout tip `2705ec4`.

@@ -548,6 +548,20 @@ const ammonia = reaction({
   inputs: { nitrogen: { substance: 'N2', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
   outputs: { ammonia: { substance: 'NH3', molPerProductMol: 1, phase: 'liquid' } },
 });
+// Screening overall 2 NH3 + CO2 → Urea + H2O. Not ammonium-carbamate recycle, not granulation, not bankable.
+// Default 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated).
+// Not a Stamicarbon SEC.
+const urea = reaction({
+  product: 'Urea', electricityKWhPerKg: 0.8,
+  inputs: {
+    ammonia: { substance: 'NH3', molPerProductMol: 2 },
+    carbonDioxide: { substance: 'CO2', molPerProductMol: 1 },
+  },
+  outputs: {
+    urea: { substance: 'Urea', molPerProductMol: 1, phase: 'solid' },
+    water: { substance: 'H2O', molPerProductMol: 1, phase: 'liquid' },
+  },
+});
 // CO2 + 3 H2 → CH3OH + H2O. 0.5 kWh/kg is screening synthesis/compression, not electrolysis.
 // Reject heat 0.43 kWh/kg is gas-phase enthalpy (~49 kJ/mol / 3.6 / 32.04); 250 °C is a screening reject T.
 const methanol = reaction({
@@ -1567,6 +1581,17 @@ const UNITS = Object.freeze({
       ammonia: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: ammonia,
+  },
+  urea: {
+    kind: 'converter',
+    ports: {
+      ammonia: { direction: 'in', kind: 'material', required: true },
+      carbonDioxide: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      urea: { direction: 'out', kind: 'material', required: true },
+      water: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: urea,
   },
   'brine-minerals': {
     kind: 'converter',

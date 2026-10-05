@@ -93,7 +93,7 @@
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
-    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia'],
+    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia', 'urea'],
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
@@ -269,6 +269,13 @@
       params: { electricityKWhPerKg: 0.6 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Synthesis electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg NH₃' }],
       references: [{ label: 'DOE ammonia synthesis', url: 'https://www.energy.gov/cmei/fuels/h2iq-hour-ammonia-fertilizer-energy-carriers-text-version' }],
+    },
+    urea: {
+      label: 'Urea', capacity: 1000, rate: 100, activityUnit: 'kg urea/day',
+      palette: { section: 'building', order: 8.5, glyph: 'Ur', tone: 'hydrogen', description: 'NH₃ + CO₂ → urea' },
+      params: { electricityKWhPerKg: 0.8 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg urea' }],
+      sourceNote: 'Screening overall stoichiometry 2 NH₃ + CO₂ → urea + H₂O; not carbamate recycle and not granulation. Default 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated). Not a Stamicarbon SEC.',
     },
     'brine-minerals': {
       label: 'Brine mineral train', capacity: 100000, rate: 1000, activityUnit: 'kg brine/day',
@@ -617,6 +624,8 @@
     silverPurchase: 'Silver purchase',
     glassPurchase: 'Glass purchase',
     evaPurchase: 'EVA purchase',
+    ammoniaPurchase: 'Ammonia purchase',
+    co2Purchase: 'CO₂ purchase',
   };
   const portNames = {
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
@@ -624,9 +633,9 @@
     capturedCo2: 'Captured CO₂', depletedAir: 'Depleted gas', spentMedia: 'Spent media', feed: 'Feed water', product: 'Fresh water',
     brine: 'Brine', water: 'Water', hydrogen: 'Hydrogen', oxygen: 'Oxygen', waterReject: 'Reject water',
     co2: 'CO₂', methane: 'Methane', methanol: 'Methanol', out: 'Output', in: 'Input',
-    wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'Ammonia', offgas: 'Off-gas',
+    wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'NH₃', offgas: 'Off-gas',
     lithium: 'Lithium chloride', bromide: 'Sodium bromide', magnesium: 'Magnesium chloride', potash: 'Potash', gypsum: 'Gypsum', salt: 'Salt', raffinate: 'Raffinate',
-    caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Al frame', carbonDioxide: 'Carbon dioxide',
+    caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Al frame', carbonDioxide: 'CO₂', urea: 'Urea',
     quartz: 'Quartzite', silicon: 'MG-Si', polysilicon: 'Poly-Si', carbonMonoxide: 'Carbon monoxide',
     bauxite: 'Bauxite', redMud: 'Red mud',
     silver: 'Ag paste', glass: 'Float glass', eva: 'EVA', module: 'Module',
@@ -644,6 +653,7 @@
     hydrogen: { label: 'Hydrogen', phase: 'gas', mol: { H2: 1000 } },
     oxygen: { label: 'Oxygen', phase: 'gas', mol: { O2: 1000 } },
     nitrogen: { label: 'Nitrogen', phase: 'gas', mol: { N2: 1000 } },
+    ammonia: { label: 'Ammonia', phase: 'liquid', mol: { NH3: 1000 } },
     salt: { label: 'Sodium chloride', phase: 'solid', mol: { NaCl: 1000 } },
     bromide: { label: 'Sodium bromide', phase: 'solid', mol: { NaBr: 1000 } },
     chlorine: { label: 'Chlorine', phase: 'gas', mol: { Cl2: 1000 } },
@@ -705,6 +715,7 @@
     ironOre: { key: 'ironOre', label: 'Hematite concentrate', profile: 'silo', glyph: 'silo' },
     magnesium: { key: 'magnesium', label: 'Magnesium', profile: 'silo', glyph: 'silo' },
     co2: { key: 'co2', label: 'Carbon dioxide', profile: 'stack', glyph: 'CO₂' },
+    ammonia: { key: 'ammonia', label: 'Ammonia', profile: 'tank', glyph: 'NH₃' },
     hydrogen: { key: 'hydrogen', label: 'Hydrogen', profile: 'stack', glyph: 'H₂' },
     oxygen: { key: 'oxygen', label: 'Oxygen', profile: 'stack', glyph: 'O₂' },
     nitrogen: { key: 'nitrogen', label: 'Nitrogen', profile: 'stack', glyph: 'N₂' },
@@ -726,7 +737,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -983,6 +994,7 @@
     'ree-sx': () => loadReeSx(),
     'bioforge-marshall': () => loadBioforgeMarshall(),
     'green-ammonia': () => loadGreenAmmonia(),
+    'urea': () => loadUrea(),
     'abundance-hub': () => loadAbundanceHub(),
     'zabuye-hub': () => loadZabuyeHub(),
     'demo-network': () => loadDemoNetwork(),
@@ -1465,6 +1477,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening air + seawater + sun → NH₃, not chlor-alkali H₂, not bankable.';
+    }
+  }
+
+  function loadUrea() {
+    setActiveDemo('urea', 'Walvis Bay urea (purchased NH₃+CO₂)');
+    lastSizing = null;
+    if (typeof UreaCase === 'undefined' || !UreaCase.createUreaCase) {
+      throw new Error('Urea case is not loaded');
+    }
+    loadCase(UreaCase.createUreaCase(), 'urea');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening urea from purchased feeds on frozen Walvis PV; may be cash±; not bankable; not green-NH₃ path.';
     }
   }
 
@@ -3692,6 +3717,7 @@
       'asu.air': 'air', 'swro.feed': 'seawater', 'med.feed': 'seawater', 'msf.feed': 'seawater', 'brine-minerals.brine': 'brine',
       'electrolyzer.water': 'water', 'chlor-alkali.water': 'water', 'sabatier.co2': 'co2', 'sabatier.hydrogen': 'hydrogen',
       'ammonia.nitrogen': 'nitrogen', 'ammonia.hydrogen': 'hydrogen',
+      'urea.ammonia': 'ammonia', 'urea.carbonDioxide': 'co2',
       'methanol.co2': 'co2', 'methanol.hydrogen': 'hydrogen',
       'chlor-alkali.salt': 'salt',
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
@@ -4810,6 +4836,9 @@
     bromine: 'Bromine',
     hydrogen: 'Hydrogen',
     methanol: 'Methanol',
+    urea: 'Urea',
+    Urea: 'Urea',
+    'urea-product': 'Urea',
     lithium: 'Lithium',
     LiCl: 'Lithium',
     Li2CO3: 'Lithium',
@@ -5287,7 +5316,7 @@
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
     if (unit === 'mg-si' || unit === 'polysilicon') return 'furnace';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'bayer-alumina' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
-    if (unit === 'asu' || unit === 'ammonia' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
+    if (unit === 'asu' || unit === 'ammonia' || unit === 'urea' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
     return 'shed';
   }
@@ -5691,6 +5720,7 @@
       'brine-minerals': '#d4a017',
       asu: '#7a8fa3',
       ammonia: '#6b7f9a',
+      urea: '#7a8aa0',
       battery: '#8a8f98',
       'solar-pv': '#c9a227',
       total: '#7a8fa3',
@@ -5711,6 +5741,7 @@
       'brine-minerals': 'var(--warning)',
       asu: 'var(--h2)',
       ammonia: 'var(--h2)',
+      urea: 'var(--h2)',
       battery: 'var(--text-muted)',
       'solar-pv': 'var(--warning)',
     }[unit] || 'var(--border-light)';
@@ -6766,7 +6797,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6882,6 +6913,7 @@
     'bromine-recovery': 'bromine-recovery',
     asu: 'asu',
     ammonia: 'ammonia',
+    urea: 'urea',
     swro: 'swro',
     electrolyzer: 'electrolyzer',
     dac: 'dac',

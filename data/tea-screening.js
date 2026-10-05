@@ -63,6 +63,8 @@ const NREL_ATB_DOI = 'https://doi.org/10.25984/2377191';
 const DOE_H2 = 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electrolysis';
 const NREL_PEM = 'https://www.nrel.gov/docs/fy24osti/87625.pdf';
 const IEA_NH3 = 'https://www.iea.org/reports/ammonia-technology-roadmap';
+const USGS_N = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-nitrogen.pdf';
+const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const IEA_H2 = 'https://www.iea.org/reports/global-hydrogen-review-2024';
 const IEA_DAC = 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary';
 const NASEM_DAC = 'https://doi.org/10.17226/25259';
@@ -177,6 +179,15 @@ const prices = {
     'Screening mid of commodity methanol ~$250–500/t band ($0.40/kg). Not a plant quote.',
     [{ label: 'Commodity methanol ~$250–500/t band (screening mid $0.40/kg); not a plant quote', url: IRENA_MEOH }]
   ),
+  urea: row(
+    0.4, '$/kg', 'screening', 'fertilizer urea band',
+    'Fertilizer urea mid of recent ~$350–450/t bands ($0.40/kg). Screening, not a Black Sea / Middle East contract.',
+    [
+      { label: 'IEA Ammonia Technology Roadmap (ammonia/fertilizer family; screening urea mid $0.40/kg, not a contract)', url: IEA_NH3 },
+      { label: 'USGS MCS 2025 nitrogen (fixed) — ammonia/fertilizer family context; urea offtake is screening', url: USGS_N },
+      { label: 'World Bank commodity markets / pink sheet (urea family context; screening mid of ~$350–450/t, not a Black Sea contract)', url: WB_PINK },
+    ]
+  ),
   water: row(
     0.001, '$/kg', 'screening', 'process water',
     'Process-water sale screening $0.001/kg. Not a municipal or concession tariff.',
@@ -282,6 +293,16 @@ const costs = {
     0.06, '$/kg', 'screening', 'industrial NaCl band',
     'Purchased salt-feed aligned with salt product band (~$0.06/kg). Screening, not a local quote.',
     [{ label: 'Salt-feed screening $0.06/kg, aligned with industrial NaCl product band', url: USGS_SALT }]
+  ),
+  'ammonia-feed': row(
+    0.45, '$/kg', 'screening', 'purchase at fertilizer NH3 screening',
+    'Purchase at fertilizer NH₃ screening, mirroring the ammonia sale price ($0.45/kg). Screening, not a fertilizer NH₃ contract.',
+    [{ label: 'IEA Ammonia Technology Roadmap (fertilizer-market order; purchase at screening mid $0.45/kg)', url: IEA_NH3 }]
+  ),
+  'co2-feed': row(
+    0.05, '$/kg', 'screening', 'industrial CO2 purchase',
+    'Screening industrial CO₂ purchase $0.05/kg (~$50/t). Not DAC full chain and not a merchant-gas contract.',
+    [{ label: 'Industrial CO₂ purchase screening $0.05/kg; not DAC full chain', url: IEA_DAC }]
   ),
   quartz: row(
     0.08, '$/kg', 'screening', 'silicon-grade quartzite lump',
@@ -440,6 +461,16 @@ const packs = {
     quality: 'screening', source: 'Haber–Bosch / e-ammonia OOM',
     note: 'installedCapex = 2000 $/ (kg NH₃/day) × capacity (scale exponent omitted). Haber–Bosch / e-ammonia CAPEX intensity screening OOM (world-scale is cheaper per kg; small e-NH₃ is not). Not a plant quote.',
     evidence: [{ label: 'IEA Ammonia Technology Roadmap (family cite; screening CAPEX intensity)', url: IEA_NH3 }],
+  }),
+  urea: pack({
+    capexIntensity: 1200, intensityUnit: '$/(kg urea/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'small-plant urea island OOM',
+    note: 'installedCapex = 1200 $/ (kg urea/day) × capacity (scale exponent omitted). ≈ $330k per annual tonne × 365/1000 rounded. Small-plant urea island OOM; world-scale is cheaper; not a Stamicarbon/Saipem quote. Linear intensity.',
+    evidence: [
+      { label: 'IEA Ammonia Technology Roadmap (fertilizer-family cite; screening urea-island CAPEX intensity, not a Stamicarbon quote)', url: IEA_NH3 },
+      { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context; CAPEX intensity is screening OOM', url: USGS_N },
+    ],
   }),
   swro: pack({
     capexIntensity: 1500, intensityUnit: '$/(m³/day)',
@@ -674,6 +705,14 @@ const demand = {
     `2 Mt/y regional ceiling. IEA ammonia world ~180 Mt; the Middle East is a large producer/exporter. ${DEMAND_REGION}`,
     [{ label: 'IEA Ammonia Technology Roadmap (world ~180 Mt family; regional ceiling is screening)', url: IEA_NH3 }]
   ),
+  urea: row(
+    5e7, 'kg/year', 'screening', 'IEA/USGS fertilizer urea; regional ceiling',
+    `50 kt/y screening regional ceiling. Fertilizer urea is the main ammonia upgrade; IEA ammonia world ~180 Mt and USGS nitrogen (fixed) are family context. Not a Black Sea / Middle East contract. ${DEMAND_REGION}`,
+    [
+      { label: 'IEA Ammonia Technology Roadmap (ammonia/fertilizer family; 50 kt/y urea ceiling is screening offtake, not a contract)', url: IEA_NH3 },
+      { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context; 50 kt/y ceiling is screening offtake, not production', url: USGS_N },
+    ]
+  ),
   oxygen: row(
     1e8, 'kg/year', 'screening', 'merchant O2 ceiling',
     `100 kt/y merchant-O₂ screening ceiling. No USGS industrial-gas series pinned — conservative screening, not a contract.`,
@@ -765,7 +804,7 @@ const demand = {
 };
 
 const MINERAL_DEMAND_KEYS = Object.freeze(['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium']);
-const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide']);
+const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide', 'urea']);
 
 function cloneDemandRow(item, extraNote, extra = {}) {
   const cloned = {
@@ -1067,6 +1106,14 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     1e7, 'kg/year', 'screening', 'mixed other-REO China/Asia ceiling; ionic-clay supply',
     'Conservative 10,000 t/y China/Asia mixed other-REO ceiling. China dominates ionic-clay supply. Screening offtake, not a production table and not a contract.',
     [{ label: 'USGS MCS 2026 rare earths (commodity-family context; 10 kt/y China other-REO ceiling is screening offtake, not production)', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf' }]
+  ),
+  urea: row(
+    5e8, 'kg/year', 'screening', 'IEA/USGS fertilizer urea; China/Asia ceiling',
+    'Conservative 500 kt/y China/Asia urea ceiling. China is a large urea producer. IEA ammonia/fertilizer family and USGS nitrogen (fixed) are commodity context. Screening offtake, not a contract and not a silent ME-Levant inherit.',
+    [
+      { label: 'IEA Ammonia Technology Roadmap (ammonia/fertilizer family; 500 kt/y China urea ceiling is screening offtake, not a contract)', url: IEA_NH3 },
+      { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context; 500 kt/y China ceiling is screening offtake, not production', url: USGS_N },
+    ]
   ),
 });
 

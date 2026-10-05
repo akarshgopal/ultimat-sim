@@ -63,6 +63,7 @@ const PROCESS_LABELS = Object.freeze({
   'brine-minerals': 'Brine minerals',
   asu: 'Air separation',
   ammonia: 'Haber–Bosch',
+  urea: 'Urea',
   'mg-si': 'MG-Si furnace',
   polysilicon: 'Polysilicon (Siemens)',
   'bayer-alumina': 'Bayer alumina',
@@ -318,6 +319,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Coega Green Ammonia EIA: HB loop ~1.4 ha for 1.2 Mt NH₃/y → 4.3 m²/(t/d); loop+storage 3.0 ha → 9.1',
         url: 'https://cdn.sanity.io/files/b0ecix6u/production/c87656422bca19568b505b0fe25d4c51130a197f.pdf',
+      }),
+    ]),
+  }),
+  urea: Object.freeze({
+    id: 'urea',
+    label: PROCESS_LABELS.urea,
+    basis: 'kgPerHour',
+    intensity: 3,
+    unitLabel: 'm²/(kg urea/h)',
+    range: Object.freeze([1, 8]),
+    floorM2: 30,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening urea island pad 3 m²/(kg urea/h) (range 1–8); not a plot survey and not a Stamicarbon layout. IEA ammonia/fertilizer family is commodity context.',
+        url: 'https://www.iea.org/reports/ammonia-technology-roadmap',
       }),
     ]),
   }),
@@ -734,6 +751,13 @@ function padAmmonia(node, solved) {
   return padAreaFromIntensity(spec, activity / 1000);
 }
 
+function padUrea(node, solved) {
+  const spec = intensitySpec('urea');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padMgSi(node, solved) {
   const spec = intensitySpec('mg-si');
   const activity = activityOf(solved, node.id);
@@ -841,6 +865,7 @@ const PROCESS_PADS = Object.freeze({
   'brine-minerals': padBrine,
   asu: padAsu,
   ammonia: padAmmonia,
+  urea: padUrea,
   'mg-si': padMgSi,
   polysilicon: padPolysilicon,
   'pv-module': padPvModule,

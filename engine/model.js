@@ -21,6 +21,7 @@ const SUBSTANCES = Object.freeze({
   'Li+': { elements: { Li: 1 }, molarMassG: 6.94, charge: 1 },
   B: { elements: { B: 1 }, molarMassG: 10.81, charge: 0 },
   NH3: { elements: { N: 1, H: 3 }, molarMassG: 17.03052, charge: 0 },
+  Urea: { elements: { C: 1, H: 4, N: 2, O: 1 }, molarMassG: 60.0553, charge: 0 },
   Cl2: { elements: { Cl: 2 }, molarMassG: 70.9, charge: 0 },
   NaOH: { elements: { Na: 1, O: 1, H: 1 }, molarMassG: 39.997, charge: 0 },
   C: { elements: { C: 1 }, molarMassG: 12.011, charge: 0 },

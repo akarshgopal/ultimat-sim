@@ -18,3 +18,7 @@ Sign recorded (cash−). Not bankable. Not a green e-diesel premium. Maglut ≈1
 - IPCC 2006 Vol. 2 Table 1.2 gas/diesel oil NCV
 - EIA ULSD / World Bank pink-sheet gasoil for diesel mid $0.90/kg
 - Purchased H₂ $2.00/kg, industrial CO₂ $0.05/kg (not electrolyzer, not DAC)
+
+## Tip
+
+Feat `6ffed81` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `6ffed81`). `npm test` 445 pass / 0 fail. Prior checkout tip `2824551`.

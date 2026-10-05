@@ -74,4 +74,4 @@ Purchased-H₂ 1000 kg/day default remains finite (net ≈ −93,017). Screening
 
 ## Tip
 
-Pending feat commit + Pages publish.
+Feat `b9a688d` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `b9a688d`). `npm test` 441 pass / 0 fail. Prior checkout tip `d824156`.

@@ -70,6 +70,7 @@ const PROCESS_LABELS = Object.freeze({
   'pv-module': 'PV module (BOM)',
   'aluminium-smelter': 'Aluminium smelter',
   'hydrogen-dri': 'Hydrogen DRI',
+  'titanium-kroll': 'Titanium Kroll',
   'iac-leach': 'Ionic-clay REE',
   'ree-chromatography': 'ARC-1 chromatography',
   'ree-sx': 'REE SX (peer)',
@@ -432,6 +433,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Screening H₂-DRI shaft pad 2 m²/(kg Fe/h) (range 0.5–8); not a plot survey. USGS MCS iron ore / iron-and-steel are commodity context, not a measured Midrex layout.',
         url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf',
+      }),
+    ]),
+  }),
+  'titanium-kroll': Object.freeze({
+    id: 'titanium-kroll',
+    label: PROCESS_LABELS['titanium-kroll'],
+    basis: 'kgPerHour',
+    intensity: 8,
+    unitLabel: 'm²/(kg Ti/h)',
+    range: Object.freeze([2, 20]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening Kroll pad 8 m²/(kg Ti/h) (range 2–20); not a plot survey. USGS MCS titanium is commodity context, not a measured TIMET layout.',
+        url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-titanium.pdf',
       }),
     ]),
   }),
@@ -817,6 +834,13 @@ function padHydrogenDri(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padTitaniumKroll(node, solved) {
+  const spec = intensitySpec('titanium-kroll');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padIacLeach(node, solved) {
   const spec = intensitySpec('iac-leach');
   const activity = activityOf(solved, node.id);
@@ -894,6 +918,7 @@ const PROCESS_PADS = Object.freeze({
   polysilicon: padPolysilicon,
   'pv-module': padPvModule,
   'hydrogen-dri': padHydrogenDri,
+  'titanium-kroll': padTitaniumKroll,
   'bayer-alumina': padBayerAlumina,
   'aluminium-smelter': padAluminiumSmelter,
   'iac-leach': padIacLeach,

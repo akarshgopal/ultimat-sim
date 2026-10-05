@@ -97,7 +97,7 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module', 'hydrogen-dri'],
+    Crust: ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module', 'hydrogen-dri', 'titanium-kroll'],
     REE: ['iac-leach', 'ree-chromatography', 'ree-sx'],
     Bio: ['bioforge'],
   };
@@ -442,10 +442,15 @@
     },
     'titanium-kroll': {
       label: 'Titanium Kroll', capacity: 1000, rate: 100, activityUnit: 'kg Ti/day',
-      palette: { section: 'building', order: 14, glyph: 'Ti', description: 'TiCl₄ + Mg + power → Ti + MgCl₂' },
+      palette: { section: 'building', order: 14, glyph: 'Ti', description: 'Purchased TiCl₄ + Mg metal → Ti sponge' },
       params: { electricityKWhPerKg: 8 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Process electricity', min: 0, max: 30, step: 0.5, unit: 'kWh/kg Ti' }],
-      references: [{ label: 'USGS Kroll process', url: 'https://www.usgs.gov/publications/titanium-2013' }],
+      sourceNote: 'Screening Kroll, 8 kWh/kg with purchased TiCl₄ + Mg metal, not TIMET. Stoich TiCl₄ + 2 Mg → Ti + 2 MgCl₂. Not chloride process from rutile and not an Mg recycle cell.',
+      references: [
+        { label: 'USGS MCS 2025 titanium', url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-titanium.pdf' },
+        { label: 'USGS MCS 2026 titanium', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-titanium.pdf' },
+        { label: 'USGS MCS 2026 magnesium metal', url: 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-magnesium-metal.pdf' },
+      ],
     },
     // NREL ATB 2024 utility-scale PV, base-year CF table, Resource Class 8: mean AC CF 24.5% (GHI bin 4–4.25 kWh/m²/day, ILR=1.34). Catalog default 0.24 is that class rounded. CAPEX 1560 kept.
     'solar-pv': {
@@ -648,7 +653,7 @@
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
     concentrate: 'Concentrate', dytb: 'DyTb', lightReo: 'Light REO',
     dextrose: 'Dextrose', gluconic: 'Gluconic acid', hydrogenPeroxide: 'Hydrogen peroxide',
-    ironOre: 'Iron ore', steel: 'Fe / Iron', titaniumTetrachloride: 'Titanium tetrachloride', titanium: 'Titanium', magnesiumChloride: 'Magnesium chloride',
+    ironOre: 'Iron ore', steel: 'Fe / Iron', titaniumTetrachloride: 'TiCl₄', titanium: 'Ti', magnesiumChloride: 'MgCl₂',
   };
   const materialPresets = {
     air: { label: 'Ambient air', phase: 'gas', mol: { CO2: 428, O2: 211409, N2: 788163 } },
@@ -996,6 +1001,7 @@
     'coastal-methanol': () => loadMethanolPlant(0),
     'silicon-alumina': () => loadSiliconAlumina(),
     'h2-dri': () => loadH2Dri(),
+    'ti-kroll': () => loadTiKroll(),
     'ree-ionic': () => loadReeIonic(),
     'maglut-long-beach': () => loadMaglutLongBeach(),
     'ree-sx': () => loadReeSx(),
@@ -1432,6 +1438,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening H₂-DRI from purchased ore+H₂ on frozen Mejillones PV; may be cash±; not bankable; not green-H₂ path.';
+    }
+  }
+
+  function loadTiKroll() {
+    setActiveDemo('ti-kroll', 'Mejillones Ti Kroll (purchased TiCl₄+Mg)');
+    lastSizing = null;
+    if (typeof TiKrollCase === 'undefined' || !TiKrollCase.createTiKrollCase) {
+      throw new Error('Ti Kroll case is not loaded');
+    }
+    loadCase(TiKrollCase.createTiKrollCase(), 'kroll');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening Kroll from purchased TiCl₄+Mg metal on frozen Mejillones PV; may be cash±; not bankable; not TIMET.';
     }
   }
 
@@ -3557,7 +3576,7 @@
       graph.edges.push({ from: { node: source.id, port: 'out' }, to: { node: target.node, port: target.port } });
       return source;
     }
-    const sink = addNode(`${kind}-sink`, { label: `${portName(target.port)} sink`, silent });
+    const sink = addNode(`${kind}-sink`, { label: `${portName(target.port, current.unit)} sink`, silent });
     graph.edges.push({ from: { node: target.node, port: target.port }, to: { node: sink.id, port: 'in' } });
     return sink;
   }
@@ -3789,7 +3808,7 @@
             nodeId: current.id,
             label: current.label,
             port,
-            text: `${current.label}: ${portName(port)}`,
+            text: `${current.label}: ${portName(port, current.unit)}`,
           });
         }
       }
@@ -3810,7 +3829,7 @@
           nodeId: current.id,
           label: current.label,
           port,
-          text: `${current.label}: ${portName(port)}`,
+          text: `${current.label}: ${portName(port, current.unit)}`,
         });
       }
     }
@@ -4010,7 +4029,10 @@
   }
 
   function node(id) { return graph.nodes.find(candidate => candidate.id === id); }
-  function portName(port) { return portNames[port] || port.replace(/([a-z])([A-Z])/g, '$1 $2'); }
+  function portName(port, unit) {
+    if (unit === 'titanium-kroll' && port === 'magnesium') return 'Mg';
+    return portNames[port] || port.replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
 
   function readMapCoordinates() {
     const latitude = Number(document.getElementById('siteLatitude')?.value);
@@ -5025,7 +5047,7 @@
     const bottleneckPairs = graph.nodes.flatMap(current => bottlenecksFor(current.id).map(limit => ({
       nodeId: current.id,
       limit,
-      label: `${current.label}: ${portName(limit)}`,
+      label: `${current.label}: ${portName(limit, current.unit)}`,
     })));
     const otherBottlenecks = bottleneckPairs.filter(item => item.limit !== 'electricity' && item.limit !== 'site budget');
     if (otherBottlenecks.length) {
@@ -5614,8 +5636,8 @@
       const cx = direction === 'in' ? x : x + NODE_WIDTH;
       const selected = pendingPort?.node === current.id && pendingPort.port === port;
       const cause = diagnosis?.action === 'port' && diagnosis.port === port && diagnosis.nodeId === current.id;
-      const portLabel = `Connect ${portName(port)} ${direction === 'in' ? 'in' : 'out'}`;
-      return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}${cause ? ' cause' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0" aria-label="${portLabel}" title="${portLabel}"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 12 : cx - 12}" y="${cy + 3}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port)}</text></g>`;
+      const portLabel = `Connect ${portName(port, current.unit)} ${direction === 'in' ? 'in' : 'out'}`;
+      return `<g class="flow-port ${declaration.kind}${selected ? ' pending' : ''}${cause ? ' cause' : ''}" data-node="${current.id}" data-port="${port}" data-direction="${direction}" role="button" tabindex="0" aria-label="${portLabel}" title="${portLabel}"><circle cx="${cx}" cy="${cy}" r="7"/><text x="${direction === 'in' ? cx + 12 : cx - 12}" y="${cy + 3}" text-anchor="${direction === 'in' ? 'start' : 'end'}">${portName(port, current.unit)}</text></g>`;
     }).join('');
     const reasonTitle = diagnosis ? escapeHtml(diagnosis.detail || diagnosis.text) : '';
     const kind = units[current.unit].kind;
@@ -5625,7 +5647,7 @@
     const flags = `${bottlenecks.length ? ' bottleneck' : ''}${current.id === selectedNodeId ? ' selected' : ''}${diagnosis ? ' is-idle' : ''}${running ? ' is-running' : ''} building-${profile}`;
     const bottleneckTitle = nodeResult?.causeText
       ? `Bottleneck: ${nodeResult.causeText}`
-      : bottlenecks.length ? `Bottleneck: ${bottlenecks.map(portName).join(', ')}` : '';
+      : bottlenecks.length ? `Bottleneck: ${bottlenecks.map(port => portName(port, current.unit)).join(', ')}` : '';
     const title = reasonTitle
       ? `<title>${reasonTitle}</title>`
       : bottleneckTitle ? `<title>${escapeHtml(bottleneckTitle)}</title>` : '';
@@ -5667,7 +5689,7 @@
 
   function renderStatus() {
     const missing = missingConnections();
-    const bottlenecks = graph.nodes.flatMap(current => bottlenecksFor(current.id).map(limit => `${current.label}: ${portName(limit)}`));
+    const bottlenecks = graph.nodes.flatMap(current => bottlenecksFor(current.id).map(limit => `${current.label}: ${portName(limit, current.unit)}`));
     const solveStatus = document.getElementById('solveStatus');
     const balanceStatus = document.getElementById('balanceStatus');
     document.getElementById('flowSummary').textContent = `${graph.nodes.length} blocks · ${graph.edges.length} connections`;
@@ -5698,7 +5720,7 @@
     if (pendingPort) {
       issues.push({
         severity: 'info',
-        text: `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port)}`,
+        text: `Connecting ${node(pendingPort.node).label} · ${portName(pendingPort.port, node(pendingPort.node).unit)}`,
       });
     }
     const openPorts = [
@@ -6403,7 +6425,7 @@
       : nodeResult?.limitedBy?.length ? [['Limited by', nodeResult.limitedBy.join(', ')], ...causeRow] : [...causeRow];
     document.getElementById('inspectorMetrics').innerHTML = metricRows([...metrics, ...economicsRows(current)]);
     document.getElementById('streamList').innerHTML = Object.entries(units[current.unit].ports).map(([port, declaration]) => renderInspectorPort(current, port, declaration)).join('');
-    document.getElementById('recipeList').innerHTML = nodeResult?.requestedInputs ? `${recipeGroup('INFLOW', nodeResult.requestedInputs)}${recipeGroup('OUTFLOW', nodeResult.outlets)}` : '<p class="status-meta">Complete the graph to calculate flows.</p>';
+    document.getElementById('recipeList').innerHTML = nodeResult?.requestedInputs ? `${recipeGroup('INFLOW', nodeResult.requestedInputs, current.unit)}${recipeGroup('OUTFLOW', nodeResult.outlets, current.unit)}` : '<p class="status-meta">Complete the graph to calculate flows.</p>';
     const exchanges = result?.streams.filter(stream => stream.recycle) || [];
     document.getElementById('exchangeList').innerHTML = exchanges.length
       ? exchanges.map(stream => `<div class="recipe-flow"><strong>${stream.label || 'Recovered stream'}</strong><span class="species">${node(stream.from.node).label} → ${node(stream.to.node).label} · ${formatStream(stream.stream)}</span></div>`).join('')
@@ -6821,7 +6843,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6953,6 +6975,7 @@
     'aluminium-smelter': 'aluminium-smelter',
     'pv-module': 'pv-module',
     'hydrogen-dri': 'hydrogen-dri',
+    'titanium-kroll': 'titanium-kroll',
     'iac-leach': 'iac-leach',
     'ree-chromatography': 'ree-chromatography',
     'ree-sx': 'ree-sx',
@@ -7630,11 +7653,11 @@
       return `<div class="port-connection${selected}" data-select-edge="${index}"><small>Connected to ${node(peerId).label}</small>${weight}${capacity}<button type="button" data-disconnect="${index}">Disconnect</button></div>`;
     }).join('') || '<small>Not connected</small>';
     const cause = highlightPort && highlightPort.nodeId === current.id && highlightPort.port === port;
-    return `<div class="port-row${cause ? ' is-cause' : ''}" data-port-row="${port}"><div><span>${declaration.direction === 'in' ? 'IN' : 'OUT'} · ${declaration.kind}</span><strong>${portName(port)}</strong>${connections}</div>${boundaryAllowed ? `<button type="button" data-boundary-port="${port}" data-direction="${declaration.direction}">${declaration.direction === 'in' ? 'Add source' : 'Add sink branch'}</button>` : ''}</div>`;
+    return `<div class="port-row${cause ? ' is-cause' : ''}" data-port-row="${port}"><div><span>${declaration.direction === 'in' ? 'IN' : 'OUT'} · ${declaration.kind}</span><strong>${portName(port, current.unit)}</strong>${connections}</div>${boundaryAllowed ? `<button type="button" data-boundary-port="${port}" data-direction="${declaration.direction}">${declaration.direction === 'in' ? 'Add source' : 'Add sink branch'}</button>` : ''}</div>`;
   }
 
-  function recipeGroup(title, streams) {
-    return `<div class="recipe-group"><h4>${title}</h4>${Object.entries(streams).map(([port, stream]) => `<div class="recipe-flow"><strong>${portName(port)}</strong><span class="species">${formatStream(stream)}</span></div>`).join('')}</div>`;
+  function recipeGroup(title, streams, unit) {
+    return `<div class="recipe-group"><h4>${title}</h4>${Object.entries(streams).map(([port, stream]) => `<div class="recipe-flow"><strong>${portName(port, unit)}</strong><span class="species">${formatStream(stream)}</span></div>`).join('')}</div>`;
   }
 
   function formatStream(stream) {
@@ -7772,7 +7795,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

@@ -59,6 +59,10 @@ const FRAUNHOFER_PV_REPORT = 'https://www.ise.fraunhofer.de/content/dam/ise/de/d
 const USGS_AG = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-silver.pdf';
 const USGS_IRON_ORE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf';
 const USGS_STEEL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf';
+const USGS_TI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-titanium.pdf';
+const USGS_TI_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-titanium.pdf';
+const USGS_MG_METAL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-metal.pdf';
+const USGS_MG_METAL_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-magnesium-metal.pdf';
 const NREL_DLE = 'https://doi.org/10.2172/1782801';
 const NREL_ATB = 'https://atb.nrel.gov/';
 const NREL_ATB_DOI = 'https://doi.org/10.25984/2377191';
@@ -277,6 +281,14 @@ const prices = {
       { label: 'World Bank commodity markets / pink sheet (metals family context; screening HBI/DRI mid of ~$350–450/t, not a contract)', url: WB_PINK },
     ]
   ),
+  titanium: row(
+    8.00, '$/kg', 'screening', 'Ti sponge band',
+    'Titanium sponge mid of recent ~$6–12/kg bands ($8.00/kg). Screening, not a TIMET sponge contract. USGS MCS titanium sponge US import unit values recently ~$11–13/kg sit at the high end of that family.',
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; screening sponge mid $8.00/kg of ~$6–12/kg, not a TIMET contract)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (sponge US import unit-value family recently ~$11–13/kg; screening mid sits in the wider ~$6–12/kg band)', url: USGS_TI_2026 },
+    ]
+  ),
 };
 
 const costs = {
@@ -396,6 +408,30 @@ const costs = {
     [
       { label: 'IEA Global Hydrogen Review 2024 (industrial/grey–blue H₂ family; screening purchase $2.00/kg, not green LCOH and not a DOE $1/kg goal)', url: IEA_H2 },
       { label: 'DOE hydrogen production electrolysis (family contrast only; this purchase is not an electrolyzer path)', url: DOE_H2 },
+    ]
+  ),
+  'titanium-tetrachloride': row(
+    1.50, '$/kg', 'screening', 'purchased TiCl4 intermediate',
+    'Screening TiCl₄ purchase $1.50/kg. Not a chloride-process plant from rutile and not a TIMET/VSMPO quote. USGS titanium family is commodity context for the metal, not a TiCl₄ contract.',
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; screening TiCl₄ purchase, not a chloride-process plant)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; TiCl₄ is a purchased intermediate in this demo)', url: USGS_TI_2026 },
+    ]
+  ),
+  'ticl4-feed': row(
+    1.50, '$/kg', 'screening', 'purchased TiCl4 intermediate',
+    'Alias of titanium-tetrachloride. Screening TiCl₄ purchase $1.50/kg. Not a chloride-process plant from rutile and not a TIMET/VSMPO quote. USGS titanium family is commodity context for the metal, not a TiCl₄ contract.',
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; screening TiCl₄ purchase, not a chloride-process plant)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; TiCl₄ is a purchased intermediate in this demo)', url: USGS_TI_2026 },
+    ]
+  ),
+  'magnesium-metal': row(
+    2.50, '$/kg', 'screening', 'USGS MCS magnesium metal',
+    'Screening Mg metal reductant $2.50/kg. USGS MCS magnesium metal European free market 2025e ~$2,500/t. NOT the brine magnesium-compound sale at $0.08/kg — do not reuse that row for Kroll. US spot Western is higher. Not a US Magnesium contract.',
+    [
+      { label: 'USGS MCS 2026 magnesium metal (European free market 2025e ~$2,500/t → $2.50/kg; Kroll reductant, not brine Mg-compound)', url: USGS_MG_METAL_2026 },
+      { label: 'USGS MCS 2025 magnesium metal (family; screening metal purchase, not the brine compound sale)', url: USGS_MG_METAL },
     ]
   ),
 };
@@ -602,6 +638,16 @@ const packs = {
       { label: 'USGS MCS 2025 iron and steel (commodity-family context; screening DRI-island CAPEX intensity, not a Midrex quote)', url: USGS_STEEL },
       { label: 'IEA Global Hydrogen Review 2024 (H₂-DRI family context; CAPEX intensity is screening OOM, not a plant quote)', url: IEA_H2 },
       { label: 'DOE hydrogen for industry / electrolysis family (contrast only; this pack is a shaft island with purchased H₂, not an electrolyzer)', url: DOE_H2 },
+    ],
+  }),
+  'titanium-kroll': pack({
+    capexIntensity: 8000, intensityUnit: '$/(kg Ti/day)',
+    fixedOmPercent: 4, variableOm: 0.04, assetLifeYears: 20,
+    quality: 'screening', source: 'small Kroll island OOM',
+    note: 'installedCapex = 8000 × capacity. ≈ $2.2M per annual tonne × 365/1000 rounded. Small Kroll island OOM; world-scale cheaper; linear intensity; not a TIMET/VSMPO quote. SEC is the unit param 8 kWh/kg with purchased TiCl₄ + Mg metal, not this pack. Not chloride process from rutile and not Mg recycle electrolysis.',
+    evidence: [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; screening Kroll-island CAPEX intensity, not a TIMET quote)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; CAPEX intensity is screening OOM, not a plant quote)', url: USGS_TI_2026 },
     ],
   }),
   'iac-leach': pack({
@@ -842,6 +888,14 @@ const demand = {
     [
       { label: 'USGS MCS 2025 iron and steel (commodity-family context; 500 kt/y DRI/HBI ceiling is screening offtake, not production)', url: USGS_STEEL },
       { label: 'World Bank commodity markets / pink sheet (metals family context; offtake cap is screening)', url: WB_PINK },
+    ]
+  ),
+  titanium: row(
+    2e7, 'kg/year', 'screening', 'Ti sponge screening regional ceiling',
+    `20 kt/y screening offtake ceiling. Tiny slice of titanium sponge; not world sponge production and not a TIMET contract. USGS titanium PDF is commodity-family context — this ceiling is screening offtake. ${DEMAND_REGION}`,
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; 20 kt/y sponge ceiling is screening offtake, not production)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; offtake cap is screening, not a TIMET contract)', url: USGS_TI_2026 },
     ]
   ),
 };
@@ -1146,6 +1200,14 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     [
       { label: 'USGS MCS 2025 iron and steel (commodity-family context; 5 Mt/y China DRI/HBI ceiling is screening offtake, not production)', url: USGS_STEEL },
       { label: 'World Bank commodity markets / pink sheet (metals family context; China ceiling is screening offtake)', url: WB_PINK },
+    ]
+  ),
+  titanium: row(
+    1e8, 'kg/year', 'screening', 'Ti sponge China/Asia ceiling',
+    'Conservative 100 kt/y China/Asia titanium-sponge ceiling. China is a large sponge producer. USGS titanium PDF is commodity-family context. Screening offtake, not a production table and not a TIMET contract.',
+    [
+      { label: 'USGS MCS 2025 titanium (commodity-family context; 100 kt/y China sponge ceiling is screening offtake, not production)', url: USGS_TI },
+      { label: 'USGS MCS 2026 titanium (family context; China ceiling is screening offtake, not a TIMET contract)', url: USGS_TI_2026 },
     ]
   ),
   'ndpr-oxide': row(

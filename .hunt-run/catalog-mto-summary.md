@@ -92,4 +92,4 @@ Not edited: `cases/network.js`, MECH undo/pump/blower, methanol/steel/Maglut/Si/
 
 ## Tip
 
-Feat SHA pending deploy. Pages URL pending. Prior checkout tip `24788fe`.
+Feat `908768a` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `908768a`). `npm test` 433 pass / 0 fail. Prior checkout tip `24788fe`.

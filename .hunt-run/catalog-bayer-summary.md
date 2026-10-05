@@ -68,4 +68,4 @@ Purchased: quartz $0.08, reductant $0.25, bauxite $0.04, caustic makeup $0.45, a
 
 ## Tip
 
-Feat pending push on `main`. Pages not yet marked live.
+Feat `d42e15a` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `d42e15a`). `npm test` 393 pass / 0 fail.

@@ -57,4 +57,4 @@ No change to `data/tea-screening.js`, `engine/economics.js`, or `js/flowsheet-ap
 
 ## Tip
 
-Feat SHA pending deploy. Pages URL pending. Prior checkout tip `ebc4330`.
+Feat `55c310d` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `55c310d`). `npm test` 403 pass / 0 fail. Prior checkout tip `ebc4330`.

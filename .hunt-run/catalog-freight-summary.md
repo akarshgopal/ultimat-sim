@@ -63,4 +63,4 @@ Installed CAPEX ≈ $3.08 M unchanged. Screening, not bankable, not a Maersk/Hyd
 
 ## Tip
 
-Feat pending push on `main`. Pages not yet marked live.
+Feat `be62508` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `be62508`). `npm test` 398 pass / 0 fail.

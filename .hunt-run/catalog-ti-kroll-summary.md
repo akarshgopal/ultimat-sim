@@ -82,4 +82,4 @@ Unit stoich in `engine/units.js` was already present and was not changed.
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `273565d`. Pages URL after deploy: https://akarshgopal.github.io/ultimat-sim/
+Feat `b1d2767` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `b1d2767`). `npm test` 422 pass / 0 fail. Prior checkout tip `273565d`.

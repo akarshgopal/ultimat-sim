@@ -90,7 +90,7 @@
   let siteMapLayersReady = false;
   const SIZE_PRODUCT_LABELS = {
     CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
-    module: 'PV module', steel: 'steel', ethylene: 'ethylene',
+    module: 'PV module', steel: 'steel', ethylene: 'ethylene', diesel: 'diesel',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -1610,7 +1610,7 @@
     loadCase(FtLiquidsCase.createFtLiquidsCase(), 'ft-liquids');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening FT diesel from purchased H₂+CO₂ on frozen Mejillones PV; may be cash±; not bankable; not green e-diesel; RWGS folded; not full FT slate.';
+      status.textContent = 'screening FT diesel from purchased H₂+CO₂ on frozen Mejillones PV; Size-to-target → diesel; may be cash±; not bankable; not green e-diesel; RWGS folded; not full FT slate.';
     }
   }
 

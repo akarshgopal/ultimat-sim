@@ -297,6 +297,11 @@ test('sizeToProduct aliases steel/fe and ethylene/mto', () => {
   assert.equal(sizeToProduct({ product: 'mto', rate: 500, caseOrBuilder: createMtoCase }).product, 'ethylene');
 });
 
+test('sizeToProduct aliases diesel/ft', () => {
+  const { createFtLiquidsCase } = require('../cases/ft-liquids');
+  assert.equal(sizeToProduct({ product: 'ft', rate: 2000, caseOrBuilder: createFtLiquidsCase }).product, 'diesel');
+});
+
 test('H2 sizing cascades an explicit hot source onto MED heat', () => {
   const withCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant() });
   const withoutCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant(), heatCredit: false });

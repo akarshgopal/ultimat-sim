@@ -16,7 +16,7 @@ const { cascadeHeat } = heat;
 // Outer plant-sizing loop. Installed capacity stays fixed inside solveOperation;
 // this module is the separate design calculation that chooses those capacities.
 //
-// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene)
+// product kg/day (CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, diesel)
 //   -> strategy estimates converter duties and source budgets
 //   -> T-feasible cascade before purchasing heat on every path with
 //      sinks/sources; residual heat is electric resistance COP=1 for PV;
@@ -67,6 +67,9 @@ const PRODUCT_ALIASES = {
   c2h4: 'ethylene',
   mto: 'ethylene',
   olefin: 'ethylene',
+  diesel: 'diesel',
+  ft: 'diesel',
+  syncrude: 'diesel',
 };
 const PV_MODULE_CHAIN_UNITS = Object.freeze([
   'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module',
@@ -2031,6 +2034,123 @@ function sizeEthylene(definition, target, opts) {
   });
 }
 
+function dieselSink(definition, ftNode) {
+  return reactionProductSink(definition, ftNode, 'diesel')
+    || nodeBy(definition, node => (
+      (node.id === 'diesel' || node.id === 'diesel-product') && String(node.unit).includes('sink')
+    ));
+}
+
+function dieselChain(definition) {
+  const ftNode = converter(definition, 'ft-liquids');
+  if (!ftNode) throw new Error('sizeToProduct needs an ft-liquids block to size diesel demand');
+  const sink = dieselSink(definition, ftNode);
+  if (!sink) throw new Error('sizeToProduct needs a diesel sink');
+  const sources = collectMaterialSourcesFeeding(definition, ftNode.id, new Set());
+  return { ft: ftNode, sink, converters: [ftNode], sources };
+}
+
+function baselineDieselDuties(definition) {
+  const chain = dieselChain(definition);
+  const converterDuties = {};
+  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
+  const streams = {};
+  for (const node of chain.sources) {
+    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
+  }
+  return {
+    dieselKg: converterDuties[chain.ft.id] || 0,
+    converterDuties,
+    streams,
+  };
+}
+
+function dieselProcessElectricityKWh(definition, baseline, scale) {
+  const ftNode = converter(definition, 'ft-liquids');
+  if (!ftNode || !(baseline.converterDuties[ftNode.id] > 0)) return 0;
+  const listed = Number(ftNode.params?.electricityKWhPerKg);
+  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 0.22;
+  return baseline.converterDuties[ftNode.id] * scale * sec;
+}
+
+function sizeDiesel(definition, target, opts) {
+  const chain = dieselChain(definition);
+  const baseline = baselineDieselDuties(definition);
+  if (!(baseline.dieselKg > 0) && target > 0) {
+    throw new Error('sizeToProduct cannot size diesel: ft-liquids has no baseline capacity');
+  }
+  let yieldPerScale = baseline.dieselKg > 0 ? baseline.dieselKg : 1;
+  return iterateSize({
+    definition,
+    target,
+    caps: opts.caps || {},
+    maxIterations: opts.maxIterations,
+    tolerance: opts.tolerance,
+    product: 'diesel',
+    estimate: (current, rate, _state, caps) => {
+      const yieldPerKWp = dailyPvKWhPerKWp(current);
+      const raw = kg => {
+        const dieselKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? dieselKg / yieldPerScale : 0;
+        const processElectricityKWh = dieselProcessElectricityKWh(current, baseline, scale);
+        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
+        return {
+          diesel: dieselKg,
+          scale,
+          processElectricityKWh,
+          electricityKWh: processElectricityKWh,
+          heatKWh: 0,
+          heatCoveredKWh: 0,
+          heatResidualKWh: 0,
+          solarKWp,
+          yieldPerKWp,
+          ch4: 0,
+          h2: 0,
+          co2: 0,
+          makeupWaterKg: 0,
+          swro: 0,
+          seawaterKg: 0,
+          brineKg: 0,
+          airKg: 0,
+          consumablesKg: 0,
+          _scaleBasis: dieselKg,
+        };
+      };
+      const uncapped = yieldPerScale > 0 ? rate : 0;
+      return applyCapScale(raw(uncapped), raw, caps, [
+        ['diesel', 'diesel'],
+        ['solarKWp', 'solarKWp'],
+      ]);
+    },
+    apply: (current, duties) => {
+      applyRatioScale(current, baseline, Number(duties.scale) || 0);
+      applyPowerAndSite(current, duties);
+      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
+    },
+    measure: (solved, current, duties) => {
+      const achieved = sinkMassKg(solved, chain.sink);
+      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
+      const gaps = [
+        relativeGap(achieved, duties.diesel),
+        relativeGap(activity(solved, chain.ft), duties.diesel),
+      ];
+      const consistency = Math.max(...gaps);
+      return {
+        achieved,
+        consistency,
+        residual: Math.max(relativeGap(achieved, target), consistency),
+        historyDuties: historyDuties(duties, solved, current, {
+          achieved,
+          scale: duties.scale,
+          diesel: duties.diesel,
+          achievedElectricityKWh: electricityConsumed(solved),
+          ...heatMeasureExtras(solved, duties),
+        }),
+      };
+    },
+  });
+}
+
 function sizeMinerals(definition, product, target, opts) {
   const minerals = converter(definition, 'brine-minerals');
   if (!minerals) throw new Error('sizeToProduct needs a brine-minerals block to size lithium or salt demand');
@@ -2128,7 +2248,7 @@ function normalizeProduct(product) {
   const key = String(product ?? '').trim().toLowerCase();
   const normalized = PRODUCT_ALIASES[key];
   if (!normalized) {
-    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, or ethylene');
+    throw new Error('Unknown product. Use CH4, H2, methanol, ammonia, lithium, salt, module, steel, ethylene, or diesel');
   }
   return normalized;
 }
@@ -2151,6 +2271,7 @@ function sizeToProduct(opts = {}) {
   if (product === 'module') return sizePvModule(definition, rate, loopOpts);
   if (product === 'steel') return sizeSteel(definition, rate, loopOpts);
   if (product === 'ethylene') return sizeEthylene(definition, rate, loopOpts);
+  if (product === 'diesel') return sizeDiesel(definition, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 

@@ -287,7 +287,7 @@
       palette: { section: 'building', order: 8.8, glyph: 'FT', tone: 'methane', description: 'H₂ + CO₂ → diesel + water' },
       params: { electricityKWhPerKg: 0.22 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 2, step: 0.01, unit: 'kWh/kg liquid' }],
-      sourceNote: 'Screening overall 12 CO₂ + 37 H₂ → C₁₂H₂₆ + 24 H₂O (n=12 paraffin diesel/syncrude proxy; RWGS folded into island). Default 0.22 kWh/kg is IEA 0.018 GJe/GJliquid × 43.0 MJ/kg (electricity of the FT island; real FT is heat/H₂ dominated). Not a Sasol/Shell SEC and not a green e-diesel stack.',
+      sourceNote: 'Screening overall 12 CO₂ + 37 H₂ → C₁₂H₂₆ + 24 H₂O (n=12 paraffin diesel/syncrude proxy; RWGS folded into island). Default 0.22 kWh/kg is IEA 0.018 GJe/GJliquid × 43.0 MJ/kg (electricity of the FT island; real FT is heat/H₂ dominated). H₂ is purchased industrial (ft-liquids) or on-site SWRO+PEM (green-ft). Not a Sasol/Shell SEC and not a green e-diesel premium.',
     },
     'brine-minerals': {
       label: 'Brine mineral train', capacity: 100000, rate: 1000, activityUnit: 'kg brine/day',
@@ -1037,6 +1037,7 @@
     'mto': () => loadMto(),
     'ft-liquids': () => loadFtLiquids(),
     'green-mto': () => loadGreenMto(),
+    'green-ft': () => loadGreenFt(),
     'abundance-hub': () => loadAbundanceHub(),
     'zabuye-hub': () => loadZabuyeHub(),
     'demo-network': () => loadDemoNetwork(),
@@ -1623,6 +1624,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening seawater+sun → PEM H₂ + purchased CO₂ → MeOH → ethylene; not purchased MeOH; not DAC; not bankable.';
+    }
+  }
+
+  function loadGreenFt() {
+    setActiveDemo('green-ft', 'Mejillones green FT (SWRO+PEM H₂+CO₂→diesel)');
+    lastSizing = null;
+    if (typeof GreenFtCase === 'undefined' || !GreenFtCase.createGreenFtCase) {
+      throw new Error('Green FT case is not loaded');
+    }
+    loadCase(GreenFtCase.createGreenFtCase(), 'ft-liquids');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening seawater+sun → PEM H₂ + purchased CO₂ → diesel; not purchased H₂; not DAC; not bankable.';
     }
   }
 
@@ -7835,7 +7849,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadFloatGlass, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, loadFtLiquids, loadGreenMto, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadFloatGlass, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, loadFtLiquids, loadGreenMto, loadGreenFt, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

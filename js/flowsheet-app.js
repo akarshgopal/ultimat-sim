@@ -432,7 +432,7 @@
       palette: { section: 'building', order: 13, glyph: 'Fe', tone: 'carbon', description: 'Purchased hematite + H₂ → DRI Fe' },
       params: { electricityKWhPerKg: 0.7 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Direct electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg Fe' }],
-      sourceNote: 'Screening H₂-DRI, 0.7 kWh/kg shaft electricity with purchased H₂, not Midrex. Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O. Not an electrolyzer path and not EAF.',
+      sourceNote: 'Screening H₂-DRI, 0.7 kWh/kg shaft electricity. Stoich 0.5 Fe₂O₃ + 1.5 H₂ → Fe + 1.5 H₂O. H₂ is purchased industrial (h2-dri) or on-site SWRO+PEM (green-h2-dri). Not Midrex and not EAF.',
       references: [
         { label: 'USGS MCS 2025 iron ore', url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf' },
         { label: 'USGS MCS 2025 iron and steel', url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf' },
@@ -1001,6 +1001,7 @@
     'coastal-methanol': () => loadMethanolPlant(0),
     'silicon-alumina': () => loadSiliconAlumina(),
     'h2-dri': () => loadH2Dri(),
+    'green-h2-dri': () => loadGreenH2Dri(),
     'ti-kroll': () => loadTiKroll(),
     'ree-ionic': () => loadReeIonic(),
     'maglut-long-beach': () => loadMaglutLongBeach(),
@@ -1438,6 +1439,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening H₂-DRI from purchased ore+H₂ on frozen Mejillones PV; may be cash±; not bankable; not green-H₂ path.';
+    }
+  }
+
+  function loadGreenH2Dri() {
+    setActiveDemo('green-h2-dri', 'Mejillones green H₂-DRI (SWRO+PEM)');
+    lastSizing = null;
+    if (typeof GreenH2DriCase === 'undefined' || !GreenH2DriCase.createGreenH2DriCase) {
+      throw new Error('Green H₂-DRI case is not loaded');
+    }
+    loadCase(GreenH2DriCase.createGreenH2DriCase(), 'dri');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening seawater+sun → PEM H₂ → DRI Fe; not purchased H₂; not Midrex; not bankable.';
     }
   }
 
@@ -7795,7 +7809,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

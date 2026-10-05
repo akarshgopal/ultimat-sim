@@ -54,3 +54,7 @@ Sign stays cash− (about 2× the 1000 demo). Maglut `createMaglutCase` cash sti
 - Size titanium.
 - Carbamate recycle / granulation.
 - Demo 2% solar seed margin is not copied into the sizer (methanol / ethylene convention).
+
+## Tip
+
+Feat `88823f7` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `88823f7`). `npm test` 475 pass / 0 fail. Prior checkout tip `d3d8058`.

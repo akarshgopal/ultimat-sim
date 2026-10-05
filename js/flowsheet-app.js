@@ -1856,11 +1856,9 @@
   }
 
   function escapeHtml(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[char]));
   }
 
   function defaultSiteRights() {
@@ -2960,10 +2958,6 @@
     const saves = readJson(SAVES_KEY) || {};
     const select = document.getElementById('factorySaves');
     select.innerHTML = `<option value="">Autosave</option>${Object.keys(saves).sort().map(name => `<option value="${encodeURIComponent(name)}"${name === selected ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('')}`;
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
   }
 
   function startDrag(event) {
@@ -6312,12 +6306,6 @@
       const rightsDetails = rightsEl.closest?.('details');
       if (rightsDetails) rightsDetails.hidden = !rightsEl.innerHTML;
     }
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, char => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[char]));
   }
 
   function syncNetworkChrome() {

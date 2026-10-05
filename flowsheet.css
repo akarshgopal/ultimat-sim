@@ -1721,8 +1721,6 @@ button.primary-action:focus-visible {
 .network-plant button:hover,
 .network-plant button:focus-visible { color: var(--electric); border-color: var(--electric); outline: none; }
 
-.network-metrics { margin-top: 0; }
-
 .product-slate {
   display: grid;
   gap: 0;
@@ -2014,7 +2012,6 @@ button.primary-action:focus-visible {
   white-space: nowrap;
   font-size: 0.72rem;
 }
-.stage-actions .primary-action { /* shared filled amber */ }
 .stage-actions button:hover,
 .stage-actions button:focus-visible,
 .save-menu summary:hover,

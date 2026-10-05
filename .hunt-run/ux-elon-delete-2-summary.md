@@ -1,8 +1,8 @@
 # UX-ELON-DELETE-2
 
 **Tip before:** `c2be082` (`docs(catalog-float-glass): mark Pages live`)
-**Product commit:** `a35790e` `refactor(ux-elon-delete-2): drop dead More-units palette, legacy gauges, duplicate Overview chips`
-**Line delta:** 5 files, **+16 / −143** (net **−127**). Product UI only: `index.html`, `js/flowsheet-app.js`, `flowsheet.css`. Tests updated only where they asserted the deleted hollow bits. `style.css` had nothing dead.
+**Product commit 1:** `a35790e` `refactor(ux-elon-delete-2): drop dead More-units palette, legacy gauges, duplicate Overview chips` — 5 files, **+16 / −143** (net **−127**)
+**Product commit 2:** leftover triplicate `escapeHtml` + unused CSS (this follow-up). Product UI only: `index.html`, `js/flowsheet-app.js`, `flowsheet.css`. Tests updated only where they asserted the deleted hollow bits. `style.css` had nothing dead.
 
 YAGNI. Network never Empire. Screening honesty left in place (one Overview honesty line; one Economics banner). No TEA pack/price/SEC retune. No MECH undo/pump/blower. No case cash numbers. `refreshLiftEconomics` left alone (pump/blower).
 
@@ -29,6 +29,9 @@ YAGNI. Network never Empire. Screening honesty left in place (one Overview hones
 | `flowsheet.css:.site-map-cite` | Live cite uses `#siteMapLegendCite` / `.site-map-legend-cite`. | `rg site-map-cite` HTML/JS → 0. |
 | `flowsheet.css:.network-detail` | Class never applied. | `rg network-detail` HTML/JS → 0. |
 | `flowsheet.css:.overview-chips` | Wrapper died with the duplicate chips. | HTML gone. |
+| `js/flowsheet-app.js:escapeHtml` (2nd + 3rd defs) | Three `function escapeHtml` in one IIFE; later declarations overwrite. First copy omitted `'`. | `rg 'function escapeHtml'` → 3 defs, no tests. Kept the apostrophe-safe body once. |
+| `flowsheet.css:.network-metrics` | Class never applied. Live rollup is `#networkMetrics.strip-metrics`. | `rg network-metrics` HTML/JS → 0. |
+| `flowsheet.css:.stage-actions .primary-action` | Empty rule (`/* shared filled amber */`). No Process primary on `.stage-actions`. | Body was a comment only. |
 
 ## Kept on purpose
 
@@ -53,4 +56,4 @@ YAGNI. Network never Empire. Screening honesty left in place (one Overview hones
 
 ## Tip
 
-Feat `a35790e` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `a35790e`). `npm test` 456 pass / 0 fail. Prior checkout tip `c2be082`.
+Feat `a35790e` on `main`, plus this follow-up. Pages published: https://akarshgopal.github.io/ultimat-sim/. `npm test` 456 pass / 0 fail. Prior checkout tip `c2be082`.

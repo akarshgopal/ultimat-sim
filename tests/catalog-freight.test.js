@@ -210,16 +210,16 @@ function solvedCash(create) {
   return { definition, solved, cash: evaluateEconomics(definition, solved) };
 }
 
-test('Mejillones cement leftover freight: limestone/clay/sale bulk-dry-shortsea 0.03', () => {
+test('Mejillones cement leftover freight: limestone/clay inland-truck-short 0.01; sale bulk-dry-shortsea 0.03', () => {
   const { definition, cash } = solvedCash(createCementCase);
   const limestone = nodeEcon(definition, 'limestone-feed');
   const clay = nodeEcon(definition, 'clay-feed');
   const sale = nodeEcon(definition, 'cement-product');
-  assert.equal(limestone.freightId, 'bulk-dry-shortsea');
-  assert.equal(limestone.freightUsdPerKg, 0.03);
+  assert.equal(limestone.freightId, 'inland-truck-short');
+  assert.equal(limestone.freightUsdPerKg, 0.01);
   assert.equal(limestone.unitCost, 0.02);
-  assert.equal(clay.freightId, 'bulk-dry-shortsea');
-  assert.equal(clay.freightUsdPerKg, 0.03);
+  assert.equal(clay.freightId, 'inland-truck-short');
+  assert.equal(clay.freightUsdPerKg, 0.01);
   assert.equal(clay.unitCost, 0.02);
   assert.equal(sale.freightId, 'bulk-dry-shortsea');
   assert.equal(sale.freightUsdPerKg, 0.03);
@@ -228,6 +228,11 @@ test('Mejillones cement leftover freight: limestone/clay/sale bulk-dry-shortsea 
   assert.ok(Math.abs(cash.installedCapex - PRIOR_CEMENT_INSTALLED_CAPEX) <= 1, `cement CAPEX ${cash.installedCapex}`);
   assert.ok(cash.breakdown.freight > 0, `cement freight ${cash.breakdown.freight}`);
   assert.ok(Number.isFinite(cash.annualNetCash), `cement annualNetCash ${cash.annualNetCash}`);
+  // Feed freight $0.03→$0.01; less cash− than plant-gate-shortsea leftover ~−25975. Sign recorded, not forced.
+  assert.ok(cash.annualNetCash > -25975, `cement expected less cash− than −25975, got ${cash.annualNetCash}`);
+  const maglutCash = evaluateEconomics(createMaglutCase(), solveOperation(createMaglutCase()));
+  assert.ok(Math.abs(maglutCash.annualNetCash - 1299) <= 5, `Maglut annualNetCash ${maglutCash.annualNetCash}`);
+  assert.equal(maglutCash.breakdown.freight, 0);
 });
 
 test('Mejillones Cu-EW leftover freight: PLS + cathode chile-coast-container 0.08', () => {
@@ -399,7 +404,7 @@ test('Leftover freight: Maglut/Dead Sea stay plant-gate; Walvis urea freighted; 
   assert.ok(Number.isFinite(greenH2Dri.economics.annualNetCash), `green-H2-DRI annualNetCash ${greenH2Dri.economics.annualNetCash}`);
 });
 
-test('inland-truck-short band is $0.01/kg; green-H2-DRI iron-ore only', () => {
+test('inland-truck-short band is $0.01/kg; green-H2-DRI iron-ore (cement quarry feeds covered by leftover cement test)', () => {
   assert.equal(tea.getFreight('inland-truck-short').value, 0.01);
   assert.equal(tea.getFreight('inland-truck-short').unit, '$/kg');
   assert.equal(tea.getFreight('inland-truck-short').quality, 'screening');

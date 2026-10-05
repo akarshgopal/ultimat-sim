@@ -86,7 +86,9 @@ test('Mejillones cement demo 1000 kg/day with CAPEX on line + solar and finite c
   assert.ok(solarCapex > 0, `solar CAPEX ${solarCapex}`);
   assert.equal(power.economics.unitCost, undefined);
   assert.equal(definition.graph.nodes.find(node => node.id === 'limestone-feed').economics.unitCost, 0.02);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'limestone-feed').economics.freightId, 'inland-truck-short');
   assert.equal(definition.graph.nodes.find(node => node.id === 'clay-feed').economics.unitCost, 0.02);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'clay-feed').economics.freightId, 'inland-truck-short');
   assert.equal(definition.graph.nodes.find(node => node.id === 'cement-product').economics.gateUnitPrice, 0.16);
   assert.equal(definition.graph.nodes.find(node => node.id === 'cement-product').economics.unitPrice, 0.13);
   assert.equal(definition.graph.nodes.find(node => node.id === 'cement-product').economics.freightId, 'bulk-dry-shortsea');

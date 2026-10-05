@@ -54,6 +54,7 @@ const UNIT_INTENSITY_QUALITY = Object.freeze({
   'aluminium-smelter': 'recoverable',
   'mg-si': 'recoverable',
   polysilicon: 'screening',
+  'pv-module': 'screening',
   'iac-leach': 'screening',
   'ree-chromatography': 'screening',
   bioforge: 'screening',

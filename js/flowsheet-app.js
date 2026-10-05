@@ -97,7 +97,7 @@
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
-    Crust: ['mg-si', 'polysilicon', 'aluminium-smelter'],
+    Crust: ['mg-si', 'polysilicon', 'aluminium-smelter', 'pv-module'],
     REE: ['iac-leach', 'ree-chromatography'],
     Bio: ['bioforge'],
   };
@@ -327,6 +327,24 @@
       references: [
         { label: 'Fraunhofer ISE polysilicon electricity (SoG 60–71 kWh/kg family)', url: 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf' },
         { label: 'NREL Spring 2025 Solar Industry Update (SoG poly spot screening mid $6/kg)', url: 'https://www.nrel.gov/docs/' },
+      ],
+    },
+    'pv-module': {
+      label: 'PV module (BOM)', capacity: 1000, rate: 100, activityUnit: 'kg module/day',
+      palette: { section: 'building', order: 12, glyph: 'PV', description: 'Poly-Si + Ag + glass + EVA + Al → module' },
+      params: {
+        electricityKWhPerKg: 0.05,
+        polysiliconKgPerKg: 0.0273,
+        silverKgPerKg: 0.0003,
+        glassKgPerKg: 0.6745,
+        evaKgPerKg: 0.0669,
+        aluminiumKgPerKg: 0.1273,
+      },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 1, step: 0.01, unit: 'kWh/kg module' }],
+      sourceNote: 'Fraunhofer ISE Photovoltaics Report 2021 module mass shares on 11.6 kg/m² (poly-Si 0.0273, Ag 0.0003, glass 0.6745, EVA 0.0669, Al 0.1273 kg/kg). Remaining ~10.4% backsheet/J-box/cables omitted. Assembly/laminator SEC 0.05 kWh/kg. Not a cell fab, not TOPCon, not bankable.',
+      references: [
+        { label: 'Fraunhofer ISE Photovoltaics Report (module mass 11.6 kg/m² shares)', url: 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf' },
+        { label: 'NREL Solar Industry Update family (module ASP context)', url: 'https://www.nrel.gov/docs/' },
       ],
     },
     'iac-leach': {
@@ -565,6 +583,11 @@
     brineConcession: 'Brine concession',
     saltPurchase: 'Salt purchase',
     concentratePurchase: 'Concentrate purchase',
+    quartzPurchase: 'Quartz purchase',
+    aluminaPurchase: 'Alumina purchase',
+    silverPurchase: 'Silver purchase',
+    glassPurchase: 'Glass purchase',
+    evaPurchase: 'EVA purchase',
   };
   const portNames = {
     air: 'Feed gas', electricity: 'Electricity', heat: 'Process heat', consumables: 'Consumables',
@@ -574,8 +597,9 @@
     co2: 'CO₂', methane: 'Methane', methanol: 'Methanol', out: 'Output', in: 'Input',
     wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'Ammonia', offgas: 'Off-gas',
     lithium: 'Lithium chloride', bromide: 'Sodium bromide', magnesium: 'Magnesium chloride', potash: 'Potash', gypsum: 'Gypsum', salt: 'Salt', raffinate: 'Raffinate',
-    caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Aluminium', carbonDioxide: 'Carbon dioxide',
+    caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Al frame', carbonDioxide: 'Carbon dioxide',
     quartz: 'Quartzite', silicon: 'MG-Si', polysilicon: 'Poly-Si', carbonMonoxide: 'Carbon monoxide',
+    silver: 'Ag paste', glass: 'Float glass', eva: 'EVA', module: 'Module',
     clay: 'Clay', lixiviant: '(NH4)2SO4', ndpr: 'NdPr', otherReo: 'Other REO', residue: 'Residue', liquor: 'Liquor',
     concentrate: 'Concentrate', dytb: 'DyTb', lightReo: 'Light REO',
     dextrose: 'Dextrose', gluconic: 'Gluconic acid', hydrogenPeroxide: 'Hydrogen peroxide',
@@ -616,6 +640,10 @@
         : { Nd2O3: 5.10 / 97.27 * 1000 / 336.48, Y2O3: 62.90 / 97.27 * 1000 / 225.81 },
     },
     dextrose: { label: 'Dextrose', phase: 'solid', mol: { C6H12O6: 1000 } },
+    silver: { label: 'Silver paste', phase: 'solid', mol: { Ag: 1000 } },
+    'float-glass': { label: 'Float glass', phase: 'solid', mol: { FloatGlass: 1000 } },
+    eva: { label: 'EVA encapsulant', phase: 'solid', mol: { EVA: 1000 } },
+    aluminium: { label: 'Aluminium', phase: 'solid', mol: { Al: 1000 } },
     flueGas: {
       label: 'Flue gas',
       phase: 'gas',
@@ -652,6 +680,10 @@
     'ammonium-sulfate': { key: 'ammonium-sulfate', label: 'Ammonium sulfate', profile: 'silo', glyph: 'silo' },
     'mixed-reo': { key: 'mixed-reo', label: 'Mixed REO concentrate', profile: 'silo', glyph: 'silo' },
     dextrose: { key: 'dextrose', label: 'Dextrose', profile: 'silo', glyph: 'silo' },
+    silver: { key: 'silver', label: 'Silver paste', profile: 'silo', glyph: 'Ag' },
+    'float-glass': { key: 'float-glass', label: 'Float glass', profile: 'silo', glyph: 'Gl' },
+    eva: { key: 'eva', label: 'EVA encapsulant', profile: 'silo', glyph: 'EVA' },
+    aluminium: { key: 'aluminium', label: 'Aluminium', profile: 'silo', glyph: 'Al' },
   };
   const PRACTICAL_INTAKE_PALETTE = [
     { preset: 'seawater', label: 'Seawater intake', glyph: 'SW', tone: 'water', description: 'Coastal seawater feed' },
@@ -660,7 +692,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -1324,15 +1356,15 @@
   }
 
   function loadSiliconAlumina() {
-    setActiveDemo('silicon-alumina', 'Mejillones MG-Si → poly-Si + Al');
+    setActiveDemo('silicon-alumina', 'Mejillones PV BOM (poly-Si + Al + Ag/glass/EVA)');
     lastSizing = null;
     if (typeof SiliconCase === 'undefined' || !SiliconCase.createSiliconCase) {
       throw new Error('Silicon case is not loaded');
     }
-    loadCase(SiliconCase.createSiliconCase(), 'polysilicon');
+    loadCase(SiliconCase.createSiliconCase(), 'pv-module');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'Siemens-style poly upgrade on frozen Mejillones PV; quartz → MG-Si → poly-Si (+ Al); screening; may be cash−; not bankable; not PV panel BOM.';
+      status.textContent = 'screening module assembly on frozen Mejillones PV; may be cash±; not bankable; not a cell fab.';
     }
   }
 
@@ -3615,7 +3647,9 @@
       'methanol.co2': 'co2', 'methanol.hydrogen': 'hydrogen',
       'chlor-alkali.salt': 'salt',
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
-      'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon', 'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
+      'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon',
+      'pv-module.polysilicon': 'silicon', 'pv-module.silver': 'silver', 'pv-module.glass': 'float-glass', 'pv-module.eva': 'eva', 'pv-module.aluminium': 'aluminium',
+      'hydrogen-dri.ironOre': 'ironOre', 'hydrogen-dri.hydrogen': 'hydrogen',
       'iac-leach.clay': 'ionic-clay', 'iac-leach.lixiviant': 'ammonium-sulfate',
       'ree-chromatography.concentrate': 'mixed-reo',
       'bioforge.dextrose': 'dextrose', 'bioforge.oxygen': 'oxygen', 'bioforge.water': 'water',
@@ -4737,6 +4771,9 @@
     O2: 'Oxygen',
     'poly-silicon': 'Poly-Si',
     polysilicon: 'Poly-Si',
+    module: 'PV module',
+    'pv-module': 'PV module',
+    PVmodule: 'PV module',
     ndpr: 'NdPr oxide',
     'ndpr-oxide': 'NdPr oxide',
     'ndpr-oxide-separated': 'NdPr oxide',
@@ -5191,7 +5228,7 @@
     if (unit === 'electrical-bus' || kind === 'junction') return 'bus';
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
     if (unit === 'mg-si' || unit === 'polysilicon') return 'furnace';
-    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'aluminium-smelter' || unit === 'bioforge') return 'cell';
+    if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
     if (unit === 'asu' || unit === 'ammonia' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
     return 'shed';
@@ -6671,7 +6708,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'aluminium-smelter' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'bioforge') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'bioforge') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6799,6 +6836,7 @@
     'mg-si': 'mg-si',
     polysilicon: 'polysilicon',
     'aluminium-smelter': 'aluminium-smelter',
+    'pv-module': 'pv-module',
     'iac-leach': 'iac-leach',
     'ree-chromatography': 'ree-chromatography',
     bioforge: 'bioforge',

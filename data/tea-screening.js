@@ -47,6 +47,8 @@ const MDPI_MGSI = 'https://www.mdpi.com/1996-1073/19/9/2023';
 const NREL_SOLAR_2025 = 'https://www.nrel.gov/docs/';
 const REW_POLYSI = 'https://www.renewableenergyworld.com/solar/advancements-in-the-commercial-production-of-polysilicon/';
 const FRAUNHOFER_POLYSI = 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf';
+const FRAUNHOFER_PV_REPORT = 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf';
+const USGS_AG = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-silver.pdf';
 const NREL_DLE = 'https://doi.org/10.2172/1782801';
 const NREL_ATB = 'https://atb.nrel.gov/';
 const NREL_ATB_DOI = 'https://doi.org/10.25984/2377191';
@@ -235,6 +237,14 @@ const prices = {
     'IndexBox US 2024 average export price $674/t. Concentration basis not stated — screening, not the Nov 2024 $950/t 70% Illinois quote, not 100% equivalent. No regional overlay.',
     [{ label: 'IndexBox hydrogen peroxide United States market overview 2024 — US 2024 average export price $674/t', url: 'https://www.indexbox.io/blog/hydrogen-peroxide-united-states-market-overview-2024-3/' }]
   ),
+  'pv-module': row(
+    2.85, '$/kg', 'screening', 'module ASP $0.15/W × 1000 / 52.7 kg/kWp',
+    'Screening module ASP mid of recent utility bands (~$0.10–0.20/W) at $0.15/W × (1000 W/kWp) / 52.7 kg/kWp = $2.85/kg, where 52.7 = 11.6 kg/m² ÷ 0.220 kW/m² (Fraunhofer 2021 module mass + ~220 W/m² modern module power-density screening). Not a Tier-1 contract and not China spot.',
+    [
+      { label: 'Fraunhofer ISE Photovoltaics Report (module mass 11.6 kg/m² family; screening ASP derivation)', url: FRAUNHOFER_PV_REPORT },
+      { label: 'NREL Solar Industry Update family (module ASP context ~$0.10–0.20/W; screening mid $0.15/W)', url: NREL_SOLAR_2025 },
+    ]
+  ),
 };
 
 const costs = {
@@ -307,6 +317,21 @@ const costs = {
     0.84, '$/kg', 'screening', 'Tridge US 2024 dextrose export low',
     'Tridge US 2024 export low $0.84/kg. Not an ADM transfer price. Do not invent a Midwest plant-gate price.',
     [{ label: 'Tridge US dextrose export prices (2024 low $0.84/kg; not an ADM transfer price)', url: 'https://dir.tridge.com/prices/dextrose/US' }]
+  ),
+  silver: row(
+    1221.73, '$/kg', 'cited', 'USGS MCS 2026 silver bullion 2025e',
+    'USGS MCS 2026 silver bullion 2025e average $38/troy oz × (1/0.0311034768 kg/troy oz) = 1221.73 $/kg. Cited bullion, not a paste contract and not a fabricator quote.',
+    [{ label: 'USGS Mineral Commodity Summaries 2026 — Silver (bullion 2025e average $38/troy oz → 1221.73 $/kg)', url: USGS_AG }]
+  ),
+  'float-glass': row(
+    0.45, '$/kg', 'screening', 'solar float/AR glass band',
+    'Solar float/AR glass ~$2.50–4.00/m² mid $3.25 / 7.8242 kg glass per m² (0.6745×11.6 Fraunhofer mass share) ≈ $0.42/kg → round $0.45/kg. Screening, not a Guardian/Xinyi quote.',
+    [{ label: 'Fraunhofer ISE Photovoltaics Report (glass mass share 0.6745 of 11.6 kg/m²; $/m² band is screening)', url: FRAUNHOFER_PV_REPORT }]
+  ),
+  'eva-encapsulant': row(
+    2.00, '$/kg', 'screening', 'solar EVA film band',
+    'Solar EVA film ~$1.8–2.5/kg mid $2.00/kg. Screening, not a STR/Mitsui contract.',
+    [{ label: 'Solar EVA encapsulant film screening mid $2.00/kg of ~$1.8–2.5/kg; not a STR/Mitsui contract', url: FRAUNHOFER_PV_REPORT }]
   ),
 };
 
@@ -447,6 +472,16 @@ const packs = {
     evidence: [
       { label: 'Renewable Energy World — advancements in commercial polysilicon production (TCS Siemens CAPEX family; screening $87/kg-y)', url: REW_POLYSI },
       { label: 'Fraunhofer ISE — electricity consumption for electronic-grade polysilicon (SEC family 60–71 kWh/kg SoG)', url: FRAUNHOFER_POLYSI },
+    ],
+  }),
+  'pv-module': pack({
+    capexIntensity: 700, intensityUnit: '$/(kg module/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'module-line CAPEX OOM / NREL manufacturing cost family',
+    note: 'installedCapex = 700 × capacity. ~$0.10/W module-line CAPEX × 1000 / 52.7 kg/kWp ≈ $1.90/kg-y × 365 ≈ 693 → 700 $/(kg module/day). Linear small-plant intensity; not a GW fab quote. Assembly/laminator island only — not a cell fab. Screening, not bankable.',
+    evidence: [
+      { label: 'Fraunhofer ISE Photovoltaics Report (module mass 11.6 kg/m² → 52.7 kg/kWp with ~220 W/m²; CAPEX intensity is screening OOM)', url: FRAUNHOFER_PV_REPORT },
+      { label: 'NREL manufacturing cost / solar industry update family (module-fab CAPEX OOM; screening $0.10/W → 700 $/(kg/day))', url: NREL_SOLAR_2025 },
     ],
   }),
   'iac-leach': pack({
@@ -655,6 +690,11 @@ const demand = {
     [
       { label: 'IndexBox hydrogen peroxide United States market overview 2024 (~1 Mt US consumption family; 100 kt/y ceiling is screening, not a contract)', url: 'https://www.indexbox.io/blog/hydrogen-peroxide-united-states-market-overview-2024-3/' },
     ]
+  ),
+  'pv-module': row(
+    5e6, 'kg/year', 'screening', 'PV module screening regional ceiling',
+    `5 kt/y screening offtake ceiling (~95 MWp/y at 52.7 kg/kWp). Tiny slice of the module market; not world production and not a contract. Fraunhofer module-mass family is BOM context — this ceiling is screening offtake. ${DEMAND_REGION}`,
+    [{ label: 'Fraunhofer ISE Photovoltaics Report (module mass family; 5 kt/y ceiling is screening offtake, not production)', url: FRAUNHOFER_PV_REPORT }]
   ),
 };
 
@@ -946,6 +986,11 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     2e8, 'kg/year', 'screening', 'SoG poly China/Asia ceiling; USGS silicon family context',
     'Conservative 200 kt/y China/Asia solar-grade poly ceiling (China dominates SoG poly). USGS MCS silicon PDF is commodity-family context — this ceiling is screening offtake, not USGS silicon-metal production and not a contract.',
     [{ label: 'USGS MCS 2025 silicon (commodity-family context; 200 kt/y China poly ceiling is screening offtake, not USGS silicon-metal production)', url: USGS_SI }]
+  ),
+  'pv-module': row(
+    5e8, 'kg/year', 'screening', 'PV module China/Asia ceiling',
+    'Conservative 500 kt/y China/Asia module ceiling (~9.5 GWp/y at 52.7 kg/kWp). China dominates module assembly. Screening offtake, not a production table and not a contract.',
+    [{ label: 'Fraunhofer ISE Photovoltaics Report (module mass family; 500 kt/y China ceiling is screening offtake, not production)', url: FRAUNHOFER_PV_REPORT }]
   ),
   'ndpr-oxide': row(
     2e6, 'kg/year', 'screening', 'NdPr oxide China/Asia ceiling; ionic-clay supply',

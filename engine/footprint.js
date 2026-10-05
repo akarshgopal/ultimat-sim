@@ -65,6 +65,7 @@ const PROCESS_LABELS = Object.freeze({
   ammonia: 'Haber–Bosch',
   'mg-si': 'MG-Si furnace',
   polysilicon: 'Polysilicon (Siemens)',
+  'pv-module': 'PV module (BOM)',
   'aluminium-smelter': 'Aluminium smelter',
   'iac-leach': 'Ionic-clay REE',
   'ree-chromatography': 'ARC-1 chromatography',
@@ -363,6 +364,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Screening Siemens poly pad 10 m²/(kg poly-Si/h) (range 6–16); not a plot survey. Fraunhofer ISE is the 60–71 kWh/kg SEC family, not a measured layout.',
         url: 'https://www.ise.fraunhofer.de/content/dam/ise/en/documents/publications/studies/25_en_ISE_Report_Analysis-of-the-Electricity-Consumption-for-the-Production-of-Electronic-Grade-Polysilicon.pdf',
+      }),
+    ]),
+  }),
+  'pv-module': Object.freeze({
+    id: 'pv-module',
+    label: PROCESS_LABELS['pv-module'],
+    basis: 'kgPerHour',
+    intensity: 4,
+    unitLabel: 'm²/(kg module/h)',
+    range: Object.freeze([2, 8]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening module-fab pad 4 m²/(kg module/h) (range 2–8); not a plot survey. Fraunhofer ISE Photovoltaics Report is the 11.6 kg/m² mass-share family, not a measured layout.',
+        url: 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf',
       }),
     ]),
   }),
@@ -700,6 +717,13 @@ function padPolysilicon(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padPvModule(node, solved) {
+  const spec = intensitySpec('pv-module');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padIacLeach(node, solved) {
   const spec = intensitySpec('iac-leach');
   const activity = activityOf(solved, node.id);
@@ -767,6 +791,7 @@ const PROCESS_PADS = Object.freeze({
   ammonia: padAmmonia,
   'mg-si': padMgSi,
   polysilicon: padPolysilicon,
+  'pv-module': padPvModule,
   'aluminium-smelter': padAluminiumSmelter,
   'iac-leach': padIacLeach,
   'ree-chromatography': padReeChromatography,

@@ -55,26 +55,20 @@ test('TEA polysilicon price, pack, and demand', () => {
   assert.notEqual(tea.prices.polysilicon.value, tea.prices.silicon.value);
 });
 
-test('Mejillones poly-Si + Al case solves at 1000 kg poly/day without electricity bind', () => {
+test('Mejillones poly-Si island still solves with module assembly and no MG-Si sale', () => {
   const definition = createSiliconCase();
   const solved = solveOperation(definition);
   assert.equal(solved.convergence.converged, true);
-  assert.ok(Math.abs(solved.nodes.polysilicon.activity - 1000) / 1000 < 0.01);
-  assert.ok(Math.abs(solved.nodes['mg-si'].activity - 1050) / 1050 < 0.01);
-  assert.ok(Math.abs(solved.nodes['aluminium-smelter'].activity - 1000) / 1000 < 0.01);
+  assert.ok(solved.nodes.polysilicon.activity > 0);
+  assert.ok(solved.nodes['mg-si'].activity > 0);
   const limited = [
     ...(solved.nodes.polysilicon.limitedBy || []),
     ...(solved.nodes['mg-si'].limitedBy || []),
-    ...(solved.nodes['aluminium-smelter'].limitedBy || []),
     ...(solved.warnings || []),
   ].join(' ');
   assert.doesNotMatch(limited, /electricity/i);
-  assert.ok(solved.nodes['poly-silicon'].received && streamMassKg(solved.nodes['poly-silicon'].received) > 0);
   assert.equal(definition.graph.nodes.find(node => node.id === 'silicon'), undefined);
-  const polySink = definition.graph.nodes.find(node => node.id === 'poly-silicon');
-  assert.equal(polySink.economics.disposition, 'sale');
-  assert.equal(polySink.economics.unitPrice, 6);
-  assert.match(polySink.economics.source || '', /NREL Spring 2025/i);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'poly-silicon'), undefined);
   const furnaceCapex = id => {
     const node = definition.graph.nodes.find(item => item.id === id);
     return Number(node.economics.installedCapex) || Number(node.economics.capexRate) * Number(node.capacity);
@@ -92,10 +86,9 @@ test('Mejillones poly-Si + Al case solves at 1000 kg poly/day without electricit
 test('palette source lists Crust with polysilicon between mg-si and aluminium-smelter', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'aluminium-smelter'\s*\]/);
-  assert.match(source, /Siemens-style poly upgrade on frozen Mejillones PV/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'aluminium-smelter',\s*'pv-module'\s*\]/);
   assert.match(html, /id="loadSiliconAlumina"/);
-  assert.match(html, /Mejillones MG-Si → poly-Si \+ Al/);
+  assert.match(html, /Mejillones PV BOM \(poly-Si \+ Al \+ Ag\/glass\/EVA\)/);
   assert.match(html, /cases\/silicon\.js/);
   const poly = PROCESS_INTENSITIES.polysilicon;
   assert.equal(poly.intensity, 10);

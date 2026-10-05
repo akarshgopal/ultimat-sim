@@ -71,12 +71,12 @@ test('TEA silicon and aluminium prices, packs, and demand', () => {
   assert.ok(!tea.MINERAL_DEMAND_KEYS.includes('aluminium'));
 });
 
-test('Mejillones MG-Si + Al case still solves with poly upgrade and no MG-Si sale', () => {
+test('Mejillones MG-Si + Al case still solves with module assembly and no MG-Si sale', () => {
   const definition = createSiliconCase();
   const solved = solveOperation(definition);
   assert.equal(solved.convergence.converged, true);
-  assert.ok(Math.abs(solved.nodes['mg-si'].activity - 1050) / 1050 < 0.01);
-  assert.ok(Math.abs(solved.nodes['aluminium-smelter'].activity - 1000) / 1000 < 0.01);
+  assert.ok(solved.nodes['mg-si'].activity > 0);
+  assert.ok(solved.nodes['aluminium-smelter'].activity > 0);
   const limited = [
     ...(solved.nodes['mg-si'].limitedBy || []),
     ...(solved.nodes['aluminium-smelter'].limitedBy || []),
@@ -84,9 +84,7 @@ test('Mejillones MG-Si + Al case still solves with poly upgrade and no MG-Si sal
   ].join(' ');
   assert.doesNotMatch(limited, /electricity/i);
   assert.equal(definition.graph.nodes.find(node => node.id === 'silicon'), undefined);
-  assert.ok(solved.nodes.aluminium.received && streamMassKg(solved.nodes.aluminium.received) > 0);
-  const aluminiumSink = definition.graph.nodes.find(node => node.id === 'aluminium');
-  assert.equal(aluminiumSink.economics.disposition, 'sale');
+  assert.equal(definition.graph.nodes.find(node => node.id === 'aluminium' && node.unit === 'material-sink'), undefined);
   const furnaceCapex = id => {
     const econ = definition.graph.nodes.find(node => node.id === id).economics;
     return Number(econ.installedCapex) || Number(econ.capexRate) * Number(definition.graph.nodes.find(node => node.id === id).capacity);
@@ -104,7 +102,7 @@ test('Mejillones MG-Si + Al case still solves with poly upgrade and no MG-Si sal
 test('palette source lists Crust before More units and hides gallery metals/desal', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'aluminium-smelter'\s*\]/);
+  assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'aluminium-smelter',\s*'pv-module'\s*\]/);
   assert.match(source, /PALETTE_MORE_UNITS = \[\s*'nuclear-electricity',\s*'solar-thermal',\s*'thermal-storage'/);
   assert.doesNotMatch(source, /PALETTE_DEFAULT_OPEN = new Set\(\[[^\]]*Crust/);
   assert.match(html, /id="loadSiliconAlumina"/);

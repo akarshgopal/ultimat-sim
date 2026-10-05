@@ -11,7 +11,7 @@ The app is intentionally centered on the idea that very cheap local solar DC, lo
 The root app now provides:
 
 - A blank, editable process canvas with explicit material, electricity, heat, and consumable ports.
-- Reusable desalination, electrolysis, DAC, Sabatier, ASU, Haber–Bosch, brine-mineral, chlor-alkali, bromine, aluminium, MG-Si, Siemens-style polysilicon, ionic-clay REE leach, Bioforge gluconic, hydrogen-DRI steel, titanium, energy, storage, splitter, mixer, source, and destination blocks.
+- Reusable desalination, electrolysis, DAC, Sabatier, ASU, Haber–Bosch, brine-mineral, chlor-alkali, bromine, aluminium, MG-Si, Siemens-style polysilicon, PV module BOM assembly, ionic-clay REE leach, Bioforge gluconic, hydrogen-DRI steel, titanium, energy, storage, splitter, mixer, source, and destination blocks.
 - A deterministic operating solver with capacity limits, bottleneck reporting, recycles, and visible balance residuals.
 - A generic post-solve economics fold: source purchases, installed CAPEX, fixed and variable O&M, sale/disposal destinations, demand caps, replacements, delivered cost, NPV, and IRR. Screening **annual net cash** is capital-inclusive: `R − OPEX − annualized CAPEX` with `annualizedCapex = installedCapex × CRF(discountRate, projectLifeYears)`. NPV/IRR stay DCF (year 0 = `−installedCapex`; years 1..N = operating cash `R − OPEX` plus replacements — the annualized charge is not subtracted again).
 - Editable economic assumptions on every source, converter, and destination, including zero-cost inputs for in-the-limit experiments.
@@ -32,7 +32,7 @@ The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`
 
 ## Crustal silicon and aluminium (screening)
 
-Metallurgical-grade silicon is a carbothermic SAF block (`mg-si`): SiO₂ + 2 C → Si + 2 CO at 12 kWh/kg electrical (mid of the 11–13 kWh/kg band). Carbon chemical energy is the C feed; the unit does not emit waste heat. Siemens-style poly upgrade (`polysilicon`) is MG-Si + power → solar-grade poly-Si at 65 kWh/kg (Fraunhofer ISE SoG 60–71 band mid; 1.05 mol feed / mol product). Sale is SoG poly screening ~$6/kg (NREL Spring 2025 family), not USGS silicon metal. Hall–Héroult aluminium stays 14 kWh/kg. The Mejillones demo path is quartz → MG-Si → poly-Si (+ Al co-product) on frozen PVGIS-ERA5 5.27 kWh/kWp·day; purchased solids are not a concession. Not a TCS plant model, not a PV module BOM. Screening TEA, not bankable.
+Metallurgical-grade silicon is a carbothermic SAF block (`mg-si`): SiO₂ + 2 C → Si + 2 CO at 12 kWh/kg electrical (mid of the 11–13 kWh/kg band). Carbon chemical energy is the C feed; the unit does not emit waste heat. Siemens-style poly upgrade (`polysilicon`) is MG-Si + power → solar-grade poly-Si at 65 kWh/kg (Fraunhofer ISE SoG 60–71 band mid; 1.05 mol feed / mol product). Hall–Héroult aluminium stays 14 kWh/kg. Screening PV module assembly (`pv-module`) wires poly-Si + purchased Ag paste + float glass + EVA + Al into a finished-module sale using Fraunhofer ISE 2021 mass shares on 11.6 kg/m² (remaining ~10% backsheet/J-box omitted). Ag is USGS MCS 2026 bullion $38/troy oz. Module ASP screening $0.15/W → $2.85/kg. The Mejillones demo is quartz → MG-Si → poly-Si + purchased Ag/glass/EVA + Al → module on frozen PVGIS-ERA5 5.27 kWh/kWp·day; purchased solids are not a concession. Not a cell fab, not a TCS plant model. Screening TEA, not bankable.
 
 ## Ionic-clay REE (screening)
 

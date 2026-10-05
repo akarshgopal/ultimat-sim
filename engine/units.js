@@ -599,6 +599,86 @@ const polysilicon = reaction({
   inputs: { silicon: { substance: 'Si', molPerProductMol: 1.05 } },
   outputs: { polysilicon: { substance: 'Si', molPerProductMol: 1, phase: 'solid' } },
 });
+
+// PV module assembly screening. Fraunhofer ISE Photovoltaics Report 2021 mass shares
+// on 11.6 kg/m², expressed as kg feed / kg finished module:
+//   poly-Si 0.0273, Ag 0.0003, float glass 0.6745, EVA 0.0669, Al frame 0.1273.
+// Sum of these five = 0.8963. Remaining ~10.4% (backsheet, J-box, cables, silicones,
+// cell Al/PbO paste extras) is YAGNI-omitted — no filler substances.
+// Activity = kg module / day. SEC 0.05 kWh/kg is assembly/laminator screening order,
+// not a cell fab, not TOPCon, not backsheet chemistry. No heatKWhPerKg / no wasteHeat.
+// Extra feed substances with mol > 1e-12 throw.
+const PV_MODULE_FEEDS = Object.freeze({
+  polysilicon: { substance: 'Si', kgPerKg: 0.0273, param: 'polysiliconKgPerKg' },
+  silver: { substance: 'Ag', kgPerKg: 0.0003, param: 'silverKgPerKg' },
+  glass: { substance: 'FloatGlass', kgPerKg: 0.6745, param: 'glassKgPerKg' },
+  eva: { substance: 'EVA', kgPerKg: 0.0669, param: 'evaKgPerKg' },
+  aluminium: { substance: 'Al', kgPerKg: 0.1273, param: 'aluminiumKgPerKg' },
+});
+
+function pvModuleAssembly({ inlets, requestedActivity, capacity, params = {} }) {
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const sec = nonnegative(Number(params.electricityKWhPerKg ?? 0.05), 'electricityKWhPerKg');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const feeds = {};
+  const intensities = {};
+  for (const [port, spec] of Object.entries(PV_MODULE_FEEDS)) {
+    const stream = validateStream(inlets[port], 'material');
+    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
+    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
+      throw new Error(`${port} must be pure ${spec.substance}`);
+    }
+    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
+    feeds[port] = stream;
+    intensities[port] = { substance: spec.substance, kgPerKg };
+  }
+  const kgOf = (port) => streamMassKg(feeds[port]);
+  const planned = Math.min(requested, installed);
+  const limits = { capacity: installed };
+  for (const [port, spec] of Object.entries(intensities)) {
+    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
+  }
+  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
+  const activity = Math.min(planned, ...Object.values(limits));
+  const streamKg = (port, kg) => {
+    const template = feeds[port];
+    const substance = intensities[port].substance;
+    return {
+      kind: 'material',
+      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
+      phase: template.phase,
+      T_C: template.T_C,
+      P_bar: template.P_bar,
+    };
+  };
+  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, planned * spec.kgPerKg),
+  ]));
+  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, activity * spec.kgPerKg),
+  ]));
+  const firstFeed = Object.values(feeds)[0];
+  const limitingValue = Math.min(...Object.values(limits));
+  return {
+    activity,
+    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
+    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    outlets: {
+      module: {
+        kind: 'material',
+        mol: { PVmodule: activity * 1000 / SUBSTANCES.PVmodule.molarMassG },
+        phase: 'solid',
+        T_C: firstFeed.T_C,
+        P_bar: firstFeed.P_bar,
+      },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
+
 const hydrogenDri = reaction({
   product: 'Fe', electricityKWhPerKg: 0.7,
   inputs: { ironOre: { substance: 'Fe2O3', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
@@ -1373,6 +1453,19 @@ const UNITS = Object.freeze({
       polysilicon: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: polysilicon,
+  },
+  'pv-module': {
+    kind: 'converter',
+    ports: {
+      polysilicon: { direction: 'in', kind: 'material', required: true },
+      silver: { direction: 'in', kind: 'material', required: true },
+      glass: { direction: 'in', kind: 'material', required: true },
+      eva: { direction: 'in', kind: 'material', required: true },
+      aluminium: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      module: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: pvModuleAssembly,
   },
   'hydrogen-dri': {
     kind: 'converter',

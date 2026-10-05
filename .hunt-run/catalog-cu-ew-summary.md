@@ -120,4 +120,4 @@ Cathode activity 1000 kg/day. Not electricity-limited. Maglut cash ≈ 1299 (±5
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `0605721`.
+Feat `f94b391` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `f94b391`). `npm test` 508 pass / 0 fail. Prior checkout tip `0605721`.

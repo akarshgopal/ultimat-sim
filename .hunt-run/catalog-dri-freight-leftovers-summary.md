@@ -99,4 +99,4 @@ Not edited: `data/tea-screening.js` (bands already exist), `cases/network.js`, `
 
 ## Tip
 
-Feat pending on `main`. Pages pending. Prior checkout tip `4b2e3c7`.
+Feat `b1f2fba` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `b1f2fba`). `npm test` 534 pass / 0 fail. Prior checkout tip `4b2e3c7`.

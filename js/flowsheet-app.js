@@ -1660,7 +1660,7 @@
     loadCase(GreenUreaCase.createGreenUreaCase(), 'urea');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening seawater+sun → PEM H₂ + ASU N₂ → Haber NH₃ + purchased CO₂ → urea; not purchased NH₃; not DAC; not bankable.';
+      status.textContent = 'screening seawater+sun → PEM H₂ + ASU N₂ → Haber NH₃ + purchased CO₂ → urea; Size-to-target → urea resizes this stack; not purchased NH₃; not DAC; not bankable.';
     }
   }
 
@@ -1712,7 +1712,7 @@
     loadCase(GreenFtCase.createGreenFtCase(), 'ft-liquids');
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
-      status.textContent = 'screening seawater+sun → PEM H₂ + purchased CO₂ → diesel; not purchased H₂; not DAC; not bankable.';
+      status.textContent = 'screening seawater+sun → PEM H₂ + purchased CO₂ → diesel; Size-to-target → diesel resizes this stack; not purchased H₂; not DAC; not bankable.';
     }
   }
 

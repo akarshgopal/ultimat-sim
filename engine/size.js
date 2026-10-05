@@ -1798,6 +1798,37 @@ function collectMaterialSourcesFeeding(definition, nodeId, seen) {
   return sources;
 }
 
+function collectMaterialSourceOnPort(definition, nodeId, port, seen) {
+  const upstream = sourceFeeding(definition, nodeId, port);
+  if (!upstream || seen.has(upstream.id)) return null;
+  if (upstream.unit === 'material-source' && upstream.params?.stream?.kind === 'material') {
+    seen.add(upstream.id);
+    return upstream;
+  }
+  return null;
+}
+
+function converterSecKWh(node, keys, fallback) {
+  if (!node) return fallback;
+  for (const key of keys) {
+    const listed = Number(node.params?.[key]);
+    if (Number.isFinite(listed) && listed >= 0) return listed;
+  }
+  return fallback;
+}
+
+function ratioChainElectricityKWh(definition, baseline, scale, secOf) {
+  let kWh = 0;
+  for (const [id, duty] of Object.entries(baseline.converterDuties || {})) {
+    if (!(duty > 0)) continue;
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node) continue;
+    const sec = Number(secOf(node)) || 0;
+    if (sec > 0) kWh += duty * scale * sec;
+  }
+  return kWh;
+}
+
 function steelSink(definition, dri) {
   return reactionProductSink(definition, dri, 'steel')
     || nodeBy(definition, node => node.id === 'steel' && String(node.unit).includes('sink'));
@@ -2070,8 +2101,15 @@ function dieselChain(definition) {
   if (!ftNode) throw new Error('sizeToProduct needs an ft-liquids block to size diesel demand');
   const sink = dieselSink(definition, ftNode);
   if (!sink) throw new Error('sizeToProduct needs a diesel sink');
-  const sources = collectMaterialSourcesFeeding(definition, ftNode.id, new Set());
-  return { ft: ftNode, sink, converters: [ftNode], sources };
+  const h2Feed = sourceFeeding(definition, ftNode.id, 'hydrogen');
+  const electrolyzer = h2Feed?.unit === 'electrolyzer' ? h2Feed : null;
+  const swro = electrolyzer ? converter(definition, 'swro') : null;
+  const converters = [ftNode, electrolyzer, swro].filter(Boolean);
+  const seen = new Set();
+  const sources = collectMaterialSourcesFeeding(definition, ftNode.id, seen);
+  const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
+  if (seawater) sources.push(seawater);
+  return { ft: ftNode, sink, electrolyzer, swro, converters, sources };
 }
 
 function baselineDieselDuties(definition) {
@@ -2090,11 +2128,11 @@ function baselineDieselDuties(definition) {
 }
 
 function dieselProcessElectricityKWh(definition, baseline, scale) {
-  const ftNode = converter(definition, 'ft-liquids');
-  if (!ftNode || !(baseline.converterDuties[ftNode.id] > 0)) return 0;
-  const listed = Number(ftNode.params?.electricityKWhPerKg);
-  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 0.22;
-  return baseline.converterDuties[ftNode.id] * scale * sec;
+  return ratioChainElectricityKWh(definition, baseline, scale, node => {
+    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
+    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
+    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'ft-liquids' ? 0.22 : 0);
+  });
 }
 
 function ureaSink(definition, ureaNode) {
@@ -2109,8 +2147,19 @@ function ureaChain(definition) {
   if (!ureaNode) throw new Error('sizeToProduct needs a urea block to size urea demand');
   const sink = ureaSink(definition, ureaNode);
   if (!sink) throw new Error('sizeToProduct needs a urea sink');
-  const sources = collectMaterialSourcesFeeding(definition, ureaNode.id, new Set());
-  return { urea: ureaNode, sink, converters: [ureaNode], sources };
+  const nh3Feed = sourceFeeding(definition, ureaNode.id, 'ammonia');
+  const ammonia = nh3Feed?.unit === 'ammonia' ? nh3Feed : null;
+  const electrolyzer = ammonia ? converter(definition, 'electrolyzer') : null;
+  const asu = ammonia ? converter(definition, 'asu') : null;
+  const swro = ammonia ? converter(definition, 'swro') : null;
+  const converters = [ureaNode, ammonia, electrolyzer, asu, swro].filter(Boolean);
+  const seen = new Set();
+  const sources = collectMaterialSourcesFeeding(definition, ureaNode.id, seen);
+  const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
+  if (seawater) sources.push(seawater);
+  const air = asu && collectMaterialSourceOnPort(definition, asu.id, 'air', seen);
+  if (air) sources.push(air);
+  return { urea: ureaNode, sink, ammonia, electrolyzer, asu, swro, converters, sources };
 }
 
 function baselineUreaDuties(definition) {
@@ -2129,11 +2178,13 @@ function baselineUreaDuties(definition) {
 }
 
 function ureaProcessElectricityKWh(definition, baseline, scale) {
-  const ureaNode = converter(definition, 'urea');
-  if (!ureaNode || !(baseline.converterDuties[ureaNode.id] > 0)) return 0;
-  const listed = Number(ureaNode.params?.electricityKWhPerKg);
-  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 0.8;
-  return baseline.converterDuties[ureaNode.id] * scale * sec;
+  return ratioChainElectricityKWh(definition, baseline, scale, node => {
+    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
+    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
+    if (node.unit === 'asu') return converterSecKWh(node, ['electricityKWhPerKgN2'], 0.25);
+    if (node.unit === 'ammonia') return converterSecKWh(node, ['electricityKWhPerKg'], 0.6);
+    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'urea' ? 0.8 : 0);
+  });
 }
 
 function sizeDiesel(definition, target, opts) {

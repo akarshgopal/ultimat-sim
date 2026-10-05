@@ -64,6 +64,7 @@ const PROCESS_LABELS = Object.freeze({
   asu: 'Air separation',
   ammonia: 'Haber–Bosch',
   urea: 'Urea',
+  mto: 'MTO',
   'mg-si': 'MG-Si furnace',
   polysilicon: 'Polysilicon (Siemens)',
   'bayer-alumina': 'Bayer alumina',
@@ -337,6 +338,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       Object.freeze({
         label: 'Screening urea island pad 3 m²/(kg urea/h) (range 1–8); not a plot survey and not a Stamicarbon layout. IEA ammonia/fertilizer family is commodity context.',
         url: 'https://www.iea.org/reports/ammonia-technology-roadmap',
+      }),
+    ]),
+  }),
+  mto: Object.freeze({
+    id: 'mto',
+    label: PROCESS_LABELS.mto,
+    basis: 'kgPerHour',
+    intensity: 3,
+    unitLabel: 'm²/(kg ethylene/h)',
+    range: Object.freeze([1, 8]),
+    floorM2: 30,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening MTO island pad 3 m²/(kg ethylene/h) (range 1–8); not a plot survey and not a UOP layout. Chen 2022 MTO TEA is the CAPEX family, not a measured pad.',
+        url: 'https://doi.org/10.1016/j.jtice.2021.07.039',
       }),
     ]),
   }),
@@ -792,6 +809,13 @@ function padUrea(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padMto(node, solved) {
+  const spec = intensitySpec('mto');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padMgSi(node, solved) {
   const spec = intensitySpec('mg-si');
   const activity = activityOf(solved, node.id);
@@ -914,6 +938,7 @@ const PROCESS_PADS = Object.freeze({
   asu: padAsu,
   ammonia: padAmmonia,
   urea: padUrea,
+  mto: padMto,
   'mg-si': padMgSi,
   polysilicon: padPolysilicon,
   'pv-module': padPvModule,

@@ -79,6 +79,10 @@ const GHAFFOUR_2013 = 'https://doi.org/10.1016/j.desal.2013.08.011';
 const VOUTCHKOV_2018 = 'https://doi.org/10.1016/j.desal.2017.10.033';
 const THEMA_2019 = 'https://doi.org/10.1016/j.rser.2019.06.030';
 const IRENA_MEOH = 'https://www.irena.org/publications/2021/Jan/Innovation-Outlook-Renewable-Methanol';
+const CHEN_MTO_2022 = 'https://doi.org/10.1016/j.jtice.2021.07.039';
+const ARGUS_ETHYLENE = 'https://www.argusmedia.com/-/media/project/argusmedia/mainsite/english/documents-and-files/sample-reports/argus-ethylene-and-derivatives.pdf';
+const IEA_ETHYLENE = 'https://www.iea.org/data-and-statistics/charts/annual-ethylene-capacitydemand-growth-and-regional-price-developments-2015-2020';
+const SINOPEC_MTO_YOKOGAWA = 'https://www.yokogawa.com/library/resources/references/stable-operation-and-proactive-maintenance-realized-at-new-coal-chemical-plant-in-china/';
 const IEA_ELEC = 'https://www.iea.org/reports/electricity-2024';
 const IEA_ELEC_2026 = 'https://www.iea.org/reports/electricity-2026';
 const EIA_EPA = 'https://www.eia.gov/electricity/annual/';
@@ -184,6 +188,14 @@ const prices = {
     0.4, '$/kg', 'screening', 'commodity MeOH band',
     'Screening mid of commodity methanol ~$250–500/t band ($0.40/kg). Not a plant quote.',
     [{ label: 'Commodity methanol ~$250–500/t band (screening mid $0.40/kg); not a plant quote', url: IRENA_MEOH }]
+  ),
+  ethylene: row(
+    0.8, '$/kg', 'screening', 'commodity ethylene band',
+    'Screening mid of recent commodity ethylene ~$0.50–1.10/kg (USGC often lower, Asia/Europe contract higher). Not a contract.',
+    [
+      { label: 'Argus Ethylene and Derivatives sample (USGC/Asia/Europe prints; screening mid $0.80/kg, not a contract)', url: ARGUS_ETHYLENE },
+      { label: 'IEA ethylene regional price family (2015–2020 chart; screening mid, not a contract)', url: IEA_ETHYLENE },
+    ]
   ),
   urea: row(
     0.4, '$/kg', 'screening', 'fertilizer urea band',
@@ -321,6 +333,11 @@ const costs = {
     0.45, '$/kg', 'screening', 'purchase at fertilizer NH3 screening',
     'Purchase at fertilizer NH₃ screening, mirroring the ammonia sale price ($0.45/kg). Screening, not a fertilizer NH₃ contract.',
     [{ label: 'IEA Ammonia Technology Roadmap (fertilizer-market order; purchase at screening mid $0.45/kg)', url: IEA_NH3 }]
+  ),
+  'methanol-feed': row(
+    0.4, '$/kg', 'screening', 'purchase at screening MeOH',
+    'Purchase at screening methanol, mirroring the methanol sale price ($0.40/kg). Screening, not a methanol contract. Does not change the methanol sale price.',
+    [{ label: 'Commodity methanol ~$250–500/t band (purchase at screening mid $0.40/kg); not a plant quote', url: IRENA_MEOH }]
   ),
   'co2-feed': row(
     0.05, '$/kg', 'screening', 'industrial CO2 purchase',
@@ -530,6 +547,16 @@ const packs = {
     evidence: [
       { label: 'IEA Ammonia Technology Roadmap (fertilizer-family cite; screening urea-island CAPEX intensity, not a Stamicarbon quote)', url: IEA_NH3 },
       { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context; CAPEX intensity is screening OOM', url: USGS_N },
+    ],
+  }),
+  mto: pack({
+    capexIntensity: 183, intensityUnit: '$/(kg olefin/day)',
+    fixedOmPercent: 4, variableOm: 0.03, assetLifeYears: 20,
+    quality: 'screening', source: 'Chen 2022 MTO TCI / olefin capacity',
+    note: 'installedCapex = 183 $/ (kg olefin/day) × capacity (scale exponent omitted). Chen, Hsieh, Chang, Ho 2022 J. Taiwan Inst. Chem. Eng. 130 103893 Table 11 TCI $371.35 MM for 0.367 MM MTPA ethylene + 0.373 MM MTPA propylene. $371.35e6 / 740e6 kg/y × 365 = $183/(kg olefin/day). Linear small-plant OOM applied to the ethylene-proxy activity; propylene/C4 omitted. Not a UOP/Honeywell quote.',
+    evidence: [
+      { label: 'Chen et al. 2022 industrial-scale MTO TEA — TCI $371.35 MM for 0.367+0.373 MM MTPA olefins → $183/(kg olefin/day); not a UOP quote', url: CHEN_MTO_2022, doi: '10.1016/j.jtice.2021.07.039' },
+      { label: 'Yokogawa — Sinopec Zhongyuan S-MTO 600 kt/y olefins (capacity-family context; CAPEX intensity is the Chen 2022 conversion)', url: SINOPEC_MTO_YOKOGAWA },
     ],
   }),
   swro: pack({
@@ -809,6 +836,14 @@ const demand = {
     `500 kt/y regional methanol chemical/fuel ceiling. World MeOH is ~100 Mt; ME conventional capacity is large. This is a screening offtake cap, not a contract.`,
     [{ label: 'IRENA renewable methanol outlook (family; regional offtake cap is screening)', url: IRENA_MEOH }]
   ),
+  ethylene: row(
+    5e7, 'kg/year', 'screening', 'regional ethylene chemical ceiling',
+    `50 kt/y screening regional ceiling. World ethylene is ~180 Mt; this is a tiny offtake slice, not a cracker contract. ${DEMAND_REGION}`,
+    [
+      { label: 'IEA ethylene capacity/demand family (world-scale context; 50 kt/y ceiling is screening offtake, not a contract)', url: IEA_ETHYLENE },
+      { label: 'Argus ethylene family (price context; offtake cap is screening, not a contract)', url: ARGUS_ETHYLENE },
+    ]
+  ),
   hydrogen: row(
     1e8, 'kg/year', 'screening', 'IEA H2; green offtake',
     `100 kt/y regional green-H₂ ceiling. IEA global H₂ is ~95 Mt, mostly grey. Not a offtake contract.`,
@@ -901,7 +936,7 @@ const demand = {
 };
 
 const MINERAL_DEMAND_KEYS = Object.freeze(['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium']);
-const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide', 'urea']);
+const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide', 'urea', 'ethylene']);
 
 function cloneDemandRow(item, extraNote, extra = {}) {
   const cloned = {
@@ -1226,6 +1261,14 @@ const demandAsiaChina = inheritDemand(demand, ASIA_CHINA_INHERIT_NOTE, {
     [
       { label: 'IEA Ammonia Technology Roadmap (ammonia/fertilizer family; 500 kt/y China urea ceiling is screening offtake, not a contract)', url: IEA_NH3 },
       { label: 'USGS MCS 2025 nitrogen (fixed) — fertilizer-family context; 500 kt/y China ceiling is screening offtake, not production', url: USGS_N },
+    ]
+  ),
+  ethylene: row(
+    5e8, 'kg/year', 'screening', 'ethylene China/Asia ceiling; MTO producer region',
+    'Conservative 500 kt/y China/Asia ethylene ceiling. China hosts most commercial MTO capacity. IEA ethylene family is commodity context. Screening offtake, not a contract and not a silent ME-Levant inherit.',
+    [
+      { label: 'IEA ethylene capacity/demand family (commodity context; 500 kt/y China ceiling is screening offtake, not a contract)', url: IEA_ETHYLENE },
+      { label: 'Yokogawa — Sinopec Zhongyuan S-MTO 600 kt/y (China MTO capacity-family context; offtake cap is screening)', url: SINOPEC_MTO_YOKOGAWA },
     ]
   ),
 });

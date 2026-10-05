@@ -562,6 +562,19 @@ const urea = reaction({
     water: { substance: 'H2O', molPerProductMol: 1, phase: 'liquid' },
   },
 });
+// Screening overall 2 CH3OH → C2H4 + 2 H2O. SAPO-34 MTO ethylene-maximizing proxy;
+// propylene/C4 omitted. Not UOP, not a full olefin slate, not FT liquids.
+// Default 4 kWh/kg is an electricity-as-total-energy proxy of Sinopec S-MTO
+// ~373 kgOE/t olefin (≈15.6 GJ/t ≈ 4.3 kWh/kg; screening 4). Real MTO is heat-dominated
+// (quench, steam, refrigeration). Chen 2022 compressor electricity is ~0.8 kWh/kg ethylene.
+const mto = reaction({
+  product: 'C2H4', electricityKWhPerKg: 4,
+  inputs: { methanol: { substance: 'CH3OH', molPerProductMol: 2 } },
+  outputs: {
+    ethylene: { substance: 'C2H4', molPerProductMol: 1, phase: 'gas' },
+    water: { substance: 'H2O', molPerProductMol: 2, phase: 'liquid' },
+  },
+});
 // CO2 + 3 H2 → CH3OH + H2O. 0.5 kWh/kg is screening synthesis/compression, not electrolysis.
 // Reject heat 0.43 kWh/kg is gas-phase enthalpy (~49 kJ/mol / 3.6 / 32.04); 250 °C is a screening reject T.
 const methanol = reaction({
@@ -1592,6 +1605,16 @@ const UNITS = Object.freeze({
       water: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: urea,
+  },
+  mto: {
+    kind: 'converter',
+    ports: {
+      methanol: { direction: 'in', kind: 'material', required: true },
+      electricity: { direction: 'in', kind: 'electricity', required: true },
+      ethylene: { direction: 'out', kind: 'material', required: true },
+      water: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: mto,
   },
   'brine-minerals': {
     kind: 'converter',

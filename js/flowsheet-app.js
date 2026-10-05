@@ -93,7 +93,7 @@
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
-    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia', 'urea'],
+    Fuels: ['electrolyzer', 'sabatier', 'methanol', 'asu', 'ammonia', 'urea', 'mto'],
     Water: ['swro'],
     Power: ['solar-pv', 'battery'],
     Carbon: ['dac-solid', 'dac-liquid', 'dac-electroswing'],
@@ -276,6 +276,13 @@
       params: { electricityKWhPerKg: 0.8 },
       controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 3, step: 0.05, unit: 'kWh/kg urea' }],
       sourceNote: 'Screening overall stoichiometry 2 NH₃ + CO₂ → urea + H₂O; not carbamate recycle and not granulation. Default 0.8 kWh/kg is an electricity-as-total-energy proxy for a steam-heavy plant (real urea is heat-dominated). Not a Stamicarbon SEC.',
+    },
+    mto: {
+      label: 'MTO (ethylene)', capacity: 1000, rate: 100, activityUnit: 'kg ethylene/day',
+      palette: { section: 'building', order: 8.7, glyph: 'MTO', tone: 'methane', description: '2 CH₃OH → ethylene + water' },
+      params: { electricityKWhPerKg: 4 },
+      controls: [{ key: 'electricityKWhPerKg', label: 'Electricity', min: 0, max: 12, step: 0.1, unit: 'kWh/kg ethylene' }],
+      sourceNote: 'Screening overall stoichiometry 2 CH₃OH → C₂H₄ + 2 H₂O; SAPO-34 ethylene-maximizing proxy, propylene/C4 omitted. Default 4 kWh/kg is an electricity-as-total-energy proxy (real MTO is heat-dominated). Not a UOP SEC and not FT liquids.',
     },
     'brine-minerals': {
       label: 'Brine mineral train', capacity: 100000, rate: 1000, activityUnit: 'kg brine/day',
@@ -646,7 +653,7 @@
     co2: 'CO₂', methane: 'Methane', methanol: 'Methanol', out: 'Output', in: 'Input',
     wasteHeat: 'Waste heat', nitrogen: 'Nitrogen', ammonia: 'NH₃', offgas: 'Off-gas',
     lithium: 'Lithium chloride', bromide: 'Sodium bromide', magnesium: 'Magnesium chloride', potash: 'Potash', gypsum: 'Gypsum', salt: 'Salt', raffinate: 'Raffinate',
-    caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Al frame', carbonDioxide: 'CO₂', urea: 'Urea',
+    caustic: 'Caustic soda', chlorine: 'Chlorine', bromine: 'Bromine', alumina: 'Alumina', carbon: 'Carbon', aluminium: 'Al frame', carbonDioxide: 'CO₂', urea: 'Urea', ethylene: 'Ethylene',
     quartz: 'Quartzite', silicon: 'MG-Si', polysilicon: 'Poly-Si', carbonMonoxide: 'Carbon monoxide',
     bauxite: 'Bauxite', redMud: 'Red mud',
     silver: 'Ag paste', glass: 'Float glass', eva: 'EVA', module: 'Module',
@@ -665,6 +672,7 @@
     oxygen: { label: 'Oxygen', phase: 'gas', mol: { O2: 1000 } },
     nitrogen: { label: 'Nitrogen', phase: 'gas', mol: { N2: 1000 } },
     ammonia: { label: 'Ammonia', phase: 'liquid', mol: { NH3: 1000 } },
+    methanol: { label: 'Methanol', phase: 'liquid', mol: { CH3OH: 1000 } },
     salt: { label: 'Sodium chloride', phase: 'solid', mol: { NaCl: 1000 } },
     bromide: { label: 'Sodium bromide', phase: 'solid', mol: { NaBr: 1000 } },
     chlorine: { label: 'Chlorine', phase: 'gas', mol: { Cl2: 1000 } },
@@ -748,7 +756,7 @@
     { preset: 'flueGas', label: 'Flue gas', glyph: 'Fg', tone: 'carbon', description: 'Screening CO₂-rich combustion flue' },
     { preset: 'water', label: 'Freshwater', glyph: 'H₂O', tone: 'water', description: 'Process freshwater intake' },
   ];
-  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
+  const PURCHASED_FEED_PRESETS = ['salt', 'ammonia', 'co2', 'methanol', 'hydrogen', 'oxygen', 'nitrogen', 'chlorine', 'bromide', 'alumina', 'bauxite', 'caustic', 'carbon', 'quartz', 'ironOre', 'magnesium', 'titaniumTetrachloride', 'ionic-clay', 'ammonium-sulfate', 'mixed-reo', 'dextrose', 'silver', 'float-glass', 'eva'];
   const PRACTICAL_INTAKE_LABELS = new Set([
     ...Object.values(INTAKE_BY_KEY).map(item => item.label),
     'Unassigned feed',
@@ -1009,6 +1017,7 @@
     'bioforge-marshall': () => loadBioforgeMarshall(),
     'green-ammonia': () => loadGreenAmmonia(),
     'urea': () => loadUrea(),
+    'mto': () => loadMto(),
     'abundance-hub': () => loadAbundanceHub(),
     'zabuye-hub': () => loadZabuyeHub(),
     'demo-network': () => loadDemoNetwork(),
@@ -1543,6 +1552,19 @@
     const status = document.getElementById('sizeToTargetStatus');
     if (status) {
       status.textContent = 'screening urea from purchased feeds on frozen Walvis PV; may be cash±; not bankable; not green-NH₃ path.';
+    }
+  }
+
+  function loadMto() {
+    setActiveDemo('mto', 'Mejillones MTO (purchased MeOH→ethylene)');
+    lastSizing = null;
+    if (typeof MtoCase === 'undefined' || !MtoCase.createMtoCase) {
+      throw new Error('MTO case is not loaded');
+    }
+    loadCase(MtoCase.createMtoCase(), 'mto');
+    const status = document.getElementById('sizeToTargetStatus');
+    if (status) {
+      status.textContent = 'screening MTO ethylene from purchased MeOH on frozen Mejillones PV; may be cash±; not bankable; not green-MeOH; not full olefin slate.';
     }
   }
 
@@ -3773,6 +3795,7 @@
       'ammonia.nitrogen': 'nitrogen', 'ammonia.hydrogen': 'hydrogen',
       'urea.ammonia': 'ammonia', 'urea.carbonDioxide': 'co2',
       'methanol.co2': 'co2', 'methanol.hydrogen': 'hydrogen',
+      'mto.methanol': 'methanol',
       'chlor-alkali.salt': 'salt',
       'bromine-recovery.bromide': 'bromide', 'bromine-recovery.chlorine': 'chlorine',
       'aluminium-smelter.alumina': 'alumina', 'aluminium-smelter.carbon': 'carbon', 'mg-si.quartz': 'quartz', 'mg-si.carbon': 'carbon', 'polysilicon.silicon': 'silicon',
@@ -4896,6 +4919,9 @@
     urea: 'Urea',
     Urea: 'Urea',
     'urea-product': 'Urea',
+    ethylene: 'Ethylene',
+    C2H4: 'Ethylene',
+    'ethylene-product': 'Ethylene',
     steel: 'Fe / Iron',
     Fe: 'Fe / Iron',
     dri: 'Fe / Iron',
@@ -5376,7 +5402,7 @@
     if (unit === 'brine-minerals' || unit === 'swro' || unit === 'med' || unit === 'msf' || unit === 'iac-leach') return 'pond';
     if (unit === 'mg-si' || unit === 'polysilicon') return 'furnace';
     if (unit === 'electrolyzer' || unit === 'chlor-alkali' || unit === 'bromine-recovery' || unit === 'bayer-alumina' || unit === 'aluminium-smelter' || unit === 'bioforge' || unit === 'pv-module') return 'cell';
-    if (unit === 'asu' || unit === 'ammonia' || unit === 'urea' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
+    if (unit === 'asu' || unit === 'ammonia' || unit === 'urea' || unit === 'mto' || unit === 'sabatier' || unit === 'methanol' || unit === 'dac') return 'tower';
     if (kind === 'splitter' || kind === 'mixer') return 'pipe';
     return 'shed';
   }
@@ -5781,6 +5807,7 @@
       asu: '#7a8fa3',
       ammonia: '#6b7f9a',
       urea: '#7a8aa0',
+      mto: '#b8924a',
       battery: '#8a8f98',
       'solar-pv': '#c9a227',
       total: '#7a8fa3',
@@ -5802,6 +5829,7 @@
       asu: 'var(--h2)',
       ammonia: 'var(--h2)',
       urea: 'var(--h2)',
+      mto: 'var(--methane)',
       battery: 'var(--text-muted)',
       'solar-pv': 'var(--warning)',
     }[unit] || 'var(--border-light)';
@@ -6857,7 +6885,7 @@
       }
       return { installedCapex: 0, fixedOMPercent: 3, assetLifeYears: 20 };
     }
-    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea') {
+    if (current.unit === 'mg-si' || current.unit === 'polysilicon' || current.unit === 'bayer-alumina' || current.unit === 'aluminium-smelter' || current.unit === 'pv-module' || current.unit === 'hydrogen-dri' || current.unit === 'titanium-kroll' || current.unit === 'iac-leach' || current.unit === 'ree-chromatography' || current.unit === 'ree-sx' || current.unit === 'bioforge' || current.unit === 'urea' || current.unit === 'mto') {
       const tea = teaApi();
       if (tea?.bindCapexPack) {
         return tea.bindCapexPack(current.unit, { capacity: current.capacity || 0, region: siteRegionForTea() });
@@ -6974,6 +7002,7 @@
     asu: 'asu',
     ammonia: 'ammonia',
     urea: 'urea',
+    mto: 'mto',
     swro: 'swro',
     electrolyzer: 'electrolyzer',
     dac: 'dac',
@@ -7809,7 +7838,7 @@
 
   window.__FLOWSHEET_APP__ = {
     graph, setpoints, addNode, choosePort, clearFactory, autoArrange, toggleCanvasFocus,
-    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
+    completeBoundaries, loadMethaneRecycle, loadCoastalMethane, loadMethanolPlant, loadSiliconAlumina, loadH2Dri, loadGreenH2Dri, loadTiKroll, loadReeIonic, loadMaglutLongBeach, loadReeSx, loadBioforgeMarshall, loadGreenAmmonia, loadUrea, loadMto, sizeCoastalToMethane, sizeToProduct, sizeForPositiveCashflow, loadAbundanceHub, loadZabuyeHub, loadDemoNetwork,
     addCurrentPlant, openNetworkPlant, clearNetwork, replaceUnit, bindLocation, applySitePreset, applyCoordinates,
     beginAddPlant, cancelAddPlant, submitAddPlant, beginRenamePlant, beginRemovePlant, cancelPlantEdit,
     renameNetworkPlant, removeNetworkPlant,

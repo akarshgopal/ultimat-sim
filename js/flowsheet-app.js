@@ -89,7 +89,8 @@
   let siteMapTilesFailed = false;
   let siteMapLayersReady = false;
   const SIZE_PRODUCT_LABELS = {
-    CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt', module: 'PV module',
+    CH4: 'CH₄', H2: 'H₂', methanol: 'methanol', ammonia: 'NH₃', lithium: 'lithium', salt: 'salt',
+    module: 'PV module', steel: 'steel', ethylene: 'ethylene',
   };
   const PALETTE_CATEGORIES = {
     Minerals: ['brine-minerals', 'chlor-alkali', 'bromine-recovery'],
@@ -101,9 +102,7 @@
     REE: ['iac-leach', 'ree-chromatography', 'ree-sx'],
     Bio: ['bioforge'],
   };
-  const PALETTE_MORE_UNITS = [
-    'nuclear-electricity', 'solar-thermal', 'thermal-storage',
-  ];
+  const PALETTE_MORE_UNITS = [];
   const PALETTE_DEFAULT_OPEN = new Set(['Minerals', 'Fuels']);
   const MapSite = typeof FlowsheetMapSite !== 'undefined' ? FlowsheetMapSite : null;
 
@@ -1614,6 +1613,8 @@
     if (product === 'ammonia') return nodes.find(node => node.unit === 'ammonia')?.id;
     if (product === 'lithium' || product === 'salt') return nodes.find(node => node.unit === 'brine-minerals')?.id;
     if (product === 'module') return nodes.find(node => node.unit === 'pv-module')?.id;
+    if (product === 'steel') return nodes.find(node => node.unit === 'hydrogen-dri')?.id;
+    if (product === 'ethylene') return nodes.find(node => node.unit === 'mto')?.id;
     return nodes[0]?.id;
   }
 

@@ -484,6 +484,8 @@ test('size product menus list methanol and ammonia', () => {
   assert.match(html, /value="methanol"/);
   assert.match(html, /value="ammonia"/);
   assert.match(html, /value="module"/);
+  assert.match(html, /value="steel">steel \/ DRI Fe</);
+  assert.match(html, /value="ethylene">ethylene</);
   assert.doesNotMatch(html, /id="processSizeProduct"/);
   assert.doesNotMatch(html, /id="processSizeForCashflow"/);
   assert.doesNotMatch(html, /id="processDemoMenu"/);
@@ -1061,7 +1063,7 @@ test('Overview is a full-width decision board with a slate table, cash gate, and
   assert.match(banner.innerHTML, /class="delta-board"/);
 });
 
-test('process chrome reads as a flowsheet, with gallery units behind More units', () => {
+test('process chrome reads as a flowsheet, with hollow More units off the default palette', () => {
   const root = path.join(__dirname, '..');
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(root, 'flowsheet.css'), 'utf8');
@@ -1094,21 +1096,18 @@ test('process chrome reads as a flowsheet, with gallery units behind More units'
   const ree = palette.indexOf('>REE<');
   const bio = palette.indexOf('>Bio<');
   const more = palette.indexOf('>More units<');
-  assert.ok(minerals >= 0 && minerals < fuels && fuels < water && water < carbon && carbon < crust && crust < ree && ree < bio && bio < more);
+  assert.ok(minerals >= 0 && minerals < fuels && fuels < water && water < carbon && carbon < crust && crust < ree && ree < bio);
+  assert.ok(more < 0, 'empty More units category stays hidden');
   assert.match(palette.slice(Math.max(0, minerals - 40), minerals), /\bopen\b/);
   assert.match(palette.slice(Math.max(0, fuels - 40), fuels), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, crust - 80), crust), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, ree - 80), ree), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, bio - 80), bio), /\bopen\b/);
-  assert.doesNotMatch(palette.slice(Math.max(0, more - 80), more), /\bopen\b/);
   for (const unit of ['brine-minerals', 'chlor-alkali', 'electrolyzer', 'sabatier', 'swro', 'solar-pv', 'mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module', 'hydrogen-dri', 'titanium-kroll', 'iac-leach', 'ree-chromatography', 'ree-sx', 'bioforge', 'ammonia', 'urea', 'mto']) {
-    assert.ok(palette.indexOf(`data-unit="${unit}"`) < more, unit);
+    assert.ok(palette.includes(`data-unit="${unit}"`), unit);
   }
-  for (const unit of ['med', 'msf']) {
+  for (const unit of ['med', 'msf', 'nuclear-electricity', 'solar-thermal', 'thermal-storage']) {
     assert.ok(!palette.includes(`data-unit="${unit}"`), unit);
-  }
-  for (const unit of ['nuclear-electricity', 'solar-thermal', 'thermal-storage']) {
-    assert.ok(palette.indexOf(`data-unit="${unit}"`) > more, unit);
   }
 
   const canvas = context.__elements.get('flowsheetCanvas').innerHTML;

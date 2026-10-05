@@ -290,6 +290,13 @@ test('sizeToProduct aliases PV module on the Mejillones chain', () => {
   assert.ok(sized.definition.graph.nodes.find(node => node.unit === 'pv-module').capacity > 0);
 });
 
+test('sizeToProduct aliases steel/fe and ethylene/mto', () => {
+  const { createH2DriCase } = require('../cases/h2-dri');
+  const { createMtoCase } = require('../cases/mto');
+  assert.equal(sizeToProduct({ product: 'fe', rate: 500, caseOrBuilder: createH2DriCase }).product, 'steel');
+  assert.equal(sizeToProduct({ product: 'mto', rate: 500, caseOrBuilder: createMtoCase }).product, 'ethylene');
+});
+
 test('H2 sizing cascades an explicit hot source onto MED heat', () => {
   const withCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant() });
   const withoutCredit = sizeToProduct({ product: 'H2', rate: 2, definition: h2MedHotPlant(), heatCredit: false });

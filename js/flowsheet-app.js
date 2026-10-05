@@ -102,7 +102,6 @@
     REE: ['iac-leach', 'ree-chromatography', 'ree-sx'],
     Bio: ['bioforge'],
   };
-  const PALETTE_MORE_UNITS = [];
   const PALETTE_DEFAULT_OPEN = new Set(['Minerals', 'Fuels']);
   const MapSite = typeof FlowsheetMapSite !== 'undefined' ? FlowsheetMapSite : null;
 
@@ -881,12 +880,6 @@
     activeDemoId = id || null;
     const cases = document.getElementById('overviewCases');
     if (cases) cases.value = id || '';
-    document.querySelectorAll('[data-demo-id]').forEach(btn => {
-      btn.classList.toggle('is-selected', !!id && btn.dataset.demoId === id);
-    });
-    document.querySelectorAll('[data-demo]').forEach(btn => {
-      btn.classList.toggle('is-selected', !!id && btn.dataset.demo === id);
-    });
     const chip = document.getElementById('overviewDemoChip');
     if (chip) {
       chip.hidden = !label;
@@ -894,21 +887,20 @@
     }
   }
 
-  function paletteCategory(name, units, { open = false, extraClass = '' } = {}) {
+  function paletteCategory(name, units, { open = false } = {}) {
     const cards = units
       .filter(unit => catalog[unit]?.palette?.section === 'building')
       .map(unit => paletteCard(unit, catalog[unit]))
       .join('');
     if (!cards) return '';
-    const cls = extraClass ? `palette-category ${extraClass}` : 'palette-category';
-    return `<details class="${cls}"${open ? ' open' : ''}><summary>${escapeHtml(name)}</summary>${cards}</details>`;
+    return `<details class="palette-category"${open ? ' open' : ''}><summary>${escapeHtml(name)}</summary>${cards}</details>`;
   }
 
   function renderPalettes() {
     const grouped = Object.entries(PALETTE_CATEGORIES)
       .map(([name, units]) => paletteCategory(name, units, { open: PALETTE_DEFAULT_OPEN.has(name) }))
       .join('');
-    document.getElementById('buildingPalette').innerHTML = `${grouped}${paletteCategory('More units', PALETTE_MORE_UNITS, { extraClass: 'palette-more' })}`;
+    document.getElementById('buildingPalette').innerHTML = grouped;
     const intakes = PRACTICAL_INTAKE_PALETTE.map(intakePaletteCard).join('');
     const utilities = Object.entries(catalog)
       .filter(([, definition]) => definition.palette?.section === 'utility')
@@ -5241,16 +5233,6 @@
     }
   }
 
-  function mirrorOverviewChips() {
-    for (const [fromId, toId] of [['solveStatus', 'overviewSolveChip'], ['balanceStatus', 'overviewBalanceChip']]) {
-      const from = document.getElementById(fromId);
-      const to = document.getElementById(toId);
-      if (!from || !to) continue;
-      to.textContent = from.textContent;
-      to.className = from.className || 'status-chip';
-    }
-  }
-
   function renderOverview() {
     const siteEl = document.getElementById('overviewSiteName');
     const honesty = document.getElementById('overviewHonesty');
@@ -5305,7 +5287,6 @@
     const offtake = document.getElementById('overviewOfftake');
     const offtakeWrap = document.getElementById('overviewOfftakeWrap');
     if (offtakeWrap && offtake) offtakeWrap.hidden = !!offtake.hidden || !offtake.textContent;
-    mirrorOverviewChips();
     renderCashflowResult();
   }
 
@@ -5442,18 +5423,6 @@
       }
     }
     return found ? sum : null;
-  }
-
-  function nodeMeterChip(current, nodeResult) {
-    const util = utilizationRatio(current, nodeResult);
-    if (util != null) {
-      const shown = Math.max(0, Math.min(1, util));
-      return { kind: 'util', text: `${formatNumber(shown * 100)}%` };
-    }
-    if (['source', 'sink', 'junction'].includes(units[current.unit].kind)) return null;
-    const kWh = electricityDrawKWh(nodeResult);
-    if (!(kWh > 0)) return null;
-    return { kind: 'power', text: formatCompactEnergy(kWh, false) };
   }
 
   function buildingProfile(unit, kind, current) {
@@ -5638,43 +5607,6 @@
     }
     const fill = Math.max(0, (trackW - 2) * status.fraction);
     return `<g class="node-face-status node-face-bar node-gauge node-gauge-bar node-gauge-${tone}${chipClass}" data-face="${status.kind || 'bar'}"><title>${title}</title><rect class="node-gauge-track node-face-track" x="${trackX}" y="${barY}" width="${trackW}" height="9" rx="1"/><rect class="node-gauge-fill node-face-fill" x="${trackX + 1}" y="${barY + 1}" width="${fill.toFixed(2)}" height="7"/><text class="node-gauge-read node-face-readout" x="${trackX + trackW}" y="${barY - 3}" text-anchor="end">${label}</text>${light}</g>`;
-  }
-
-  function renderHubGauge(x, y, gauge) {
-    // Legacy helper retained for tests/callers; face status owns paint.
-    if (!gauge) return '';
-    if (gauge.type === 'spark') {
-      const width = 70;
-      const height = 13;
-      const gx = x + NODE_WIDTH - 8 - width;
-      const gy = y + 6;
-      const peak = Math.max(...gauge.series, 0);
-      if (!(peak > 0)) return '';
-      const slot = width / gauge.series.length;
-      const bars = gauge.series.map((value, index) => {
-        const barHeight = Math.max(0, (value / peak) * height);
-        if (!(barHeight > 0)) return '';
-        const barWidth = Math.max(0.8, slot - 0.7);
-        return `<rect class="node-spark-bar" x="${(gx + index * slot).toFixed(2)}" y="${(gy + height - barHeight).toFixed(2)}" width="${barWidth.toFixed(2)}" height="${barHeight.toFixed(2)}"/>`;
-      }).join('');
-      return `<g class="node-gauge node-gauge-spark"><title>${escapeHtml(gauge.title)}</title>${bars}</g>`;
-    }
-    const read = String(gauge.read || '');
-    const readWidth = Math.max(18, read.length * 5.6);
-    const barWidth = 34;
-    const gx = x + NODE_WIDTH - 8 - readWidth - 4 - barWidth;
-    const barX = gx + readWidth + 4;
-    const barY = y + 9;
-    const fill = Math.max(0, (barWidth - 2) * gauge.fraction);
-    const tone = gauge.tone === 'cf' ? ' node-gauge-cf' : ' node-gauge-util';
-    return `<g class="node-gauge node-gauge-bar${tone}"><title>${escapeHtml(gauge.title)}</title><text class="node-gauge-read" x="${gx.toFixed(2)}" y="${y + 16}">${escapeHtml(read)}</text><rect class="node-gauge-track" x="${barX}" y="${barY}" width="${barWidth}" height="6" rx="1"/><rect class="node-gauge-fill" x="${barX + 1}" y="${barY + 1}" width="${fill.toFixed(2)}" height="4"/></g>`;
-  }
-
-  function renderMeterChip(x, y, chip) {
-    if (!chip) return '';
-    const width = Math.min(92, Math.max(34, String(chip.text).length * 5.8 + 10));
-    const chipX = x + NODE_WIDTH - 8 - width;
-    return `<g class="node-chip node-chip-${chip.kind}"><rect x="${chipX}" y="${y + 6}" width="${width}" height="13" rx="1"/><text x="${chipX + width / 2}" y="${y + 15.5}" text-anchor="middle">${escapeHtml(chip.text)}</text></g>`;
   }
 
   function floorGridMarkup(width, height) {

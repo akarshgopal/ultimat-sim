@@ -1098,8 +1098,9 @@ test('process chrome reads as a flowsheet, with hollow More units off the defaul
   assert.doesNotMatch(process, /id="advancedComparison"[^>]*\bopen\b/);
   assert.match(process, /<summary>Advanced<\/summary>/);
   assert.match(css, /\.node-kind-badge/);
-  assert.match(css, /\.palette-more/);
-  assert.match(source, /PALETTE_MORE_UNITS/);
+  assert.doesNotMatch(css, /\.palette-more/);
+  assert.doesNotMatch(source, /PALETTE_MORE_UNITS/);
+  assert.doesNotMatch(source, /More units/);
   assert.doesNotMatch(html, /empire/i);
 
   const context = loadApp();
@@ -1113,7 +1114,7 @@ test('process chrome reads as a flowsheet, with hollow More units off the defaul
   const bio = palette.indexOf('>Bio<');
   const more = palette.indexOf('>More units<');
   assert.ok(minerals >= 0 && minerals < fuels && fuels < water && water < carbon && carbon < crust && crust < ree && ree < bio);
-  assert.ok(more < 0, 'empty More units category stays hidden');
+  assert.ok(more < 0, 'empty More units category is gone');
   assert.match(palette.slice(Math.max(0, minerals - 40), minerals), /\bopen\b/);
   assert.match(palette.slice(Math.max(0, fuels - 40), fuels), /\bopen\b/);
   assert.doesNotMatch(palette.slice(Math.max(0, crust - 80), crust), /\bopen\b/);

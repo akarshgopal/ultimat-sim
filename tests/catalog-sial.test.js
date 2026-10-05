@@ -99,11 +99,12 @@ test('Mejillones MG-Si + Al case still solves with module assembly and no MG-Si 
   assert.ok(Number.isFinite(cash.annualNetCash));
 });
 
-test('palette source lists Crust before More units and hides gallery metals/desal', () => {
+test('palette source lists Crust in default categories and hides gallery metals/desal', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll'\s*\]/);
-  assert.match(source, /PALETTE_MORE_UNITS = \[\s*\]/);
+  assert.doesNotMatch(source, /PALETTE_MORE_UNITS/);
+  assert.doesNotMatch(source, /More units/);
   assert.doesNotMatch(source, /PALETTE_DEFAULT_OPEN = new Set\(\[[^\]]*Crust/);
   assert.match(html, /id="loadSiliconAlumina"/);
   assert.match(html, /cases\/silicon\.js/);

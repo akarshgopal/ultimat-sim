@@ -40,7 +40,6 @@ button.primary-action:focus-visible {
 .site-location button:not(.primary-action),
 .canvas-zoom button,
 .save-menu summary,
-.demo-menu summary,
 .port-row button,
 .network-plant button,
 .clear-factory {
@@ -67,8 +66,6 @@ button.primary-action:focus-visible {
 .canvas-zoom button:focus-visible,
 .save-menu summary:hover,
 .save-menu summary:focus-visible,
-.demo-menu summary:hover,
-.demo-menu summary:focus-visible,
 .port-row button:hover,
 .port-row button:focus-visible,
 .network-plant button:hover,
@@ -80,24 +77,6 @@ button.primary-action:focus-visible {
   background: var(--bg-card-hover);
   outline: none;
   box-shadow: var(--shadow-soft);
-}
-
-.btn-ghost {
-  min-height: 32px;
-  padding: 6px 10px;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-ghost:hover,
-.btn-ghost:focus-visible {
-  color: var(--accent);
-  background: var(--accent-muted);
-  outline: none;
 }
 
 .flowsheet-header {
@@ -421,12 +400,6 @@ button.primary-action:focus-visible {
   font-weight: 650;
 }
 .overview-case-chip[hidden] { display: none !important; }
-.overview-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
 
 .cash-gate {
   grid-area: gate;
@@ -1395,11 +1368,6 @@ button.primary-action:focus-visible {
 .map-layer-chip--footprint { --chip-tone: #7a8fa3; }
 .map-layer-chip--network { --chip-tone: var(--methane); }
 .map-layer-chip--basemap { --chip-tone: #8aa0b5; }
-.site-map-cite {
-  font-weight: 400;
-  opacity: 0.8;
-}
-.site-map-cite a { color: var(--teal); }
 .site-map-shell {
   position: relative;
   width: 100%;
@@ -2035,8 +2003,7 @@ button.primary-action:focus-visible {
 .snapshot-controls select { min-width: 120px; }
 .stage-actions button,
 .save-menu summary,
-.canvas-menu summary,
-.demo-menu summary {
+.canvas-menu summary {
   min-height: 26px;
   padding: 2px 7px;
   color: var(--text-secondary);
@@ -2051,21 +2018,15 @@ button.primary-action:focus-visible {
 .stage-actions button:hover,
 .stage-actions button:focus-visible,
 .save-menu summary:hover,
-.save-menu summary:focus-visible,
-.demo-menu summary:hover,
-.demo-menu summary:focus-visible {
+.save-menu summary:focus-visible {
   color: var(--text-primary);
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   outline: none;
 }
-.save-menu,
-.demo-menu { position: relative; }
-.save-menu summary,
-.demo-menu summary { list-style: none; }
-.save-menu summary::-webkit-details-marker,
-.demo-menu summary::-webkit-details-marker { display: none; }
-.save-menu[open] .snapshot-controls,
-.demo-menu[open] .demo-menu-actions {
+.save-menu { position: relative; }
+.save-menu summary { list-style: none; }
+.save-menu summary::-webkit-details-marker { display: none; }
+.save-menu[open] .snapshot-controls {
   position: absolute;
   z-index: 40;
   top: calc(100% + 6px);
@@ -2076,15 +2037,6 @@ button.primary-action:focus-visible {
   border-radius: var(--radius);
   background: var(--bg-secondary);
   box-shadow: var(--shadow);
-}
-.demo-menu-actions {
-  display: grid;
-  gap: 5px;
-}
-.demo-menu-actions button {
-  width: 100%;
-  text-align: left;
-  white-space: normal;
 }
 .save-menu .snapshot-controls button {
   width: 100%;
@@ -2847,13 +2799,6 @@ label output + .quality-chip {
   font-size: 0.74rem;
 }
 
-.palette-category.palette-more > summary {
-  margin-top: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
-}
-
 .palette-category .building-card { margin-top: 4px; }
 .palette-intakes {
   display: grid;
@@ -2873,8 +2818,6 @@ label output + .quality-chip {
 .more-section:has(> .site-rights:empty) {
   display: none;
 }
-
-.network-detail { margin-top: 6px; }
 
 .cashflow-result {
   border: 1px solid var(--border);

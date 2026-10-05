@@ -58,4 +58,4 @@ Sign stays cash+ (about 2×). Maglut `createMaglutCase` cash still ≈ 1299 (±5
 
 ## Tip
 
-Feat pending on `main`. Prior checkout tip `47355c9`.
+Feat `bfb85c8` on `main`. Pages published: https://akarshgopal.github.io/ultimat-sim/ (asset `bfb85c8b64ba`). `npm test` 487 pass / 0 fail. Prior checkout tip `47355c9`.

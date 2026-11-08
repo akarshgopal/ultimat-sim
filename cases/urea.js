@@ -1,12 +1,14 @@
 (function exposeUreaCase(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.UreaCase = api;
-})(globalThis, (model, tea) => {
+})(globalThis, (model, tea, shared) => {
 const { SUBSTANCES } = model;
+const { projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-22.957&lon=14.505&peakpower=1&loss=14&angle=23&aspect=-179&raddatabase=PVGIS-ERA5&outputformat=json';
 const DAILY_PV_ED = 5.48;
 const UREA_KG_PER_DAY = 1000;
@@ -16,26 +18,6 @@ const IEA_NH3 = 'https://www.iea.org/reports/ammonia-technology-roadmap';
 const USGS_N = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-nitrogen.pdf';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const WALVIS_URL = 'https://en.wikipedia.org/wiki/Walvis_Bay';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase) {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createUreaCase() {
   const ureaKg = UREA_KG_PER_DAY;
@@ -48,12 +30,12 @@ function createUreaCase() {
   const carbonDioxide = material('CO2', co2Kg, 'gas');
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'ammonia-feed', unit: 'material-source', sourcePreset: 'ammonia', params: { stream: ammonia }, economics: tea.bindCost('ammonia-feed', { freight: 'chile-coast-container' }) },
         { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed', { freight: 'chile-coast-container' }) },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'urea',
@@ -68,7 +50,7 @@ function createUreaCase() {
       edges: [
         { from: { node: 'ammonia-feed', port: 'out' }, to: { node: 'urea', port: 'ammonia' } },
         { from: { node: 'co2-feed', port: 'out' }, to: { node: 'urea', port: 'carbonDioxide' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'urea', port: 'electricity' } },
         { from: { node: 'urea', port: 'urea' }, to: { node: 'urea-product', port: 'in' } },
         { from: { node: 'urea', port: 'water' }, to: { node: 'process-water', port: 'in' } },
@@ -79,8 +61,7 @@ function createUreaCase() {
       priorities: { 'power-bus': ['urea'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('ammonia-feed').siteResource = 'ammonia';
   node('co2-feed').siteResource = 'co2';

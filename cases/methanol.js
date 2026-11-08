@@ -2,13 +2,15 @@
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
     typeof require === 'function' ? require('../data/atacama-pacific-seawater.js') : root.AtacamaPacificSeawater,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.MethanolCase = api;
-})(globalThis, (model, assay, tea) => {
+})(globalThis, (model, assay, tea, shared) => {
 const { SUBSTANCES, streamMassKg } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const { projectEconomics, streamFromAssay, right, nodeFinder } = shared;
+const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
 // Frozen PVGIS-ERA5 response: data/pvgis-mejillones.json, retrieved 2026-09-14.
 const DAILY_PV = [1923.52 / 365, 5.57, 5.66, 5.56, 5.05, 4.63, 4.38, 4.54, 5.1, 5.59, 5.8, 5.76, 5.62];
 const INTAKE_M3_PER_DAY = 0.1;
@@ -30,17 +32,6 @@ const EVIDENCE = [
   { label: 'Methanol: CO₂ + 3 H₂ → CH₃OH + H₂O; 0.5 kWh/kg synthesis/compression is screening. Product $0.40/kg is a commodity MeOH band mid, not a plant quote.' },
 ];
 
-function seawaterFromAssay(pacificAssay, massKg) {
-  const gPerKg = pacificAssay.ions_g_per_kg;
-  const molPerKg = pacificAssay.mol_per_kg;
-  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
-  const mol = {
-    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
-  };
-  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
-  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
-}
-
 function scaleMaterial(stream, targetKg) {
   const factor = targetKg / streamMassKg(stream);
   return { ...stream, mol: Object.fromEntries(Object.entries(stream.mol).map(([id, mol]) => [id, mol * factor])) };
@@ -58,22 +49,12 @@ function airFromCo2Ppm(co2Ppm, massKg) {
   }, massKg);
 }
 
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
 function createMethanolCase(month = 0) {
   if (!Number.isInteger(month) || month < 0 || month > 12) throw new Error('Month must be 0–12');
   const solarKWp = 20;
   const electricityKWh = DAILY_PV[month] * solarKWp;
   const massKg = INTAKE_M3_PER_DAY * FEED_DENSITY_KG_M3;
-  const seawater = seawaterFromAssay(assay, massKg);
+  const seawater = streamFromAssay(assay, massKg);
   const air = airFromCo2Ppm(422.45, 25000);
   const waterPerKg = H2_PER_KG * WATER_PER_KG_H2;
   const seawaterM3PerKg = waterPerKg / 1000 / 0.45;
@@ -93,7 +74,7 @@ function createMethanolCase(month = 0) {
   const heatKWh = 30;
   const heatT_C = 100;
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
@@ -204,7 +185,7 @@ function createMethanolCase(month = 0) {
       boundaryLimitedBy: target < 5 ? ['site solar electricity'] : [],
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
+  const node = nodeFinder(definition);
   const assumed = 'Assumed accessible quantity; no local supply agreement verified';
   const resources = {
     air: { stream: JSON.parse(JSON.stringify(node('air').params.stream)), quality: 'literature-estimate', evidence: assumed },
@@ -268,5 +249,5 @@ function createMethanolCase(month = 0) {
   return definition;
 }
 
-return { createMethanolCase, DAILY_PV, seawaterFromAssay, INTAKE_M3_PER_DAY };
+return { createMethanolCase, DAILY_PV, seawaterFromAssay: streamFromAssay, INTAKE_M3_PER_DAY };
 });

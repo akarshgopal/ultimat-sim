@@ -1,13 +1,15 @@
 (function exposeMtoCase(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.MtoCase = api;
-})(globalThis, (model, tea) => {
+})(globalThis, (model, tea, shared) => {
 const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const { MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
+const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
 const DAILY_PV_ED = 5.27;
 const ETHYLENE_KG_PER_DAY = 1000;
 const SEC_MTO = 4;
@@ -18,27 +20,6 @@ const IRENA_MEOH = 'https://www.irena.org/publications/2021/Jan/Innovation-Outlo
 const ARGUS_ETHYLENE = 'https://www.argusmedia.com/-/media/project/argusmedia/mainsite/english/documents-and-files/sample-reports/argus-ethylene-and-derivatives.pdf';
 const IEA_ETHYLENE = 'https://www.iea.org/data-and-statistics/charts/annual-ethylene-capacitydemand-growth-and-regional-price-developments-2015-2020';
 const SINOPEC_MTO = 'https://www.yokogawa.com/library/resources/references/stable-operation-and-proactive-maintenance-realized-at-new-coal-chemical-plant-in-china/';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase) {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createMtoCase() {
   const ethyleneKg = ETHYLENE_KG_PER_DAY;
@@ -49,11 +30,11 @@ function createMtoCase() {
   const methanol = material('CH3OH', methanolKg, 'liquid');
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'methanol-feed', unit: 'material-source', sourcePreset: 'methanol', params: { stream: methanol }, economics: tea.bindCost('methanol-feed') },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'mto',
@@ -67,7 +48,7 @@ function createMtoCase() {
       ],
       edges: [
         { from: { node: 'methanol-feed', port: 'out' }, to: { node: 'mto', port: 'methanol' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'mto', port: 'electricity' } },
         { from: { node: 'mto', port: 'ethylene' }, to: { node: 'ethylene-product', port: 'in' } },
         { from: { node: 'mto', port: 'water' }, to: { node: 'process-water', port: 'in' } },
@@ -78,8 +59,7 @@ function createMtoCase() {
       priorities: { 'power-bus': ['mto'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('methanol-feed').siteResource = 'methanol';
   definition.site = {

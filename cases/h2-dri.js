@@ -1,13 +1,16 @@
 (function exposeH2DriCase(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.H2DriCase = api;
-})(globalThis, (model, tea) => {
+})(globalThis, (model, tea, shared) => {
 const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const { MEJILLONES_URL, projectEconomics, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
+const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
+const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
 const DAILY_PV_ED = 5.27;
 const FE_KG_PER_DAY = 1000;
 const SEC_DRI = 0.7;
@@ -18,30 +21,9 @@ const USGS_STEEL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel
 const IEA_H2 = 'https://www.iea.org/reports/global-hydrogen-review-2024';
 const DOE_H2 = 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electrolysis';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
 const NS_TRUCK_RATES = 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf';
 const UNCTAD_TRANSPORT = 'https://unctad.org/publication/trade-and-transport-dataset';
 const WB_FREIGHT_LOGISTICS = 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase = 'solid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createH2DriCase() {
   const oreKg = FE_KG_PER_DAY * 0.5 * SUBSTANCES.Fe2O3.molarMassG / SUBSTANCES.Fe.molarMassG * FEED_MARGIN;
@@ -53,12 +35,12 @@ function createH2DriCase() {
   const hydrogen = material('H2', hydrogenKg, 'gas');
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'iron-ore', unit: 'material-source', sourcePreset: 'ironOre', params: { stream: hematite }, economics: tea.bindCost('iron-ore', { freight: 'inland-truck-short' }) },
         { id: 'hydrogen-feed', unit: 'material-source', sourcePreset: 'hydrogen', params: { stream: hydrogen }, economics: tea.bindCost('hydrogen-feed', { freight: 'chile-coast-container' }) },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'dri',
@@ -73,7 +55,7 @@ function createH2DriCase() {
       edges: [
         { from: { node: 'iron-ore', port: 'out' }, to: { node: 'dri', port: 'ironOre' } },
         { from: { node: 'hydrogen-feed', port: 'out' }, to: { node: 'dri', port: 'hydrogen' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'dri', port: 'electricity' } },
         { from: { node: 'dri', port: 'steel' }, to: { node: 'steel', port: 'in' } },
         { from: { node: 'dri', port: 'water' }, to: { node: 'process-water', port: 'in' } },
@@ -84,8 +66,7 @@ function createH2DriCase() {
       priorities: { 'power-bus': ['dri'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('iron-ore').siteResource = 'ironOre';
   node('hydrogen-feed').siteResource = 'hydrogen';

@@ -2,12 +2,15 @@
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
     typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('../data/ionic-clay-longnan.js') : root.IonicClayLongnan
+    typeof require === 'function' ? require('../data/ionic-clay-longnan.js') : root.IonicClayLongnan,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ReeCase = api;
-})(globalThis, (model, tea, clay) => {
+})(globalThis, (model, tea, clay, shared) => {
 const { SUBSTANCES } = model;
+const { projectEconomics, right, nodeFinder, clone, solarPowerNode } = shared;
+const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-13.53&lon=-48.22&peakpower=1&loss=14&angle=13&aspect=180&outputformat=json';
 const DAILY_PV_ED = 4.24;
 const DAILY_PV_EY = 1546.98;
@@ -24,16 +27,6 @@ const USGS_Y = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-yttrium.pdf';
 const METEORIC = 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf';
 const MINACU_URL = 'https://en.wikipedia.org/wiki/Mina%C3%A7u';
 
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
 function clayStream(kg) {
   const reoKg = kg * GRADE;
   const mol = {};
@@ -42,16 +35,6 @@ function clayStream(kg) {
   }
   mol.Al2Si2O5OH4 = (kg - reoKg) * 1000 / SUBSTANCES.Al2Si2O5OH4.molarMassG;
   return { kind: 'material', mol, phase: 'solid', T_C: 25, P_bar: 1 };
-}
-
-function material(substance, kg, phase = 'solid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
 }
 
 function createReeCase() {
@@ -64,12 +47,12 @@ function createReeCase() {
   const lixiviant = material('NH42SO4', lixKg, 'solid');
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'clay', unit: 'material-source', sourcePreset: 'ionic-clay', params: { stream: clayFeed }, economics: tea.bindCost('ionic-clay') },
         { id: 'lixiviant', unit: 'material-source', sourcePreset: 'ammonium-sulfate', params: { stream: lixiviant }, economics: tea.bindCost('ammonium-sulfate') },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         {
           id: 'iac-leach',
           unit: 'iac-leach',
@@ -101,8 +84,7 @@ function createReeCase() {
       setpoints: { 'iac-leach': REO_KG_PER_DAY },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('clay').siteResource = 'clay';
   node('lixiviant').siteResource = 'lixiviant';

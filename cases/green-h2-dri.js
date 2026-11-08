@@ -2,13 +2,16 @@
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
     typeof require === 'function' ? require('../data/atacama-pacific-seawater.js') : root.AtacamaPacificSeawater,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.GreenH2DriCase = api;
-})(globalThis, (model, assay, tea) => {
+})(globalThis, (model, assay, tea, shared) => {
 const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const { MEJILLONES_URL, projectEconomics, streamFromAssay, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
+const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
+const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
 const DAILY_PV_ED = 5.27;
 const FE_KG_PER_DAY = 1000;
 const SEC_DRI = 0.7;
@@ -24,43 +27,11 @@ const USGS_STEEL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel
 const IEA_H2 = 'https://www.iea.org/reports/global-hydrogen-review-2024';
 const DOE_H2 = 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electrolysis';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
 const MILLERO_URL = 'https://doi.org/10.1016/j.dsr.2007.10.001';
 const WOA_URL = 'https://doi.org/10.25923/70qt-9574';
 const UNCTAD_TRANSPORT = 'https://unctad.org/publication/trade-and-transport-dataset';
 const WB_FREIGHT_LOGISTICS = 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf';
 const LINDE_LOX_TANKER = 'https://static.prd.echannel.linde.com/wcsstore/SE_REN_Industrial_Gas_Store/pdf/Prislista_Flytande_gaser_Industri_2024_01.pdf';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase = 'solid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
-
-function seawaterFromAssay(seawaterAssay, massKg) {
-  const gPerKg = seawaterAssay.ions_g_per_kg;
-  const molPerKg = seawaterAssay.mol_per_kg;
-  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
-  const mol = {
-    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
-  };
-  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
-  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
-}
 
 function createGreenH2DriCase() {
   const oreKg = FE_KG_PER_DAY * 0.5 * SUBSTANCES.Fe2O3.molarMassG / SUBSTANCES.Fe.molarMassG * FEED_MARGIN;
@@ -73,18 +44,18 @@ function createGreenH2DriCase() {
   const solarKWp = kWhPerDay / DAILY_PV_ED * 1.02;
   const electricityKWh = solarKWp * DAILY_PV_ED;
   const hematite = material('Fe2O3', oreKg);
-  const seawater = seawaterFromAssay(assay, seawaterKg);
+  const seawater = streamFromAssay(assay, seawaterKg);
   const power = { kind: 'electricity', kWh: electricityKWh };
   const seawaterCost = tea.costs && tea.costs.seawater
     ? tea.bindCost('seawater', { region: REGION })
     : { unitCost: 0 };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'iron-ore', unit: 'material-source', sourcePreset: 'ironOre', params: { stream: hematite }, economics: tea.bindCost('iron-ore', { region: REGION, freight: 'inland-truck-short' }) },
         { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: seawaterCost },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'swro',
@@ -123,7 +94,7 @@ function createGreenH2DriCase() {
         { from: { node: 'electrolyzer', port: 'waterReject' }, to: { node: 'waterReject', port: 'in' } },
         { from: { node: 'dri', port: 'steel' }, to: { node: 'steel', port: 'in' } },
         { from: { node: 'dri', port: 'water' }, to: { node: 'process-water', port: 'in' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'electrolyzer', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'dri', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'swro', port: 'electricity' } },
@@ -134,8 +105,7 @@ function createGreenH2DriCase() {
       priorities: { 'power-bus': ['electrolyzer', 'dri', 'swro'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('iron-ore').siteResource = 'ironOre';
   node('seawater').siteResource = 'seawater';

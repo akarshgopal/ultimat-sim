@@ -1,13 +1,15 @@
 (function exposeFtLiquidsCase(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FtLiquidsCase = api;
-})(globalThis, (model, tea) => {
+})(globalThis, (model, tea, shared) => {
 const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const { MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
+const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
 const DAILY_PV_ED = 5.27;
 const DIESEL_KG_PER_DAY = 1000;
 const SEC_FT = 0.22;
@@ -20,27 +22,6 @@ const IEA_DAC = 'https://www.iea.org/reports/direct-air-capture-2022/executive-s
 const EIA_DIESEL = 'https://www.eia.gov/petroleum/gasdiesel/';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const IPCC_FUEL_NCV = 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/2_Volume2/V2_1_Ch1_Introduction.pdf';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase) {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createFtLiquidsCase() {
   const dieselKg = DIESEL_KG_PER_DAY;
@@ -53,12 +34,12 @@ function createFtLiquidsCase() {
   const carbonDioxide = material('CO2', co2Kg, 'gas');
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'hydrogen-feed', unit: 'material-source', sourcePreset: 'hydrogen', params: { stream: hydrogen }, economics: tea.bindCost('hydrogen-feed', { freight: 'chile-coast-container' }) },
         { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed', { freight: 'chile-coast-container' }) },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'ft-liquids',
@@ -73,7 +54,7 @@ function createFtLiquidsCase() {
       edges: [
         { from: { node: 'hydrogen-feed', port: 'out' }, to: { node: 'ft-liquids', port: 'hydrogen' } },
         { from: { node: 'co2-feed', port: 'out' }, to: { node: 'ft-liquids', port: 'co2' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'ft-liquids', port: 'electricity' } },
         { from: { node: 'ft-liquids', port: 'diesel' }, to: { node: 'diesel-product', port: 'in' } },
         { from: { node: 'ft-liquids', port: 'water' }, to: { node: 'process-water', port: 'in' } },
@@ -84,8 +65,7 @@ function createFtLiquidsCase() {
       priorities: { 'power-bus': ['ft-liquids'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('hydrogen-feed').siteResource = 'hydrogen';
   node('co2-feed').siteResource = 'co2';

@@ -2,12 +2,14 @@
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
     typeof require === 'function' ? require('../data/benguela-atlantic-seawater.js') : root.BenguelaAtlanticSeawater,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.GreenAmmoniaCase = api;
-})(globalThis, (model, assay, tea) => {
+})(globalThis, (model, assay, tea, shared) => {
 const { SUBSTANCES } = model;
+const { projectEconomics, streamFromAssay, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-22.957&lon=14.505&peakpower=1&loss=14&angle=23&aspect=-179&raddatabase=PVGIS-ERA5&outputformat=json';
 const DAILY_PV_ED = 5.48;
 const NH3_KG_PER_DAY = 1000;
@@ -31,27 +33,6 @@ const WALVIS_URL = 'https://en.wikipedia.org/wiki/Walvis_Bay';
 const AIR_N2 = 788163;
 const AIR_O2 = 211409;
 const AIR_CO2 = 428;
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function seawaterFromAssay(seawaterAssay, massKg) {
-  const gPerKg = seawaterAssay.ions_g_per_kg;
-  const molPerKg = seawaterAssay.mol_per_kg;
-  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
-  const mol = {
-    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
-  };
-  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
-  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
-}
 
 function airFromNitrogenKg(nitrogenKg) {
   const n2Mol = nitrogenKg * 1000 / SUBSTANCES.N2.molarMassG;
@@ -80,16 +61,16 @@ function createGreenAmmoniaCase() {
   const kWhPerDay = h2Kg * SEC_H2 + n2Kg * SEC_N2 + NH3_KG_PER_DAY * SEC_NH3 + swroProductM3 * SEC_SWRO;
   const solarKWp = kWhPerDay / DAILY_PV_ED * 1.02;
   const electricityKWh = solarKWp * DAILY_PV_ED;
-  const seawater = seawaterFromAssay(assay, seawaterKg);
+  const seawater = streamFromAssay(assay, seawaterKg);
   const air = airFromNitrogenKg(airN2Kg);
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: tea.bindCost('seawater') },
         { id: 'air', unit: 'material-source', sourcePreset: 'air', params: { stream: air }, economics: { unitCost: 0 } },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'swro',
@@ -138,7 +119,7 @@ function createGreenAmmoniaCase() {
         { from: { node: 'asu', port: 'oxygen' }, to: { node: 'asu-oxygen', port: 'in' } },
         { from: { node: 'asu', port: 'offgas' }, to: { node: 'offgas', port: 'in' } },
         { from: { node: 'ammonia', port: 'ammonia' }, to: { node: 'ammonia-product', port: 'in' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'electrolyzer', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'asu', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'ammonia', port: 'electricity' } },
@@ -150,8 +131,7 @@ function createGreenAmmoniaCase() {
       priorities: { 'power-bus': ['electrolyzer', 'asu', 'ammonia', 'swro'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('seawater').siteResource = 'seawater';
   node('air').siteResource = 'air';

@@ -12,12 +12,14 @@
     typeof require === 'function' ? require('./green-ft') : root.GreenFtCase,
     typeof require === 'function' ? require('./green-mto') : root.GreenMtoCase,
     typeof require === 'function' ? require('./green-h2-dri') : root.GreenH2DriCase,
-    typeof require === 'function' ? require('./h2-dri') : root.H2DriCase
+    typeof require === 'function' ? require('./h2-dri') : root.H2DriCase,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.NetworkCase = api;
-})(globalThis, (coastal, abundance, model, silicon, greenUrea, maglut, cement, cuEw, floatGlass, greenFt, greenMto, greenH2Dri, h2Dri) => {
+})(globalThis, (coastal, abundance, model, silicon, greenUrea, maglut, cement, cuEw, floatGlass, greenFt, greenMto, greenH2Dri, h2Dri, shared) => {
 const { streamMassKg } = model;
+const { right, nodeFinder, clone } = shared;
 const tea = abundance.TEA;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.43&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
 // Frozen PVGIS response: data/pvgis-dead-sea.json, retrieved 2026-09-06.
@@ -29,22 +31,11 @@ const ZABUYE_DAILY_PV = [2070.67 / 365, 5.44, 5.93, 6.09, 6.29, 6.12, 5.98, 5.34
 const ZABUYE_PV = ZABUYE_DAILY_PV[0]; // kWh/kWp·day = E_y 2070.67 / 365
 const ZABUYE_ASSAY_URL = 'https://doi.org/10.3389/fceng.2022.1008680';
 
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
 function siteDeadSeaAbundance() {
   const definition = abundance.createAbundanceCase({ region: 'Levant' });
-  const node = id => definition.graph.nodes.find(item => item.id === id);
+  const node = nodeFinder(definition);
   const power = node('power').params.stream.kWh;
   const solarKWp = power / DEAD_SEA_PV;
-  const clone = stream => JSON.parse(JSON.stringify(stream));
   node('power').siteResource = 'electricity';
   node('brine').siteResource = 'brine';
   node('salt-feed').siteResource = 'salt';
@@ -143,10 +134,9 @@ function siteZabuyeAbundance() {
     assayId: 'zabuye-lithium-brine',
     region: 'China / Tibet',
   });
-  const node = id => definition.graph.nodes.find(item => item.id === id);
+  const node = nodeFinder(definition);
   const power = node('power').params.stream.kWh;
   const solarKWp = power / ZABUYE_PV;
-  const clone = stream => JSON.parse(JSON.stringify(stream));
   node('power').siteResource = 'electricity';
   node('brine').siteResource = 'brine';
   node('salt-feed').siteResource = 'salt';

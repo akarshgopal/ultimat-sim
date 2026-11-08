@@ -2,12 +2,14 @@
   const commonJs = typeof module === 'object' && module.exports;
   const api = factory(
     commonJs ? require('../engine/model') : root.FlowsheetModel,
-    commonJs ? require('../data/tea-screening.js') : root.TeaScreening
+    commonJs ? require('../data/tea-screening.js') : root.TeaScreening,
+    commonJs ? require('./_shared.js') : root.CaseShared
   );
   if (commonJs) module.exports = api;
   else root.SabatierCase = api;
-})(globalThis, (model, tea) => {
+})(globalThis, (model, tea, shared) => {
 const { streamMassKg } = model;
+const { projectEconomics } = shared;
 const H2O_KG_PER_KG_H2 = 18.01528 / 2.01588;
 const H2_KG_PER_KG_CH4 = 4 * 2.01588 / 16.04246;
 const CO2_KG_PER_KG_CH4 = 44.0095 / 16.04246;
@@ -153,7 +155,7 @@ function createSabatierCase(overrides = {}) {
   }
 
   return {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },

@@ -2,12 +2,13 @@
   const api = factory(
     typeof require === 'function' ? require('./sabatier') : root.SabatierCase,
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/almeria-seawater.js') : root.AlmeriaSeawater
+    typeof require === 'function' ? require('../data/almeria-seawater.js') : root.AlmeriaSeawater,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.CoastalCase = api;
-})(globalThis, (sabatier, model, assay) => {
-const { SUBSTANCES } = model;
+})(globalThis, (sabatier, model, assay, shared) => {
+const { streamFromAssay, right, nodeFinder } = shared;
 const tea = typeof require === 'function' ? require('../data/tea-screening.js') : globalThis.TeaScreening;
 const HOURLY = typeof require === 'function' ? require('../data/pvgis-almeria-hourly.js') : globalThis.PvgisAlmeriaHourly;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=36.834&lon=-2.463&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
@@ -28,33 +29,12 @@ const EVIDENCE = [
   { label: 'NASEM 2019 Negative Emissions Technologies — DAC heat-dominated (DOI)', url: 'https://doi.org/10.17226/25259' },
 ];
 
-function seawaterFromAssay(almeriaAssay, massKg) {
-  const gPerKg = almeriaAssay.ions_g_per_kg;
-  const molPerKg = almeriaAssay.mol_per_kg;
-  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
-  const mol = {
-    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
-  };
-  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
-  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
-}
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
 function createCoastalCase(month = 0) {
   if (!Number.isInteger(month) || month < 0 || month > 12) throw new Error('Month must be 0–12');
   const solarKWp = 37.5;
   const electricityKWh = DAILY_PV[month] * solarKWp;
   const massKg = INTAKE_M3_PER_DAY * FEED_DENSITY_KG_M3;
-  const seawater = seawaterFromAssay(assay, massKg);
+  const seawater = streamFromAssay(assay, massKg);
   const h2 = 4 * 2.01588 / 16.04246;
   const co2 = 44.0095 / 16.04246;
   const water = h2 * 18.01528 / 2.01588;
@@ -67,7 +47,7 @@ function createCoastalCase(month = 0) {
     h2Requested: target * h2, dacRequested: target * co2,
     params: { electrolyzer: { secKWhPerKgH2: 55 }, swro: { feedDensityKgM3: FEED_DENSITY_KG_M3 } },
   });
-  const node = id => definition.graph.nodes.find(item => item.id === id);
+  const node = nodeFinder(definition);
   node('dac').unit = 'dac-solid';
   node('dac').params.consumablesPerKgCO2 = 0.02;
   node('consumables').params.stream = { kind: 'consumable', amount: 1, unit: 'kg/day', label: 'Amine sorbent makeup', chemicalId: 'amine-sorbent' };
@@ -146,5 +126,5 @@ function createCoastalCase(month = 0) {
   definition.operation.boundaryLimitedBy = target < 5 ? ['site solar electricity'] : [];
   return definition;
 }
-return { createCoastalCase, DAILY_PV, seawaterFromAssay, INTAKE_M3_PER_DAY };
+return { createCoastalCase, DAILY_PV, seawaterFromAssay: streamFromAssay, INTAKE_M3_PER_DAY };
 });

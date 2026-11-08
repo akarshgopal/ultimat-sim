@@ -80,7 +80,7 @@ function loadApp() {
     'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js',
     'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js',
     'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js',
-    'data/tea-screening.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js',
+    'data/tea-screening.js', 'cases/_shared.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js',
     'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js',
     'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js',
     'data/mediterranean-swro-brine.js',

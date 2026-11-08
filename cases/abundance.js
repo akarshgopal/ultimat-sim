@@ -40,25 +40,16 @@
       'clayton-valley-brine': root.ClaytonValleyBrine,
       'zabuye-lithium-brine': root.ZabuyeLithiumBrine,
     },
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
+    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.AbundanceCase = api;
-})(globalThis, (model, assays, tea) => {
+})(globalThis, (model, assays, tea, shared) => {
 const { SUBSTANCES, streamMassKg } = model;
+const { projectEconomics, streamFromAssay, powerToBusEdge } = shared;
 const MASS_KG_PER_DAY = 100000;
 const DEFAULT_ASSAY_ID = 'dead-sea-brine';
-
-function brineFromAssay(assayData, massKg) {
-  const gPerKg = assayData.ions_g_per_kg;
-  const molPerKg = assayData.mol_per_kg;
-  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
-  const mol = {
-    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
-  };
-  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
-  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
-}
 
 function resolveAssayId(options) {
   if (typeof options === 'string') return options;
@@ -72,7 +63,7 @@ function createAbundanceCase(options = {}) {
   const demandRegionId = tea.resolveDemandRegion(region);
   const assay = assays[assayId];
   if (!assay) throw new Error(`Unknown abundance assay ${assayId}`);
-  const brine = brineFromAssay(assay, MASS_KG_PER_DAY);
+  const brine = streamFromAssay(assay, MASS_KG_PER_DAY);
   const bromideRecovery = 0.9;
   const bromineMol = (brine.mol['Br-'] || 0) * bromideRecovery / 2;
   const bromineKg = bromineMol * SUBSTANCES.Br2.molarMassG / 1000;
@@ -98,7 +89,7 @@ function createAbundanceCase(options = {}) {
   return {
     meta: { assayId, demandRegionId, tea: tea.abundanceEvidence(region) },
     teaEvidence: tea.abundanceEvidence(region),
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'brine', unit: 'material-source', sourcePreset: 'brine', params: { stream: brine }, economics: tea.bindCost('brine', { region }) },
@@ -127,7 +118,7 @@ function createAbundanceCase(options = {}) {
         { from: { node: 'salt-feed', port: 'out' }, to: { node: 'chlor-alkali', port: 'salt' } },
         { from: { node: 'water', port: 'out' }, to: { node: 'chlor-alkali', port: 'water' } },
         { from: { node: 'air', port: 'out' }, to: { node: 'asu', port: 'air' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'brine-pump', port: 'electricity' } },
         ...['minerals', 'chlor-alkali', 'bromine-recovery', 'asu', 'ammonia'].map(id => ({ from: { node: 'power-bus', port: 'out' }, to: { node: id, port: 'electricity' } })),
         ...outputs.map(port => ({ from: { node: 'minerals', port }, to: { node: port, port: 'in' } })),

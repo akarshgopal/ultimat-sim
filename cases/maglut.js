@@ -2,11 +2,13 @@
   const api = factory(
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
     typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('../data/ionic-clay-longnan.js') : root.IonicClayLongnan
+    typeof require === 'function' ? require('../data/ionic-clay-longnan.js') : root.IonicClayLongnan,
+    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.MaglutCase = api;
-})(globalThis, (model, tea, clay) => {
+})(globalThis, (model, tea, clay, shared) => {
+const { projectEconomics, right, nodeFinder, clone, solarPowerNode } = shared;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=33.77&lon=-118.19&peakpower=1&loss=14&angle=20&aspect=180&outputformat=json';
 const pvgis = typeof require === 'function' ? require('../data/pvgis-long-beach.json') : null;
 const DAILY_PV_ED = pvgis ? pvgis.outputs.totals.fixed.E_d : 3.33;
@@ -26,16 +28,6 @@ const USGS_REE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.
 const LONG_BEACH_URL = 'https://en.wikipedia.org/wiki/Long_Beach,_California';
 const METEORIC = 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf';
 
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
 function concentrateStream(kg) {
   return {
     kind: 'material',
@@ -54,11 +46,11 @@ function createMaglutCase() {
   const concentrate = concentrateStream(feedKg);
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'concentrate', unit: 'material-source', sourcePreset: 'mixed-reo', params: { stream: concentrate }, economics: tea.bindCost('mixed-reo-concentrate') },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         {
           id: 'chrom',
           unit: 'ree-chromatography',
@@ -87,8 +79,7 @@ function createMaglutCase() {
       setpoints: { chrom: REO_KG_PER_DAY },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('concentrate').siteResource = 'concentrate';
   definition.site = {

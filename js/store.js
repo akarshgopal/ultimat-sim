@@ -10,6 +10,24 @@
   const MARKETS = globalThis.FoundryMarkets.MARKETS;
   const SITES = globalThis.FoundrySites.SITES;
   const pct = v => Math.round(v * 1000) / 10;
+  const round4 = v => Math.round(v * 1e4) / 1e4;
+  // Solar electricity is quoted in $/kWh at the reference yield (2,000 kWh/kWp·yr); a site's own
+  // price scales with its sun. Converted to PV capex with the scenario's discount rate.
+  const lcoeOf = capex => Company.solarLcoe({ ...D.pv, capexUsdPerKWp: D.pv.capexUsdPerKWp }, D.finance, capex);
+  const KWH_TODAY = round4(lcoeOf(D.pv.capexUsdPerKWp));
+  const KWH_FLOOR = round4(lcoeOf(D.pv.floorUsdPerKWp));
+  // Presets for the energy and equipment levers.
+  const ENERGY_PRESETS = Object.freeze([
+    { id: 'today', label: 'Today', kwh: KWH_TODAY, floor: KWH_FLOOR, hint: 'IRENA 2023 utility PV ($758/kW)' },
+    { id: '3x', label: '3× cheaper', kwh: round4(KWH_TODAY / 3), floor: round4(KWH_FLOOR / 3), hint: 'record sunbelt PPA territory' },
+    { id: '10x', label: '10× cheaper', kwh: round4(KWH_TODAY / 10), floor: round4(KWH_FLOOR / 10), hint: 'the Terraform thesis' },
+  ]);
+  const EQUIPMENT_PRESETS = Object.freeze([
+    { id: '1', label: '×1', equip: 1, hint: 'recipe screening packs' },
+    { id: '0.5', label: '×0.5', equip: 0.5 },
+    { id: '0.25', label: '×0.25', equip: 0.25 },
+    { id: '0.1', label: '×0.1', equip: 0.1, hint: 'mass-produced, low-utilization hardware' },
+  ]);
 
   // Scenario fields. group: where the Company view shows them. key: URL parameter.
   const FIELDS = Object.freeze([
@@ -22,8 +40,13 @@
     { group: 'build', key: 'pvSite', label: 'Max PV per site', unit: 'GWp', min: 0.1, max: 1000, step: 1, def: D.build.maxPvGWpPerSite },
     { group: 'build', key: 'lead', label: 'Build lead time', unit: 'yr', min: 0, max: 10, step: 1, def: D.build.leadTimeYears },
     { group: 'build', key: 'perYear', label: 'Plants per year', unit: 'max', min: 0, max: 200, step: 1, def: D.build.maxPlantsPerYear },
-    { group: 'cost', key: 'pvCapex', label: 'PV capex today', unit: '$/kWp', min: 50, max: 5000, step: 10, def: D.pv.capexUsdPerKWp },
-    { group: 'cost', key: 'pvDecline', label: 'PV decline', unit: '%/yr', min: 0, max: 30, step: 0.5, def: pct(D.pv.exogenousDeclinePerYear) },
+    { group: 'energy', key: 'kwh', label: 'Solar electricity, start year', unit: '$/kWh', min: 0.0001, max: 0.3, step: 0.0005, def: KWH_TODAY,
+      hint: 'At 2,000 kWh/kWp·yr; sunnier sites pay less. Moves PV capex and O&M together.' },
+    { group: 'energy', key: 'kwhDecline', label: 'Solar price decline', unit: '%/yr', min: 0, max: 30, step: 0.5, def: pct(D.pv.exogenousDeclinePerYear) },
+    { group: 'energy', key: 'kwhFloor', label: 'Solar price floor', unit: '$/kWh', min: 0, max: 0.3, step: 0.0005, def: KWH_FLOOR },
+    { group: 'energy', key: 'battery', label: 'Battery', unit: '$/kWh', min: 1, max: 2000, step: 5, def: Company.DEFAULTS.utilization.battery.usdPerKWh },
+    { group: 'energy', key: 'equip', label: 'Equipment cost', unit: '×', min: 0.01, max: 3, step: 0.05, def: D.equipmentCostMultiplier,
+      hint: 'Multiplies electrolyzer, DAC, desal and process capex (not PV or storage).' },
     { group: 'cost', key: 'lrElec', label: 'Electrolyzer learning', unit: '%', min: 0, max: 50, step: 1, def: pct(D.tech.electrolyzer.learningRate) },
     { group: 'cost', key: 'lrProc', label: 'Process learning', unit: '%', min: 0, max: 50, step: 1, def: pct(D.tech.process.learningRate) },
     { group: 'cost', key: 'lrDac', label: 'DAC learning', unit: '%', min: 0, max: 50, step: 1, def: pct(D.tech.dac.learningRate) },
@@ -93,7 +116,13 @@
         infiniteSourcesOnly: s.infinite,
       },
       integration: { enabled: s.make || s.infinite },
-      pv: { capexUsdPerKWp: s.pvCapex, exogenousDeclinePerYear: s.pvDecline / 100 },
+      pv: {
+        capexUsdPerKWp: Company.pvCapexFromLcoe(s.kwh, D.pv, { discountRate: s.rate / 100 }),
+        floorUsdPerKWp: Company.pvCapexFromLcoe(s.kwhFloor, D.pv, { discountRate: s.rate / 100 }),
+        exogenousDeclinePerYear: s.kwhDecline / 100,
+      },
+      equipmentCostMultiplier: s.equip,
+      utilization: { battery: { usdPerKWh: s.battery } },
       tech: {
         electrolyzer: { learningRate: s.lrElec / 100 },
         process: { learningRate: s.lrProc / 100 },
@@ -154,6 +183,16 @@
   }
 
   // Year-0 opportunity ranking for the current scenario (fast, main thread).
+  // Energy break-even ($/kWh) per pathway for the current scenario at several equipment multipliers.
+  function breakevens(equipMultipliers = [1, 0.5, 0.25, 0.1]) {
+    return equipMultipliers.map(equip => {
+      const config = toConfig(scenario);
+      config.build.allowPathways = null;
+      config.equipmentCostMultiplier = equip;
+      return { equip, rows: Company.energyBreakevens({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }) };
+    });
+  }
+
   function rank(sizeMultiple = 10) {
     const config = toConfig(scenario);
     config.build.allowPathways = null; // rank every pathway; views mark excluded ones
@@ -161,7 +200,7 @@
   }
 
   globalThis.Store = Object.freeze({
-    FIELDS, FIELD_BY_KEY, PATHWAYS, MARKETS, SITES,
+    FIELDS, FIELD_BY_KEY, PATHWAYS, MARKETS, SITES, ENERGY_PRESETS, EQUIPMENT_PRESETS,
     pathwayById: new Map(PATHWAYS.map(p => [p.id, p])),
     siteById: new Map(SITES.map(s => [s.id, s])),
     defaults, toQuery, fromQuery, toConfig, pathwayAllowed,
@@ -173,5 +212,6 @@
     reset() { scenario = defaults(); runNow(); },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     rank,
+    breakevens,
   });
 })();

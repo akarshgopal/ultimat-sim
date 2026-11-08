@@ -62,7 +62,8 @@ test('evaluatePlant reproduces hand-computed plant economics', () => {
   close(ev.capex.process, 100 * 1000);
   close(ev.capex.pv, pvKWp * 1000);
   close(ev.capex.land, pvKWp * 0.0016 * 1000);
-  const opex = 1e5 * 0.03 + pvKWp * 20 + 365000 * 0.01;
+  // PV O&M holds the configured O&M/capex ratio ($20 per $758 of capex), so it scales with PV price.
+  const opex = 1e5 * 0.03 + pvKWp * 1000 * (20 / 758) + 365000 * 0.01;
   close(ev.opex.total, opex);
   close(ev.revenue, 365000);
   const af = C.annuityFactor(0.08, 25);
@@ -90,7 +91,7 @@ function run(config = {}, pathways = [good, bad]) {
 }
 
 test('company builds profitable plants, never unprofitable ones, and grows', () => {
-  const result = run();
+  const result = run({ finance: { initialEquityUsd: 2e6 } });
   assert.ok(result.plants.length > 0);
   assert.ok(result.plants.every(p => p.pathwayId === 'good'));
   const t = result.timeline;
@@ -335,4 +336,41 @@ test('material totals and price relief are reported per year', () => {
   const relief = last.priceReliefByMarket.widget;
   close(relief, 1 - last.priceByProduct.widget / MARKETS.widget.priceUsdPerKg);
   assert.ok(relief > 0 && relief < 1);
+});
+
+test('solar $/kWh and PV capex convert both ways; O&M moves with capex', () => {
+  const pv = C.DEFAULTS.pv;
+  const fin = C.DEFAULTS.finance;
+  const usd = C.solarLcoe(pv, fin);
+  // IRENA 2023 $758/kW at 2,000 kWh/kWp·yr and an 8%/25-yr CRF ≈ 4.5¢/kWh.
+  assert.ok(usd > 0.04 && usd < 0.05, String(usd));
+  close(C.pvCapexFromLcoe(usd, pv, fin), pv.capexUsdPerKWp, 1e-12);
+  close(C.solarLcoe(pv, fin, pv.capexUsdPerKWp / 10), usd / 10, 1e-12);
+  // A sunnier site (3,000 kWh/kWp·yr) pays less per kWh for the same PV.
+  close(C.solarLcoe(pv, fin, pv.capexUsdPerKWp, 3000), usd * 2000 / 3000, 1e-12);
+});
+
+test('equipment multiplier scales non-storage equipment capex only', () => {
+  const rank = equip => C.rankOpportunities({ pathways: [good], sites: SITES, markets: MARKETS, config: { equipmentCostMultiplier: equip } })[0];
+  const full = rank(1);
+  const tenth = rank(0.1);
+  close(tenth.capex.process, full.capex.process * 0.1, 1e-9);
+  close(tenth.capex.pv, full.capex.pv, 1e-12);
+  assert.ok(tenth.lcopUsdPerKg < full.lcopUsdPerKg);
+});
+
+test('energy break-evens: cheaper equipment never raises the price a pathway needs; free-energy checks bound it', () => {
+  const pathways = [good, bad];
+  const at = equip => new Map(C.energyBreakevens({ pathways, sites: SITES, markets: MARKETS, config: { equipmentCostMultiplier: equip } }).map(r => [r.pathwayId, r]));
+  const one = at(1);
+  const tenth = at(0.1);
+  assert.equal(one.get('bad').limitedBy, 'not-energy', 'a $1M/(kg/day) plant cannot be saved by free electricity');
+  const g = one.get('good');
+  assert.ok(['energy', 'feasible-at-any-price'].includes(g.limitedBy));
+  assert.ok((tenth.get('good').breakevenUsdPerKWh ?? -1) >= (g.breakevenUsdPerKWh ?? -1));
+  if (g.limitedBy === 'energy') {
+    // At the break-even price the best site's NPV is ~0: just above it is infeasible.
+    const above = C.energyBreakevens({ pathways: [good], sites: SITES, markets: MARKETS, config: { pv: { capexUsdPerKWp: C.pvCapexFromLcoe(g.breakevenUsdPerKWh * 1.05, C.DEFAULTS.pv, C.DEFAULTS.finance) } } })[0];
+    assert.ok(above.today.npv < 0);
+  }
 });

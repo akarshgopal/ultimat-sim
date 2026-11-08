@@ -14,6 +14,7 @@
   const Views = globalThis.Views;
   const NAV = [
     { id: 'company', label: 'Company' },
+    { id: 'energy', label: 'Energy' },
     { id: 'pathways', label: 'Pathways' },
     { id: 'sites', label: 'Sites' },
     { id: 'markets', label: 'Markets' },

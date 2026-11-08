@@ -10,11 +10,12 @@ Live: https://akarshgopal.github.io/ultimat-sim/
 
 ## The app
 
-One page (`index.html`), four views. The scenario lives in the URL, so a link reproduces both the screen and the assumptions.
+One page (`index.html`), five views. The scenario lives in the URL, so a link reproduces both the screen and the assumptions.
 
 | View | Question |
 |---|---|
 | **Company** | What does the company make, how much of the world's supply is that, and is it feasible and self-funding? Scenario panel, abundance first, economics as the constraint. |
+| **Energy** | Think in kWh and $/kWh: the electricity price below which each recipe becomes feasible, at several equipment costs; how much world material demand each price unlocks; where each kg's cost goes (energy, equipment, feedstock). Presets for today, 3× and 10× cheaper solar. |
 | **Pathways** | Each recipe: cost vs price over the years at its best site, when it becomes feasible, make-vs-buy, best sites, and the solved plant flowsheet per kg of product. |
 | **Sites** | The 34 sites: solar, land price, seawater/brine, which recipes they can host, what the run builds there. |
 | **Markets** | The 31 world markets: demand, price, sources, the company's share and the price relief it delivers. |
@@ -35,6 +36,10 @@ Each simulated year:
 2. **Plants operate.** Revenue uses that year's realized price, which falls as the company's share of the world market grows (`price = p0 × (1 − elasticity × share)`). Opex is fixed O&M on built capex plus purchased feeds.
 3. **Debt is serviced** and cash is banked.
 4. **The company builds.** Among plants that pay back their capital (NPV ≥ 0) and that it can afford, it picks the one with the most lifetime material: the plant's own tonnes plus the tonnes its surplus will fund when reinvested (`own kg + λ × NPV`, with λ the year's best kg per capex dollar). A `profit` objective (highest NPV) is kept for comparison. It decides make-vs-buy for each purchased intermediate (below) and builds the best affordable ones, using equity plus a debt fraction, until money, the yearly build limit, a per-product world-market share ceiling (applied to coproducts too) or a per-site PV ceiling stops it.
+
+**Energy in $/kWh.** Solar electricity is a scenario input in $/kWh (quoted at 2,000 kWh/kWp·yr; a site's own price scales with its sun), converted to PV capex at a fixed O&M/capex ratio. Today ≈ 4.5¢/kWh (IRENA 2023 utility PV, $758/kW); presets at 3× and 10× cheaper. Equipment capex has its own multiplier. Every plant reports its cost per kg split into energy (PV + storage + land), equipment, feedstock and other, and the effective $/kWh it pays for the energy it actually uses (curtailment and storage push this above the headline price). `energyBreakevens` solves, per recipe, the electricity price at which its best site pays back its capital.
+
+What that shows at 2027 equipment costs: cheap electricity alone unlocks little beyond cement, glass, PV modules and brine minerals. Ammonia, urea, steel, diesel and ethylene stay infeasible even with free electricity, because equipment running ~7 sun-hours a day dominates their cost; they unlock only when cheaper electricity comes with much cheaper low-utilization hardware (e.g. green ammonia below ~5¢/kWh at equipment ×0.1).
 
 **Running on sunlight alone (utilization).** Each plant is designed per site from the recipe's flowsheet and 12 monthly typical solar days. Flexible units are sized for the hours the sun shines, choosing the unit-to-PV ratio that minimizes PV plus oversized equipment; steady units (kilns, furnaces, Haber-Bosch, synthesis loops) are firmed with batteries, or thermal stores for heat-dominated units, never turning down below 70% of full load; an intermediate passed from a flexible to a steady unit (H₂ into Haber-Bosch or DRI) is buffered overnight. The cheaper of "sun-following" and "everything firmed" wins. At 2027 costs this puts solar-only green H₂ at about $6.6/kg and green NH₃ at about $1.55/kg at the best site, inside or near the published IEA (2024) and IRENA (2022) ranges; the old 24 h costing gave $4.8 and $1.18.
 

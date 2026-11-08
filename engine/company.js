@@ -71,8 +71,12 @@
       floorFactor: 0.4, // per-unit capex never falls below this × reference
     }),
     pv: Object.freeze({
-      capexUsdPerKWp: 1000, // NREL ATB-order screening, matches TeaScreening 'solar-pv'
+      // IRENA Renewable Power Generation Costs in 2023: global weighted-average installed cost of
+      // utility-scale PV USD 758/kW. ≈ $0.046/kWh at 2,000 kWh/kWp·yr with an 8%/25-yr CRF.
+      // Think in $/kWh: pvCapexFromLcoe / solarLcoe convert between the two.
+      capexUsdPerKWp: 758,
       fixedOmUsdPerKWpYear: 20,
+      lcoeRefYieldKWhPerKWpYear: 2000, // reference sunbelt yield for quoting $/kWh
       lifeYears: 25,
       exogenousDeclinePerYear: 0.06,
       floorUsdPerKWp: 250,
@@ -86,6 +90,9 @@
       storage: Object.freeze({ exogenousDeclinePerYear: 0.06, learningRate: 0.1, seedUsd: 50e6, floorFraction: 0.3 }),
     }),
     defaultLandUsdPerHa: 2000,
+    // Scenario lever: multiplies equipment capex (process, electrolyzer, DAC, desal classes; not
+    // PV or storage). 0.1 = equipment 10× cheaper than the recipes' screening packs.
+    equipmentCostMultiplier: 1,
     // Solar-only utilization and storage design (engine/utilization.js): flexible units are sized
     // for the hours the sun shines, baseload units are firmed with batteries / thermal stores,
     // intermediates between them are buffered. Recipes without a flowsheet keep 24 h costing.
@@ -144,6 +151,21 @@
     const seed = techCfg.seedUsd > 0 ? techCfg.seedUsd : 1;
     const learn = (1 + Math.max(0, companyCumRefUsd) / seed) ** -b;
     return Math.max(techCfg.floorFraction ?? 0, exo * learn);
+  }
+
+  // Solar electricity price ↔ PV capex. O&M is held at the configured O&M/capex ratio, so a
+  // $/kWh target moves capex and O&M together. Quoted at the reference yield; a site's own price
+  // scales with refYield / siteYield.
+  function pvOmFraction(pvCfg) {
+    return pvCfg.capexUsdPerKWp > 0 ? (pvCfg.fixedOmUsdPerKWpYear || 0) / pvCfg.capexUsdPerKWp : 0;
+  }
+  function solarLcoe(pvCfg, financeCfg, capexUsdPerKWp = pvCfg.capexUsdPerKWp, yieldKWhPerKWpYear = pvCfg.lcoeRefYieldKWhPerKWpYear) {
+    const crf = 1 / annuityFactor(financeCfg.discountRate, pvCfg.lifeYears);
+    return (capexUsdPerKWp * (crf + pvOmFraction(pvCfg))) / yieldKWhPerKWpYear;
+  }
+  function pvCapexFromLcoe(usdPerKWh, pvCfg, financeCfg) {
+    const crf = 1 / annuityFactor(financeCfg.discountRate, pvCfg.lifeYears);
+    return (usdPerKWh * pvCfg.lcoeRefYieldKWhPerKWpYear) / (crf + pvOmFraction(pvCfg));
   }
 
   function pvCapexUsdPerKWp(pvCfg, yearIndex) {
@@ -378,10 +400,13 @@
     }
     // Recipe fixed O&M applies to process equipment; stores carry their own O&M (below).
     const storageUsd = design ? design.storageUsd : 0;
-    let fixedOm = (processCapex - storageUsd) * (Number(pathway.fixedOmFracPerYear) || 0)
-      + pvKWp * cfg.pv.fixedOmUsdPerKWpYear
-      + (design ? design.storageFixedOmUsdPerYear : 0);
-    let variableOm = annualKg * ((Number(pathway.variableOmUsdPerKg) || 0) + feedUsdPerKg);
+    // PV O&M scales with PV capex (constant O&M/capex ratio), so cheap solar is cheap to run too.
+    let pvOm = pvKWp * ctx.pvUsdPerKWp * siteMult * pvOmFraction(cfg.pv);
+    let storageOm = design ? design.storageFixedOmUsdPerYear : 0;
+    let equipmentOm = (processCapex - storageUsd) * (Number(pathway.fixedOmFracPerYear) || 0);
+    let feedCost = annualKg * feedUsdPerKg;
+    let otherVariable = annualKg * (Number(pathway.variableOmUsdPerKg) || 0);
+    let storageCapex = storageUsd;
 
     const price = ctx.priceFor(pathway.product, null, annualKg);
     const sales = [{ product: pathway.product, kgPerYear: annualKg, fallbackUsdPerKg: null }];
@@ -408,8 +433,12 @@
       landHa += u.landHa;
       landCapex += u.capex.land;
       electricityKWhPerYear += u.electricityKWhPerYear;
-      fixedOm += u.opex.fixed;
-      variableOm += u.opex.variable;
+      pvOm += u.costParts.pvOm;
+      storageOm += u.costParts.storageOm + u.costParts.storageReplacement;
+      equipmentOm += u.costParts.equipmentOm;
+      feedCost += u.costParts.feedCost;
+      otherVariable += u.costParts.otherVariable;
+      storageCapex += u.capex.byTech.storage;
       coproductRevenue += u.coproductRevenue;
       for (const sale of u.sales.slice(1)) sales.push(sale);
       for (const feed of u.feedsKgPerYear) feedsKgPerYear.push(feed);
@@ -438,7 +467,8 @@
       ? design.batteryUsd * Math.max(0, 1 / design.batteryLifeYears - 1 / life)
         + design.thermalUsd * Math.max(0, 1 / design.thermalLifeYears - 1 / life)
       : 0;
-    fixedOm += storageReplacementUsdPerYear;
+    const fixedOm = pvOm + storageOm + equipmentOm + storageReplacementUsdPerYear;
+    const variableOm = feedCost + otherVariable;
     const opex = fixedOm + variableOm;
     const revenue = annualKg * price + coproductRevenue;
     const annualCash = revenue - opex;
@@ -452,6 +482,20 @@
     const grossCost = annualKg > 0 ? (capexTotal * crf + opex) / annualKg : Infinity;
     const coproductCredit = annualKg > 0 ? coproductRevenue / annualKg : 0;
     const lcop = grossCost - coproductCredit;
+    // Cost per kg by driver. Energy = PV + land + stores (capital recovery + O&M + replacements):
+    // what cheaper electricity would cut. effectiveEnergyUsdPerKWh is that over the kWh used.
+    // (Captive buffers sit in storage capex.)
+    const capexBuffers = processByTech.storage - storageCapex;
+    const energyAnnual = (pvCapex + landCapex + processByTech.storage) * crf + pvOm + storageOm + storageReplacementUsdPerYear;
+    const equipmentAnnual = (processCapex - processByTech.storage) * crf + equipmentOm;
+    const perKg = v => (annualKg > 0 ? v / annualKg : Infinity);
+    const costBreakdownUsdPerKg = {
+      energy: perKg(energyAnnual),
+      equipment: perKg(equipmentAnnual),
+      feedstock: perKg(feedCost),
+      other: perKg(otherVariable),
+    };
+    void capexBuffers;
     return {
       pathwayId: pathway.id,
       product: pathway.product,
@@ -474,6 +518,10 @@
       profitabilityIndex: capexTotal > 0 ? npv / capexTotal : 0,
       lcopUsdPerKg: lcop,
       grossCostUsdPerKg: grossCost,
+      costBreakdownUsdPerKg,
+      energyKWhPerKg: annualKg > 0 ? electricityKWhPerYear / annualKg : 0,
+      effectiveEnergyUsdPerKWh: electricityKWhPerYear > 0 ? energyAnnual / electricityKWhPerYear : 0,
+      costParts: { pvOm, storageOm, storageReplacement: storageReplacementUsdPerYear, equipmentOm, feedCost, otherVariable },
       coproductCreditUsdPerKg: coproductCredit,
       marginUsdPerKg: price - lcop,
       sales,
@@ -523,7 +571,10 @@
 
   function yearContext(cfg, markets, state, yearIndex, year, committedKg, extras = {}) {
     const costFactors = {};
-    for (const cls of TECH_CLASSES) costFactors[cls] = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]);
+    const equipment = Number.isFinite(cfg.equipmentCostMultiplier) ? cfg.equipmentCostMultiplier : 1;
+    for (const cls of TECH_CLASSES) {
+      costFactors[cls] = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]) * (cls === 'storage' ? 1 : equipment);
+    }
     const pvUsdPerKWp = pvCapexUsdPerKWp(cfg.pv, yearIndex);
     const shareOf = (product, extraKg = 0) => {
       const group = marketGroupOf(cfg, product);
@@ -885,6 +936,7 @@
         landHa,
         electricityTWh: electricityKWh / 1e9,
         pvCapexUsdPerKWp: opCtx.pvUsdPerKWp,
+        solarUsdPerKWh: solarLcoe(cfg.pv, cfg.finance, opCtx.pvUsdPerKWp),
         costFactors: { ...opCtx.costFactors },
       });
     }
@@ -989,9 +1041,89 @@
     return evaluatePlant(pathway, site, sizeKgPerDay, ctx);
   }
 
+  // ---------------------------------------------------------------------------
+  // Energy break-even: the solar electricity price ($/kWh at the reference yield) at which each
+  // pathway's best site reaches NPV = 0 at year-0 equipment, feedstock and storage costs.
+  //   breakevenUsdPerKWh = null and limitedBy 'not-energy' when even free electricity does not make
+  //   it feasible (equipment, feedstock or price is the barrier); Infinity-like ≥ maxUsdPerKWh when
+  //   it is feasible at any price in range.
+  function energyBreakevens(input = {}, opts = {}) {
+    const base = merge(DEFAULTS, input.config || {});
+    const maxUsdPerKWh = opts.maxUsdPerKWh ?? 0.5;
+    const sizeMultiple = Number(opts.sizeMultiple) || 100;
+    const allSites = (input.sites || []).filter(s => s.pvKWhPerKWpDay > 0);
+    const sitesById = new Map((input.sites || []).map(s => [s.id, s]));
+    const pathways = (input.pathways || []).filter(p => p.refOutputKgPerDay > 0
+      && (!base.build.allowPathways || base.build.allowPathways.includes(p.id)));
+    const ids = opts.pathwayIds ? new Set(opts.pathwayIds) : null;
+    const suppliers = captiveSuppliers(base, pathways);
+    const ctxFor = usdPerKWh => {
+      const cfg = merge(base, { pv: { capexUsdPerKWp: pvCapexFromLcoe(usdPerKWh, base.pv, base.finance), floorUsdPerKWp: 0 } });
+      return yearContext(cfg, input.markets || {}, createState(cfg), 0, cfg.startYear, {}, { suppliers, sitesById });
+    };
+    const bestAt = (pathway, usdPerKWh, ctx) => {
+      const size = Math.min(base.build.maxPlantKgPerDay, pathway.refOutputKgPerDay * sizeMultiple);
+      let best = null;
+      for (const site of allSites) {
+        if (!siteAllowsPathway(site, pathway, sitesById)) continue;
+        const ev = evaluatePlant(pathway, site, size, ctx);
+        if (base.build.infiniteSourcesOnly && ev.purchasedIntermediates.length) continue;
+        if (!best || ev.npv > best.npv) best = ev;
+      }
+      return best;
+    };
+    const ctxCache = new Map();
+    const ctxAt = usdPerKWh => {
+      const key = usdPerKWh.toPrecision(6);
+      if (!ctxCache.has(key)) ctxCache.set(key, ctxFor(usdPerKWh));
+      return ctxCache.get(key);
+    };
+    const rows = [];
+    const todayUsdPerKWh = solarLcoe(base.pv, base.finance);
+    for (const pathway of pathways) {
+      if (ids && !ids.has(pathway.id)) continue;
+      const atZero = bestAt(pathway, 0, ctxAt(0));
+      if (!atZero) continue;
+      const today = bestAt(pathway, todayUsdPerKWh, ctxAt(todayUsdPerKWh));
+      const row = {
+        pathwayId: pathway.id,
+        product: pathway.product,
+        siteId: atZero.siteId,
+        energyKWhPerKg: today?.energyKWhPerKg ?? atZero.energyKWhPerKg,
+        todayUsdPerKWh,
+        today: today ? { npv: today.npv, lcopUsdPerKg: today.lcopUsdPerKg, priceUsdPerKg: today.priceUsdPerKg, costBreakdownUsdPerKg: today.costBreakdownUsdPerKg, effectiveEnergyUsdPerKWh: today.effectiveEnergyUsdPerKWh, siteId: today.siteId } : null,
+        atFreeEnergy: { npv: atZero.npv, lcopUsdPerKg: atZero.lcopUsdPerKg, costBreakdownUsdPerKg: atZero.costBreakdownUsdPerKg },
+        breakevenUsdPerKWh: null,
+        limitedBy: null,
+      };
+      if (!(atZero.npv >= 0)) {
+        row.limitedBy = 'not-energy';
+      } else if (bestAt(pathway, maxUsdPerKWh, ctxAt(maxUsdPerKWh)).npv >= 0) {
+        row.breakevenUsdPerKWh = maxUsdPerKWh;
+        row.limitedBy = 'feasible-at-any-price';
+      } else {
+        // Bisection on log price: NPV falls monotonically with the electricity price.
+        let lo = Math.log(1e-5);
+        let hi = Math.log(maxUsdPerKWh);
+        for (let i = 0; i < 28; i += 1) {
+          const mid = (lo + hi) / 2;
+          if (bestAt(pathway, Math.exp(mid), ctxFor(Math.exp(mid))).npv >= 0) lo = mid; else hi = mid;
+        }
+        row.breakevenUsdPerKWh = Math.exp(lo);
+        row.limitedBy = 'energy';
+      }
+      rows.push(row);
+    }
+    rows.sort((a, b) => (b.breakevenUsdPerKWh ?? -1) - (a.breakevenUsdPerKWh ?? -1));
+    return rows;
+  }
+
   return {
     DEFAULTS,
     TECH_CLASSES,
+    solarLcoe,
+    pvCapexFromLcoe,
+    energyBreakevens,
     INFINITE_ORIGINS,
     annuityFactor,
     techCostFactor,

@@ -188,9 +188,10 @@
         el('div', { class: 'scenario-head' }, [el('h2', { text: 'Scenario' }), el('span', { class: 'row' }, [changedCount, expandBtn])]),
         el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Build objective' }), objectiveSeg, objectiveHint]),
         ...FIELDS.filter(f => f.group === 'goal').map(f => numberField(f, true)),
+        group('Energy & equipment', 'energy'),
         group('Finance', 'finance'),
         group('Build', 'build'),
-        group('Cost', 'cost'),
+        group('Learning & scale', 'cost'),
         el('div', { class: 'form-section' }, [
           el('h3', { text: 'Feedstock origins' }),
           el('div', { class: 'origin-grid' }, originBoxes.map(o => o.label)),

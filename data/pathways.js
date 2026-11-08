@@ -22,7 +22,7 @@
         "file": "cases/abundance.js",
         "factory": "createAbundanceCase"
       },
-      "refSiteId": null,
+      "refSiteId": "levant-dead-sea",
       "refRegion": null,
       "refOutputKgPerDay": 7.979853,
       "electricityKWhPerKg": 702.0837,
@@ -133,7 +133,7 @@
         "file": "cases/abundance.js",
         "factory": "createAbundanceCase"
       },
-      "refSiteId": null,
+      "refSiteId": "levant-dead-sea",
       "refRegion": null,
       "refOutputKgPerDay": 4268.964,
       "electricityKWhPerKg": 1.312385,
@@ -1364,7 +1364,7 @@
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "005eec9",
+    "gitSha": "3d3f127",
     "caseCount": 22,
     "skipped": [
       {

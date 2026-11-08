@@ -132,6 +132,10 @@ function pvgisFileKeys() {
 
 // Exact FILES key, else the longest FILES key that prefixes the case site id; aliases that
 // point at the same frozen JSON resolve to the canonical (non-dated) key.
+// Cases without a map site whose recipe is still tied to one place.
+// abundance.js defaults to the Dead Sea brine assay (DEFAULT_ASSAY_ID = 'dead-sea-brine').
+const CASE_SITE_FALLBACK = Object.freeze({ 'abundance.js': 'levant-dead-sea' });
+
 function resolveSiteId(siteId) {
   if (!siteId) return null;
   const { keys, files } = pvgisFileKeys();
@@ -311,7 +315,7 @@ function analyseCase(file, factoryName, factory) {
       name: NAMES[file] || stem,
       product: primary.product,
       case: { file: `cases/${file}`, factory: factoryName },
-      refSiteId: resolveSiteId(siteId),
+      refSiteId: resolveSiteId(siteId) ?? CASE_SITE_FALLBACK[file] ?? null,
       refRegion,
       refOutputKgPerDay: kg,
       electricityKWhPerKg: elecKWh / kg,

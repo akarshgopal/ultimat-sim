@@ -329,11 +329,24 @@
     return (product && cfg.marketGroups?.[product]) || product;
   }
 
+  // group → [group, ...member products], memoized per config object.
+  const groupMembersCache = new WeakMap();
+  function groupMembers(cfg, group) {
+    let byGroup = groupMembersCache.get(cfg);
+    if (!byGroup) {
+      byGroup = new Map();
+      for (const [member, target] of Object.entries(cfg.marketGroups || {})) {
+        if (!byGroup.has(target)) byGroup.set(target, [target]);
+        byGroup.get(target).push(member);
+      }
+      groupMembersCache.set(cfg, byGroup);
+    }
+    return byGroup.get(group) || [group];
+  }
+
   function groupKg(cfg, kgByProduct, group) {
     let total = 0;
-    for (const [product, kg] of Object.entries(kgByProduct)) {
-      if (marketGroupOf(cfg, product) === group) total += kg;
-    }
+    for (const product of groupMembers(cfg, group)) total += kgByProduct[product] || 0;
     return total;
   }
 
@@ -364,6 +377,12 @@
     return [...sizes].sort((a, b) => a - b);
   }
 
+  function productGroups(cfg, pathway) {
+    const groups = new Set([marketGroupOf(cfg, pathway.product)]);
+    for (const co of pathway.coproducts || []) if (co.product) groups.add(marketGroupOf(cfg, co.product));
+    return groups;
+  }
+
   // Every product a plant sells (not just its primary) must stay under the share ceiling.
   function coproductsFit(cfg, ctx, markets, pathway, annualKg, committedKg) {
     for (const co of pathway.coproducts || []) {
@@ -377,23 +396,43 @@
     return true;
   }
 
-  function pickBuild(cfg, ctx, pathways, sites, sitesById, committedKg, budgetUsd, markets, sitePvKWp) {
+  // cache: evaluations valid for this year until a build changes a market they sell into.
+  // Per-run candidate structure: compatible sites and size ladder per pathway.
+  function buildCandidates(cfg, pathways, sites, sitesById) {
+    return pathways.map(pathway => ({
+      pathway,
+      group: marketGroupOf(cfg, pathway.product),
+      sites: sites.filter(site => siteAllowsPathway(site, pathway, sitesById)),
+      sizes: candidateSizes(cfg, pathway),
+    })).filter(item => item.sites.length && item.sizes.length);
+  }
+
+  function pickBuild(cfg, ctx, candidates, committedKg, budgetUsd, markets, sitePvKWp, cache) {
     let best = null;
     const sitePvCapKWp = (Number(cfg.build.maxPvGWpPerSite) || Infinity) * 1e6;
-    for (const pathway of pathways) {
-      const group = marketGroupOf(cfg, pathway.product);
+    for (const { pathway, group, sites: pathwaySites, sizes } of candidates) {
+      let pathwayCache = cache.get(pathway.id);
+      if (!pathwayCache) {
+        pathwayCache = new Map();
+        cache.set(pathway.id, pathwayCache);
+      }
       const demandT = marketDemandT(markets[group], ctx.year);
       const headroomKg = Number.isFinite(demandT)
         ? cfg.build.maxMarketShare * demandT * 1000 - groupKg(cfg, committedKg, group)
         : Infinity;
       if (!(headroomKg > 0)) continue;
-      for (const site of sites) {
-        if (!siteAllowsPathway(site, pathway, sitesById)) continue;
+      for (const site of pathwaySites) {
         const pvRoomKWp = sitePvCapKWp - (sitePvKWp[site.id] || 0);
-        for (const size of candidateSizes(cfg, pathway)) {
+        if (!(pvRoomKWp > 0)) continue;
+        for (const size of sizes) {
           if (size * 365 > headroomKg) break;
           if (!coproductsFit(cfg, ctx, markets, pathway, size * 365, committedKg)) break;
-          const ev = evaluatePlant(pathway, site, size, ctx);
+          const key = site.id + '|' + size;
+          let ev = pathwayCache.get(key);
+          if (!ev) {
+            ev = evaluatePlant(pathway, site, size, ctx);
+            pathwayCache.set(key, ev);
+          }
           if (ev.pvKWp > pvRoomKWp) break;
           if (!(ev.npv > 0) || ev.profitabilityIndex < cfg.build.minProfitabilityIndex) continue;
           const equity = ev.capex.total * (1 - cfg.finance.debtFraction);
@@ -413,6 +452,7 @@
     const state = createState(cfg);
     const timeline = [];
     let minCash = state.cash;
+    const candidates = buildCandidates(cfg, pathways, sites, sitesById);
 
     for (let yearIndex = 0; yearIndex < cfg.years; yearIndex += 1) {
       const year = cfg.startYear + yearIndex;
@@ -490,9 +530,12 @@
       for (const plant of state.plants) {
         if (year < plant.onlineYear + plant.lifeYears) sitePvKWp[plant.siteId] = (sitePvKWp[plant.siteId] || 0) + plant.eval.pvKWp;
       }
+      // Cost factors are fixed for the year (this year's learning lowers next year's costs);
+      // prices read committedKg live, so only evaluations touching a built plant's markets go stale.
+      const ctx = yearContext(cfg, markets, state, yearIndex, year, committedKg);
+      const cache = new Map();
       for (let n = 0; n < cfg.build.maxPlantsPerYear; n += 1) {
-        const ctx = yearContext(cfg, markets, state, yearIndex, year, committedKg);
-        const choice = pickBuild(cfg, ctx, pathways, sites, sitesById, committedKg, budget, markets, sitePvKWp);
+        const choice = pickBuild(cfg, ctx, candidates, committedKg, budget, markets, sitePvKWp, cache);
         if (!choice) break;
         const pathway = pathwaysById.get(choice.pathwayId);
         const debt = choice.capex.total * cfg.finance.debtFraction;
@@ -521,6 +564,11 @@
           eval: choice,
         };
         state.plants.push(plant);
+        const touched = productGroups(cfg, pathway);
+        for (const other of pathways) {
+          if (![...productGroups(cfg, other)].some(group => touched.has(group))) continue;
+          cache.delete(other.id);
+        }
         sitePvKWp[plant.siteId] = (sitePvKWp[plant.siteId] || 0) + choice.pvKWp;
         addKg(committedKg, pathway.product, choice.annualKg);
         for (const co of pathway.coproducts || []) addKg(committedKg, co.product, (Number(co.kgPerKg) || 0) * choice.annualKg);

@@ -298,3 +298,41 @@ test('infinite-sources-only builds the consumer only when it makes its intermedi
   assert.deepEqual(ranked.purchasedIntermediates, []);
   assert.ok(withDear.plants.every(p => p.pathwayId !== 'consumer' || p.integration.length === 1));
 });
+
+test('abundance objective trades a little NPV for much more material, but not a lot of NPV', () => {
+  // Bulk makes 10× the material per kg (a by-product aggregate); specialty earns more per plant.
+  const sites = [{ id: 'inland', name: 'Inland', coastal: false, pvKWhPerKWpDay: 6, landUsdPerHa: 1000 }];
+  const bulk = {
+    ...good, id: 'bulk', product: 'widget', capexByTechUsdPerKgDay: { process: 20 },
+    coproducts: [{ id: 'aggregate', product: null, kgPerKg: 9, usdPerKg: 0 }],
+  };
+  const specialty = { ...good, id: 'specialty', product: 'gadget', electricityKWhPerKg: 0.1, capexByTechUsdPerKgDay: { process: 200 } };
+  const firstBuild = (objective, gadgetPrice) => {
+    const markets = {
+      widget: { ...MARKETS.widget, priceUsdPerKg: 0.2, worldDemandTPerYear: 1e9 },
+      gadget: { ...MARKETS.gadget, priceUsdPerKg: gadgetPrice, worldDemandTPerYear: 1e9 },
+    };
+    const r = C.simulateCompany({
+      pathways: [bulk, specialty], sites, markets,
+      config: { objective, years: 1, build: { maxPlantsPerYear: 1, sizeMultiples: [1000] }, finance: { initialEquityUsd: 1e10 } },
+    });
+    assert.equal(r.summary.objective, objective);
+    assert.ok(r.plants.every(p => p.npvAtBuildUsd >= 0), 'every plant pays back its capital');
+    return r.plants[0].pathwayId;
+  };
+  // Small NPV gap (598M vs 511M): profit takes specialty, abundance takes 10× the tonnes.
+  assert.equal(firstBuild('profit', 0.2), 'specialty');
+  assert.equal(firstBuild('abundance', 0.2), 'bulk');
+  // Large NPV gap: the specialty surplus funds more material than bulk makes, so abundance agrees.
+  assert.equal(firstBuild('abundance', 0.25), 'specialty');
+});
+
+test('material totals and price relief are reported per year', () => {
+  const r = run();
+  const last = r.timeline.at(-1);
+  close(last.materialTPerYear, Object.values(last.outputTByProduct).reduce((a, b) => a + b, 0));
+  close(r.summary.cumulativeMaterialT, r.timeline.reduce((sum, y) => sum + y.materialTPerYear, 0));
+  const relief = last.priceReliefByMarket.widget;
+  close(relief, 1 - last.priceByProduct.widget / MARKETS.widget.priceUsdPerKg);
+  assert.ok(relief > 0 && relief < 1);
+});

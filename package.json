@@ -11,6 +11,7 @@
     "test": "node --test",
     "deploy": "node scripts/deploy-pages.mjs",
     "company": "node scripts/company.mjs",
-    "pathways": "node scripts/build-pathways.mjs"
+    "pathways": "node scripts/build-pathways.mjs",
+    "sites": "node scripts/build-sites.mjs"
   }
 }

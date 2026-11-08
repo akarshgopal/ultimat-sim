@@ -28,6 +28,19 @@
   const INFINITE_ORIGINS = Object.freeze(['ocean', 'brine', 'air', 'crust', 'water']);
 
   const DEFAULTS = Object.freeze({
+    // What the company builds next, among plants it can afford:
+    //  'abundance' — material abundance through feasible economics. Every plant must pay back its
+    //                capital at the discount rate (NPV ≥ 0, PI ≥ build.minProfitabilityIndex). Among
+    //                those, build the one with the most lifetime material, counting both the plant's
+    //                own tonnes and the tonnes its surplus (NPV) will fund when reinvested:
+    //                  score = own kg over life + λ × NPV
+    //                where λ is this year's best lifetime kg per capex dollar among feasible plants.
+    //                Absolute (not per dollar): money is already enforced by affordability, and the
+    //                yearly build-slot limit would otherwise fill with tiny high-margin plants.
+    //                Pure tonnes-per-dollar is myopic: thin-margin bulk plants fund no growth, so it
+    //                ends with less material than chasing profit.
+    //  'profit'    — the highest-NPV plant (for comparison).
+    objective: 'abundance',
     startYear: 2027,
     years: 25,
     finance: Object.freeze({
@@ -396,6 +409,7 @@
       coproductCreditUsdPerKg: coproductCredit,
       marginUsdPerKg: price - lcop,
       sales,
+      materialKgPerYear: sales.reduce((sum, sale) => sum + sale.kgPerYear, 0),
       feedsKgPerYear,
       purchasedIntermediates,
       integration: integration.map(({ unit, ...item }) => item),
@@ -550,9 +564,13 @@
     })).filter(item => item.sites.length && item.sizes.length);
   }
 
+  const lifetimeKgPerUsd = ev => (ev.capex.total > 0 ? (ev.materialKgPerYear * ev.lifeYears) / ev.capex.total : 0);
+
   function pickBuild(cfg, ctx, candidates, committedKg, budgetUsd, markets, sitePvKWp, cache) {
-    let best = null;
     const sitePvCapKWp = (Number(cfg.build.maxPvGWpPerSite) || Infinity) * 1e6;
+    // Pass 1: feasible (NPV ≥ 0, hurdle met) and affordable options; per pathway × site, sizes
+    // are ascending and stop at the first that breaks a site or market ceiling.
+    const feasible = [];
     for (const { pathway, group, sites: pathwaySites, sizes } of candidates) {
       let pathwayCache = cache.get(pathway.id);
       if (!pathwayCache) {
@@ -574,17 +592,25 @@
           }
           if (ev.pvKWp > pvRoomKWp) break;
           if (cfg.build.infiniteSourcesOnly && ev.purchasedIntermediates.length) break;
-          if (!(ev.npv > 0) || ev.profitabilityIndex < cfg.build.minProfitabilityIndex) continue;
-          if (best && ev.npv <= best.npv) continue;
-          const equity = ev.capex.total * (1 - cfg.finance.debtFraction);
-          if (equity > budgetUsd) continue;
-          if (!salesFit(cfg, ctx, ev, committedKg)) break;
-          // Rank by absolute NPV among affordable options: bigger good plants first.
-          if (!best || ev.npv > best.npv) best = ev;
+          if (!(ev.npv >= 0) || ev.profitabilityIndex < cfg.build.minProfitabilityIndex) continue;
+          if (ev.capex.total * (1 - cfg.finance.debtFraction) > budgetUsd) continue;
+          feasible.push(ev);
         }
       }
     }
-    return best;
+    if (!feasible.length) return null;
+    // Pass 2: score, then take the best option that also fits every market it sells into.
+    let score;
+    if (cfg.objective === 'profit') {
+      score = ev => ev.npv;
+    } else {
+      let lambda = 0;
+      for (const ev of feasible) lambda = Math.max(lambda, lifetimeKgPerUsd(ev));
+      score = ev => ev.materialKgPerYear * ev.lifeYears + lambda * ev.npv;
+    }
+    const ranked = feasible.map(ev => ({ ev, s: score(ev) })).sort((a, b) => b.s - a.s);
+    for (const { ev } of ranked) if (salesFit(cfg, ctx, ev, committedKg)) return ev;
+    return null;
   }
 
   function simulateCompany(input = {}) {
@@ -596,6 +622,7 @@
     let minCash = state.cash;
     const suppliers = captiveSuppliers(cfg, pathways);
     const candidates = buildCandidates(cfg, pathways, sites, sitesById, suppliers);
+    let cumulativeMaterialT = 0;
 
     for (let yearIndex = 0; yearIndex < cfg.years; yearIndex += 1) {
       const year = cfg.startYear + yearIndex;
@@ -738,8 +765,18 @@
           demandTByMarket[group] = demandT;
         }
       }
+      const priceReliefByMarket = {};
+      for (const [product, price] of Object.entries(priceByProduct)) {
+        const p0 = Number(markets[product]?.priceUsdPerKg);
+        if (p0 > 0) priceReliefByMarket[marketGroupOf(cfg, product)] = Math.max(0, 1 - price / p0);
+      }
+      const materialTPerYear = Object.values(outputTByProduct).reduce((sum, t) => sum + t, 0);
+      cumulativeMaterialT += materialTPerYear;
       timeline.push({
         year,
+        materialTPerYear,
+        cumulativeMaterialT,
+        priceReliefByMarket,
         equityRaisedUsd: raise,
         revenueUsd: revenue,
         opexUsd: opex,
@@ -790,7 +827,11 @@
         integration: plant.eval.integration,
       })),
       summary: {
+        objective: cfg.objective,
         years: cfg.years,
+        finalMaterialTPerYear: last.materialTPerYear || 0,
+        cumulativeMaterialT: last.cumulativeMaterialT || 0,
+        materialsCount: Object.keys(last.outputTByProduct || {}).length,
         equityInUsd: state.equityInUsd,
         totalCapexUsd: state.plants.reduce((sum, plant) => sum + plant.capexUsd, 0),
         plants: state.plants.length,

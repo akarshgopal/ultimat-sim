@@ -14,6 +14,7 @@ const { createUreaCase } = require('../cases/urea');
 const { createMaglutCase } = require('../cases/maglut');
 const { createFuelsAndMineralsNetwork } = require('../cases/network');
 const { solveOperation } = require('../engine/solve');
+const { readAppSource } = require('./helpers/app-source');
 
 function node(definition, unitOrId) {
   return definition.graph.nodes.find(item => item.id === unitOrId || item.unit === unitOrId);
@@ -125,7 +126,7 @@ test('Maglut cash stays ≈1299; network evaluate stays finite; green-FT / green
 });
 
 test('Size-to-target load status mentions green-FT diesel and green-urea stacks', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(source, /Size-to-target → diesel resizes this stack/);
   assert.match(source, /Size-to-target → urea resizes this stack/);
 });

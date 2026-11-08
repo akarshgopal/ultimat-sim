@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const { solveOperation } = require('../engine/solve');
 const { resolveLiquidPumpSec, resolveGasBlowerSec } = require('../engine/units');
 const tea = require('../data/tea-screening');
+const { expandAppFiles } = require('./helpers/app-source');
 
 function seawaterStream(kg) {
   const saltKg = kg * 0.035;
@@ -99,7 +100,7 @@ function loadApp() {
   };
   const context = vm.createContext({ document, console, localStorage: null });
   context.window = context;
-  for (const file of [
+  for (const file of expandAppFiles([
     'engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js',
     'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js',
     'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js',
@@ -116,7 +117,7 @@ function loadApp() {
     'cases/abundance.js', 'cases/network.js', 'js/flowsheet-app.js',
     'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js',
     'data/mediterranean-swro-brine.js',
-  ]) {
+  ])) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context.__FLOWSHEET_APP__;

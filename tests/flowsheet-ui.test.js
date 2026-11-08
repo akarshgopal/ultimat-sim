@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const { expandAppFiles, readAppSource } = require('./helpers/app-source');
 
 function loadApp(localStorage) {
   const elements = new Map();
@@ -61,7 +62,7 @@ function loadApp(localStorage) {
   const context = vm.createContext({ document, console, localStorage });
   context.window = context;
   context.__elements = elements;
-  for (const file of ['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/ionic-clay-longnan.js', 'data/tea-screening.js', 'cases/_shared.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/silicon.js', 'cases/maglut.js', 'cases/green-urea.js', 'cases/float-glass.js', 'cases/cement.js', 'cases/cu-ew.js', 'cases/green-ft.js', 'cases/green-mto.js', 'cases/green-h2-dri.js', 'cases/h2-dri.js', 'cases/network.js', 'cases/ree.js', 'cases/ree-sx.js', 'cases/green-ammonia.js', 'cases/mto.js', 'cases/ft-liquids.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js']) {
+  for (const file of expandAppFiles(['engine/model.js', 'engine/units.js', 'engine/heat.js', 'engine/solve.js', 'engine/economics.js', 'engine/material-power-breakeven.js', 'engine/footprint.js', 'engine/size.js', 'engine/network.js', 'engine/uncertainty.js', 'engine/map-site.js', 'data/pvgis-almeria-hourly.js', 'data/dead-sea-brine.js', 'data/persian-gulf-sabkha-brine.js', 'data/atacama-lithium-brine.js', 'data/lake-mackay-wa-brine.js', 'data/great-salt-lake-brine.js', 'data/salton-sea-brine.js', 'data/uyuni-lithium-brine.js', 'data/qaidam-brine.js', 'data/danakil-brine.js', 'data/searles-lake-brine.js', 'data/hombre-muerto-lithium-brine.js', 'data/maricunga-lithium-brine.js', 'data/clayton-valley-brine.js', 'data/zabuye-lithium-brine.js', 'data/almeria-seawater.js', 'data/persian-gulf-seawater.js', 'data/red-sea-seawater.js', 'data/texas-gulf-seawater.js', 'data/pilbara-indian-ocean-seawater.js', 'data/atacama-pacific-seawater.js', 'data/morocco-atlantic-seawater.js', 'data/arabian-sea-seawater.js', 'data/gulf-of-kutch-seawater.js', 'data/benguela-atlantic-seawater.js', 'data/site-assays.js', 'data/site-presets.js', 'data/ionic-clay-longnan.js', 'data/tea-screening.js', 'cases/_shared.js', 'cases/sabatier.js', 'cases/coastal.js', 'cases/methanol.js', 'cases/abundance.js', 'cases/silicon.js', 'cases/maglut.js', 'cases/green-urea.js', 'cases/float-glass.js', 'cases/cement.js', 'cases/cu-ew.js', 'cases/green-ft.js', 'cases/green-mto.js', 'cases/green-h2-dri.js', 'cases/h2-dri.js', 'cases/network.js', 'cases/ree.js', 'cases/ree-sx.js', 'cases/green-ammonia.js', 'cases/mto.js', 'cases/ft-liquids.js', 'js/flowsheet-app.js', 'data/red-sea-sabkha-brine.js', 'data/kutch-subsoil-brine.js', 'data/texas-gulf-desal-brine.js', 'data/mediterranean-swro-brine.js'])) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return context;
@@ -276,7 +277,7 @@ test('fuels plus minerals network rolls up twelve sited plants', () => {
 
 test('network plants edit in the page and tag the biggest earner', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js', 'flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /id="addPlantForm"/);
   assert.match(html, /id="addPlantName"/);
   assert.match(html, /id="cancelAddPlant"/);
@@ -1041,7 +1042,7 @@ test('process chrome collapses the palette, cites map sources, and searches bloc
   const root = path.join(__dirname, '..');
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(root, 'flowsheet.css'), 'utf8');
-  const app = fs.readFileSync(path.join(root, 'js/flowsheet-app.js'), 'utf8');
+  const app = readAppSource();
   assert.match(html, /id="paletteDrawerToggle"/);
   assert.match(html, /id="paletteEmpty"/);
   assert.match(html, /id="siteMapSources"/);
@@ -1143,7 +1144,7 @@ test('process chrome reads as a flowsheet, with hollow More units off the defaul
   const root = path.join(__dirname, '..');
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(root, 'flowsheet.css'), 'utf8');
-  const source = fs.readFileSync(path.join(root, 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const process = html.slice(html.indexOf('id="panelProcess"'), html.indexOf('id="panelEconomics"'));
   assert.doesNotMatch(process, /Blank factory|Start here|Factory floor|Saved factories|Empty factory/);
   assert.match(process, /Plant floor/);

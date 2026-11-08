@@ -45,6 +45,7 @@ const {
 
 const landPrices = require('../data/land-prices.js');
 const landAdmin = require('../data/land-admin.js');
+const { readAppSource } = require('./helpers/app-source');
 
 test('waterAvailabilityScreening keeps coastal seawater, Dead Sea brine, and inland arid/fresh bands', () => {
   const almeria = waterAvailabilityScreening(36.834, -2.463);
@@ -371,7 +372,7 @@ test('web mercator helper and footprint circle stay available', () => {
 });
 
 test('site map solar uses GSA LERC; land uses GeoJSON choropleth, not GridLayer paint', () => {
-  const app = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const app = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
   assert.doesNotMatch(app, /radius:\s*14000/);

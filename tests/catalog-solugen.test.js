@@ -10,6 +10,7 @@ const { evaluateEconomics } = require('../engine/economics');
 const tea = require('../data/tea-screening.js');
 const { createBioforgeCase } = require('../cases/bioforge');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 function addElements(into, stream) {
   for (const [el, n] of Object.entries(elementAmounts(stream))) {
@@ -117,7 +118,7 @@ test('No Maglut/ARC-1 unit; overview and palette expose Bioforge', () => {
   assert.equal(UNITS['arc-1'], undefined);
   assert.equal(UNITS['ARC-1'], undefined);
   assert.ok(UNITS.bioforge);
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(html, /Innovative · bio/);
   assert.match(html, /id="loadBioforgeMarshall"/);

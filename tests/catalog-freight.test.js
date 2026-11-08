@@ -24,6 +24,7 @@ const { createGreenAmmoniaCase } = require('../cases/green-ammonia');
 const { createGreenH2DriCase } = require('../cases/green-h2-dri');
 const { createH2DriCase } = require('../cases/h2-dri');
 const { createFuelsAndMineralsNetwork } = require('../cases/network');
+const { readAppSource } = require('./helpers/app-source');
 
 // Prior CATALOG-FREIGHT-BOM tip (module + bauxite + Ag/glass/EVA), solved createSiliconCase.
 const PRIOR_FREIGHT_BOM_TIP_INSTALLED_CAPEX = 3076388.8084867904;
@@ -175,7 +176,7 @@ test('Mejillones QCC freight: quartz/carbon 0.03, caustic 0.08; BOM/module uncha
   assert.ok(cash.breakdown.freight > PRIOR_FREIGHT_BOM_TIP_BREAKDOWN_FREIGHT);
   const moduleFreight = cash.sinks.find(sink => sink.id === 'module');
   assert.ok(moduleFreight.annualFreight > 0);
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(source, /Screening freight applied on \$\{freightStreams\} streams/);
   assert.match(source, /breakdown\?\.freight/);
 });

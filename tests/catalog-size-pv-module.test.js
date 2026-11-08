@@ -11,6 +11,7 @@ const { createAbundanceCase } = require('../cases/abundance');
 const { createMaglutCase } = require('../cases/maglut');
 const { createUreaCase } = require('../cases/urea');
 const { createGreenAmmoniaCase } = require('../cases/green-ammonia');
+const { readAppSource } = require('./helpers/app-source');
 
 const POLY_SHARE = 0.0273;
 const AL_SHARE = 0.1273;
@@ -87,7 +88,7 @@ test('sizeToProduct module throws without a pv-module block', () => {
 
 test('Size-to-target menu and Mejillones load status mention PV module', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /value="module">PV module</);
   assert.match(source, /module:\s*'PV module'/);
   assert.match(source, /Size-to-target → PV module/);

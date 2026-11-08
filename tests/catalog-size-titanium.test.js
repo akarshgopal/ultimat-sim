@@ -11,6 +11,7 @@ const { createAbundanceCase } = require('../cases/abundance');
 const { createH2DriCase } = require('../cases/h2-dri');
 const { createMaglutCase } = require('../cases/maglut');
 const { solveOperation } = require('../engine/solve');
+const { readAppSource } = require('./helpers/app-source');
 
 function node(definition, unitOrId) {
   return definition.graph.nodes.find(item => item.id === unitOrId || item.unit === unitOrId);
@@ -93,7 +94,7 @@ test('sizeToProduct titanium throws without titanium-kroll', () => {
 
 test('Size-to-target menu lists titanium', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /value="titanium">titanium \/ Kroll</);
   assert.match(source, /titanium:\s*'titanium'/);
   assert.match(source, /Size-to-target → titanium/);

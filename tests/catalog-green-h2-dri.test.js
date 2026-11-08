@@ -11,6 +11,7 @@ const { createH2DriCase } = require('../cases/h2-dri');
 const { createSiliconCase } = require('../cases/silicon');
 const { createUreaCase } = require('../cases/urea');
 const { createMaglutCase } = require('../cases/maglut');
+const { readAppSource } = require('./helpers/app-source');
 
 test('TEA steel/ore/H2/DRI/electrolyzer/SWRO stay at screening values', () => {
   assert.equal(tea.prices.steel.value, 0.40);
@@ -118,7 +119,7 @@ test('green H2-DRI economics have installed CAPEX and finite annualNetCash; Magl
 
 test('Overview lists Mejillones green H2-DRI under Fuels screening cash−', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /id="loadGreenH2Dri"/);
   assert.match(html, /Mejillones green H₂-DRI \(SWRO\+PEM\)/);
   assert.match(html, /cases\/green-h2-dri\.js/);

@@ -10,6 +10,7 @@ const { evaluateEconomics } = require('../engine/economics');
 const tea = require('../data/tea-screening.js');
 const { createSiliconCase } = require('../cases/silicon');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 function material(substance, mol, phase = 'solid') {
   return { kind: 'material', mol: { [substance]: mol }, phase, T_C: 25, P_bar: 1 };
@@ -132,7 +133,7 @@ test('Mejillones PV BOM case solves at 1000 kg module/day without electricity bi
 });
 
 test('palette Crust lists pv-module after aluminium-smelter; Overview mentions BOM or module', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'cement',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll',\s*'copper-ew'\s*\]/);
   assert.match(html, /id="loadSiliconAlumina"/);

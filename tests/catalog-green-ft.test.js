@@ -12,6 +12,7 @@ const { createFtLiquidsCase } = require('../cases/ft-liquids');
 const { createGreenMtoCase } = require('../cases/green-mto');
 const { createUreaCase } = require('../cases/urea');
 const { createMaglutCase } = require('../cases/maglut');
+const { readAppSource } = require('./helpers/app-source');
 
 test('TEA diesel/H2/CO2/FT/electrolyzer/SWRO stay at screening values', () => {
   assert.equal(tea.prices.diesel.value, 0.90);
@@ -134,7 +135,7 @@ test('green FT economics have installed CAPEX and finite cash−; Maglut/purchas
 
 test('Overview lists Mejillones green FT under Fuels screening cash− after ft-liquids / green-mto', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /id="loadGreenFt"/);
   assert.match(html, /Mejillones green FT \(SWRO\+PEM H₂\+CO₂→diesel\)/);
   assert.match(html, /cases\/green-ft\.js/);

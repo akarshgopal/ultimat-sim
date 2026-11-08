@@ -11,6 +11,7 @@ const tea = require('../data/tea-screening.js');
 const clay = require('../data/ionic-clay-longnan.js');
 const { createReeCase } = require('../cases/ree');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 function addElements(into, stream) {
   for (const [el, n] of Object.entries(elementAmounts(stream))) {
@@ -143,7 +144,7 @@ test('Minaçu ionic-clay case solves at 100 kg recovered REO/day without electri
 });
 
 test('Overview option text contains Minaçu and NdPr; palette has REE with iac-leach; Crust unchanged', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'cement',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll',\s*'copper-ew'\s*\]/);
   assert.match(source, /REE:\s*\[\s*'iac-leach',\s*'ree-chromatography',\s*'ree-sx'\s*\]/);

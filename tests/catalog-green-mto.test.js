@@ -12,6 +12,7 @@ const { createMtoCase } = require('../cases/mto');
 const { createFtLiquidsCase } = require('../cases/ft-liquids');
 const { createUreaCase } = require('../cases/urea');
 const { createMaglutCase } = require('../cases/maglut');
+const { readAppSource } = require('./helpers/app-source');
 
 test('TEA ethylene/MeOH/MTO/electrolyzer/SWRO/CO2 stay at screening values', () => {
   assert.equal(tea.prices.ethylene.value, 0.80);
@@ -134,7 +135,7 @@ test('green MTO economics have installed CAPEX and finite annualNetCash; Maglut/
 
 test('Overview lists Mejillones green MTO under Fuels screening cash− after mto / ft-liquids', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /id="loadGreenMto"/);
   assert.match(html, /Mejillones green MTO \(SWRO\+PEM MeOH→ethylene\)/);
   assert.match(html, /cases\/green-mto\.js/);

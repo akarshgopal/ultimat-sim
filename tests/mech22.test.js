@@ -7,6 +7,7 @@ const vm = require('node:vm');
 const { streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
 const { pumpPartLoad, flowWithinShapedSec } = require('../engine/units');
+const { expandAppFiles } = require('./helpers/app-source');
 
 function seawaterStream(kg) {
   const saltKg = kg * 0.035;
@@ -130,7 +131,7 @@ function loadApp() {
   };
   const context = vm.createContext({ document, console, localStorage: null });
   context.window = context;
-  for (const file of files) {
+  for (const file of expandAppFiles(files)) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), context, { filename: file });
   }
   return { app: context.__FLOWSHEET_APP__, elements };

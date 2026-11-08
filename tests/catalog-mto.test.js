@@ -14,6 +14,7 @@ const { createGreenH2DriCase } = require('../cases/green-h2-dri');
 const { createH2DriCase } = require('../cases/h2-dri');
 const { createMaglutCase } = require('../cases/maglut');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 function material(substance, mol, phase) {
   return { kind: 'material', mol: { [substance]: mol }, phase, T_C: 25, P_bar: 1 };
@@ -140,7 +141,7 @@ test('Mejillones MTO demo ~1000 kg ethylene/day with CAPEX on mto + solar and fi
 });
 
 test('Palette Fuels lists mto after urea; Overview option mentions MTO; flowsheet-ui script list includes cases/mto.js', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const uiTest = fs.readFileSync(path.join(__dirname, 'flowsheet-ui.test.js'), 'utf8');
   assert.match(source, /Fuels:\s*\[\s*'electrolyzer',\s*'sabatier',\s*'methanol',\s*'asu',\s*'ammonia',\s*'urea',\s*'mto',\s*'ft-liquids'\s*\]/);

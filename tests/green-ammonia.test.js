@@ -9,6 +9,7 @@ const { evaluateEconomics } = require('../engine/economics');
 const tea = require('../data/tea-screening.js');
 const { createGreenAmmoniaCase } = require('../cases/green-ammonia');
 const { siteDeadSeaAbundance } = require('../cases/network');
+const { readAppSource } = require('./helpers/app-source');
 
 test('TEA ammonia/oxygen prices and fuel packs stay at screening values', () => {
   assert.equal(tea.prices.ammonia.value, 0.45);
@@ -75,7 +76,7 @@ test('Dead Sea abundance still feeds Haber from chlor-alkali, with no electrolyz
 
 test('Overview lists Walvis Bay green NH3 under Fuels screening cash−', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /id="loadGreenAmmonia"/);
   assert.match(html, /cases\/green-ammonia\.js/);
   assert.ok(html.indexOf('cases/green-ammonia.js') < html.indexOf('js/flowsheet-app.js'));

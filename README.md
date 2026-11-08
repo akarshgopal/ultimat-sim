@@ -28,7 +28,7 @@ The root app now provides:
 - Iterative size-to-target: pick CH₄, H₂, methanol, ammonia, lithium, salt, PV module, steel, ethylene, diesel, urea, titanium, float glass, cement, copper, or ndpr and a kg/day rate. The outer loop sizes the loaded plant (desal, electrolyzer, DAC/Sabatier, methanol, ammonia, brine minerals, Mejillones PV-module chain, purchased-H₂ or green H₂-DRI steel (1000→2000 verified), purchased-MeOH or green-MTO ethylene, purchased-H₂ or green-FT diesel, Walvis purchased-NH₃ or green-urea, Mejillones purchased-TiCl₄ Kroll titanium, Mejillones purchased-sand/soda/limestone float glass, Mejillones purchased-limestone/clay cement, Mejillones purchased-PLS copper SX-EW, Long Beach Maglut chromatography NdPr, and PV as needed) until the operating solve is consistent. Every strategy with heat sinks/sources runs the T-feasible cascade inside duty estimation before buying residual heat or PV; leftover heat is screening electric resistance COP=1. The coastal demo remains a one-shot 37.5 kWp methane example until Size to target is used. Nuclear, solar-thermal, and thermal-storage stay out of the default More palette until TEA packs exist.
 - A network rollup: multiple sited plants, product slate in t/year, land, optional haul corridors, and combined CAPEX/NPV. The fuels + minerals demo places solar methane at Almería, a brine/ammonia hub on the Dead Sea, the existing Mejillones silicon/PV plant, Walvis Bay green urea, Long Beach Maglut chromatography, and the existing Mejillones cement, copper SX-EW, float-glass, green-FT, green-MTO, green-H2-DRI, and purchased-H₂ DRI plants. Corridors stay empty.
 
-The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js`, `index.html`, and `flowsheet.css`.
+The Foundry source is concentrated in `engine/`, `cases/`, `js/flowsheet-app.js` + `js/app/`, `index.html`, and `flowsheet.css`.
 
 ## Hydrogen DRI (screening)
 
@@ -94,7 +94,7 @@ Mejillones SWRO + PEM H₂ + purchased industrial CO₂ → screening diesel/syn
 
 ## Code map
 
-- `index.html`, `flowsheet.css`, and `js/flowsheet-app.js`: editor, inspector, saved factories, and scenario comparison.
+- `index.html`, `flowsheet.css`, and `js/flowsheet-app.js`: editor, inspector, saved factories, and scenario comparison. `js/flowsheet-app.js` is the entry (shared state, DOM wiring, test hook, boot) and loads last; panel code lives in `js/app/*.js` (catalog, palette/demos, sizing, location, site map, footprint, network, persistence, canvas editing/rendering, solve diagnostics, overview, inspector, economics, format) and shares state through the `globalThis.FlowsheetApp` namespace.
 - `engine/model.js`: substances, streams, and graph validation.
 - `engine/units.js`: process catalog and unit physics.
 - `engine/solve.js`: operation, resource allocation, recycles, and balance diagnostics.

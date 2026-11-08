@@ -14,6 +14,7 @@ const { createH2DriCase } = require('../cases/h2-dri');
 const { createUreaCase } = require('../cases/urea');
 const { createMaglutCase } = require('../cases/maglut');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 function material(substance, mol, phase) {
   return { kind: 'material', mol: { [substance]: mol }, phase, T_C: 25, P_bar: 1 };
@@ -131,7 +132,7 @@ test('Mejillones cement demo 1000 kg/day with CAPEX on line + solar and finite c
 });
 
 test('Palette Crust lists cement after float-glass; Overview option mentions cement', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'cement',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll',\s*'copper-ew'\s*\]/);
   assert.match(html, /id="loadCement"/);

@@ -12,6 +12,7 @@ const { createUreaCase } = require('../cases/urea');
 const { createGreenAmmoniaCase } = require('../cases/green-ammonia');
 const { createMaglutCase } = require('../cases/maglut');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 function material(substance, mol, phase) {
   return { kind: 'material', mol: { [substance]: mol }, phase, T_C: 25, P_bar: 1 };
@@ -114,7 +115,7 @@ test('Walvis urea demo ~1000 kg/day with CAPEX on urea + solar and finite cash; 
 });
 
 test('Palette Fuels lists urea after ammonia; Overview option mentions urea', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(source, /Fuels:\s*\[\s*'electrolyzer',\s*'sabatier',\s*'methanol',\s*'asu',\s*'ammonia',\s*'urea',\s*'mto',\s*'ft-liquids'\s*\]/);
   assert.match(html, /id="loadUrea"/);

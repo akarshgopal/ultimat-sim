@@ -12,6 +12,7 @@ const clay = require('../data/ionic-clay-longnan.js');
 const { createMaglutCase } = require('../cases/maglut');
 const { createReeCase } = require('../cases/ree');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 const PROXY_SENTENCE = 'proxy band · not a Maglut ARC-1 quote · Maglut has not published kWh/kg or CAPEX';
 
@@ -142,7 +143,7 @@ test('Long Beach Maglut case solves at 10 kg recovered REO/day without electrici
 });
 
 test('Overview option, palette, proxy sentence, and chromatography footprint', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const teaSource = fs.readFileSync(path.join(__dirname, '..', 'data/tea-screening.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.ok(source.includes(PROXY_SENTENCE));

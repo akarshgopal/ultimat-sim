@@ -12,6 +12,7 @@ const { createMtoCase } = require('../cases/mto');
 const { createAbundanceCase } = require('../cases/abundance');
 const { createMaglutCase } = require('../cases/maglut');
 const { solveOperation } = require('../engine/solve');
+const { readAppSource } = require('./helpers/app-source');
 
 function node(definition, unitOrId) {
   return definition.graph.nodes.find(item => item.id === unitOrId || item.unit === unitOrId);
@@ -108,7 +109,7 @@ test('sizeToProduct steel throws without hydrogen-dri; ethylene throws without m
 
 test('Size-to-target menu lists steel and ethylene', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /value="steel">steel \/ DRI Fe</);
   assert.match(html, /value="ethylene">ethylene</);
   assert.match(source, /steel:\s*'steel'/);

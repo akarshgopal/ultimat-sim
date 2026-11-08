@@ -11,6 +11,7 @@ const { createGreenUreaCase } = require('../cases/green-urea');
 const { createUreaCase } = require('../cases/urea');
 const { createGreenAmmoniaCase } = require('../cases/green-ammonia');
 const { createMaglutCase } = require('../cases/maglut');
+const { readAppSource } = require('./helpers/app-source');
 
 test('TEA urea/ammonia/oxygen/electrolyzer/SWRO/ASU stay at screening values', () => {
   assert.equal(tea.prices.urea.value, 0.40);
@@ -145,7 +146,7 @@ test('green urea economics have installed CAPEX and finite cash−; Maglut/purch
 
 test('Overview lists Walvis Bay green urea under Fuels screening cash− after urea / green-ammonia', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(html, /id="loadGreenUrea"/);
   assert.match(html, /Walvis Bay green urea \(SWRO\+PEM Haber→urea\)/);
   assert.match(html, /cases\/green-urea\.js/);

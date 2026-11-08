@@ -13,6 +13,7 @@ const { createMtoCase } = require('../cases/mto');
 const { createUreaCase } = require('../cases/urea');
 const { createMaglutCase } = require('../cases/maglut');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 function material(substance, mol, phase) {
   return { kind: 'material', mol: { [substance]: mol }, phase, T_C: 25, P_bar: 1 };
@@ -139,7 +140,7 @@ test('Mejillones FT liquids demo ~1000 kg diesel/day with CAPEX on ft-liquids + 
 });
 
 test('Palette Fuels lists ft-liquids after mto; Overview option mentions FT; flowsheet-ui script list includes cases/ft-liquids.js', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const uiTest = fs.readFileSync(path.join(__dirname, 'flowsheet-ui.test.js'), 'utf8');
   assert.match(source, /Fuels:\s*\[\s*'electrolyzer',\s*'sabatier',\s*'methanol',\s*'asu',\s*'ammonia',\s*'urea',\s*'mto',\s*'ft-liquids'\s*\]/);

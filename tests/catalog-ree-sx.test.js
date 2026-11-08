@@ -13,6 +13,7 @@ const { createReeSxCase } = require('../cases/ree-sx');
 const { createMaglutCase } = require('../cases/maglut');
 const { createReeCase } = require('../cases/ree');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 function concentrateInlet(kg, extra) {
   const mol = clay.concentrateMolForKg(kg);
@@ -151,7 +152,7 @@ test('Long Beach peer SX demo is 10 kg/day with finite cash; Maglut stays ~1299;
 });
 
 test('palette lists ree-sx after chromatography and Overview names peer SX', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(source, /REE:\s*\[\s*'iac-leach',\s*'ree-chromatography',\s*'ree-sx'\s*\]/);
   assert.match(html, /id="loadReeSx"/);

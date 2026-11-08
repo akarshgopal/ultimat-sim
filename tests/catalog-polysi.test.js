@@ -10,6 +10,7 @@ const { evaluateEconomics } = require('../engine/economics');
 const tea = require('../data/tea-screening.js');
 const { createSiliconCase } = require('../cases/silicon');
 const { PROCESS_INTENSITIES } = require('../engine/footprint');
+const { readAppSource } = require('./helpers/app-source');
 
 test('polysilicon Siemens-style upgrade closes Si mass at 1.05 feed and 65 kWh/kg', () => {
   const result = UNITS.polysilicon.evaluate({
@@ -84,7 +85,7 @@ test('Mejillones poly-Si island still solves with module assembly and no MG-Si s
 });
 
 test('palette source lists Crust with polysilicon between mg-si and aluminium-smelter', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.match(source, /Crust:\s*\[\s*'mg-si',\s*'polysilicon',\s*'bayer-alumina',\s*'aluminium-smelter',\s*'float-glass',\s*'cement',\s*'pv-module',\s*'hydrogen-dri',\s*'titanium-kroll',\s*'copper-ew'\s*\]/);
   assert.match(html, /id="loadSiliconAlumina"/);

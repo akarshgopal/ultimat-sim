@@ -10,6 +10,7 @@ const { createGreenMtoCase } = require('../cases/green-mto');
 const { createMtoCase } = require('../cases/mto');
 const { createMaglutCase } = require('../cases/maglut');
 const { solveOperation } = require('../engine/solve');
+const { readAppSource } = require('./helpers/app-source');
 
 function node(definition, unitOrId) {
   return definition.graph.nodes.find(item => item.id === unitOrId || item.unit === unitOrId);
@@ -71,6 +72,6 @@ test('Maglut cash stays ≈1299 after green-MTO size', () => {
 });
 
 test('Size-to-target load status mentions green-MTO ethylene stack', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'js/flowsheet-app.js'), 'utf8');
+  const source = readAppSource();
   assert.match(source, /Size-to-target → ethylene resizes this stack/);
 });

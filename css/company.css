@@ -1,1 +1,83 @@
 /* company view — scoped by .v-company. */
+.v-company .company-main { gap: 28px; min-width: 0; }
+.v-company.is-busy .company-main { opacity: 0.72; transition: opacity 0.2s 0.15s; }
+.v-company .section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.v-company .section-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.v-company .section-head h2 { font-size: 16px; }
+.v-company .chart-card h3 { font-size: 13px; }
+.v-company .card .card-head h2 { font-size: 13px; }
+.v-company .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------------------------------------------------------------- scenario panel */
+.v-company .scenario { padding: 14px; max-height: calc(100vh - var(--header-h) - 32px); overflow-y: auto; overscroll-behavior: contain; }
+.v-company .scenario-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.v-company .scenario .segmented { align-self: flex-start; margin: 2px 0; }
+.v-company .scenario .segmented button { padding: 5px 14px; }
+.v-company .scenario > .field + .field { margin-top: 12px; }
+.v-company .field.is-prominent { background: var(--accent-soft); border-radius: 6px; padding: 10px; margin-left: -4px; margin-right: -4px; }
+.v-company .field.is-prominent .field-label { color: var(--text); font-weight: 650; }
+.v-company .field-input { position: relative; display: flex; align-items: center; gap: 8px; }
+.v-company .field.is-prominent input[type="number"] { width: 84px; flex: none; }
+.v-company .field-grid .field { justify-content: flex-end; }
+.v-company .field-grid .field-label { align-items: flex-end; }
+.v-company .field-reset {
+  display: none; position: absolute; right: -6px; top: -6px;
+  width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--accent); color: transparent; font-size: 0; cursor: pointer;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.v-company .field.is-prominent .field-reset { box-shadow: 0 0 0 2px var(--accent-soft); }
+.v-company .field.is-changed .field-reset { display: block; width: 8px; height: 8px; right: -3px; top: -3px; }
+.v-company .field.is-changed input[type="number"] { border-color: var(--accent); }
+.v-company .field.is-invalid input[type="number"] { border-color: var(--neg); }
+.v-company .origin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.v-company .origin-grid .check { align-items: center; font-size: 12px; }
+.v-company .origin-grid .check input { margin-top: 0; }
+.v-company .stack-tight { display: flex; flex-direction: column; gap: 10px; }
+.v-company .pathway-list summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-2); }
+.v-company .pathway-actions { margin: 8px 0 6px; gap: 12px; }
+.v-company .link-button { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
+.v-company .pathway-items { display: flex; flex-direction: column; gap: 6px; }
+.v-company .pathway-check { font-size: 12px; }
+.v-company .pathway-check small { display: flex; align-items: center; gap: 3px; }
+.v-company .pathway-check small .origin-dot { width: 6px; height: 6px; }
+.v-company .changed-count { font-size: 11px; }
+.v-company .scenario-expand { display: none; }
+.v-company .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.v-company .materials-table td:first-child { white-space: nowrap; }
+
+/* ---------------------------------------------------------------- abundance */
+.v-company .compare { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 8px 12px; }
+.v-company .compare summary { cursor: pointer; font-size: 12px; color: var(--text-2); font-weight: 550; }
+.v-company .compare[open] summary { margin-bottom: 8px; }
+.v-company .compare .data-table th[scope="col"]:not(:first-child) { text-transform: none; }
+.v-company .compare-body > p { margin-top: 6px; }
+.v-company .share-cell { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.v-company .share-bar { display: inline-block; width: 56px; height: 6px; border-radius: 3px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); overflow: hidden; }
+.v-company .share-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+/* ---------------------------------------------------------------- feasibility */
+.v-company .feasibility { display: flex; flex-direction: column; gap: 14px; }
+.v-company .checks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.v-company .checks li { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.v-company .check-icon { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; margin-top: 1px; }
+.v-company .checks .is-ok .check-icon { background: var(--pos); }
+.v-company .checks .is-fail .check-icon { background: var(--neg); }
+
+/* ---------------------------------------------------------------- build */
+.v-company .build-log { max-height: 460px; overflow: auto; }
+.v-company .build-log td { white-space: nowrap; }
+.v-company .build-log .inhouse { white-space: normal; display: inline-block; min-width: 180px; color: var(--text-2); font-size: 12px; }
+.v-company .caveats summary { cursor: pointer; font-weight: 600; }
+.v-company .caveats[open] summary { margin-bottom: 8px; }
+
+@media (max-width: 1000px) {
+  .v-company .scenario { max-height: none; overflow: visible; }
+}
+@media (max-width: 680px) {
+  .v-company .scenario-expand { display: inline; }
+  .v-company .scenario.is-collapsed > :not(.scenario-head):not(.field) { display: none; }
+  .v-company .checks { grid-template-columns: 1fr; }
+  .v-company .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .v-company .kpi-value { font-size: 18px; }
+}

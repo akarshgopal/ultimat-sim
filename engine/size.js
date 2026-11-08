@@ -1614,166 +1614,12 @@ function sizeAmmonia(definition, target, opts) {
   return sizeDedicatedAmmonia(definition, target, opts);
 }
 
-function pvModuleSink(definition, pvModule) {
-  return reactionProductSink(definition, pvModule, 'module')
-    || nodeBy(definition, node => node.id === 'module' && String(node.unit).includes('sink'));
-}
-
-function pvModuleChain(definition) {
-  const pvModule = converter(definition, 'pv-module');
-  if (!pvModule) throw new Error('sizeToProduct needs a pv-module block to size module demand');
-  const sink = pvModuleSink(definition, pvModule);
-  if (!sink) throw new Error('sizeToProduct needs a module sink');
-  const converters = definition.graph.nodes.filter(node => PV_MODULE_CHAIN_UNITS.includes(node.unit));
-  const converterIds = new Set(converters.map(node => node.id));
-  const sources = [];
-  const seen = new Set();
-  for (const edge of definition.graph.edges || []) {
-    if (!converterIds.has(edge.to?.node)) continue;
-    const upstream = nodeBy(definition, node => node.id === edge.from.node);
-    if (!upstream || seen.has(upstream.id)) continue;
-    if (upstream.unit === 'material-source' && upstream.params?.stream?.kind === 'material') {
-      seen.add(upstream.id);
-      sources.push(upstream);
-    }
-  }
-  return { pvModule, sink, converters, sources };
-}
-
 function converterDutyKg(definition, node) {
   const cap = Number(node.capacity);
   const sp = Number(definition.operation?.setpoints?.[node.id]);
   const fromCap = Number.isFinite(cap) && cap > 0 ? cap : 0;
   const fromSp = Number.isFinite(sp) && sp > 0 ? sp : 0;
   return Math.max(fromCap, fromSp);
-}
-
-function baselinePvModuleDuties(definition) {
-  const chain = pvModuleChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    moduleKg: converterDuties[chain.pvModule.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function converterSecKWhPerKg(node) {
-  const listed = Number(node.params?.electricityKWhPerKg);
-  if (Number.isFinite(listed) && listed >= 0) return listed;
-  return PV_MODULE_SEC_DEFAULTS[node.unit] ?? 0;
-}
-
-function pvModuleProcessElectricityKWh(definition, baseline, scale) {
-  let kWh = 0;
-  for (const node of definition.graph.nodes) {
-    const baseDuty = baseline.converterDuties[node.id];
-    if (!(baseDuty > 0)) continue;
-    kWh += baseDuty * scale * converterSecKWhPerKg(node);
-  }
-  return kWh;
-}
-
-function applyPvModuleScale(definition, baseline, duties) {
-  const ratio = Number(duties.scale) || 0;
-  const setpoints = definition.operation.setpoints || (definition.operation.setpoints = {});
-  for (const [id, base] of Object.entries(baseline.converterDuties)) {
-    const node = nodeBy(definition, item => item.id === id);
-    if (!node) continue;
-    const next = base * ratio;
-    node.capacity = next;
-    setpoints[id] = next;
-  }
-  for (const [id, stream] of Object.entries(baseline.streams)) {
-    const node = nodeBy(definition, item => item.id === id);
-    if (!node?.params) continue;
-    node.params.stream = JSON.parse(JSON.stringify(stream));
-    scaleMaterialStream(node.params.stream, ratio);
-    syncSiteResource(definition, node);
-  }
-}
-
-function sizePvModule(definition, target, opts) {
-  const chain = pvModuleChain(definition);
-  const baseline = baselinePvModuleDuties(definition);
-  if (!(baseline.moduleKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size module: pv-module has no baseline capacity');
-  }
-  let yieldPerScale = baseline.moduleKg > 0 ? baseline.moduleKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'module',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const moduleKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? moduleKg / yieldPerScale : 0;
-        const processElectricityKWh = pvModuleProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          module: moduleKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: moduleKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['module', 'module'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyPvModuleScale(current, baseline, duties);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties.module),
-        relativeGap(activity(solved, chain.pvModule), duties.module),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          module: duties.module,
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
 }
 
 function applyRatioScale(definition, baseline, ratio) {
@@ -1839,1090 +1685,265 @@ function ratioChainElectricityKWh(definition, baseline, scale, secOf) {
   return kWh;
 }
 
-function steelSink(definition, dri) {
-  return reactionProductSink(definition, dri, 'steel')
-    || nodeBy(definition, node => node.id === 'steel' && String(node.unit).includes('sink'));
+// ---------------------------------------------------------------------------
+// Baseline-ratio islands. The loaded case is the recipe: every converter in the
+// chain and every purchased feed scales by one ratio from its baseline duty,
+// PV is resized to the summed process electricity, and the loop re-measures
+// product-per-scale after each solve. A product only declares how to find its
+// chain and each converter's default SEC (listed params win).
+
+function namedProductSink(definition, node, reactionKey, sinkIds) {
+  return reactionProductSink(definition, node, reactionKey)
+    || nodeBy(definition, item => sinkIds.includes(item.id) && String(item.unit).includes('sink'));
+}
+
+function singleConverterChain(definition, { unit, product, sinkLabel, reactionKey, sinkIds }) {
+  const primary = converter(definition, unit);
+  if (!primary) throw new Error(`sizeToProduct needs a ${unit} block to size ${product} demand`);
+  const sink = namedProductSink(definition, primary, reactionKey, sinkIds);
+  if (!sink) throw new Error(`sizeToProduct needs a ${sinkLabel} sink`);
+  const sources = collectMaterialSourcesFeeding(definition, primary.id, new Set());
+  return { primary, sink, converters: [primary], sources };
+}
+
+function pvModuleChain(definition) {
+  const primary = converter(definition, 'pv-module');
+  if (!primary) throw new Error('sizeToProduct needs a pv-module block to size module demand');
+  const sink = namedProductSink(definition, primary, 'module', ['module']);
+  if (!sink) throw new Error('sizeToProduct needs a module sink');
+  const converters = definition.graph.nodes.filter(node => PV_MODULE_CHAIN_UNITS.includes(node.unit));
+  const converterIds = new Set(converters.map(node => node.id));
+  const sources = [];
+  const seen = new Set();
+  for (const edge of definition.graph.edges || []) {
+    if (!converterIds.has(edge.to?.node)) continue;
+    const upstream = nodeBy(definition, node => node.id === edge.from.node);
+    if (!upstream || seen.has(upstream.id)) continue;
+    if (upstream.unit === 'material-source' && upstream.params?.stream?.kind === 'material') {
+      seen.add(upstream.id);
+      sources.push(upstream);
+    }
+  }
+  return { primary, sink, converters, sources };
 }
 
 function steelChain(definition) {
-  const dri = converter(definition, 'hydrogen-dri');
-  if (!dri) throw new Error('sizeToProduct needs a hydrogen-dri block to size steel demand');
-  const sink = steelSink(definition, dri);
+  const primary = converter(definition, 'hydrogen-dri');
+  if (!primary) throw new Error('sizeToProduct needs a hydrogen-dri block to size steel demand');
+  const sink = namedProductSink(definition, primary, 'steel', ['steel']);
   if (!sink) throw new Error('sizeToProduct needs a steel sink');
   const electrolyzer = converter(definition, 'electrolyzer');
   const swro = converter(definition, 'swro');
-  const converters = [dri, electrolyzer, swro].filter(Boolean);
   const seen = new Set();
-  const sources = collectMaterialSourcesFeeding(definition, dri.id, seen);
-  if (swro) {
-    const seawater = sourceFeeding(definition, swro.id, 'feed');
-    if (seawater && !seen.has(seawater.id)
-      && seawater.unit === 'material-source'
-      && seawater.params?.stream?.kind === 'material') {
-      seen.add(seawater.id);
-      sources.push(seawater);
-    }
-  }
-  return { dri, sink, electrolyzer, swro, converters, sources };
-}
-
-function baselineSteelDuties(definition) {
-  const chain = steelChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    steelKg: converterDuties[chain.dri.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function steelProcessElectricityKWh(definition, baseline, scale) {
-  let kWh = 0;
-  const dri = converter(definition, 'hydrogen-dri');
-  if (dri && baseline.converterDuties[dri.id] > 0) {
-    const listed = Number(dri.params?.electricityKWhPerKg);
-    const sec = Number.isFinite(listed) && listed >= 0 ? listed : 0.7;
-    kWh += baseline.converterDuties[dri.id] * scale * sec;
-  }
-  const electrolyzer = converter(definition, 'electrolyzer');
-  if (electrolyzer && baseline.converterDuties[electrolyzer.id] > 0) {
-    const listed = Number(electrolyzer.params?.secKWhPerKgH2);
-    const sec = Number.isFinite(listed) && listed >= 0 ? listed : 52;
-    kWh += baseline.converterDuties[electrolyzer.id] * scale * sec;
-  }
-  const swro = converter(definition, 'swro');
-  if (swro && baseline.converterDuties[swro.id] > 0) {
-    const listed = Number(swro.params?.secKWhPerM3 ?? swro.params?.electricityKWhPerM3);
-    const sec = Number.isFinite(listed) && listed >= 0 ? listed : 3.5;
-    kWh += baseline.converterDuties[swro.id] * scale * sec;
-  }
-  return kWh;
-}
-
-function sizeSteel(definition, target, opts) {
-  const chain = steelChain(definition);
-  const baseline = baselineSteelDuties(definition);
-  if (!(baseline.steelKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size steel: hydrogen-dri has no baseline capacity');
-  }
-  let yieldPerScale = baseline.steelKg > 0 ? baseline.steelKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'steel',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const steelKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? steelKg / yieldPerScale : 0;
-        const processElectricityKWh = steelProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          steel: steelKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: steelKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['steel', 'steel'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyRatioScale(current, baseline, Number(duties.scale) || 0);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties.steel),
-        relativeGap(activity(solved, chain.dri), duties.steel),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          steel: duties.steel,
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
-}
-
-function ethyleneSink(definition, mtoNode) {
-  return reactionProductSink(definition, mtoNode, 'ethylene')
-    || nodeBy(definition, node => (
-      (node.id === 'ethylene' || node.id === 'ethylene-product') && String(node.unit).includes('sink')
-    ));
+  const sources = collectMaterialSourcesFeeding(definition, primary.id, seen);
+  const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
+  if (seawater) sources.push(seawater);
+  return { primary, sink, converters: [primary, electrolyzer, swro].filter(Boolean), sources };
 }
 
 function ethyleneChain(definition) {
-  const mtoNode = converter(definition, 'mto');
-  if (!mtoNode) throw new Error('sizeToProduct needs an mto block to size ethylene demand');
-  const sink = ethyleneSink(definition, mtoNode);
+  const primary = converter(definition, 'mto');
+  if (!primary) throw new Error('sizeToProduct needs an mto block to size ethylene demand');
+  const sink = namedProductSink(definition, primary, 'ethylene', ['ethylene', 'ethylene-product']);
   if (!sink) throw new Error('sizeToProduct needs an ethylene sink');
-  const meohFeed = sourceFeeding(definition, mtoNode.id, 'methanol');
+  const meohFeed = sourceFeeding(definition, primary.id, 'methanol');
   const methanol = meohFeed?.unit === 'methanol' ? meohFeed : null;
   const h2Feed = methanol ? sourceFeeding(definition, methanol.id, 'hydrogen') : null;
   const electrolyzer = h2Feed?.unit === 'electrolyzer'
     ? h2Feed
     : (methanol ? converter(definition, 'electrolyzer') : null);
   const swro = electrolyzer ? converter(definition, 'swro') : null;
-  const converters = [mtoNode, methanol, electrolyzer, swro].filter(Boolean);
   const seen = new Set();
-  const sources = collectMaterialSourcesFeeding(definition, mtoNode.id, seen);
-  if (methanol) {
-    for (const extra of collectMaterialSourcesFeeding(definition, methanol.id, seen)) sources.push(extra);
-  }
+  const sources = collectMaterialSourcesFeeding(definition, primary.id, seen);
+  if (methanol) sources.push(...collectMaterialSourcesFeeding(definition, methanol.id, seen));
   const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
   if (seawater) sources.push(seawater);
-  return { mto: mtoNode, sink, methanol, electrolyzer, swro, converters, sources };
-}
-
-function baselineEthyleneDuties(definition) {
-  const chain = ethyleneChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    ethyleneKg: converterDuties[chain.mto.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function ethyleneProcessElectricityKWh(definition, baseline, scale) {
-  return ratioChainElectricityKWh(definition, baseline, scale, node => {
-    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
-    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
-    if (node.unit === 'methanol') return converterSecKWh(node, ['electricityKWhPerKg'], 0.5);
-    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'mto' ? 4 : 0);
-  });
-}
-
-function sizeEthylene(definition, target, opts) {
-  const chain = ethyleneChain(definition);
-  const baseline = baselineEthyleneDuties(definition);
-  if (!(baseline.ethyleneKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size ethylene: mto has no baseline capacity');
-  }
-  let yieldPerScale = baseline.ethyleneKg > 0 ? baseline.ethyleneKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'ethylene',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const ethyleneKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? ethyleneKg / yieldPerScale : 0;
-        const processElectricityKWh = ethyleneProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          ethylene: ethyleneKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: ethyleneKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['ethylene', 'ethylene'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyRatioScale(current, baseline, Number(duties.scale) || 0);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties.ethylene),
-        relativeGap(activity(solved, chain.mto), duties.ethylene),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          ethylene: duties.ethylene,
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
-}
-
-function dieselSink(definition, ftNode) {
-  return reactionProductSink(definition, ftNode, 'diesel')
-    || nodeBy(definition, node => (
-      (node.id === 'diesel' || node.id === 'diesel-product') && String(node.unit).includes('sink')
-    ));
+  return { primary, sink, converters: [primary, methanol, electrolyzer, swro].filter(Boolean), sources };
 }
 
 function dieselChain(definition) {
-  const ftNode = converter(definition, 'ft-liquids');
-  if (!ftNode) throw new Error('sizeToProduct needs an ft-liquids block to size diesel demand');
-  const sink = dieselSink(definition, ftNode);
+  const primary = converter(definition, 'ft-liquids');
+  if (!primary) throw new Error('sizeToProduct needs an ft-liquids block to size diesel demand');
+  const sink = namedProductSink(definition, primary, 'diesel', ['diesel', 'diesel-product']);
   if (!sink) throw new Error('sizeToProduct needs a diesel sink');
-  const h2Feed = sourceFeeding(definition, ftNode.id, 'hydrogen');
+  const h2Feed = sourceFeeding(definition, primary.id, 'hydrogen');
   const electrolyzer = h2Feed?.unit === 'electrolyzer' ? h2Feed : null;
   const swro = electrolyzer ? converter(definition, 'swro') : null;
-  const converters = [ftNode, electrolyzer, swro].filter(Boolean);
   const seen = new Set();
-  const sources = collectMaterialSourcesFeeding(definition, ftNode.id, seen);
+  const sources = collectMaterialSourcesFeeding(definition, primary.id, seen);
   const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
   if (seawater) sources.push(seawater);
-  return { ft: ftNode, sink, electrolyzer, swro, converters, sources };
-}
-
-function baselineDieselDuties(definition) {
-  const chain = dieselChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    dieselKg: converterDuties[chain.ft.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function dieselProcessElectricityKWh(definition, baseline, scale) {
-  return ratioChainElectricityKWh(definition, baseline, scale, node => {
-    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
-    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
-    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'ft-liquids' ? 0.22 : 0);
-  });
-}
-
-function ureaSink(definition, ureaNode) {
-  return reactionProductSink(definition, ureaNode, 'urea')
-    || nodeBy(definition, node => (
-      (node.id === 'urea' || node.id === 'urea-product') && String(node.unit).includes('sink')
-    ));
+  return { primary, sink, converters: [primary, electrolyzer, swro].filter(Boolean), sources };
 }
 
 function ureaChain(definition) {
-  const ureaNode = converter(definition, 'urea');
-  if (!ureaNode) throw new Error('sizeToProduct needs a urea block to size urea demand');
-  const sink = ureaSink(definition, ureaNode);
+  const primary = converter(definition, 'urea');
+  if (!primary) throw new Error('sizeToProduct needs a urea block to size urea demand');
+  const sink = namedProductSink(definition, primary, 'urea', ['urea', 'urea-product']);
   if (!sink) throw new Error('sizeToProduct needs a urea sink');
-  const nh3Feed = sourceFeeding(definition, ureaNode.id, 'ammonia');
+  const nh3Feed = sourceFeeding(definition, primary.id, 'ammonia');
   const ammonia = nh3Feed?.unit === 'ammonia' ? nh3Feed : null;
   const electrolyzer = ammonia ? converter(definition, 'electrolyzer') : null;
   const asu = ammonia ? converter(definition, 'asu') : null;
   const swro = ammonia ? converter(definition, 'swro') : null;
-  const converters = [ureaNode, ammonia, electrolyzer, asu, swro].filter(Boolean);
   const seen = new Set();
-  const sources = collectMaterialSourcesFeeding(definition, ureaNode.id, seen);
+  const sources = collectMaterialSourcesFeeding(definition, primary.id, seen);
   const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
   if (seawater) sources.push(seawater);
   const air = asu && collectMaterialSourceOnPort(definition, asu.id, 'air', seen);
   if (air) sources.push(air);
-  return { urea: ureaNode, sink, ammonia, electrolyzer, asu, swro, converters, sources };
-}
-
-function baselineUreaDuties(definition) {
-  const chain = ureaChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    ureaKg: converterDuties[chain.urea.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function ureaProcessElectricityKWh(definition, baseline, scale) {
-  return ratioChainElectricityKWh(definition, baseline, scale, node => {
-    if (node.unit === 'electrolyzer') return converterSecKWh(node, ['secKWhPerKgH2'], 52);
-    if (node.unit === 'swro') return converterSecKWh(node, ['secKWhPerM3', 'electricityKWhPerM3'], 3.5);
-    if (node.unit === 'asu') return converterSecKWh(node, ['electricityKWhPerKgN2'], 0.25);
-    if (node.unit === 'ammonia') return converterSecKWh(node, ['electricityKWhPerKg'], 0.6);
-    return converterSecKWh(node, ['electricityKWhPerKg'], node.unit === 'urea' ? 0.8 : 0);
-  });
-}
-
-function sizeDiesel(definition, target, opts) {
-  const chain = dieselChain(definition);
-  const baseline = baselineDieselDuties(definition);
-  if (!(baseline.dieselKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size diesel: ft-liquids has no baseline capacity');
-  }
-  let yieldPerScale = baseline.dieselKg > 0 ? baseline.dieselKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'diesel',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const dieselKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? dieselKg / yieldPerScale : 0;
-        const processElectricityKWh = dieselProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          diesel: dieselKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: dieselKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['diesel', 'diesel'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyRatioScale(current, baseline, Number(duties.scale) || 0);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties.diesel),
-        relativeGap(activity(solved, chain.ft), duties.diesel),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          diesel: duties.diesel,
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
-}
-
-function sizeUrea(definition, target, opts) {
-  const chain = ureaChain(definition);
-  const baseline = baselineUreaDuties(definition);
-  if (!(baseline.ureaKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size urea: urea has no baseline capacity');
-  }
-  let yieldPerScale = baseline.ureaKg > 0 ? baseline.ureaKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'urea',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const ureaKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? ureaKg / yieldPerScale : 0;
-        const processElectricityKWh = ureaProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          urea: ureaKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: ureaKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['urea', 'urea'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyRatioScale(current, baseline, Number(duties.scale) || 0);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties.urea),
-        relativeGap(activity(solved, chain.urea), duties.urea),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          urea: duties.urea,
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
-}
-
-function titaniumSink(definition, krollNode) {
-  return reactionProductSink(definition, krollNode, 'titanium')
-    || nodeBy(definition, node => (
-      (node.id === 'titanium' || node.id === 'titanium-product' || node.id === 'sponge')
-      && String(node.unit).includes('sink')
-    ));
-}
-
-function titaniumChain(definition) {
-  const kroll = converter(definition, 'titanium-kroll');
-  if (!kroll) throw new Error('sizeToProduct needs a titanium-kroll block to size titanium demand');
-  const sink = titaniumSink(definition, kroll);
-  if (!sink) throw new Error('sizeToProduct needs a titanium sink');
-  const sources = collectMaterialSourcesFeeding(definition, kroll.id, new Set());
-  return { kroll, sink, converters: [kroll], sources };
-}
-
-function baselineTitaniumDuties(definition) {
-  const chain = titaniumChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    titaniumKg: converterDuties[chain.kroll.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function titaniumProcessElectricityKWh(definition, baseline, scale) {
-  const kroll = converter(definition, 'titanium-kroll');
-  if (!kroll || !(baseline.converterDuties[kroll.id] > 0)) return 0;
-  const listed = Number(kroll.params?.electricityKWhPerKg);
-  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 8;
-  return baseline.converterDuties[kroll.id] * scale * sec;
-}
-
-function sizeTitanium(definition, target, opts) {
-  const chain = titaniumChain(definition);
-  const baseline = baselineTitaniumDuties(definition);
-  if (!(baseline.titaniumKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size titanium: titanium-kroll has no baseline capacity');
-  }
-  let yieldPerScale = baseline.titaniumKg > 0 ? baseline.titaniumKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'titanium',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const titaniumKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? titaniumKg / yieldPerScale : 0;
-        const processElectricityKWh = titaniumProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          titanium: titaniumKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: titaniumKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['titanium', 'titanium'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyRatioScale(current, baseline, Number(duties.scale) || 0);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties.titanium),
-        relativeGap(activity(solved, chain.kroll), duties.titanium),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          titanium: duties.titanium,
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
-}
-
-function floatGlassSink(definition, glassNode) {
-  return reactionProductSink(definition, glassNode, 'glass')
-    || nodeBy(definition, node => (
-      (node.id === 'glass' || node.id === 'float-glass' || node.id === 'solar-glass'
-        || node.id === 'float-glass-product')
-      && String(node.unit).includes('sink')
-    ));
-}
-
-function floatGlassChain(definition) {
-  const floatGlass = converter(definition, 'float-glass');
-  if (!floatGlass) throw new Error('sizeToProduct needs a float-glass block to size float-glass demand');
-  const sink = floatGlassSink(definition, floatGlass);
-  if (!sink) throw new Error('sizeToProduct needs a glass sink');
-  const sources = collectMaterialSourcesFeeding(definition, floatGlass.id, new Set());
-  return { floatGlass, sink, converters: [floatGlass], sources };
-}
-
-function baselineFloatGlassDuties(definition) {
-  const chain = floatGlassChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    glassKg: converterDuties[chain.floatGlass.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function floatGlassProcessElectricityKWh(definition, baseline, scale) {
-  const floatGlass = converter(definition, 'float-glass');
-  if (!floatGlass || !(baseline.converterDuties[floatGlass.id] > 0)) return 0;
-  const listed = Number(floatGlass.params?.electricityKWhPerKg);
-  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 2.5;
-  return baseline.converterDuties[floatGlass.id] * scale * sec;
-}
-
-function sizeFloatGlass(definition, target, opts) {
-  const chain = floatGlassChain(definition);
-  const baseline = baselineFloatGlassDuties(definition);
-  if (!(baseline.glassKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size float-glass: float-glass has no baseline capacity');
-  }
-  let yieldPerScale = baseline.glassKg > 0 ? baseline.glassKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'float-glass',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const glassKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? glassKg / yieldPerScale : 0;
-        const processElectricityKWh = floatGlassProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          'float-glass': glassKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: glassKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['float-glass', 'float-glass'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyRatioScale(current, baseline, Number(duties.scale) || 0);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties['float-glass']),
-        relativeGap(activity(solved, chain.floatGlass), duties['float-glass']),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          'float-glass': duties['float-glass'],
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
-}
-
-function cementSink(definition, cementNode) {
-  return reactionProductSink(definition, cementNode, 'cement')
-    || nodeBy(definition, node => (
-      (node.id === 'cement' || node.id === 'clinker' || node.id === 'portland'
-        || node.id === 'cement-product' || node.id === 'cem-i')
-      && String(node.unit).includes('sink')
-    ));
-}
-
-function cementChain(definition) {
-  const cementNode = converter(definition, 'cement');
-  if (!cementNode) throw new Error('sizeToProduct needs a cement block to size cement demand');
-  const sink = cementSink(definition, cementNode);
-  if (!sink) throw new Error('sizeToProduct needs a cement sink');
-  const sources = collectMaterialSourcesFeeding(definition, cementNode.id, new Set());
-  return { cement: cementNode, sink, converters: [cementNode], sources };
-}
-
-function baselineCementDuties(definition) {
-  const chain = cementChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    cementKg: converterDuties[chain.cement.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function cementProcessElectricityKWh(definition, baseline, scale) {
-  const cementNode = converter(definition, 'cement');
-  if (!cementNode || !(baseline.converterDuties[cementNode.id] > 0)) return 0;
-  const listed = Number(cementNode.params?.electricityKWhPerKg);
-  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 1.05;
-  return baseline.converterDuties[cementNode.id] * scale * sec;
-}
-
-function sizeCement(definition, target, opts) {
-  const chain = cementChain(definition);
-  const baseline = baselineCementDuties(definition);
-  if (!(baseline.cementKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size cement: cement has no baseline capacity');
-  }
-  let yieldPerScale = baseline.cementKg > 0 ? baseline.cementKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'cement',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const cementKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? cementKg / yieldPerScale : 0;
-        const processElectricityKWh = cementProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          cement: cementKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: cementKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['cement', 'cement'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyRatioScale(current, baseline, Number(duties.scale) || 0);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties.cement),
-        relativeGap(activity(solved, chain.cement), duties.cement),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          cement: duties.cement,
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
-}
-
-function copperSink(definition, ewNode) {
-  return reactionProductSink(definition, ewNode, 'cathode')
-    || nodeBy(definition, node => (
-      (node.id === 'cathode' || node.id === 'cathode-product' || node.id === 'copper'
-        || node.id === 'copper-product' || node.id === 'copper-cathode')
-      && String(node.unit).includes('sink')
-    ));
-}
-
-function copperChain(definition) {
-  const copperEw = converter(definition, 'copper-ew');
-  if (!copperEw) throw new Error('sizeToProduct needs a copper-ew block to size copper demand');
-  const sink = copperSink(definition, copperEw);
-  if (!sink) throw new Error('sizeToProduct needs a copper sink');
-  const sources = collectMaterialSourcesFeeding(definition, copperEw.id, new Set());
-  return { copperEw, sink, converters: [copperEw], sources };
-}
-
-function baselineCopperDuties(definition) {
-  const chain = copperChain(definition);
-  const converterDuties = {};
-  for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
-  const streams = {};
-  for (const node of chain.sources) {
-    if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
-  }
-  return {
-    copperKg: converterDuties[chain.copperEw.id] || 0,
-    converterDuties,
-    streams,
-  };
-}
-
-function copperProcessElectricityKWh(definition, baseline, scale) {
-  const copperEw = converter(definition, 'copper-ew');
-  if (!copperEw || !(baseline.converterDuties[copperEw.id] > 0)) return 0;
-  const listed = Number(copperEw.params?.electricityKWhPerKg);
-  const sec = Number.isFinite(listed) && listed >= 0 ? listed : 2.2;
-  return baseline.converterDuties[copperEw.id] * scale * sec;
-}
-
-function sizeCopper(definition, target, opts) {
-  const chain = copperChain(definition);
-  const baseline = baselineCopperDuties(definition);
-  if (!(baseline.copperKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size copper: copper-ew has no baseline capacity');
-  }
-  let yieldPerScale = baseline.copperKg > 0 ? baseline.copperKg : 1;
-  return iterateSize({
-    definition,
-    target,
-    caps: opts.caps || {},
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    product: 'copper',
-    estimate: (current, rate, _state, caps) => {
-      const yieldPerKWp = dailyPvKWhPerKWp(current);
-      const raw = kg => {
-        const copperKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? copperKg / yieldPerScale : 0;
-        const processElectricityKWh = copperProcessElectricityKWh(current, baseline, scale);
-        const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
-        return {
-          copper: copperKg,
-          scale,
-          processElectricityKWh,
-          electricityKWh: processElectricityKWh,
-          heatKWh: 0,
-          heatCoveredKWh: 0,
-          heatResidualKWh: 0,
-          solarKWp,
-          yieldPerKWp,
-          ch4: 0,
-          h2: 0,
-          co2: 0,
-          makeupWaterKg: 0,
-          swro: 0,
-          seawaterKg: 0,
-          brineKg: 0,
-          airKg: 0,
-          consumablesKg: 0,
-          _scaleBasis: copperKg,
-        };
-      };
-      const uncapped = yieldPerScale > 0 ? rate : 0;
-      return applyCapScale(raw(uncapped), raw, caps, [
-        ['copper', 'copper'],
-        ['solarKWp', 'solarKWp'],
-      ]);
-    },
-    apply: (current, duties) => {
-      applyRatioScale(current, baseline, Number(duties.scale) || 0);
-      applyPowerAndSite(current, duties);
-      current.operation.boundaryLimitedBy = duties.capped ? ['sizing cap'] : [];
-    },
-    measure: (solved, current, duties) => {
-      const achieved = sinkMassKg(solved, chain.sink);
-      if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
-      const gaps = [
-        relativeGap(achieved, duties.copper),
-        relativeGap(activity(solved, chain.copperEw), duties.copper),
-      ];
-      const consistency = Math.max(...gaps);
-      return {
-        achieved,
-        consistency,
-        residual: Math.max(relativeGap(achieved, target), consistency),
-        historyDuties: historyDuties(duties, solved, current, {
-          achieved,
-          scale: duties.scale,
-          copper: duties.copper,
-          achievedElectricityKWh: electricityConsumed(solved),
-          ...heatMeasureExtras(solved, duties),
-        }),
-      };
-    },
-  });
+  return { primary, sink, converters: [primary, ammonia, electrolyzer, asu, swro].filter(Boolean), sources };
 }
 
 const NDPR_SEPARATOR_UNITS = Object.freeze(['ree-chromatography', 'ree-sx']);
-
-function ndprSink(definition, separator) {
-  return reactionProductSink(definition, separator, 'ndpr')
-    || nodeBy(definition, node => (
-      (node.id === 'ndpr' || node.id === 'ndpr-oxide' || node.id === 'ndpr-oxide-separated'
-        || node.id === 'nd2o3')
-      && String(node.unit).includes('sink')
-    ));
-}
 
 function ndprChain(definition) {
   const separators = definition.graph.nodes.filter(node => NDPR_SEPARATOR_UNITS.includes(node.unit));
   if (separators.length > 1) {
     throw new Error('sizeToProduct cannot size ndpr: multiple REE separators');
   }
-  const chrom = separators[0];
-  if (!chrom) throw new Error('sizeToProduct needs a ree-chromatography block to size ndpr demand');
-  const sink = ndprSink(definition, chrom);
+  const primary = separators[0];
+  if (!primary) throw new Error('sizeToProduct needs a ree-chromatography block to size ndpr demand');
+  const sink = namedProductSink(definition, primary, 'ndpr', ['ndpr', 'ndpr-oxide', 'ndpr-oxide-separated', 'nd2o3']);
   if (!sink) throw new Error('sizeToProduct needs an ndpr sink');
-  const sources = collectMaterialSourcesFeeding(definition, chrom.id, new Set());
-  return { chrom, sink, converters: [chrom], sources };
+  const sources = collectMaterialSourcesFeeding(definition, primary.id, new Set());
+  return { primary, sink, converters: [primary], sources };
 }
 
-function baselineNdprDuties(definition) {
-  const chain = ndprChain(definition);
+const perKg = fallback => [['electricityKWhPerKg'], fallback];
+const ELECTROLYZER_SEC = [['secKWhPerKgH2'], 52];
+const SWRO_SEC = [['secKWhPerM3', 'electricityKWhPerM3'], 3.5];
+const REE_SEC_KEYS = ['electricityKWhPerKgReo', 'electricityKWhPerKg'];
+
+// Each entry: the converter named in "no baseline capacity" errors, how to
+// collect the scaled chain, and default SEC [paramKeys, kWh/unit] per unit.
+// Units not listed read electricityKWhPerKg with a 0 default.
+const RATIO_ISLANDS = Object.freeze({
+  module: {
+    unitLabel: 'pv-module',
+    chain: pvModuleChain,
+    sec: Object.fromEntries(Object.entries(PV_MODULE_SEC_DEFAULTS).map(([unit, kWh]) => [unit, perKg(kWh)])),
+  },
+  steel: {
+    unitLabel: 'hydrogen-dri',
+    chain: steelChain,
+    sec: { 'hydrogen-dri': perKg(0.7), electrolyzer: ELECTROLYZER_SEC, swro: SWRO_SEC },
+  },
+  ethylene: {
+    unitLabel: 'mto',
+    chain: ethyleneChain,
+    sec: { mto: perKg(4), methanol: perKg(0.5), electrolyzer: ELECTROLYZER_SEC, swro: SWRO_SEC },
+  },
+  diesel: {
+    unitLabel: 'ft-liquids',
+    chain: dieselChain,
+    sec: { 'ft-liquids': perKg(0.22), electrolyzer: ELECTROLYZER_SEC, swro: SWRO_SEC },
+  },
+  urea: {
+    unitLabel: 'urea',
+    chain: ureaChain,
+    sec: {
+      urea: perKg(0.8),
+      ammonia: perKg(0.6),
+      asu: [['electricityKWhPerKgN2'], 0.25],
+      electrolyzer: ELECTROLYZER_SEC,
+      swro: SWRO_SEC,
+    },
+  },
+  titanium: {
+    unitLabel: 'titanium-kroll',
+    chain: definition => singleConverterChain(definition, {
+      unit: 'titanium-kroll', product: 'titanium', sinkLabel: 'titanium',
+      reactionKey: 'titanium', sinkIds: ['titanium', 'titanium-product', 'sponge'],
+    }),
+    sec: { 'titanium-kroll': perKg(8) },
+  },
+  'float-glass': {
+    unitLabel: 'float-glass',
+    chain: definition => singleConverterChain(definition, {
+      unit: 'float-glass', product: 'float-glass', sinkLabel: 'glass',
+      reactionKey: 'glass', sinkIds: ['glass', 'float-glass', 'solar-glass', 'float-glass-product'],
+    }),
+    sec: { 'float-glass': perKg(2.5) },
+  },
+  cement: {
+    unitLabel: 'cement',
+    chain: definition => singleConverterChain(definition, {
+      unit: 'cement', product: 'cement', sinkLabel: 'cement',
+      reactionKey: 'cement', sinkIds: ['cement', 'clinker', 'portland', 'cement-product', 'cem-i'],
+    }),
+    sec: { cement: perKg(1.05) },
+  },
+  copper: {
+    unitLabel: 'copper-ew',
+    chain: definition => singleConverterChain(definition, {
+      unit: 'copper-ew', product: 'copper', sinkLabel: 'copper',
+      reactionKey: 'cathode',
+      sinkIds: ['cathode', 'cathode-product', 'copper', 'copper-product', 'copper-cathode'],
+    }),
+    sec: { 'copper-ew': perKg(2.2) },
+  },
+  // NdPr is a co-product of the separator's REO duty, so the converter duty
+  // ("reo") is tracked separately and product-per-scale comes from a baseline solve.
+  ndpr: {
+    unitLabel: 'ree-chromatography',
+    chain: ndprChain,
+    sec: { 'ree-chromatography': [REE_SEC_KEYS, 5], 'ree-sx': [REE_SEC_KEYS, 5.3] },
+    primaryKey: 'reo',
+    yieldFromBaselineSolve: true,
+  },
+});
+
+function ratioBaseline(definition, chain) {
   const converterDuties = {};
   for (const node of chain.converters) converterDuties[node.id] = converterDutyKg(definition, node);
   const streams = {};
   for (const node of chain.sources) {
     if (node.params?.stream) streams[node.id] = JSON.parse(JSON.stringify(node.params.stream));
   }
-  return {
-    reoKg: converterDuties[chain.chrom.id] || 0,
-    converterDuties,
-    streams,
-  };
+  return { primaryKg: converterDuties[chain.primary.id] || 0, converterDuties, streams };
 }
 
-function ndprProcessElectricityKWh(definition, baseline, scale) {
-  return ratioChainElectricityKWh(definition, baseline, scale, node => (
-    converterSecKWh(
-      node,
-      ['electricityKWhPerKgReo', 'electricityKWhPerKg'],
-      node.unit === 'ree-sx' ? 5.3 : 5,
-    )
-  ));
-}
-
-function sizeNdpr(definition, target, opts) {
-  const chain = ndprChain(definition);
-  const baseline = baselineNdprDuties(definition);
-  if (!(baseline.reoKg > 0) && target > 0) {
-    throw new Error('sizeToProduct cannot size ndpr: ree-chromatography has no baseline capacity');
+function sizeRatioIsland(definition, product, target, opts) {
+  const spec = RATIO_ISLANDS[product];
+  const primaryKey = spec.primaryKey || product;
+  const chain = spec.chain(definition);
+  const baseline = ratioBaseline(definition, chain);
+  if (!(baseline.primaryKg > 0) && target > 0) {
+    throw new Error(`sizeToProduct cannot size ${product}: ${spec.unitLabel} has no baseline capacity`);
   }
-  let yieldPerScale = 1;
-  if (target > 0) {
-    const baselineNdpr = sinkMassKg(solveOperation(definition), chain.sink);
-    if (!(baselineNdpr > 0)) {
-      throw new Error('sizeToProduct cannot size ndpr: ndpr sink has no baseline product');
+  let yieldPerScale = baseline.primaryKg > 0 ? baseline.primaryKg : 1;
+  if (spec.yieldFromBaselineSolve) {
+    yieldPerScale = 1;
+    if (target > 0) {
+      const baselineProduct = sinkMassKg(solveOperation(definition), chain.sink);
+      if (!(baselineProduct > 0)) {
+        throw new Error(`sizeToProduct cannot size ${product}: ${product} sink has no baseline product`);
+      }
+      yieldPerScale = baselineProduct;
     }
-    yieldPerScale = baselineNdpr;
   }
+  const secOf = node => {
+    const [keys, fallback] = spec.sec[node.unit] || perKg(0);
+    return converterSecKWh(node, keys, fallback);
+  };
   return iterateSize({
     definition,
     target,
     caps: opts.caps || {},
     maxIterations: opts.maxIterations,
     tolerance: opts.tolerance,
-    product: 'ndpr',
+    product,
     estimate: (current, rate, _state, caps) => {
       const yieldPerKWp = dailyPvKWhPerKWp(current);
       const raw = kg => {
-        const ndprKg = Math.max(0, kg);
-        const scale = yieldPerScale > 0 ? ndprKg / yieldPerScale : 0;
-        const processElectricityKWh = ndprProcessElectricityKWh(current, baseline, scale);
+        const productKg = Math.max(0, kg);
+        const scale = yieldPerScale > 0 ? productKg / yieldPerScale : 0;
+        const processElectricityKWh = ratioChainElectricityKWh(current, baseline, scale, secOf);
         const solarKWp = yieldPerKWp > 0 ? processElectricityKWh / yieldPerKWp : 0;
         return {
-          ndpr: ndprKg,
-          reo: baseline.reoKg * scale,
+          [product]: productKg,
+          ...(primaryKey !== product ? { [primaryKey]: baseline.primaryKg * scale } : {}),
           scale,
           processElectricityKWh,
           electricityKWh: processElectricityKWh,
@@ -2940,12 +1961,12 @@ function sizeNdpr(definition, target, opts) {
           brineKg: 0,
           airKg: 0,
           consumablesKg: 0,
-          _scaleBasis: ndprKg,
+          _scaleBasis: productKg,
         };
       };
       const uncapped = yieldPerScale > 0 ? rate : 0;
       return applyCapScale(raw(uncapped), raw, caps, [
-        ['ndpr', 'ndpr'],
+        [product, product],
         ['solarKWp', 'solarKWp'],
       ]);
     },
@@ -2958,8 +1979,8 @@ function sizeNdpr(definition, target, opts) {
       const achieved = sinkMassKg(solved, chain.sink);
       if (duties.scale > 0 && achieved > 0) yieldPerScale = achieved / duties.scale;
       const gaps = [
-        relativeGap(achieved, duties.ndpr),
-        relativeGap(activity(solved, chain.chrom), duties.reo),
+        relativeGap(achieved, duties[product]),
+        relativeGap(activity(solved, chain.primary), duties[primaryKey]),
       ];
       const consistency = Math.max(...gaps);
       return {
@@ -2969,8 +1990,8 @@ function sizeNdpr(definition, target, opts) {
         historyDuties: historyDuties(duties, solved, current, {
           achieved,
           scale: duties.scale,
-          ndpr: duties.ndpr,
-          reo: duties.reo,
+          [product]: duties[product],
+          ...(primaryKey !== product ? { [primaryKey]: duties[primaryKey] } : {}),
           achievedElectricityKWh: electricityConsumed(solved),
           ...heatMeasureExtras(solved, duties),
         }),
@@ -3096,16 +2117,7 @@ function sizeToProduct(opts = {}) {
   if (product === 'H2') return sizeHydrogen(definition, rate, loopOpts);
   if (product === 'methanol') return sizeMethanol(definition, rate, loopOpts);
   if (product === 'ammonia') return sizeAmmonia(definition, rate, loopOpts);
-  if (product === 'module') return sizePvModule(definition, rate, loopOpts);
-  if (product === 'steel') return sizeSteel(definition, rate, loopOpts);
-  if (product === 'ethylene') return sizeEthylene(definition, rate, loopOpts);
-  if (product === 'diesel') return sizeDiesel(definition, rate, loopOpts);
-  if (product === 'urea') return sizeUrea(definition, rate, loopOpts);
-  if (product === 'titanium') return sizeTitanium(definition, rate, loopOpts);
-  if (product === 'float-glass') return sizeFloatGlass(definition, rate, loopOpts);
-  if (product === 'cement') return sizeCement(definition, rate, loopOpts);
-  if (product === 'copper') return sizeCopper(definition, rate, loopOpts);
-  if (product === 'ndpr') return sizeNdpr(definition, rate, loopOpts);
+  if (RATIO_ISLANDS[product]) return sizeRatioIsland(definition, product, rate, loopOpts);
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 

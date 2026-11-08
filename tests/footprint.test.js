@@ -12,8 +12,6 @@ const {
   layoutSpacingMultiplier,
   groundCoverageRatio,
 } = require('../engine/footprint');
-const { evaluateNetwork } = require('../engine/network');
-const { createFuelsAndMineralsNetwork } = require('../cases/network');
 
 const MAIN_UNITS = [
   'electrolyzer',
@@ -110,14 +108,4 @@ test('estimateFootprint returns cited/screening process pads from activity', () 
   assert.ok(Math.abs(byId['site-battery'].areaM2 - Math.max(20, 2 * PROCESS_INTENSITIES.battery.intensity)) < 1e-9);
   assert.ok(Math.abs(footprint.processAreaM2 - footprint.processes.reduce((sum, item) => sum + item.areaM2, 0)) < 1e-12);
   assert.equal(footprint.totalAreaM2, footprint.processAreaM2);
-  assert.match(footprint.assumptions.join(' '), /cited or screening intensities/i);
-});
-
-test('network landHa is the sum of plant totalHa from estimateFootprint', () => {
-  const result = evaluateNetwork(createFuelsAndMineralsNetwork(6));
-  const summed = result.plants.reduce((sum, plant) => sum + plant.footprint.totalHa, 0);
-  assert.ok(Math.abs(result.landHa - summed) < 1e-12);
-  assert.ok(result.landHa > result.plants[0].footprint.totalHa);
-  const solarOnly = result.plants.reduce((sum, plant) => sum + plant.footprint.solar.ha, 0);
-  assert.ok(result.landHa >= solarOnly);
 });

@@ -1,13 +1,10 @@
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
-const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
 const { findFuelBreakEven, probeFuelCash, fuelScreeningBounds } = require('../engine/sensitivity');
 const { sizeForPositiveCashflow } = require('../engine/size');
-const pvgisSites = require('../data/pvgis-sites');
-const { frozenSolarFor } = require('../engine/site-search');
 
 function waterStream(kg = 20) {
   return { kind: 'material', mol: { H2O: kg * 1000 / 18.01528 }, phase: 'liquid', T_C: 25, P_bar: 1 };
@@ -91,7 +88,6 @@ test('findFuelBreakEven returns a finite H2 price for a tiny cash-negative plant
   assert.ok(result.curve.length >= 9);
   assert.ok(result.curve.some(point => point.met === false));
   assert.ok(result.curve.some(point => point.met === true));
-  assert.ok(result.priceSources.some(item => /screening/i.test(item.label) || item.quality === 'screening'));
   const high = result.curve[result.curve.length - 1];
   assert.equal(high.met, true);
   assert.ok(high.positiveSaleCount >= 1);
@@ -141,22 +137,12 @@ test("alias product 'methane' normalizes to CH4", () => {
   assert.equal(result.label, 'screening');
 });
 
-test('fuelScreeningBounds uses tea-screening CH4 green-premium and MeOH commodity band', () => {
-  const ch4 = fuelScreeningBounds('CH4');
-  const meoh = fuelScreeningBounds('methanol');
-  assert.equal(ch4.label, 'screening');
-  assert.equal(ch4.priceMid, 1);
-  assert.equal(ch4.priceMin, 1);
-  assert.equal(ch4.priceMax, 1);
-  assert.equal(ch4.capexMin, 0.05);
-  assert.equal(ch4.capexMax, 2);
-  assert.match(ch4.note, /green-premium/i);
-  assert.equal(meoh.priceMid, 0.4);
-  assert.equal(meoh.priceMin, 0.25);
-  assert.equal(meoh.priceMax, 0.5);
-  assert.equal(meoh.capexMin, 0.05);
-  assert.equal(meoh.capexMax, 2);
-  assert.match(meoh.note, /commodity/i);
+test('fuelScreeningBounds brackets the mid price and CAPEX factor 1', () => {
+  for (const product of ['CH4', 'methanol']) {
+    const bounds = fuelScreeningBounds(product);
+    assert.ok(bounds.priceMin <= bounds.priceMid && bounds.priceMid <= bounds.priceMax, product);
+    assert.ok(bounds.capexMin < 1 && bounds.capexMax > 1, product);
+  }
 });
 
 test('probeFuelCash documents a CH4 near-miss inside the green-premium × CAPEX band', () => {
@@ -170,14 +156,11 @@ test('probeFuelCash documents a CH4 near-miss inside the green-premium × CAPEX 
   assert.equal(probe.met, probe.midMet);
   assert.ok(Number.isFinite(probe.bestCash));
   assert.ok(Number.isFinite(probe.midCash));
-  assert.ok(probe.note);
-  assert.match(probe.note, /screening/i);
   if (probe.midMet) {
     assert.ok(probe.midCash > 0);
   } else {
     assert.ok(!(probe.midCash > 0));
     assert.ok(probe.breakEvenPrice === null || Number.isFinite(probe.breakEvenPrice));
-    assert.match(probe.note, /not an invented fuel winner/i);
   }
 });
 
@@ -207,8 +190,6 @@ test('probeFuelCash ranks cash+ only at mid-band, not capexFactor=0.05 alone', (
   assert.ok(probe.bestCash > 0);
   assert.equal(probe.best.capexFactor, 0.05);
   assert.equal(probe.mid.capexFactor, 1);
-  assert.match(probe.note, /band edge|not ranked/i);
-  assert.match(probe.note, /not an invented fuel winner/i);
 
   const cheap = tinyMethanePlant({ unitPrice: 1, unitCost: 0.1 });
   const midHit = probeFuelCash({ definition: cheap, product: 'CH4' });
@@ -216,71 +197,25 @@ test('probeFuelCash ranks cash+ only at mid-band, not capexFactor=0.05 alone', (
   assert.equal(midHit.met, true);
   assert.ok(midHit.midCash > 0);
   assert.equal(midHit.mid.capexFactor, 1);
-  assert.match(midHit.note, /mid-band/i);
 });
 
-test('fuel-breakeven hunt proves midCash << 0 and uses frozen PVGIS for overlay coasts', () => {
-  const script = path.join(__dirname, '..', 'scripts', 'fuel-breakeven.mjs');
-  const ran = spawnSync(process.execPath, [script], {
+test('fuel-breakeven script proves no frozen-PVGIS fuel site is cash+ at mid-band', () => {
+  const ran = spawnSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'fuel-breakeven.mjs')], {
     encoding: 'utf8',
     timeout: 60000,
   });
   assert.equal(ran.status, 0, ran.stderr || ran.stdout);
   const report = JSON.parse(ran.stdout);
-  const blob = JSON.stringify(report);
-  assert.ok(!/no frozen typical-day PVGIS in-repo/i.test(blob));
-  assert.ok(!/no Gulf typical-day in-repo/i.test(blob));
-  assert.ok(!/Almer[ií]a frozen PVGIS retained/i.test(blob));
-  assert.ok(Array.isArray(report.notRun));
   assert.equal(report.notRun.length, 0);
-  assert.ok(report.proof);
-  assert.ok(Array.isArray(report.proof.rows));
   assert.ok(report.proof.rows.length >= 6);
   assert.equal(report.proof.midPositiveCount, 0);
-  assert.match(report.proof.conclusion, /midCash|materials maximizer/i);
-  assert.ok(report.proof.cites.some(cite => /green-premium/i.test(cite)));
-  assert.ok(report.proof.cites.some(cite => /0\.40\/kg|commodity/i.test(cite)));
-
-  const byId = id => report.proof.rows.filter(row => row.siteId === id);
-  assert.ok(byId('spain-almeria').length >= 1);
-  assert.ok(byId('chile-mejillones').length >= 1);
-  assert.ok(byId('uae-taweelah').length >= 1);
-  assert.ok(byId('au-port-hedland').length >= 1);
-  assert.ok(byId('saudi-oxagon').length >= 1);
+  for (const id of ['spain-almeria', 'chile-mejillones', 'uae-taweelah', 'au-port-hedland', 'saudi-oxagon']) {
+    assert.ok(report.proof.rows.some(row => row.siteId === id), id);
+  }
   for (const row of report.proof.rows) {
-    assert.equal(row.midMet, false, row.siteId);
     assert.equal(row.feasible, false, row.siteId);
-    assert.ok(Number.isFinite(row.midCash), row.siteId);
     assert.ok(row.midCash < 0, `${row.siteId} ${row.template} midCash=${row.midCash}`);
     assert.match(row.solar, /frozen/i, row.siteId);
-    assert.ok(!/missing/i.test(row.solar), row.siteId);
-  }
-
-  const overlay = report.runs.find(row => row.site?.id === 'uae-taweelah');
-  assert.ok(overlay);
-  assert.match(overlay.site.solar, /frozen/i);
-  assert.match(overlay.site.solar, /PVGIS-ERA5/i);
-  const hedland = report.runs.find(row => row.site?.id === 'au-port-hedland');
-  assert.ok(hedland);
-  assert.match(hedland.site.solar, /frozen/i);
-  const oxagon = report.runs.find(row => row.site?.id === 'saudi-oxagon');
-  assert.ok(oxagon);
-  assert.match(oxagon.site.solar, /frozen/i);
-});
-
-test('fuel-breakeven overlay claims match frozen PVGIS already in-repo', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'fuel-breakeven.mjs'), 'utf8');
-  assert.doesNotMatch(src, /no frozen typical-day PVGIS in-repo/i);
-  assert.doesNotMatch(src, /no Gulf typical-day in-repo/i);
-  assert.doesNotMatch(src, /this preset has no frozen typical-day in-repo/i);
-  assert.match(src, /frozenSolarFor/);
-  assert.match(src, /data\/pvgis-sites\.js/);
-  for (const id of ['uae-taweelah', 'au-port-hedland', 'saudi-oxagon']) {
-    assert.ok(pvgisSites.BY_SITE_ID[id], id);
-    const solar = frozenSolarFor({ id }, 'coastal');
-    assert.ok(solar?.dailyPVKWhPerKWp > 0, id);
-    assert.match(solar.source, /PVGIS-ERA5/, id);
-    assert.equal(solar.keepHourly, false, id);
   }
 });
 

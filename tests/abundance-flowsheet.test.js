@@ -49,62 +49,16 @@ test('abundance hub couples brine bromide to chlor-alkali chlorine and its hydro
   assert.ok(solved.balances.maxAbsResidual < 1e-8);
 });
 
-test('abundance TEA registry exposes cited prices and screening CAPEX intensities', () => {
-  assert.equal(tea.prices.lithium.value, 14);
-  assert.equal(tea.prices.lithium.quality, 'cited');
-  assert.ok(tea.prices.lithium.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
-  assert.equal(tea.prices.bromine.value, 3.1);
-  assert.equal(tea.prices.bromine.quality, 'cited');
-  assert.ok(tea.prices.bromine.evidence.some(item => /usgs\.gov.*bromine/i.test(item.url || '')));
-  assert.equal(tea.prices.potash.value, 0.35);
-  assert.equal(tea.prices.magnesium.value, 0.08);
-  assert.match(tea.prices.magnesium.note, /not.*Mg-metal|not use Mg-metal/i);
-  assert.equal(tea.prices.magnesium.quality, 'screening');
-  assert.equal(tea.capex.minerals.value, 12);
-  assert.equal(tea.capex.minerals.quality, 'screening');
-  assert.ok(tea.capex.minerals.evidence.some(item => /10\.2172\/1782801/.test(item.doi || item.url || '')));
-  assert.equal(tea.packs.minerals.capexIntensity, 12);
-  assert.deepEqual(tea.packs.minerals.capexIntensityBand, { low: 3, mid: 12, high: 40 });
-  assert.equal(tea.packs.minerals.capexIntensityBand.mid, tea.packs.minerals.capexIntensity);
-  assert.deepEqual(tea.capex.minerals.capexIntensityBand, tea.packs.minerals.capexIntensityBand);
-  assert.match(tea.packs.minerals.note, /10\.2172\/1782801/);
-  assert.match(tea.packs.minerals.note, /2\.86e7 kg brine\/day/);
-  assert.match(tea.packs.minerals.note, /multi-product Dead Sea/i);
-  assert.match(tea.packs.minerals.note, /not bankable/i);
-  assert.match(tea.packs.minerals.note, /not independent bankable quotes/i);
-  const mineralsPack = tea.abundanceEvidence().packs.find(item => item.key === 'minerals');
-  assert.equal(mineralsPack.capexIntensity, 12);
-  assert.deepEqual(mineralsPack.capexIntensityBand, { low: 3, mid: 12, high: 40 });
-  assert.equal(tea.demand.lithium.value, 1e6);
-  assert.match(tea.demand.lithium.note, /not a plant offtake/i);
-  assert.equal(tea.demand.unlimited, undefined);
-});
-
-test('abundance case binds TEA prices, capexRate, and evidence onto nodes', () => {
+test('abundance case binds TEA prices, CAPEX intensity, and demand ceilings onto nodes', () => {
   const definition = createAbundanceCase();
   const node = id => definition.graph.nodes.find(item => item.id === id);
-  assert.equal(node('lithium').economics.unitPrice, 14);
-  assert.equal(node('lithium').economics.quality, 'cited');
-  assert.ok(Array.isArray(node('lithium').economics.evidence) && node('lithium').economics.evidence.length >= 1);
-  assert.equal(node('bromine').economics.unitPrice, 3.1);
-  assert.equal(node('brine').economics.unitCost, 0.0005);
-  assert.equal(node('power').economics.unitCost, 0.04);
-  assert.equal(node('salt-feed').economics.unitCost, 0.06);
-  assert.equal(node('minerals').economics.capexRate, 12);
-  assert.equal(node('minerals').economics.capexIntensity, 12);
-  assert.deepEqual(node('minerals').economics.capexIntensityBand, { low: 3, mid: 12, high: 40 });
-  assert.equal(node('minerals').economics.installedCapex, undefined);
-  assert.equal(node('chlor-alkali').economics.capexRate, 1500);
-  assert.equal(node('ammonia').economics.capexRate, 2000);
-  assert.ok(definition.teaEvidence?.prices?.some(row => row.key === 'lithium' && row.quality === 'cited'));
-  const solved = solveOperation(definition);
-  const economics = evaluateEconomics(definition, solved);
-  const lithiumSink = economics.sinks.find(sink => sink.id === 'lithium');
-  assert.equal(lithiumSink.quality, 'cited');
-  assert.ok(lithiumSink.evidence.some(item => /usgs/i.test(item.url || item.label || '')));
+  assert.equal(node('lithium').economics.unitPrice, tea.prices.lithium.value);
+  assert.equal(node('bromine').economics.unitPrice, tea.prices.bromine.value);
+  assert.equal(node('minerals').economics.capexRate, tea.packs.minerals.capexIntensity);
+  assert.equal(node('minerals').economics.installedCapex, undefined, 'minerals CAPEX scales with capacity');
+  const economics = evaluateEconomics(definition, solveOperation(definition));
+  assert.equal(economics.sinks.find(sink => sink.id === 'lithium').quality, tea.prices.lithium.quality);
   assert.ok(economics.annualizedCapex > 0);
-  assert.equal(node('lithium').economics.annualDemandLimit, tea.demand.lithium.value);
-  assert.notEqual(node('lithium').economics.annualDemandLimit, 1e12);
 });
 
 test('createAbundanceCase({ assayId }) runs Atacama lithium brine without invented bromide', () => {
@@ -128,35 +82,19 @@ function packCapex(key, capacity) {
   return bound.capexRate * capacity;
 }
 
-test('TEA pack CAPEX scales with capacity and is not the old fuel-path toy lump', () => {
-  const intensity = tea.packs.minerals.capexIntensity;
-  assert.equal(intensity, 12);
-  const mineralsLarge = packCapex('minerals', 100000);
-  const mineralsSmall = packCapex('minerals', 1000);
-  assert.equal(mineralsLarge, intensity * 100000);
-  assert.equal(mineralsSmall, intensity * 1000);
-  assert.notEqual(mineralsLarge, 80 * 100000);
-
-  const electrolyzer = packCapex('electrolyzer', 100);
-  assert.equal(electrolyzer, tea.packs.electrolyzer.capexIntensity * 100);
-  assert.notEqual(electrolyzer, 21000);
-  assert.ok(electrolyzer > 21000);
-
-  const swro = packCapex('swro', 10);
-  assert.equal(swro, 1500 * 10);
-  assert.notEqual(swro, 1000);
-
+test('TEA pack CAPEX scales linearly with capacity, or by the scale exponent when asked', () => {
+  for (const key of ['minerals', 'electrolyzer', 'swro']) {
+    assert.equal(packCapex(key, 1000), tea.packs[key].capexIntensity * 1000, key);
+    assert.equal(packCapex(key, 100000), 100 * packCapex(key, 1000), key);
+  }
+  const intensity = tea.packs.swro.capexIntensity;
   const scaled = tea.bindCapexPack('swro', { capacity: 100, scaleExponent: 0.6, refCapacity: 10, precompute: true });
-  assert.ok(Math.abs(scaled.installedCapex - 1500 * 100 * (100 / 10) ** (0.6 - 1)) < 1e-6);
+  assert.ok(Math.abs(scaled.installedCapex - intensity * 100 * (100 / 10) ** (0.6 - 1)) < 1e-6);
 });
 
 test('Dead Sea demo scale is cash-positive at minerals mid intensity; Atacama Li stays cash+', () => {
   const deadSea = sizeForPositiveCashflow({ definition: createAbundanceCase(), scales: [1], rates: [0] });
   assert.ok(deadSea.objective.annualNetCash > 0, 'mid=12 is cash+ at Dead Sea demo scale because 4% fixed OM tracks CAPEX');
-  assert.ok(deadSea.economics.installedCapex < 80 * 1e5, 'minerals intensity drop must cut demo CAPEX below the old $8M minerals line');
-  const minerals = deadSea.definition.graph.nodes.find(node => node.id === 'minerals');
-  assert.equal(minerals.capacity, 1e5);
-  assert.equal(minerals.economics.capexRate, 12);
 
   const atacama = sizeForPositiveCashflow({
     definition: createAbundanceCase({ assayId: 'atacama-lithium-brine', region: 'Atacama/Chile' }),

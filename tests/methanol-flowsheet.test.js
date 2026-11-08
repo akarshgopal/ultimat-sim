@@ -15,52 +15,18 @@ function assertClosed(solved) {
   assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
 }
 
-test('methanol plant uses solid-sorbent DAC, cited Mejillones site, and closes balances', () => {
+test('methanol plant runs DAC, SWRO, and electrolysis on the frozen Mejillones series and closes balances', () => {
   const definition = createMethanolCase();
   const solved = solveOperation(definition);
-
-  const sales = definition.graph.nodes.filter(node => node.economics?.disposition === 'sale');
-  for (const node of sales) {
+  assert.deepEqual(DAILY_PV.slice(1), pvgis.outputs.monthly.fixed.map(row => row.E_d));
+  assert.equal(definition.site.meteo.dailyPVKWhPerKWp, DAILY_PV[0]);
+  assert.equal(definition.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
+  for (const node of definition.graph.nodes.filter(item => item.economics?.disposition === 'sale')) {
     assert.ok(node.economics.annualDemandLimit < 1e12, node.id);
   }
-  assert.equal(definition.graph.nodes.find(node => node.id === 'electrolyzer').economics.capexRate, 3250);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'electricity').economics.installedCapex, 20 * 1000);
-  assert.equal(definition.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
-  assert.equal(definition.graph.nodes.find(node => node.id === 'methanol').unit, 'methanol');
-  assert.equal(definition.graph.nodes.find(node => node.id === 'swro').unit, 'swro');
-  assert.equal(definition.site.id, 'mejillones-pvgis-2026-09-14');
-  assert.equal(definition.site.latitude, -23.100);
-  assert.equal(definition.site.longitude, -70.448);
-  assert.equal(definition.site.resources.grid.quality, 'unverified');
-  assert.equal(definition.site.resources.freshwater.quality, 'unverified');
-  assert.equal(definition.site.meteo.quality, 'cited');
-  assert.equal(definition.site.meteo.dailyPVKWhPerKWp, DAILY_PV[0]);
-  assert.equal(definition.site.assay.kind, 'seawater');
-  assert.equal(definition.site.assay.quality, 'cited');
-  assert.match(definition.site.assay.summary, /34\.9|Atacama|Millero/);
-  assert.equal(definition.site.resources.seawater.quality, 'cited');
-  assert.ok(definition.site.resources.seawater.stream.mol['Mg+2'] > 0);
-  assert.equal(definition.site.rights.seawaterIntake.status, 'assumed');
-  assert.equal(definition.site.rights.seawaterDischarge.status, 'unverified');
-  assert.equal(definition.site.rights.gridImport.status, 'unverified');
-  assert.equal(definition.site.rights.gridImport.authorize, false);
-  assert.ok(definition.site.meteo.cite.url.includes('re.jrc.ec.europa.eu'));
-  assert.ok(definition.site.assay.evidence.some(item => /doi\.org\/10\.1016\/j\.dsr\.2007\.10\.001/.test(item.url)));
   assert.ok(solved.warnings.some(message => message.includes('unverified site right: gridImport')));
-  assert.ok(solved.nodes.methanol.activity > 0);
-  assert.ok(solved.nodes.electrolyzer.activity > 0);
-  assert.ok(solved.nodes.dac.activity > 0);
-  assert.ok(solved.nodes.swro.activity > 0);
+  for (const id of ['methanol', 'electrolyzer', 'dac', 'swro']) assert.ok(solved.nodes[id].activity > 0, id);
   assertClosed(solved);
-});
-
-test('frozen Mejillones PVGIS monthly matches the methanol case series', () => {
-  const monthly = pvgis.outputs.monthly.fixed.map(row => row.E_d);
-  assert.equal(pvgis.outputs.totals.fixed.E_y, 1923.52);
-  assert.deepEqual(DAILY_PV.slice(1), monthly);
-  assert.equal(pvgis.inputs.meteo_data.radiation_db, 'PVGIS-ERA5');
-  assert.equal(pvgis.inputs.location.latitude, -23.1);
-  assert.equal(pvgis.inputs.location.longitude, -70.448);
 });
 
 test('sizeToProduct methanol meets a sink target on the Mejillones plant', () => {

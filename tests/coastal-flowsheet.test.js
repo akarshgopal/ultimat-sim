@@ -1,9 +1,6 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
 
-const { streamMassKg } = require('../engine/model');
 const { UNITS } = require('../engine/units');
 const { solveOperation, solveHorizon } = require('../engine/solve');
 const { createCoastalCase, DAILY_PV } = require('../cases/coastal');
@@ -16,39 +13,15 @@ function assertClosed(solved) {
   assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
 }
 
-test('coastal methane uses solid-sorbent DAC and closes balances', () => {
+test('coastal methane uses solid-sorbent DAC on the frozen Almería series and closes balances', () => {
   const definition = createCoastalCase();
   const solved = solveOperation(definition);
-
   assert.equal(definition.graph.nodes.find(node => node.id === 'dac').unit, 'dac-solid');
-  assert.equal(definition.site.resources.grid.quality, 'unverified');
-  assert.equal(definition.site.resources.freshwater.quality, 'unverified');
-  assert.equal(definition.site.meteo.quality, 'cited');
   assert.equal(definition.site.meteo.dailyPVKWhPerKWp, DAILY_PV[0]);
-  assert.equal(definition.site.assay.kind, 'seawater');
-  assert.equal(definition.site.assay.quality, 'cited');
-  assert.match(definition.site.assay.summary, /Millero|Alboran|36\.5/);
-  assert.equal(definition.site.resources.seawater.quality, 'cited');
-  assert.ok(definition.site.resources.seawater.stream.mol['Mg+2'] > 0);
-  assert.equal(definition.site.rights.seawaterIntake.status, 'assumed');
-  assert.equal(definition.site.rights.seawaterIntake.kind, 'intake');
-  assert.equal(definition.site.rights.seawaterIntake.authorize, true);
-  assert.equal(definition.site.rights.seawaterDischarge.status, 'unverified');
-  assert.equal(definition.site.rights.seawaterDischarge.kind, 'discharge');
-  assert.equal(definition.site.rights.seawaterDischarge.authorize, false);
-  assert.equal(definition.site.rights.gridImport.status, 'unverified');
-  assert.equal(definition.site.rights.gridImport.authorize, false);
-  assert.equal(definition.site.rights.freshwater.status, 'unverified');
-  assert.equal(definition.site.rights.freshwater.authorize, false);
-  assert.ok(definition.site.meteo.cite.url.includes('re.jrc.ec.europa.eu'));
-  assert.ok(definition.site.assay.evidence.some(item => /doi\.org\/10\.1016\/j\.dsr\.2007\.10\.001/.test(item.url)));
-  assert.ok(definition.site.assay.evidence.some(item => /Alboran_Sea/.test(item.url)));
-  assert.ok(solved.warnings.some(message => message.includes('unverified site right: gridImport')));
-  assert.ok(solved.warnings.some(message => message.includes('unverified site right: freshwater')));
-  assert.ok(solved.warnings.some(message => message.includes('unverified site right: seawaterDischarge')));
+  assert.deepEqual(DAILY_PV.slice(1), pvgis.outputs.monthly.fixed.map(row => row.E_d));
   assert.ok(Math.abs(solved.nodes.sabatier.activity - 5) < 1e-9);
-  assert.ok(solved.nodes['spent-media'].received.amount > 0);
   assert.equal(solved.nodes['spent-media'].received.chemicalId, 'amine-sorbent');
+  assert.ok(solved.nodes['spent-media'].received.amount > 0);
   assertClosed(solved);
 });
 

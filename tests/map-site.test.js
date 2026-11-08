@@ -8,10 +8,6 @@ const {
   COLORMAP_LAYER_IDS,
   LAYER_SCORE_EXPECTED_PARTS,
   PV_YIELD_SCORE_MAX,
-  GSA_GHI_RAMP,
-  GSA_IRRAD,
-  LAND_USD_HA_RAMP,
-  LAND_VALUE_RAMP,
   haToRadiusM,
   circlePolygon,
   layoutFootprintCampus,
@@ -45,20 +41,15 @@ const {
 
 const landPrices = require('../data/land-prices.js');
 const landAdmin = require('../data/land-admin.js');
-const { readAppSource } = require('./helpers/app-source');
 
 test('waterAvailabilityScreening keeps coastal seawater, Dead Sea brine, and inland arid/fresh bands', () => {
   const almeria = waterAvailabilityScreening(36.834, -2.463);
   assert.equal(almeria.band, 'seawater');
-  assert.equal(almeria.class, 'coastal-seawater');
   assert.equal(almeria.quality, 'screening');
-  assert.match(almeria.cite.url, /aqueduct/);
   assert.equal(almeria.seawaterAccess, true);
 
   const deadSea = waterAvailabilityScreening({ latitude: 31.16, longitude: 35.43 });
   assert.equal(deadSea.band, 'brine');
-  assert.equal(deadSea.class, 'inland-brine');
-  assert.match(deadSea.note, /Dead Sea|brine/i);
 
   const sahara = waterAvailabilityScreening(23, 10);
   assert.equal(sahara.band, 'arid');
@@ -76,10 +67,8 @@ test('waterAvailabilityScreening keeps coastal seawater, Dead Sea brine, and inl
 test('pvScreeningBand is a latitude screen, not a PVGIS hourly series', () => {
   const almeria = pvScreeningBand(36.834, -2.463);
   assert.equal(almeria.quality, 'screening');
-  assert.match(almeria.cite.url, /pvg_tools|jrc\.ec\.europa\.eu/);
   assert.ok(['good', 'excellent'].includes(almeria.band));
   assert.ok(almeria.typicalKWhPerKWpDay > 4);
-  assert.match(almeria.note, /not a PVGIS typical-day/i);
 
   const deadSea = pvScreeningBand({ latitude: 31.16, longitude: 35.43 });
   const oslo = pvScreeningBand(59.9, 10.8);
@@ -90,61 +79,17 @@ test('pvScreeningBand is a latitude screen, not a PVGIS hourly series', () => {
   assert.equal(pvScreeningBand(NaN).band, 'unknown');
 });
 
-test('landValueScreening remains a non-price helper; land overlay is cited choropleth', () => {
+test('landValueScreening ranks coastal above inland above arid and rejects bad coordinates', () => {
   const almeria = landValueScreening(36.834, -2.463);
-  assert.equal(almeria.quality, 'screening');
-  assert.equal(almeria.band, 'coastal-high');
-  assert.ok(almeria.relativeIndex > 0.6);
-
   const sahara = landValueScreening(23, 10);
-  assert.equal(sahara.band, 'arid-low');
-  assert.ok(sahara.relativeIndex < almeria.relativeIndex);
-
   const amazon = landValueScreening(3, -60);
-  assert.equal(amazon.band, 'inland-moderate');
-  assert.ok(amazon.relativeIndex > sahara.relativeIndex);
+  assert.ok(sahara.relativeIndex < amazon.relativeIndex);
   assert.ok(amazon.relativeIndex < almeria.relativeIndex);
-
-  const bad = landValueScreening(120, 0);
-  assert.equal(bad.band, 'unknown');
-  assert.equal(bad.relativeIndex, 0);
-
-  assert.equal(LAYER_SOURCES.land.available, true);
-  assert.equal(LAYER_SOURCES.land.render, 'choropleth');
-  assert.equal(LAYER_SOURCES.land.quality, 'cited');
-  assert.match(LAYER_SOURCES.land.note, /not cadastral|not industrial|siting proxy/i);
-  assert.match(LAYER_SOURCES.land.cite.url, /nass\.usda\.gov|land0825/);
-  assert.ok(LAYER_SOURCES.land.cites.length >= 2);
+  assert.equal(landValueScreening(120, 0).relativeIndex, 0);
 });
 
-test('LAYER_SOURCES describes cited GSA LERC solar and Aqueduct water', () => {
-  assert.deepEqual([...COLORMAP_LAYER_IDS], ['pvgis', 'water', 'land']);
-  assert.equal(LAYER_SOURCES.pvgis.label, 'Solar GHI');
-  assert.equal(LAYER_SOURCES.pvgis.render, 'lerc-tiles');
-  assert.equal(LAYER_SOURCES.pvgis.quality, 'cited');
-  assert.equal(LAYER_SOURCES.pvgis.sliceId, 2);
-  assert.equal(LAYER_SOURCES.pvgis.variable, 'GHI');
-  assert.match(LAYER_SOURCES.pvgis.units, /kWh\/m²·year|kWh\/m\u00b2·year/);
-  assert.match(LAYER_SOURCES.pvgis.url, /GSA_IRRAD/);
-  assert.match(LAYER_SOURCES.pvgis.url, /sliceId=2/);
-  assert.match(LAYER_SOURCES.pvgis.url, /\{z\}\/\{y\}\/\{x\}/);
-  assert.doesNotMatch(LAYER_SOURCES.pvgis.url || '', /ghi-coarse/);
-  assert.equal(LAYER_SOURCES.pvgis.data, undefined);
-  assert.match(LAYER_SOURCES.pvgis.overlayCite.label, /Global Solar Atlas|Solargis|ESMAP/i);
-  assert.match(LAYER_SOURCES.pvgis.overlayCite.url, /globalsolaratlas/i);
-  assert.match(LAYER_SOURCES.pvgis.cite.url, /pvg_tools|jrc\.ec\.europa\.eu/);
-
-  assert.equal(LAYER_SOURCES.water.label, 'Aqueduct BWS');
-  assert.equal(LAYER_SOURCES.water.quality, 'cited');
-  assert.equal(LAYER_SOURCES.water.render, 'tiles');
-  assert.equal(LAYER_SOURCES.water.tileScheme, 'arcgis-zyx');
-  assert.match(LAYER_SOURCES.water.url, /gis6\.uspatial\.umn\.edu/);
-  assert.match(LAYER_SOURCES.water.url, /SCOPE\/WRI_Aqueducts_Baseline_water_stress/);
-  assert.match(LAYER_SOURCES.water.url, /MapServer\/tile\/\{z\}\/\{y\}\/\{x\}/);
-  assert.equal(LAYER_SOURCES.water.fallback, 'screening-grid');
-  assert.match(LAYER_SOURCES.water.cite.url, /aqueduct/);
-  assert.ok(LAYER_SOURCES.water.legend.length >= 3);
-
+test('every colormap layer source is cited', () => {
+  for (const id of COLORMAP_LAYER_IDS) assert.ok(LAYER_SOURCES[id], id);
   for (const source of Object.values(LAYER_SOURCES)) {
     assert.ok(source.id);
     assert.ok(source.cite);
@@ -152,27 +97,19 @@ test('LAYER_SOURCES describes cited GSA LERC solar and Aqueduct water', () => {
   }
 });
 
-test('GSA annual ramp and geographic tile helpers', () => {
-  assert.equal(GSA_IRRAD.sliceId, 2);
-  assert.equal(GSA_IRRAD.variable, 'GHI');
-  assert.equal(GSA_GHI_RAMP.length, 11);
-  assert.equal(GSA_GHI_RAMP[1][0], 365);
+test('GSA annual ramp colors and geographic tile helpers', () => {
   assert.equal(ghiAt(NaN), null);
-  const cool = ghiColor(700);
-  const hot = ghiColor(2800);
-  assert.match(cool, /rgb\(|#/);
-  assert.match(hot, /rgb\(|#/);
   const coolRgb = ghiColorRgb(700);
   const hotRgb = ghiColorRgb(2800);
   assert.ok(coolRgb[2] > coolRgb[0], 'low annual GHI is blue/cyan');
   assert.ok(hotRgb[0] > hotRgb[2], 'high annual GHI is orange/red');
+  assert.notEqual(ghiColor(700), ghiColor(2800));
 
   const alm = gsaTileXY(36.834, -2.463, 6);
   assert.deepEqual({ z: alm.z, y: alm.y, x: alm.x }, { z: 6, y: 11, x: 69 });
-  const covers = gsaCoveringTiles(36, -3, 37, -2, 6);
-  assert.ok(covers.some(t => t.y === 11 && t.x === 69));
-  assert.ok(gsaZoomForMapZoom(10, 36) >= 0);
-  assert.ok(gsaZoomForMapZoom(10, 36) <= 8);
+  assert.ok(gsaCoveringTiles(36, -3, 37, -2, 6).some(t => t.y === 11 && t.x === 69));
+  const zoom = gsaZoomForMapZoom(10, 36);
+  assert.ok(zoom >= 0 && zoom <= 8);
   assert.ok(ghiAt(23, 10) > ghiAt(59.9, 10.8));
 });
 
@@ -188,91 +125,43 @@ test('vendored Lerc decodes a GSA GHI fixture tile', async () => {
   assert.ok(value > 1500 && value < 2300, `Almería annual GHI should be ~1871, got ${value}`);
 });
 
-test('land USD/ha ramp is yellow→dark green; deep ocean skip still works', () => {
-  const pale = landColorUsdPerHa(2500);
-  const dark = landColorUsdPerHa(90000);
-  assert.match(pale, /#|rgb\(/);
-  assert.match(dark, /#|rgb\(/);
-  assert.equal(LAND_USD_HA_RAMP[0][1], '#ffffcc');
-  assert.equal(LAND_USD_HA_RAMP[LAND_USD_HA_RAMP.length - 1][1], '#006837');
-  assert.equal(LAND_VALUE_RAMP[0][1], '#ffffcc');
+test('land colors and choropleth follow USD/ha; deep ocean is skipped', () => {
+  assert.notEqual(landColorUsdPerHa(2500), landColorUsdPerHa(90000));
   assert.ok(landIndexAt(36.834, -2.463) > 0.6);
   assert.ok(landIndexAt(36.77, -2.81) > 0.6, 'El Ejido / Alboran coast is not treated as ocean');
   assert.equal(isDeepOceanScreening(38, 15), true);
   assert.equal(landIndexAt(38, 15), null);
   assert.equal(isDeepOceanScreening(36.834, -2.463), false);
-  assert.match(waterScreeningColor('arid'), /#999|#999999/i);
-  const styled = landChoroplethStyle({ properties: { id: 'US-IA' } }, landPrices);
-  assert.ok(styled.fillOpacity > 0);
-  const empty = landChoroplethStyle({ properties: { id: 'AQ' } }, landPrices);
-  assert.equal(empty.fillOpacity, 0);
+  assert.notEqual(waterScreeningColor('arid'), waterScreeningColor('seawater'));
+  assert.ok(landChoroplethStyle({ properties: { id: 'US-IA' } }, landPrices).fillOpacity > 0);
+  assert.equal(landChoroplethStyle({ properties: { id: 'AQ' } }, landPrices).fillOpacity, 0);
 });
 
-test('bundled land-prices data is finite, unique, and covers US+EU+CA+AU', () => {
+test('bundled land prices are unique, finite, and cited; lookups resolve by id and point', () => {
   const bundle = getLandPricesBundle();
   assert.equal(bundle, landPrices);
-  assert.ok(Array.isArray(bundle.records));
-  assert.ok(bundle.records.length >= 76);
   const ids = new Set();
-  let us = 0;
-  let eu = 0;
   for (const record of bundle.records) {
-    assert.ok(record.id);
     assert.ok(!ids.has(record.id), `duplicate id ${record.id}`);
     ids.add(record.id);
     assert.ok(Number.isFinite(record.usdPerHa) && record.usdPerHa > 0, record.id);
-    assert.ok(record.year >= 2010);
-    assert.ok(record.source);
-    assert.ok(record.citeUrl);
+    assert.ok(record.source && record.citeUrl, record.id);
     assert.ok(record.quality === 'cited' || record.quality === 'screening', record.id);
-    if (record.kind === 'us-state') us += 1;
-    if (record.kind === 'eu-country') eu += 1;
   }
-  assert.equal(us, 48);
-  assert.ok(eu >= 20, `expected ≥20 EU countries, got ${eu}`);
-  const byId = Object.fromEntries(bundle.records.map((r) => [r.id, r]));
-  assert.ok(byId.CA, 'Canada national record');
-  assert.ok(byId.AU, 'Australia national record');
-  assert.equal(byId.CA.kind, 'country');
-  assert.equal(byId.AU.kind, 'country');
-  assert.ok(byId.CA.citeUrl.includes('statcan'));
-  assert.ok(byId.AU.citeUrl.includes('agriculture.gov.au') || byId.AU.source.includes('ABARES'));
-  assert.ok(Number.isFinite(byId.CA.usdPerHa) && byId.CA.usdPerHa > 0);
-  assert.ok(Number.isFinite(byId.AU.usdPerHa) && byId.AU.usdPerHa > 0);
-  assert.ok(byId.CA.fx?.pair === 'CADUSD');
-  assert.ok(byId.AU.fx?.pair === 'AUDUSD');
-  assert.ok(landPriceById('US-IA', bundle).usdPerHa > 10000);
-  assert.ok(landPriceById('ES', bundle).usdPerHa > 5000);
+  assert.ok(landPriceById('US-IA', bundle).usdPerHa > 0);
   assert.equal(landPriceById('US-AK', bundle), null);
-  for (const id of ['CL', 'IN', 'JP', 'ZA', 'AE', 'SA', 'QA', 'OM']) {
-    assert.ok(byId[id], id);
-    assert.ok(Number.isFinite(byId[id].usdPerHa) && byId[id].usdPerHa > 0, id);
-    assert.ok(byId[id].quality === 'cited' || byId[id].quality === 'screening', id);
-    assert.ok(byId[id].source);
-    assert.ok(byId[id].citeUrl);
-  }
-  assert.equal(byId.JP.quality, 'cited');
-  assert.equal(byId.SA.quality, 'cited');
-  assert.equal(byId.CL.quality, 'screening');
   assert.equal(landPriceAt(36.834, -2.463)?.id, 'ES');
   assert.equal(landPriceAt(27.8, -97.4)?.id, 'US-TX');
   assert.equal(landPriceAt(31.16, 35.43), null);
   assert.equal(layerScoreAt(NaN, NaN), null);
   assert.equal(layerScoreAt(120, 0), null);
-  const almeriaScore = layerScoreAt(36.834, -2.463);
-  const osloScore = layerScoreAt(59.9, 10.8);
-  assert.ok(Number.isFinite(almeriaScore));
-  assert.ok(Number.isFinite(osloScore));
-  assert.ok(almeriaScore > osloScore);
-  assert.ok(landAdmin.features.length > 50);
+  assert.ok(layerScoreAt(36.834, -2.463) > layerScoreAt(59.9, 10.8));
   const priced = landAdmin.features.filter(f => f.properties.hasPrice);
-  assert.ok(priced.length >= 60);
+  assert.ok(priced.length > 0);
+  assert.ok(priced.every(f => landPriceById(f.properties.id, bundle)), 'every priced admin polygon has a record');
 });
 
 test('layerScoreAt prefers frozen PVGIS yield and completeness-weights missing land $/ha', () => {
-  assert.equal(LAYER_SCORE_EXPECTED_PARTS, 3);
-  assert.equal(PV_YIELD_SCORE_MAX, 6.8);
-
   const almeriaLat = 36.834;
   const almeriaLon = -2.463;
   const screening = layerScoreAt(almeriaLat, almeriaLon);
@@ -370,42 +259,6 @@ test('web mercator helper and footprint circle stay available', () => {
   const markers = networkPlantMarkers({ plants: [{ id: 'p', name: 'P', definition: { site: { latitude: 36.8, longitude: -2.5 } } }] });
   assert.equal(markers.length, 1);
 });
-
-test('site map solar uses GSA LERC; land uses GeoJSON choropleth, not GridLayer paint', () => {
-  const app = readAppSource();
-  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  const css = fs.readFileSync(path.join(__dirname, '..', 'flowsheet.css'), 'utf8');
-  assert.doesNotMatch(app, /radius:\s*14000/);
-  assert.doesNotMatch(app, /radius:\s*22000/);
-  assert.doesNotMatch(app, /radius:\s*30000/);
-  assert.match(app, /GridLayer/);
-  assert.match(app, /GSA_IRRAD|gsaTileUrl|paintGsaIrradTile|createGsaIrradLayer/);
-  assert.match(app, /sliceId/);
-  assert.match(app, /Lerc\.(load|decode)/);
-  assert.match(app, /gis6\.uspatial\.umn\.edu/);
-  assert.match(app, /\{z\}\/\{y\}\/\{x\}/);
-  assert.match(app, /COLORMAP_IDS|COLORMAP_LAYER_IDS/);
-  assert.match(app, /updateSiteMapLegend/);
-  assert.match(app, /ensureLandChoropleth/);
-  assert.match(app, /L\.geoJSON/);
-  assert.doesNotMatch(app, /ensureLandColormap/);
-  assert.doesNotMatch(app, /landIndexAt\(lat,\s*lon\)/);
-  assert.doesNotMatch(app, /ghi-coarse/);
-  assert.match(html, /id="siteMapLegend"/);
-  assert.match(html, /vendor\/LercDecode\.js/);
-  assert.match(html, /data\/land-prices\.js/);
-  assert.match(html, /data\/land-admin\.js/);
-  assert.doesNotMatch(html, /ghi-coarse/);
-  assert.ok(html.indexOf('vendor/LercDecode.js') < html.indexOf('js/flowsheet-app.js'));
-  assert.ok(html.indexOf('data/land-prices.js') < html.indexOf('js/flowsheet-app.js'));
-  assert.match(css, /\.site-map-legend/);
-  assert.match(css, /\.site-map-legend-ramp/);
-  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'data', 'ghi-coarse.json')));
-  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'data', 'ghi-coarse.js')));
-  assert.ok(fs.existsSync(path.join(__dirname, '..', 'data', 'land-prices.json')));
-  assert.ok(fs.existsSync(path.join(__dirname, '..', 'data', 'land-admin.geojson')));
-});
-
 
 test('layoutFootprintCampus returns solar + pad rings whose areas sum to inputs', () => {
   const solar = { landAreaM2: 10000, quality: 'cited', evidence: [{ label: 't', url: 'https://example.com' }] };

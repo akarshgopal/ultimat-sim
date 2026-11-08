@@ -146,3 +146,50 @@ test('buildSites reads presets and frozen PVGIS yields from the repo data', () =
   assert.ok(mej.coastal);
   close(mej.pvKWhPerKWpDay, 1923.52 / 365, 1e-3);
 });
+
+test('inland brine hubs host only brine recipes', () => {
+  const hub = { id: 'hub', name: 'Hub', kind: 'brine-hub', coastal: false, brineAssayId: 'b1', pvKWhPerKWpDay: 7, landUsdPerHa: 1 };
+  const sites = [...SITES, hub];
+  const byId = new Map(sites.map(s => [s.id, s]));
+  assert.equal(C.siteAllowsPathway(hub, good, byId), false);
+  assert.equal(C.siteAllowsPathway(hub, brine, byId), true);
+  const result = C.simulateCompany({ pathways: [good], sites, markets: MARKETS, config: { years: 8 } });
+  assert.ok(result.plants.length > 0);
+  assert.ok(result.plants.every(p => p.siteId !== 'hub'));
+});
+
+test('per-site PV ceiling spreads plants across sites', () => {
+  const capGWp = 0.002;
+  const result = run({ build: { maxPvGWpPerSite: capGWp }, finance: { initialEquityUsd: 1e9 } });
+  const bySite = {};
+  for (const p of result.plants) bySite[p.siteId] = (bySite[p.siteId] || 0) + p.pvKWp;
+  for (const kWp of Object.values(bySite)) assert.ok(kWp <= capGWp * 1e6 + 1e-6);
+  assert.ok(Object.keys(bySite).length >= 2);
+});
+
+test('products in one market group share one demand ceiling', () => {
+  const twin = { ...good, id: 'twin', product: 'widget-sep' };
+  const markets = { ...MARKETS, 'widget-sep': { ...MARKETS.widget } };
+  const config = {
+    years: 15,
+    marketGroups: { 'widget-sep': 'widget' },
+    build: { maxMarketShare: 0.02 },
+    finance: { initialEquityUsd: 1e9 },
+  };
+  const result = C.simulateCompany({ pathways: [good, twin], sites: SITES, markets, config });
+  for (const year of result.timeline) {
+    const t = (year.outputTByProduct.widget || 0) + (year.outputTByProduct['widget-sep'] || 0);
+    assert.ok(t <= 0.02 * 1e6 + 1e-6, `${year.year}: ${t} t`);
+  }
+  assert.equal(C.marketGroupOf('ndpr-oxide-separated'), 'ndpr-oxide');
+});
+
+test('coproducts are held to the market-share ceiling too', () => {
+  const withCo = { ...good, id: 'withco', coproducts: [{ id: 'gadget', product: 'gadget', kgPerKg: 5, usdPerKg: 1 }] };
+  const result = C.simulateCompany({
+    pathways: [withCo], sites: SITES, markets: MARKETS,
+    config: { years: 15, build: { maxMarketShare: 0.02 }, finance: { initialEquityUsd: 1e9 } },
+  });
+  assert.ok(result.plants.length > 0);
+  for (const year of result.timeline) assert.ok((year.shareByProduct.gadget || 0) <= 0.02 + 1e-9);
+});

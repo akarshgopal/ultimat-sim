@@ -123,7 +123,65 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Dead Sea brine minerals hub (DLE Li, salt, Br2, Mg, potash, chlor-alkali, NH3) at no map site; one of 2 size-to-target primaries (whole plant normalized to lithium); case buys grid power (no PV CAPEX in case); on-site intake keeps the case screening $/kg as usdPerKg; demo scale 7.979853 kg/day."
+      "notes": "Dead Sea brine minerals hub (DLE Li, salt, Br2, Mg, potash, chlor-alkali, NH3) at no map site; one of 2 size-to-target primaries (whole plant normalized to lithium); case buys grid power (no PV CAPEX in case); on-site intake keeps the case screening $/kg as usdPerKg; demo scale 7.979853 kg/day.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"brine","unit":"material-source","kind":"source","label":"Brine"},
+          {"id":"brine-pump","unit":"intake-pump","kind":"converter","label":"Brine pump","kWhPerKg":4.04,"capexUsdPerKgDay":3540},
+          {"id":"salt-feed","unit":"material-source","kind":"source","label":"Salt feed"},
+          {"id":"water","unit":"material-source","kind":"source","label":"Water"},
+          {"id":"air","unit":"material-source","kind":"source","label":"Air"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"minerals","unit":"brine-minerals","kind":"converter","label":"Minerals","kWhPerKg":627,"capexUsdPerKgDay":150000},
+          {"id":"chlor-alkali","unit":"chlor-alkali","kind":"converter","label":"Chlor alkali","kWhPerKg":59.3,"capexUsdPerKgDay":35600},
+          {"id":"bromine-recovery","unit":"bromine-recovery","kind":"converter","label":"Bromine recovery","kWhPerKg":9.47,"capexUsdPerKgDay":37900},
+          {"id":"asu","unit":"asu","kind":"converter","label":"ASU","kWhPerKg":0.692,"capexUsdPerKgDay":1110},
+          {"id":"ammonia","unit":"ammonia","kind":"converter","label":"Ammonia","kWhPerKg":2.02,"capexUsdPerKgDay":6730},
+          {"id":"lithium","unit":"material-sink","kind":"sink","label":"Lithium","disposition":"product"},
+          {"id":"magnesium","unit":"material-sink","kind":"sink","label":"Magnesium","disposition":"coproduct"},
+          {"id":"potash","unit":"material-sink","kind":"sink","label":"Potash","disposition":"coproduct"},
+          {"id":"gypsum","unit":"material-sink","kind":"sink","label":"Gypsum","disposition":"coproduct"},
+          {"id":"salt","unit":"material-sink","kind":"sink","label":"Salt","disposition":"coproduct"},
+          {"id":"raffinate","unit":"material-sink","kind":"sink","label":"Raffinate","disposition":"waste"},
+          {"id":"caustic","unit":"material-sink","kind":"sink","label":"Caustic","disposition":"coproduct"},
+          {"id":"bromine","unit":"material-sink","kind":"sink","label":"Bromine","disposition":"coproduct"},
+          {"id":"recovered-salt","unit":"material-sink","kind":"sink","label":"Recovered salt","disposition":"coproduct"},
+          {"id":"ammonia-product","unit":"material-sink","kind":"sink","label":"Ammonia product","disposition":"coproduct"},
+          {"id":"oxygen","unit":"material-sink","kind":"sink","label":"Oxygen","disposition":"coproduct"},
+          {"id":"offgas","unit":"material-sink","kind":"sink","label":"Offgas","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"brine","to":"brine-pump","kind":"material","kgPerKg":12500,"substances":[["H2O",9100],["Cl-",2270],["Mg+2",441]]},
+          {"from":"brine-pump","to":"minerals","kind":"material","kgPerKg":12500,"substances":[["H2O",9100],["Cl-",2270],["Mg+2",441]]},
+          {"from":"salt-feed","to":"chlor-alkali","kind":"material","kgPerKg":34.6,"substances":[["NaCl",34.6]]},
+          {"from":"water","to":"chlor-alkali","kind":"material","kgPerKg":10.7,"substances":[["H2O",10.7]]},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":3.69,"substances":[["N2",2.82],["O2",0.865]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":702},
+          {"from":"power-bus","to":"brine-pump","kind":"electricity","kWhPerKg":4.04},
+          {"from":"power-bus","to":"minerals","kind":"electricity","kWhPerKg":627},
+          {"from":"power-bus","to":"chlor-alkali","kind":"electricity","kWhPerKg":59.3},
+          {"from":"power-bus","to":"bromine-recovery","kind":"electricity","kWhPerKg":9.47},
+          {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.692},
+          {"from":"power-bus","to":"ammonia","kind":"electricity","kWhPerKg":2.02},
+          {"from":"minerals","to":"lithium","kind":"material","kgPerKg":1,"substances":[["LiCl",1]]},
+          {"from":"minerals","to":"magnesium","kind":"material","kgPerKg":864,"substances":[["MgCl2",864]]},
+          {"from":"minerals","to":"potash","kind":"material","kgPerKg":104,"substances":[["KCl",104]]},
+          {"from":"minerals","to":"gypsum","kind":"material","kgPerKg":4.97,"substances":[["CaSO4",4.97]]},
+          {"from":"minerals","to":"salt","kind":"material","kgPerKg":500,"substances":[["NaCl",500]]},
+          {"from":"minerals","to":"raffinate","kind":"material","kgPerKg":11000,"substances":[["H2O",9100],["Cl-",1280],["Mg+2",221]]},
+          {"from":"minerals","to":"bromine-recovery","kind":"material","kgPerKg":61,"substances":[["NaBr",61]]},
+          {"from":"chlor-alkali","to":"bromine-recovery","kind":"material","kgPerKg":21,"substances":[["Cl2",21]]},
+          {"from":"chlor-alkali","to":"caustic","kind":"material","kgPerKg":23.7,"substances":[["NaOH",23.7]]},
+          {"from":"chlor-alkali","to":"ammonia","kind":"material","kgPerKg":0.598,"substances":[["H2",0.598]]},
+          {"from":"bromine-recovery","to":"bromine","kind":"material","kgPerKg":47.4,"substances":[["Br2",47.4]]},
+          {"from":"bromine-recovery","to":"recovered-salt","kind":"material","kgPerKg":34.6,"substances":[["NaCl",34.6]]},
+          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":2.77,"substances":[["N2",2.77]]},
+          {"from":"asu","to":"oxygen","kind":"material","kgPerKg":0.821,"substances":[["O2",0.821]]},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0997,"substances":[["N2",0.0565],["O2",0.0432]]},
+          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":3.37,"substances":[["NH3",3.37]]}
+        ]
+      }
     },
     {
       "id": "abundance-salt",
@@ -234,7 +292,65 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Dead Sea brine minerals hub (DLE Li, salt, Br2, Mg, potash, chlor-alkali, NH3) at no map site; one of 2 size-to-target primaries (whole plant normalized to salt); case buys grid power (no PV CAPEX in case); on-site intake keeps the case screening $/kg as usdPerKg."
+      "notes": "Dead Sea brine minerals hub (DLE Li, salt, Br2, Mg, potash, chlor-alkali, NH3) at no map site; one of 2 size-to-target primaries (whole plant normalized to salt); case buys grid power (no PV CAPEX in case); on-site intake keeps the case screening $/kg as usdPerKg.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"brine","unit":"material-source","kind":"source","label":"Brine"},
+          {"id":"brine-pump","unit":"intake-pump","kind":"converter","label":"Brine pump","kWhPerKg":0.00756,"capexUsdPerKgDay":6.61},
+          {"id":"salt-feed","unit":"material-source","kind":"source","label":"Salt feed"},
+          {"id":"water","unit":"material-source","kind":"source","label":"Water"},
+          {"id":"air","unit":"material-source","kind":"source","label":"Air"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"minerals","unit":"brine-minerals","kind":"converter","label":"Minerals","kWhPerKg":1.17,"capexUsdPerKgDay":281},
+          {"id":"chlor-alkali","unit":"chlor-alkali","kind":"converter","label":"Chlor alkali","kWhPerKg":0.111,"capexUsdPerKgDay":66.5},
+          {"id":"bromine-recovery","unit":"bromine-recovery","kind":"converter","label":"Bromine recovery","kWhPerKg":0.0177,"capexUsdPerKgDay":70.8},
+          {"id":"asu","unit":"asu","kind":"converter","label":"ASU","kWhPerKg":0.00129,"capexUsdPerKgDay":2.07},
+          {"id":"ammonia","unit":"ammonia","kind":"converter","label":"Ammonia","kWhPerKg":0.00377,"capexUsdPerKgDay":12.6},
+          {"id":"lithium","unit":"material-sink","kind":"sink","label":"Lithium","disposition":"coproduct"},
+          {"id":"magnesium","unit":"material-sink","kind":"sink","label":"Magnesium","disposition":"coproduct"},
+          {"id":"potash","unit":"material-sink","kind":"sink","label":"Potash","disposition":"coproduct"},
+          {"id":"gypsum","unit":"material-sink","kind":"sink","label":"Gypsum","disposition":"coproduct"},
+          {"id":"salt","unit":"material-sink","kind":"sink","label":"Salt","disposition":"product"},
+          {"id":"raffinate","unit":"material-sink","kind":"sink","label":"Raffinate","disposition":"waste"},
+          {"id":"caustic","unit":"material-sink","kind":"sink","label":"Caustic","disposition":"coproduct"},
+          {"id":"bromine","unit":"material-sink","kind":"sink","label":"Bromine","disposition":"coproduct"},
+          {"id":"recovered-salt","unit":"material-sink","kind":"sink","label":"Recovered salt","disposition":"product"},
+          {"id":"ammonia-product","unit":"material-sink","kind":"sink","label":"Ammonia product","disposition":"coproduct"},
+          {"id":"oxygen","unit":"material-sink","kind":"sink","label":"Oxygen","disposition":"coproduct"},
+          {"id":"offgas","unit":"material-sink","kind":"sink","label":"Offgas","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"brine","to":"brine-pump","kind":"material","kgPerKg":23.4,"substances":[["H2O",17],["Cl-",4.25],["Mg+2",0.825]]},
+          {"from":"brine-pump","to":"minerals","kind":"material","kgPerKg":23.4,"substances":[["H2O",17],["Cl-",4.25],["Mg+2",0.825]]},
+          {"from":"salt-feed","to":"chlor-alkali","kind":"material","kgPerKg":0.0648,"substances":[["NaCl",0.0648]]},
+          {"from":"water","to":"chlor-alkali","kind":"material","kgPerKg":0.02,"substances":[["H2O",0.02]]},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":0.0069,"substances":[["N2",0.00528],["O2",0.00162]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":1.31},
+          {"from":"power-bus","to":"brine-pump","kind":"electricity","kWhPerKg":0.00756},
+          {"from":"power-bus","to":"minerals","kind":"electricity","kWhPerKg":1.17},
+          {"from":"power-bus","to":"chlor-alkali","kind":"electricity","kWhPerKg":0.111},
+          {"from":"power-bus","to":"bromine-recovery","kind":"electricity","kWhPerKg":0.0177},
+          {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.00129},
+          {"from":"power-bus","to":"ammonia","kind":"electricity","kWhPerKg":0.00377},
+          {"from":"minerals","to":"lithium","kind":"material","kgPerKg":0.00187,"substances":[["LiCl",0.00187]]},
+          {"from":"minerals","to":"magnesium","kind":"material","kgPerKg":1.61,"substances":[["MgCl2",1.61]]},
+          {"from":"minerals","to":"potash","kind":"material","kgPerKg":0.194,"substances":[["KCl",0.194]]},
+          {"from":"minerals","to":"gypsum","kind":"material","kgPerKg":0.0093,"substances":[["CaSO4",0.0093]]},
+          {"from":"minerals","to":"salt","kind":"material","kgPerKg":0.935,"substances":[["NaCl",0.935]]},
+          {"from":"minerals","to":"raffinate","kind":"material","kgPerKg":20.6,"substances":[["H2O",17],["Cl-",2.39],["Mg+2",0.412]]},
+          {"from":"minerals","to":"bromine-recovery","kind":"material","kgPerKg":0.114,"substances":[["NaBr",0.114]]},
+          {"from":"chlor-alkali","to":"bromine-recovery","kind":"material","kgPerKg":0.0393,"substances":[["Cl2",0.0393]]},
+          {"from":"chlor-alkali","to":"caustic","kind":"material","kgPerKg":0.0443,"substances":[["NaOH",0.0443]]},
+          {"from":"chlor-alkali","to":"ammonia","kind":"material","kgPerKg":0.00112,"substances":[["H2",0.00112]]},
+          {"from":"bromine-recovery","to":"bromine","kind":"material","kgPerKg":0.0885,"substances":[["Br2",0.0885]]},
+          {"from":"bromine-recovery","to":"recovered-salt","kind":"material","kgPerKg":0.0648,"substances":[["NaCl",0.0648]]},
+          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.00517,"substances":[["N2",0.00517]]},
+          {"from":"asu","to":"oxygen","kind":"material","kgPerKg":0.00154,"substances":[["O2",0.00154]]},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.000186,"substances":[["N2",0.000106],["O2",0.0000808]]},
+          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":0.00629,"substances":[["NH3",0.00629]]}
+        ]
+      }
     },
     {
       "id": "bioforge",
@@ -295,7 +411,28 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.2172918,
       "quality": "screening",
-      "notes": "Gluconic acid + H2O2 from purchased dextrose (Bioforge) at us-marshall; highest-revenue sale (no size-to-target product); purchased dextrose; case buys grid power (no PV CAPEX in case)."
+      "notes": "Gluconic acid + H2O2 from purchased dextrose (Bioforge) at us-marshall; highest-revenue sale (no size-to-target product); purchased dextrose; case buys grid power (no PV CAPEX in case).",
+      "flowsheet": {
+        "nodes": [
+          {"id":"dextrose","unit":"material-source","kind":"source","label":"Dextrose"},
+          {"id":"water","unit":"material-source","kind":"source","label":"Water"},
+          {"id":"oxygen","unit":"material-source","kind":"source","label":"Oxygen"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"electrical-bus","unit":"electrical-bus","kind":"bus","label":"Electrical bus"},
+          {"id":"bioforge","unit":"bioforge","kind":"converter","label":"Bioforge","kWhPerKg":0.05,"capexUsdPerKgDay":438},
+          {"id":"gluconic","unit":"material-sink","kind":"sink","label":"Gluconic","disposition":"product"},
+          {"id":"hydrogenPeroxide","unit":"material-sink","kind":"sink","label":"Hydrogen peroxide","disposition":"coproduct"}
+        ],
+        "edges": [
+          {"from":"dextrose","to":"bioforge","kind":"material","kgPerKg":0.918,"substances":[["C6H12O6",0.918]]},
+          {"from":"water","to":"bioforge","kind":"material","kgPerKg":0.0918,"substances":[["H2O",0.0918]]},
+          {"from":"oxygen","to":"bioforge","kind":"material","kgPerKg":0.163,"substances":[["O2",0.163]]},
+          {"from":"power","to":"electrical-bus","kind":"electricity","kWhPerKg":0.05},
+          {"from":"electrical-bus","to":"bioforge","kind":"electricity","kWhPerKg":0.05},
+          {"from":"bioforge","to":"gluconic","kind":"material","kgPerKg":1,"substances":[["C6H12O7",1]]},
+          {"from":"bioforge","to":"hydrogenPeroxide","kind":"material","kgPerKg":0.173,"substances":[["H2O2",0.173]]}
+        ]
+      }
     },
     {
       "id": "cement",
@@ -341,7 +478,26 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Clinker from purchased limestone + clay at chile-mejillones-cement; size-to-target product; electricity-as-total-energy proxy."
+      "notes": "Clinker from purchased limestone + clay at chile-mejillones-cement; size-to-target product; electricity-as-total-energy proxy.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"limestone-feed","unit":"material-source","kind":"source","label":"Limestone feed"},
+          {"id":"clay-feed","unit":"material-source","kind":"source","label":"Clay feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"cement","unit":"cement","kind":"converter","label":"Cement","kWhPerKg":1.05,"capexUsdPerKgDay":63},
+          {"id":"cement-product","unit":"material-sink","kind":"sink","label":"Cement product","disposition":"product"},
+          {"id":"process-co2","unit":"material-sink","kind":"sink","label":"Process CO₂","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"limestone-feed","to":"cement","kind":"material","kgPerKg":1.18,"substances":[["CaCO3",1.18]]},
+          {"from":"clay-feed","to":"cement","kind":"material","kgPerKg":0.337,"substances":[["SiO2",0.337]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":1.05},
+          {"from":"power-bus","to":"cement","kind":"electricity","kWhPerKg":1.05},
+          {"from":"cement","to":"cement-product","kind":"material","kgPerKg":1,"substances":[["PortlandCement",1]]},
+          {"from":"cement","to":"process-co2","kind":"material","kgPerKg":0.52,"substances":[["CO2",0.52]]}
+        ]
+      }
     },
     {
       "id": "coastal",
@@ -402,7 +558,56 @@
       "assetLifeYears": 12.93023,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
-      "notes": "Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria at almeria-pvgis-2026-09-05; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day."
+      "notes": "Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria at almeria-pvgis-2026-09-05; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"air","unit":"material-source","kind":"source","label":"Air"},
+          {"id":"air-blower","unit":"gas-blower","kind":"converter","label":"Air blower","kWhPerKg":3.67,"capexUsdPerKgDay":6610},
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"seawater-pump","unit":"intake-pump","kind":"converter","label":"Seawater pump","kWhPerKg":0.00399,"capexUsdPerKgDay":4.19},
+          {"id":"electricity","unit":"electricity-source","kind":"electricity","label":"Electricity"},
+          {"id":"heat","unit":"heat-source","kind":"heat","label":"Heat"},
+          {"id":"consumables","unit":"consumable-source","kind":"source","label":"Consumables"},
+          {"id":"dac","unit":"dac-solid","kind":"converter","label":"DAC","kWhPerKg":1.37,"capexUsdPerKgDay":16000},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0139,"capexUsdPerKgDay":3000},
+          {"id":"electrical-bus","unit":"electrical-bus","kind":"bus","label":"Electrical bus"},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":27.6,"capexUsdPerKgDay":65000},
+          {"id":"sabatier","unit":"sabatier","kind":"converter","label":"Sabatier","kWhPerKg":1,"capexUsdPerKgDay":6000},
+          {"id":"depleted-air","unit":"material-sink","kind":"sink","label":"Depleted air","disposition":"waste"},
+          {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"oxygen","unit":"material-sink","kind":"sink","label":"Oxygen","disposition":"waste"},
+          {"id":"methane","unit":"material-sink","kind":"sink","label":"Methane","disposition":"product"},
+          {"id":"sabatier-water","unit":"material-sink","kind":"sink","label":"Sabatier water","disposition":"coproduct"},
+          {"id":"spent-media","unit":"consumable-sink","kind":"sink","label":"Spent media","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"air","to":"air-blower","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]]},
+          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]]},
+          {"from":"heat","to":"dac","kind":"heat","kWhPerKg":4.11},
+          {"from":"consumables","to":"dac","kind":"material","kgPerKg":0.0549},
+          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":10.2,"substances":[["H2O",9.87],["Cl-",0.207],["Na+",0.115]]},
+          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":10.2,"substances":[["H2O",9.87],["Cl-",0.207],["Na+",0.115]]},
+          {"from":"electricity","to":"electrical-bus","kind":"electricity","kWhPerKg":33.7},
+          {"from":"electrical-bus","to":"air-blower","kind":"electricity","kWhPerKg":3.67},
+          {"from":"electrical-bus","to":"seawater-pump","kind":"electricity","kWhPerKg":0.00399},
+          {"from":"electrical-bus","to":"dac","kind":"electricity","kWhPerKg":1.37},
+          {"from":"electrical-bus","to":"swro","kind":"electricity","kWhPerKg":0.0139},
+          {"from":"electrical-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":27.6},
+          {"from":"electrical-bus","to":"sabatier","kind":"electricity","kWhPerKg":1},
+          {"from":"dac","to":"sabatier","kind":"material","kgPerKg":2.74,"substances":[["CO2",2.74]]},
+          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]]},
+          {"from":"dac","to":"waste-heat","kind":"heat","kWhPerKg":4.11},
+          {"from":"sabatier","to":"waste-heat","kind":"heat","kWhPerKg":2.86},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.49,"substances":[["H2O",4.49]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.75,"substances":[["H2O",5.38],["Cl-",0.207],["Na+",0.115]]},
+          {"from":"electrolyzer","to":"sabatier","kind":"material","kgPerKg":0.503,"substances":[["H2",0.503]]},
+          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":3.99,"substances":[["O2",3.99]]},
+          {"from":"sabatier","to":"methane","kind":"material","kgPerKg":1,"substances":[["CH4",1]]},
+          {"from":"sabatier","to":"sabatier-water","kind":"material","kgPerKg":2.25,"substances":[["H2O",2.25]]},
+          {"from":"dac","to":"spent-media","kind":"material","kgPerKg":0.0549}
+        ]
+      }
     },
     {
       "id": "cu-ew",
@@ -440,7 +645,22 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Copper cathode by SX-EW from purchased PLS at chile-mejillones-cu-ew; size-to-target product; purchased pls-copper."
+      "notes": "Copper cathode by SX-EW from purchased PLS at chile-mejillones-cu-ew; size-to-target product; purchased pls-copper.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"pls-feed","unit":"material-source","kind":"source","label":"PLS feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"copper-ew","unit":"copper-ew","kind":"converter","label":"Copper EW","kWhPerKg":2.2,"capexUsdPerKgDay":788},
+          {"id":"cathode-product","unit":"material-sink","kind":"sink","label":"Cathode product","disposition":"product"}
+        ],
+        "edges": [
+          {"from":"pls-feed","to":"copper-ew","kind":"material","kgPerKg":1,"substances":[["Cu",1]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":2.2},
+          {"from":"power-bus","to":"copper-ew","kind":"electricity","kWhPerKg":2.2},
+          {"from":"copper-ew","to":"cathode-product","kind":"material","kgPerKg":1,"substances":[["Cu",1]]}
+        ]
+      }
     },
     {
       "id": "float-glass",
@@ -494,7 +714,28 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Float glass from purchased sand, soda ash + limestone at chile-mejillones-float-glass; size-to-target product; electricity-as-total-energy proxy."
+      "notes": "Float glass from purchased sand, soda ash + limestone at chile-mejillones-float-glass; size-to-target product; electricity-as-total-energy proxy.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"sand-feed","unit":"material-source","kind":"source","label":"Sand feed"},
+          {"id":"soda-feed","unit":"material-source","kind":"source","label":"Soda feed"},
+          {"id":"limestone-feed","unit":"material-source","kind":"source","label":"Limestone feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"float-glass","unit":"float-glass","kind":"converter","label":"Float glass","kWhPerKg":2.5,"capexUsdPerKgDay":315},
+          {"id":"glass","unit":"material-sink","kind":"sink","label":"Glass","disposition":"product"},
+          {"id":"process-co2","unit":"material-sink","kind":"sink","label":"Process CO₂","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"sand-feed","to":"float-glass","kind":"material","kgPerKg":0.65,"substances":[["SiO2",0.65]]},
+          {"from":"soda-feed","to":"float-glass","kind":"material","kgPerKg":0.2,"substances":[["Na2CO3",0.2]]},
+          {"from":"limestone-feed","to":"float-glass","kind":"material","kgPerKg":0.21,"substances":[["CaCO3",0.21]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":2.5},
+          {"from":"power-bus","to":"float-glass","kind":"electricity","kWhPerKg":2.5},
+          {"from":"float-glass","to":"glass","kind":"material","kgPerKg":1,"substances":[["FloatGlass",1]]},
+          {"from":"float-glass","to":"process-co2","kind":"material","kgPerKg":0.06,"substances":[["CO2",0.06]]}
+        ]
+      }
     },
     {
       "id": "ft-liquids",
@@ -540,7 +781,26 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "FT diesel from purchased H2 + CO2 at chile-mejillones-ft-liquids; size-to-target product; purchased hydrogen-feed, co2-feed."
+      "notes": "FT diesel from purchased H2 + CO2 at chile-mejillones-ft-liquids; size-to-target product; purchased hydrogen-feed, co2-feed.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"hydrogen-feed","unit":"material-source","kind":"source","label":"Hydrogen feed"},
+          {"id":"co2-feed","unit":"material-source","kind":"source","label":"CO₂ feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"ft-liquids","unit":"ft-liquids","kind":"converter","label":"FT liquids","kWhPerKg":0.22,"capexUsdPerKgDay":465},
+          {"id":"diesel-product","unit":"material-sink","kind":"sink","label":"Diesel product","disposition":"product"},
+          {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"hydrogen-feed","to":"ft-liquids","kind":"material","kgPerKg":0.438,"substances":[["H2",0.438]]},
+          {"from":"co2-feed","to":"ft-liquids","kind":"material","kgPerKg":3.1,"substances":[["CO2",3.1]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.22},
+          {"from":"power-bus","to":"ft-liquids","kind":"electricity","kWhPerKg":0.22},
+          {"from":"ft-liquids","to":"diesel-product","kind":"material","kgPerKg":1,"substances":[["C12H26",1]]},
+          {"from":"ft-liquids","to":"process-water","kind":"material","kgPerKg":2.54,"substances":[["H2O",2.54]]}
+        ]
+      }
     },
     {
       "id": "green-ammonia",
@@ -593,7 +853,43 @@
       "assetLifeYears": 18.01601,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Green ammonia (SWRO + PEM + ASU + Haber-Bosch) at namibia-walvis-bay; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg."
+      "notes": "Green ammonia (SWRO + PEM + ASU + Haber-Bosch) at namibia-walvis-bay; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"air","unit":"material-source","kind":"source","label":"Air"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.00583,"capexUsdPerKgDay":2.37},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":9.23,"capexUsdPerKgDay":548},
+          {"id":"asu","unit":"asu","kind":"converter","label":"ASU","kWhPerKg":0.206,"capexUsdPerKgDay":313},
+          {"id":"ammonia","unit":"ammonia","kind":"converter","label":"Ammonia","kWhPerKg":0.6,"capexUsdPerKgDay":1900},
+          {"id":"ammonia-product","unit":"material-sink","kind":"sink","label":"Ammonia product","disposition":"product"},
+          {"id":"electrolyzer-oxygen","unit":"material-sink","kind":"sink","label":"Electrolyzer oxygen","disposition":"coproduct"},
+          {"id":"asu-oxygen","unit":"material-sink","kind":"sink","label":"ASU oxygen","disposition":"coproduct"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"offgas","unit":"material-sink","kind":"sink","label":"Offgas","disposition":"waste"},
+          {"id":"waterReject","unit":"material-sink","kind":"sink","label":"Water reject","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":3.79,"substances":[["H2O",3.66],["Cl-",0.0739],["Na+",0.0411]]},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":1.67,"substances":[["H2O",1.67]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":2.13,"substances":[["H2O",2],["Cl-",0.0735],["Na+",0.041]]},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":1.1,"substances":[["N2",0.839],["O2",0.257]]},
+          {"from":"electrolyzer","to":"ammonia","kind":"material","kgPerKg":0.178,"substances":[["H2",0.178]]},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":1.41,"substances":[["O2",1.41]]},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.0793,"substances":[["H2O",0.0787],["Cl-",0.000332],["Na+",0.000185]]},
+          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.822,"substances":[["N2",0.822]]},
+          {"from":"asu","to":"asu-oxygen","kind":"material","kgPerKg":0.244,"substances":[["O2",0.244]]},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0304,"substances":[["N2",0.0168],["O2",0.0129],["CO2",0.000716]]},
+          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":1,"substances":[["NH3",1]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":10},
+          {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":9.23},
+          {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.206},
+          {"from":"power-bus","to":"ammonia","kind":"electricity","kWhPerKg":0.6},
+          {"from":"power-bus","to":"swro","kind":"electricity","kWhPerKg":0.00583}
+        ]
+      }
     },
     {
       "id": "green-ft",
@@ -646,7 +942,38 @@
       "assetLifeYears": 12.39899,
       "infiniteSourceShare": 0.7511615,
       "quality": "screening",
-      "notes": "Green FT diesel (SWRO + PEM H2, purchased CO2) at chile-mejillones-green-ft; size-to-target product; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg."
+      "notes": "Green FT diesel (SWRO + PEM H2, purchased CO2) at chile-mejillones-green-ft; size-to-target product; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"co2-feed","unit":"material-source","kind":"source","label":"CO₂ feed"},
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0144,"capexUsdPerKgDay":6.47},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":22.8,"capexUsdPerKgDay":1490},
+          {"id":"ft-liquids","unit":"ft-liquids","kind":"converter","label":"FT liquids","kWhPerKg":0.22,"capexUsdPerKgDay":465},
+          {"id":"diesel-product","unit":"material-sink","kind":"sink","label":"Diesel product","disposition":"product"},
+          {"id":"electrolyzer-oxygen","unit":"material-sink","kind":"sink","label":"Electrolyzer oxygen","disposition":"coproduct"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"waterReject","unit":"material-sink","kind":"sink","label":"Water reject","disposition":"waste"},
+          {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"co2-feed","to":"ft-liquids","kind":"material","kgPerKg":3.1,"substances":[["CO2",3.1]]},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":9.36,"substances":[["H2O",9.03],["Cl-",0.181],["Na+",0.101]]},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.11,"substances":[["H2O",4.11]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.25,"substances":[["H2O",4.93],["Cl-",0.18],["Na+",0.1]]},
+          {"from":"electrolyzer","to":"ft-liquids","kind":"material","kgPerKg":0.438,"substances":[["H2",0.438]]},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":3.48,"substances":[["O2",3.48]]},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.196,"substances":[["H2O",0.194],["Cl-",0.000813],["Na+",0.000453]]},
+          {"from":"ft-liquids","to":"diesel-product","kind":"material","kgPerKg":1,"substances":[["C12H26",1]]},
+          {"from":"ft-liquids","to":"process-water","kind":"material","kgPerKg":2.54,"substances":[["H2O",2.54]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":23},
+          {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":22.8},
+          {"from":"power-bus","to":"ft-liquids","kind":"electricity","kWhPerKg":0.22},
+          {"from":"power-bus","to":"swro","kind":"electricity","kWhPerKg":0.0144}
+        ]
+      }
     },
     {
       "id": "green-h2-dri",
@@ -699,7 +1026,38 @@
       "assetLifeYears": 18.19832,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Green H2-DRI iron (SWRO + PEM H2, purchased ore) at chile-mejillones-green-h2-dri; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg."
+      "notes": "Green H2-DRI iron (SWRO + PEM H2, purchased ore) at chile-mejillones-green-h2-dri; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"iron-ore","unit":"material-source","kind":"source","label":"Iron ore"},
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.00178,"capexUsdPerKgDay":0.8},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":2.82,"capexUsdPerKgDay":185},
+          {"id":"dri","unit":"hydrogen-dri","kind":"converter","label":"DRI","kWhPerKg":0.7,"capexUsdPerKgDay":840},
+          {"id":"steel","unit":"material-sink","kind":"sink","label":"Steel","disposition":"product"},
+          {"id":"electrolyzer-oxygen","unit":"material-sink","kind":"sink","label":"Electrolyzer oxygen","disposition":"coproduct"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"waterReject","unit":"material-sink","kind":"sink","label":"Water reject","disposition":"waste"},
+          {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"iron-ore","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]]},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":1.16,"substances":[["H2O",1.12],["Cl-",0.0223],["Na+",0.0124]]},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":0.508,"substances":[["H2O",0.508]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":0.649,"substances":[["H2O",0.609],["Cl-",0.0222],["Na+",0.0124]]},
+          {"from":"electrolyzer","to":"dri","kind":"material","kgPerKg":0.0541,"substances":[["H2",0.0541]]},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":0.43,"substances":[["O2",0.43]]},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.0242,"substances":[["H2O",0.024],["Cl-",0.000101],["Na+",0.000056]]},
+          {"from":"dri","to":"steel","kind":"material","kgPerKg":1,"substances":[["Fe",1]]},
+          {"from":"dri","to":"process-water","kind":"material","kgPerKg":0.484,"substances":[["H2O",0.484]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":3.52},
+          {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":2.82},
+          {"from":"power-bus","to":"dri","kind":"electricity","kWhPerKg":0.7},
+          {"from":"power-bus","to":"swro","kind":"electricity","kWhPerKg":0.00178}
+        ]
+      }
     },
     {
       "id": "green-hydrogen",
@@ -744,7 +1102,31 @@
       "assetLifeYears": 10.04312,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Green hydrogen (SWRO + PEM electrolysis) at namibia-walvis-bay; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg."
+      "notes": "Green hydrogen (SWRO + PEM electrolysis) at namibia-walvis-bay; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0328,"capexUsdPerKgDay":13.4},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":52,"capexUsdPerKgDay":3090},
+          {"id":"hydrogen-product","unit":"material-sink","kind":"sink","label":"Hydrogen product","disposition":"product"},
+          {"id":"electrolyzer-oxygen","unit":"material-sink","kind":"sink","label":"Electrolyzer oxygen","disposition":"coproduct"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"waterReject","unit":"material-sink","kind":"sink","label":"Water reject","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":21.4,"substances":[["H2O",20.6],["Cl-",0.416],["Na+",0.232]]},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":9.38,"substances":[["H2O",9.38]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":12,"substances":[["H2O",11.2],["Cl-",0.414],["Na+",0.231]]},
+          {"from":"electrolyzer","to":"hydrogen-product","kind":"material","kgPerKg":1,"substances":[["H2",1]]},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":7.94,"substances":[["O2",7.94]]},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.447,"substances":[["H2O",0.443],["Cl-",0.00187],["Na+",0.00104]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":52},
+          {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":52},
+          {"from":"power-bus","to":"swro","kind":"electricity","kWhPerKg":0.0328}
+        ]
+      }
     },
     {
       "id": "green-mto",
@@ -797,7 +1179,45 @@
       "assetLifeYears": 13.15525,
       "infiniteSourceShare": 0.746005,
       "quality": "screening",
-      "notes": "Green ethylene via methanol-to-olefins (SWRO + PEM, purchased CO2) at chile-mejillones-green-mto; size-to-target product; electricity-as-total-energy proxy; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg."
+      "notes": "Green ethylene via methanol-to-olefins (SWRO + PEM, purchased CO2) at chile-mejillones-green-mto; size-to-target product; electricity-as-total-energy proxy; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"co2-feed","unit":"material-source","kind":"source","label":"CO₂ feed"},
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0142,"capexUsdPerKgDay":6.37},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":22.4,"capexUsdPerKgDay":1470},
+          {"id":"methanol","unit":"methanol","kind":"converter","label":"Methanol","kWhPerKg":1.14,"capexUsdPerKgDay":480},
+          {"id":"mto","unit":"mto","kind":"converter","label":"MTO","kWhPerKg":4,"capexUsdPerKgDay":192},
+          {"id":"ethylene-product","unit":"material-sink","kind":"sink","label":"Ethylene product","disposition":"product"},
+          {"id":"electrolyzer-oxygen","unit":"material-sink","kind":"sink","label":"Electrolyzer oxygen","disposition":"coproduct"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"waterReject","unit":"material-sink","kind":"sink","label":"Water reject","disposition":"waste"},
+          {"id":"methanol-water","unit":"material-sink","kind":"sink","label":"Methanol water","disposition":"waste"},
+          {"id":"mto-water","unit":"material-sink","kind":"sink","label":"MTO water","disposition":"waste"},
+          {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"co2-feed","to":"methanol","kind":"material","kgPerKg":3.14,"substances":[["CO2",3.14]]},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":9.22,"substances":[["H2O",8.89],["Cl-",0.178],["Na+",0.0991]]},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.05,"substances":[["H2O",4.04]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.17,"substances":[["H2O",4.85],["Cl-",0.177],["Na+",0.0986]]},
+          {"from":"electrolyzer","to":"methanol","kind":"material","kgPerKg":0.431,"substances":[["H2",0.431]]},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":3.42,"substances":[["O2",3.42]]},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.193,"substances":[["H2O",0.191],["Cl-",0.0008],["Na+",0.000446]]},
+          {"from":"methanol","to":"mto","kind":"material","kgPerKg":2.28,"substances":[["CH3OH",2.28]]},
+          {"from":"methanol","to":"methanol-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]]},
+          {"from":"methanol","to":"waste-heat","kind":"heat","kWhPerKg":0.982},
+          {"from":"mto","to":"ethylene-product","kind":"material","kgPerKg":1,"substances":[["C2H4",1]]},
+          {"from":"mto","to":"mto-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":27.6},
+          {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":22.4},
+          {"from":"power-bus","to":"methanol","kind":"electricity","kWhPerKg":1.14},
+          {"from":"power-bus","to":"mto","kind":"electricity","kWhPerKg":4},
+          {"from":"power-bus","to":"swro","kind":"electricity","kWhPerKg":0.0142}
+        ]
+      }
     },
     {
       "id": "green-urea",
@@ -858,7 +1278,50 @@
       "assetLifeYears": 18.85149,
       "infiniteSourceShare": 0.7910646,
       "quality": "screening",
-      "notes": "Green urea (SWRO + PEM + ASU + NH3, purchased CO2) at namibia-walvis-bay-green-urea; size-to-target product; electricity-as-total-energy proxy; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg."
+      "notes": "Green urea (SWRO + PEM + ASU + NH3, purchased CO2) at namibia-walvis-bay-green-urea; size-to-target product; electricity-as-total-energy proxy; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"air","unit":"material-source","kind":"source","label":"Air"},
+          {"id":"co2-feed","unit":"material-source","kind":"source","label":"CO₂ feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.00331,"capexUsdPerKgDay":1.35},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":5.24,"capexUsdPerKgDay":311},
+          {"id":"asu","unit":"asu","kind":"converter","label":"ASU","kWhPerKg":0.117,"capexUsdPerKgDay":177},
+          {"id":"ammonia","unit":"ammonia","kind":"converter","label":"Ammonia","kWhPerKg":0.34,"capexUsdPerKgDay":1080},
+          {"id":"urea","unit":"urea","kind":"converter","label":"Urea","kWhPerKg":0.8,"capexUsdPerKgDay":1140},
+          {"id":"urea-product","unit":"material-sink","kind":"sink","label":"Urea product","disposition":"product"},
+          {"id":"electrolyzer-oxygen","unit":"material-sink","kind":"sink","label":"Electrolyzer oxygen","disposition":"coproduct"},
+          {"id":"asu-oxygen","unit":"material-sink","kind":"sink","label":"ASU oxygen","disposition":"coproduct"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"offgas","unit":"material-sink","kind":"sink","label":"Offgas","disposition":"waste"},
+          {"id":"waterReject","unit":"material-sink","kind":"sink","label":"Water reject","disposition":"waste"},
+          {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":2.15,"substances":[["H2O",2.08],["Cl-",0.0419],["Na+",0.0233]]},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":0.945,"substances":[["H2O",0.945]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":1.21,"substances":[["H2O",1.13],["Cl-",0.0417],["Na+",0.0232]]},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":0.622,"substances":[["N2",0.476],["O2",0.146]]},
+          {"from":"electrolyzer","to":"ammonia","kind":"material","kgPerKg":0.101,"substances":[["H2",0.101]]},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":0.799,"substances":[["O2",0.799]]},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.045,"substances":[["H2O",0.0447],["Cl-",0.000189],["Na+",0.000105]]},
+          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.466,"substances":[["N2",0.466]]},
+          {"from":"asu","to":"asu-oxygen","kind":"material","kgPerKg":0.139,"substances":[["O2",0.139]]},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0172,"substances":[["N2",0.00952],["O2",0.00729],["CO2",0.000406]]},
+          {"from":"ammonia","to":"urea","kind":"material","kgPerKg":0.567,"substances":[["NH3",0.567]]},
+          {"from":"co2-feed","to":"urea","kind":"material","kgPerKg":0.733,"substances":[["CO2",0.733]]},
+          {"from":"urea","to":"urea-product","kind":"material","kgPerKg":1,"substances":[["Urea",1]]},
+          {"from":"urea","to":"process-water","kind":"material","kgPerKg":0.3,"substances":[["H2O",0.3]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":6.5},
+          {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":5.24},
+          {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.117},
+          {"from":"power-bus","to":"ammonia","kind":"electricity","kWhPerKg":0.34},
+          {"from":"power-bus","to":"urea","kind":"electricity","kWhPerKg":0.8},
+          {"from":"power-bus","to":"swro","kind":"electricity","kWhPerKg":0.00331}
+        ]
+      }
     },
     {
       "id": "h2-dri",
@@ -904,7 +1367,26 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.9635101,
       "quality": "screening",
-      "notes": "H2-DRI iron from purchased H2 + iron ore at chile-mejillones-h2-dri; size-to-target product; purchased hydrogen-feed."
+      "notes": "H2-DRI iron from purchased H2 + iron ore at chile-mejillones-h2-dri; size-to-target product; purchased hydrogen-feed.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"iron-ore","unit":"material-source","kind":"source","label":"Iron ore"},
+          {"id":"hydrogen-feed","unit":"material-source","kind":"source","label":"Hydrogen feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"dri","unit":"hydrogen-dri","kind":"converter","label":"DRI","kWhPerKg":0.7,"capexUsdPerKgDay":840},
+          {"id":"steel","unit":"material-sink","kind":"sink","label":"Steel","disposition":"product"},
+          {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"iron-ore","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]]},
+          {"from":"hydrogen-feed","to":"dri","kind":"material","kgPerKg":0.0541,"substances":[["H2",0.0541]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.7},
+          {"from":"power-bus","to":"dri","kind":"electricity","kWhPerKg":0.7},
+          {"from":"dri","to":"steel","kind":"material","kgPerKg":1,"substances":[["Fe",1]]},
+          {"from":"dri","to":"process-water","kind":"material","kgPerKg":0.484,"substances":[["H2O",0.484]]}
+        ]
+      }
     },
     {
       "id": "maglut",
@@ -955,7 +1437,26 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Separated NdPr oxide by chromatography (purchased REO concentrate) at us-long-beach; size-to-target product; purchased mixed-reo-concentrate; demo scale 0.637401 kg/day."
+      "notes": "Separated NdPr oxide by chromatography (purchased REO concentrate) at us-long-beach; size-to-target product; purchased mixed-reo-concentrate; demo scale 0.637401 kg/day.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"concentrate","unit":"material-source","kind":"source","label":"Concentrate"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"chrom","unit":"ree-chromatography","kind":"converter","label":"Chrom","kWhPerKg":78.4,"capexUsdPerKgDay":429000},
+          {"id":"ndpr","unit":"material-sink","kind":"sink","label":"NDPR","disposition":"product"},
+          {"id":"dytb","unit":"material-sink","kind":"sink","label":"Dytb","disposition":"coproduct"},
+          {"id":"light-reo","unit":"material-sink","kind":"sink","label":"Light REO","disposition":"coproduct"},
+          {"id":"raffinate","unit":"material-sink","kind":"sink","label":"Raffinate","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"concentrate","to":"chrom","kind":"material","kgPerKg":17.2,"substances":[["Y2O3",11.1],["Dy2O3",1.32],["Nd2O3",0.9]]},
+          {"from":"power","to":"chrom","kind":"electricity","kWhPerKg":78.4},
+          {"from":"chrom","to":"ndpr","kind":"material","kgPerKg":1,"substances":[["Nd2O3",0.823],["Pr6O11",0.177]]},
+          {"from":"chrom","to":"dytb","kind":"material","kgPerKg":1.39,"substances":[["Dy2O3",1.21],["Tb4O7",0.182]]},
+          {"from":"chrom","to":"light-reo","kind":"material","kgPerKg":13.3,"substances":[["Y2O3",10.1],["Er2O3",0.687],["Yb2O3",0.539]]},
+          {"from":"chrom","to":"raffinate","kind":"material","kgPerKg":1.48,"substances":[["Y2O3",0.955],["Dy2O3",0.114],["Nd2O3",0.0774]]}
+        ]
+      }
     },
     {
       "id": "methanol",
@@ -1016,7 +1517,56 @@
       "assetLifeYears": 12.68982,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
-      "notes": "Coastal e-methanol (DAC + SWRO + PEM), Mejillones at mejillones-pvgis-2026-09-14; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day."
+      "notes": "Coastal e-methanol (DAC + SWRO + PEM), Mejillones at mejillones-pvgis-2026-09-14; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"air","unit":"material-source","kind":"source","label":"Air"},
+          {"id":"air-blower","unit":"gas-blower","kind":"converter","label":"Air blower","kWhPerKg":1.84,"capexUsdPerKgDay":2900},
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"seawater-pump","unit":"intake-pump","kind":"converter","label":"Seawater pump","kWhPerKg":0.0015,"capexUsdPerKgDay":1.38},
+          {"id":"electricity","unit":"electricity-source","kind":"electricity","label":"Electricity"},
+          {"id":"heat","unit":"heat-source","kind":"heat","label":"Heat"},
+          {"id":"consumables","unit":"consumable-source","kind":"source","label":"Consumables"},
+          {"id":"dac","unit":"dac-solid","kind":"converter","label":"DAC","kWhPerKg":0.687,"capexUsdPerKgDay":16000},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.00523,"capexUsdPerKgDay":3000},
+          {"id":"electrical-bus","unit":"electrical-bus","kind":"bus","label":"Electrical bus"},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":10.4,"capexUsdPerKgDay":65000},
+          {"id":"methanol","unit":"methanol","kind":"converter","label":"Methanol","kWhPerKg":0.5,"capexUsdPerKgDay":4000},
+          {"id":"depleted-air","unit":"material-sink","kind":"sink","label":"Depleted air","disposition":"waste"},
+          {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"oxygen","unit":"material-sink","kind":"sink","label":"Oxygen","disposition":"waste"},
+          {"id":"spent-media","unit":"consumable-sink","kind":"sink","label":"Spent media","disposition":"waste"},
+          {"id":"methanol-product","unit":"material-sink","kind":"sink","label":"Methanol product","disposition":"product"},
+          {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"coproduct"}
+        ],
+        "edges": [
+          {"from":"air","to":"air-blower","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]]},
+          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]]},
+          {"from":"heat","to":"dac","kind":"heat","kWhPerKg":2.06},
+          {"from":"consumables","to":"dac","kind":"material","kgPerKg":0.0275},
+          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":3.84,"substances":[["H2O",3.71],["Cl-",0.0741],["Na+",0.0413]]},
+          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":3.84,"substances":[["H2O",3.71],["Cl-",0.0741],["Na+",0.0413]]},
+          {"from":"electricity","to":"electrical-bus","kind":"electricity","kWhPerKg":13.4},
+          {"from":"electrical-bus","to":"air-blower","kind":"electricity","kWhPerKg":1.84},
+          {"from":"electrical-bus","to":"seawater-pump","kind":"electricity","kWhPerKg":0.0015},
+          {"from":"electrical-bus","to":"dac","kind":"electricity","kWhPerKg":0.687},
+          {"from":"electrical-bus","to":"swro","kind":"electricity","kWhPerKg":0.00523},
+          {"from":"electrical-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":10.4},
+          {"from":"electrical-bus","to":"methanol","kind":"electricity","kWhPerKg":0.5},
+          {"from":"dac","to":"methanol","kind":"material","kgPerKg":1.37,"substances":[["CO2",1.37]]},
+          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]]},
+          {"from":"dac","to":"waste-heat","kind":"heat","kWhPerKg":2.06},
+          {"from":"dac","to":"spent-media","kind":"material","kgPerKg":0.0275},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":1.69,"substances":[["H2O",1.69]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":2.16,"substances":[["H2O",2.02],["Cl-",0.0741],["Na+",0.0413]]},
+          {"from":"electrolyzer","to":"methanol","kind":"material","kgPerKg":0.189,"substances":[["H2",0.189]]},
+          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":1.5,"substances":[["O2",1.5]]},
+          {"from":"methanol","to":"methanol-product","kind":"material","kgPerKg":1,"substances":[["CH3OH",1]]},
+          {"from":"methanol","to":"process-water","kind":"material","kgPerKg":0.562,"substances":[["H2O",0.562]]},
+          {"from":"methanol","to":"waste-heat","kind":"heat","kWhPerKg":0.43}
+        ]
+      }
     },
     {
       "id": "mto",
@@ -1054,7 +1604,24 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Ethylene from purchased methanol (MTO) at chile-mejillones-mto; size-to-target product; electricity-as-total-energy proxy; purchased methanol-feed."
+      "notes": "Ethylene from purchased methanol (MTO) at chile-mejillones-mto; size-to-target product; electricity-as-total-energy proxy; purchased methanol-feed.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"methanol-feed","unit":"material-source","kind":"source","label":"Methanol feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"mto","unit":"mto","kind":"converter","label":"MTO","kWhPerKg":4,"capexUsdPerKgDay":192},
+          {"id":"ethylene-product","unit":"material-sink","kind":"sink","label":"Ethylene product","disposition":"product"},
+          {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"methanol-feed","to":"mto","kind":"material","kgPerKg":2.28,"substances":[["CH3OH",2.28]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":4},
+          {"from":"power-bus","to":"mto","kind":"electricity","kWhPerKg":4},
+          {"from":"mto","to":"ethylene-product","kind":"material","kgPerKg":1,"substances":[["C2H4",1]]},
+          {"from":"mto","to":"process-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]]}
+        ]
+      }
     },
     {
       "id": "ree",
@@ -1107,7 +1674,28 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.9940852,
       "quality": "screening",
-      "notes": "Mixed REO + NdPr from ionic-clay heap leach (Minacu) at brazil-minacu; highest-revenue sale (no size-to-target product); purchased ammonium-sulfate."
+      "notes": "Mixed REO + NdPr from ionic-clay heap leach (Minacu) at brazil-minacu; highest-revenue sale (no size-to-target product); purchased ammonium-sulfate.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"clay","unit":"material-source","kind":"source","label":"Clay"},
+          {"id":"lixiviant","unit":"material-source","kind":"source","label":"Lixiviant"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"iac-leach","unit":"iac-leach","kind":"converter","label":"Iac leach","kWhPerKg":9.4,"capexUsdPerKgDay":19500},
+          {"id":"ndpr","unit":"material-sink","kind":"sink","label":"NDPR","disposition":"coproduct"},
+          {"id":"other-reo","unit":"material-sink","kind":"sink","label":"Other REO","disposition":"product"},
+          {"id":"residue","unit":"material-sink","kind":"sink","label":"Residue","disposition":"waste"},
+          {"id":"liquor","unit":"material-sink","kind":"sink","label":"Liquor","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"clay","to":"iac-leach","kind":"material","kgPerKg":1260,"substances":[["Al2Si2O5OH4",1260]]},
+          {"from":"lixiviant","to":"iac-leach","kind":"material","kgPerKg":7.48,"substances":[["NH42SO4",7.48]]},
+          {"from":"power","to":"iac-leach","kind":"electricity","kWhPerKg":9.4},
+          {"from":"iac-leach","to":"ndpr","kind":"material","kgPerKg":0.0681,"substances":[["Nd2O3",0.056],["Pr6O11",0.0121]]},
+          {"from":"iac-leach","to":"other-reo","kind":"material","kgPerKg":1,"substances":[["Y2O3",0.691],["Dy2O3",0.0821],["Er2O3",0.0468]]},
+          {"from":"iac-leach","to":"residue","kind":"material","kgPerKg":1260,"substances":[["Al2Si2O5OH4",1260]]},
+          {"from":"iac-leach","to":"liquor","kind":"material","kgPerKg":7.48,"substances":[["NH42SO4",7.48]]}
+        ]
+      }
     },
     {
       "id": "ree-sx",
@@ -1158,7 +1746,26 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Separated NdPr oxide by solvent extraction (purchased REO concentrate) at us-long-beach; size-to-target product; purchased mixed-reo-concentrate; demo scale 0.637401 kg/day."
+      "notes": "Separated NdPr oxide by solvent extraction (purchased REO concentrate) at us-long-beach; size-to-target product; purchased mixed-reo-concentrate; demo scale 0.637401 kg/day.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"concentrate","unit":"material-source","kind":"source","label":"Concentrate"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"sx","unit":"ree-sx","kind":"converter","label":"SX","kWhPerKg":83.2,"capexUsdPerKgDay":687000},
+          {"id":"ndpr","unit":"material-sink","kind":"sink","label":"NDPR","disposition":"product"},
+          {"id":"dytb","unit":"material-sink","kind":"sink","label":"Dytb","disposition":"coproduct"},
+          {"id":"light-reo","unit":"material-sink","kind":"sink","label":"Light REO","disposition":"coproduct"},
+          {"id":"raffinate","unit":"material-sink","kind":"sink","label":"Raffinate","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"concentrate","to":"sx","kind":"material","kgPerKg":16.5,"substances":[["Y2O3",10.7],["Dy2O3",1.27],["Nd2O3",0.866]]},
+          {"from":"power","to":"sx","kind":"electricity","kWhPerKg":83.2},
+          {"from":"sx","to":"ndpr","kind":"material","kgPerKg":1,"substances":[["Nd2O3",0.823],["Pr6O11",0.177]]},
+          {"from":"sx","to":"dytb","kind":"material","kgPerKg":1.39,"substances":[["Dy2O3",1.21],["Tb4O7",0.182]]},
+          {"from":"sx","to":"light-reo","kind":"material","kgPerKg":13.3,"substances":[["Y2O3",10.1],["Er2O3",0.687],["Yb2O3",0.539]]},
+          {"from":"sx","to":"raffinate","kind":"material","kgPerKg":0.826,"substances":[["Y2O3",0.534],["Dy2O3",0.0635],["Nd2O3",0.0433]]}
+        ]
+      }
     },
     {
       "id": "sabatier",
@@ -1219,7 +1826,54 @@
       "assetLifeYears": 12.90472,
       "infiniteSourceShare": 0.9999883,
       "quality": "screening",
-      "notes": "Reference e-methane (DAC + SWRO + PEM + Sabatier) on grid power at no map site; size-to-target product; purchased consumables; case buys grid power (no PV CAPEX in case); DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day."
+      "notes": "Reference e-methane (DAC + SWRO + PEM + Sabatier) on grid power at no map site; size-to-target product; purchased consumables; case buys grid power (no PV CAPEX in case); DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"air","unit":"material-source","kind":"source","label":"Air"},
+          {"id":"air-blower","unit":"gas-blower","kind":"converter","label":"Air blower","kWhPerKg":3.63,"capexUsdPerKgDay":5440},
+          {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
+          {"id":"seawater-pump","unit":"intake-pump","kind":"converter","label":"Seawater pump","kWhPerKg":0.00399,"capexUsdPerKgDay":3.49},
+          {"id":"electricity","unit":"electricity-source","kind":"electricity","label":"Electricity"},
+          {"id":"heat","unit":"heat-source","kind":"heat","label":"Heat"},
+          {"id":"consumables","unit":"consumable-source","kind":"source","label":"Consumables"},
+          {"id":"dac","unit":"dac","kind":"converter","label":"DAC","kWhPerKg":1.37,"capexUsdPerKgDay":16000},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0139,"capexUsdPerKgDay":3000},
+          {"id":"electrical-bus","unit":"electrical-bus","kind":"bus","label":"Electrical bus"},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":26.1,"capexUsdPerKgDay":65000},
+          {"id":"sabatier","unit":"sabatier","kind":"converter","label":"Sabatier","kWhPerKg":1,"capexUsdPerKgDay":6000},
+          {"id":"depleted-air","unit":"material-sink","kind":"sink","label":"Depleted air","disposition":"waste"},
+          {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"},
+          {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
+          {"id":"oxygen","unit":"material-sink","kind":"sink","label":"Oxygen","disposition":"waste"},
+          {"id":"methane","unit":"material-sink","kind":"sink","label":"Methane","disposition":"product"},
+          {"id":"sabatier-water","unit":"material-sink","kind":"sink","label":"Sabatier water","disposition":"coproduct"}
+        ],
+        "edges": [
+          {"from":"air","to":"air-blower","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]]},
+          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]]},
+          {"from":"heat","to":"dac","kind":"heat","kWhPerKg":4.11},
+          {"from":"consumables","to":"dac","kind":"material","kgPerKg":0.0549},
+          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":9.98,"substances":[["H2O",9.66],["Cl-",0.195],["Na+",0.126]]},
+          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":9.98,"substances":[["H2O",9.66],["Cl-",0.195],["Na+",0.126]]},
+          {"from":"electricity","to":"electrical-bus","kind":"electricity","kWhPerKg":32.2},
+          {"from":"electrical-bus","to":"air-blower","kind":"electricity","kWhPerKg":3.63},
+          {"from":"electrical-bus","to":"seawater-pump","kind":"electricity","kWhPerKg":0.00399},
+          {"from":"electrical-bus","to":"dac","kind":"electricity","kWhPerKg":1.37},
+          {"from":"electrical-bus","to":"swro","kind":"electricity","kWhPerKg":0.0139},
+          {"from":"electrical-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":26.1},
+          {"from":"electrical-bus","to":"sabatier","kind":"electricity","kWhPerKg":1},
+          {"from":"dac","to":"sabatier","kind":"material","kgPerKg":2.74,"substances":[["CO2",2.74]]},
+          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]]},
+          {"from":"dac","to":"waste-heat","kind":"heat","kWhPerKg":4.11},
+          {"from":"sabatier","to":"waste-heat","kind":"heat","kWhPerKg":2.86},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.49,"substances":[["H2O",4.49]]},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.49,"substances":[["H2O",5.17],["Cl-",0.195],["Na+",0.126]]},
+          {"from":"electrolyzer","to":"sabatier","kind":"material","kgPerKg":0.503,"substances":[["H2",0.503]]},
+          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":3.99,"substances":[["O2",3.99]]},
+          {"from":"sabatier","to":"methane","kind":"material","kgPerKg":1,"substances":[["CH4",1]]},
+          {"from":"sabatier","to":"sabatier-water","kind":"material","kgPerKg":2.25,"substances":[["H2O",2.25]]}
+        ]
+      }
     },
     {
       "id": "silicon",
@@ -1313,7 +1967,54 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.3957975,
       "quality": "screening",
-      "notes": "PV modules from quartz + bauxite chain (MG-Si, polysilicon, Al) at chile-mejillones; size-to-target product; electricity-as-total-energy proxy; purchased carbon-reductant, caustic-makeup, carbon-anode, silver, float-glass, eva-encapsulant."
+      "notes": "PV modules from quartz + bauxite chain (MG-Si, polysilicon, Al) at chile-mejillones; size-to-target product; electricity-as-total-energy proxy; purchased carbon-reductant, caustic-makeup, carbon-anode, silver, float-glass, eva-encapsulant.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"quartz","unit":"material-source","kind":"source","label":"Quartz"},
+          {"id":"reductant","unit":"material-source","kind":"source","label":"Reductant"},
+          {"id":"bauxite","unit":"material-source","kind":"source","label":"Bauxite"},
+          {"id":"caustic","unit":"material-source","kind":"source","label":"Caustic"},
+          {"id":"anode","unit":"material-source","kind":"source","label":"Anode"},
+          {"id":"silver","unit":"material-source","kind":"source","label":"Silver"},
+          {"id":"glass","unit":"material-source","kind":"source","label":"Glass"},
+          {"id":"eva","unit":"material-source","kind":"source","label":"Eva"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"mg-si","unit":"mg-si","kind":"converter","label":"MG SI","kWhPerKg":0.344,"capexUsdPerKgDay":90.3},
+          {"id":"polysilicon","unit":"polysilicon","kind":"converter","label":"Polysilicon","kWhPerKg":1.77,"capexUsdPerKgDay":910},
+          {"id":"bayer-alumina","unit":"bayer-alumina","kind":"converter","label":"Bayer alumina","kWhPerKg":0.842,"capexUsdPerKgDay":126},
+          {"id":"aluminium-smelter","unit":"aluminium-smelter","kind":"converter","label":"Aluminium smelter","kWhPerKg":1.78,"capexUsdPerKgDay":241},
+          {"id":"pv-module","unit":"pv-module","kind":"converter","label":"PV module","kWhPerKg":0.05,"capexUsdPerKgDay":735},
+          {"id":"module","unit":"material-sink","kind":"sink","label":"Module","disposition":"product"},
+          {"id":"carbonMonoxide","unit":"material-sink","kind":"sink","label":"Carbon monoxide","disposition":"waste"},
+          {"id":"carbonDioxide","unit":"material-sink","kind":"sink","label":"Carbon dioxide","disposition":"waste"},
+          {"id":"redMud","unit":"material-sink","kind":"sink","label":"Red mud","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"quartz","to":"mg-si","kind":"material","kgPerKg":0.0613,"substances":[["SiO2",0.0613]]},
+          {"from":"reductant","to":"mg-si","kind":"material","kgPerKg":0.0245,"substances":[["C",0.0245]]},
+          {"from":"bauxite","to":"bayer-alumina","kind":"material","kgPerKg":0.481,"substances":[["Bauxite",0.481]]},
+          {"from":"caustic","to":"bayer-alumina","kind":"material","kgPerKg":0.0192,"substances":[["NaOH",0.0192]]},
+          {"from":"bayer-alumina","to":"aluminium-smelter","kind":"material","kgPerKg":0.241,"substances":[["Al2O3",0.241]]},
+          {"from":"anode","to":"aluminium-smelter","kind":"material","kgPerKg":0.0425,"substances":[["C",0.0425]]},
+          {"from":"silver","to":"pv-module","kind":"material","kgPerKg":0.0003,"substances":[["Ag",0.0003]]},
+          {"from":"glass","to":"pv-module","kind":"material","kgPerKg":0.674,"substances":[["FloatGlass",0.674]]},
+          {"from":"eva","to":"pv-module","kind":"material","kgPerKg":0.0669,"substances":[["EVA",0.0669]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":4.79},
+          {"from":"power-bus","to":"mg-si","kind":"electricity","kWhPerKg":0.344},
+          {"from":"power-bus","to":"polysilicon","kind":"electricity","kWhPerKg":1.77},
+          {"from":"power-bus","to":"bayer-alumina","kind":"electricity","kWhPerKg":0.842},
+          {"from":"power-bus","to":"aluminium-smelter","kind":"electricity","kWhPerKg":1.78},
+          {"from":"power-bus","to":"pv-module","kind":"electricity","kWhPerKg":0.05},
+          {"from":"mg-si","to":"polysilicon","kind":"material","kgPerKg":0.0287,"substances":[["Si",0.0287]]},
+          {"from":"polysilicon","to":"pv-module","kind":"material","kgPerKg":0.0273,"substances":[["Si",0.0273]]},
+          {"from":"aluminium-smelter","to":"pv-module","kind":"material","kgPerKg":0.127,"substances":[["Al",0.127]]},
+          {"from":"pv-module","to":"module","kind":"material","kgPerKg":1,"substances":[["PVmodule",1]]},
+          {"from":"mg-si","to":"carbonMonoxide","kind":"material","kgPerKg":0.0572,"substances":[["CO",0.0572]]},
+          {"from":"aluminium-smelter","to":"carbonDioxide","kind":"material","kgPerKg":0.156,"substances":[["CO2",0.156]]},
+          {"from":"bayer-alumina","to":"redMud","kind":"material","kgPerKg":0.241,"substances":[["Bauxite",0.241]]}
+        ]
+      }
     },
     {
       "id": "ti-kroll",
@@ -1359,7 +2060,26 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Titanium sponge by Kroll from purchased TiCl4 + Mg at chile-mejillones-ti-kroll; size-to-target product; purchased titanium-tetrachloride, magnesium-metal."
+      "notes": "Titanium sponge by Kroll from purchased TiCl4 + Mg at chile-mejillones-ti-kroll; size-to-target product; purchased titanium-tetrachloride, magnesium-metal.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"ticl4-feed","unit":"material-source","kind":"source","label":"TiCl₄ feed"},
+          {"id":"magnesium-feed","unit":"material-source","kind":"source","label":"Magnesium feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"kroll","unit":"titanium-kroll","kind":"converter","label":"Kroll","kWhPerKg":8,"capexUsdPerKgDay":8400},
+          {"id":"titanium","unit":"material-sink","kind":"sink","label":"Titanium","disposition":"product"},
+          {"id":"magnesium-chloride","unit":"material-sink","kind":"sink","label":"Magnesium chloride","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"ticl4-feed","to":"kroll","kind":"material","kgPerKg":3.96,"substances":[["TiCl4",3.96]]},
+          {"from":"magnesium-feed","to":"kroll","kind":"material","kgPerKg":1.02,"substances":[["Mg",1.02]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":8},
+          {"from":"power-bus","to":"kroll","kind":"electricity","kWhPerKg":8},
+          {"from":"kroll","to":"titanium","kind":"material","kgPerKg":1,"substances":[["Ti",1]]},
+          {"from":"kroll","to":"magnesium-chloride","kind":"material","kgPerKg":3.98,"substances":[["MgCl2",3.98]]}
+        ]
+      }
     },
     {
       "id": "urea",
@@ -1405,11 +2125,30 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Urea from purchased NH3 + CO2 at namibia-walvis-bay-urea; size-to-target product; electricity-as-total-energy proxy; purchased ammonia-feed, co2-feed."
+      "notes": "Urea from purchased NH3 + CO2 at namibia-walvis-bay-urea; size-to-target product; electricity-as-total-energy proxy; purchased ammonia-feed, co2-feed.",
+      "flowsheet": {
+        "nodes": [
+          {"id":"ammonia-feed","unit":"material-source","kind":"source","label":"Ammonia feed"},
+          {"id":"co2-feed","unit":"material-source","kind":"source","label":"CO₂ feed"},
+          {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
+          {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"urea","unit":"urea","kind":"converter","label":"Urea","kWhPerKg":0.8,"capexUsdPerKgDay":1140},
+          {"id":"urea-product","unit":"material-sink","kind":"sink","label":"Urea product","disposition":"product"},
+          {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
+        ],
+        "edges": [
+          {"from":"ammonia-feed","to":"urea","kind":"material","kgPerKg":0.567,"substances":[["NH3",0.567]]},
+          {"from":"co2-feed","to":"urea","kind":"material","kgPerKg":0.733,"substances":[["CO2",0.733]]},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.8},
+          {"from":"power-bus","to":"urea","kind":"electricity","kWhPerKg":0.8},
+          {"from":"urea","to":"urea-product","kind":"material","kgPerKg":1,"substances":[["Urea",1]]},
+          {"from":"urea","to":"process-water","kind":"material","kgPerKg":0.3,"substances":[["H2O",0.3]]}
+        ]
+      }
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "327c9b5",
+    "gitSha": "b59c76d",
     "caseCount": 23,
     "skipped": [
       {
@@ -1422,5 +2161,5 @@
       }
     ]
   },
-  "SCHEMA_VERSION": 1
+  "SCHEMA_VERSION": 2
 });

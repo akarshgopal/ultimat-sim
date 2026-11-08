@@ -41,7 +41,7 @@
   }
 
   // spec: { x: number[], series: [{ key, label, color, values[] }], kind: 'line'|'stack'|'area',
-  //         log, yMin, yMax, yFormat, refLines: [{ y, label }], ariaLabel, height }
+  //         log, yMin, yMax, yFormat, refLines: [{ y, label }], xMarks: [{ index, label }], ariaLabel, height }
   function drawChart(container, spec) {
     chartRegistry.set(container, spec);
     container.replaceChildren();
@@ -160,6 +160,16 @@
       t.textContent = r.label;
       marks.append(t);
     }
+    // Vertical event markers at x indices: xMarks: [{ index, label }].
+    (spec.xMarks || []).forEach((m, k) => {
+      if (!(m.index >= 0 && m.index < n)) return;
+      const x = xs(m.index);
+      marks.append(svg('line', { class: 'chart-ref chart-xmark', x1: x, x2: x, y1: pad.top, y2: pad.top + ih }));
+      const t = svg('text', { class: 'chart-ref-label', x: x + 4, y: pad.top + 10 + k * 13, 'text-anchor': x > pad.left + iw * 0.7 ? 'end' : 'start' });
+      if (x > pad.left + iw * 0.7) t.setAttribute('x', x - 4);
+      t.textContent = m.label;
+      marks.append(t);
+    });
     root.append(marks);
 
     // Direct end labels (≤ 4 series), nudged apart.

@@ -884,6 +884,30 @@
     return rows;
   }
 
+  // One pathway at one site in a given year, with no company market share (list prices).
+  // Cost factors and PV price default to the exogenous decline only (no company learning);
+  // pass opts.costFactors / opts.pvUsdPerKWp (e.g. from a simulateCompany timeline row) to
+  // price that year as the simulation did. Integration (make vs buy) follows cfg.integration.
+  // Returns evaluatePlant()'s result, or null when the pathway/site is unknown or incompatible.
+  function evaluateAtYear(input, pathwayId, siteId, sizeKgPerDay, yearIndex = 0, opts = {}) {
+    const cfg = merge(DEFAULTS, input.config || {});
+    const allSites = input.sites || [];
+    const allPathways = input.pathways || [];
+    const pathway = allPathways.find(p => p.id === pathwayId);
+    const site = allSites.find(s => s.id === siteId);
+    const sitesById = new Map(allSites.map(s => [s.id, s]));
+    if (!pathway || !site || !siteAllowsPathway(site, pathway, sitesById)) return null;
+    const state = createState(cfg);
+    const ctx = yearContext(cfg, input.markets || {}, state, yearIndex, cfg.startYear + yearIndex, {}, {
+      suppliers: captiveSuppliers(cfg, allPathways.filter(p => p.refOutputKgPerDay > 0
+        && (!cfg.build.allowPathways || cfg.build.allowPathways.includes(p.id)))),
+      sitesById,
+    });
+    if (opts.costFactors) ctx.costFactors = { ...ctx.costFactors, ...opts.costFactors };
+    if (Number.isFinite(opts.pvUsdPerKWp)) ctx.pvUsdPerKWp = opts.pvUsdPerKWp;
+    return evaluatePlant(pathway, site, sizeKgPerDay, ctx);
+  }
+
   return {
     DEFAULTS,
     TECH_CLASSES,
@@ -898,6 +922,7 @@
     siteAllowsPathway,
     marketGroupOf: (product, config) => marketGroupOf(merge(DEFAULTS, config || {}), product),
     evaluatePlant,
+    evaluateAtYear,
     simulateCompany,
     rankOpportunities,
     mergeConfig: override => merge(DEFAULTS, override || {}),

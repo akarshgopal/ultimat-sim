@@ -28,11 +28,11 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_FILE = path.join(ROOT, 'data', 'pathways.js');
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 const { solveOperation } = require(path.join(ROOT, 'engine/solve.js'));
 const { evaluateEconomics } = require(path.join(ROOT, 'engine/economics.js'));
-const { streamMassKg } = require(path.join(ROOT, 'engine/model.js'));
+const { streamMassKg, SUBSTANCES } = require(path.join(ROOT, 'engine/model.js'));
 const { sizeToProduct } = require(path.join(ROOT, 'engine/size.js'));
 const tea = require(path.join(ROOT, 'data/tea-screening.js'));
 const pvgisSites = fs.readFileSync(path.join(ROOT, 'data/pvgis-sites.js'), 'utf8');
@@ -195,6 +195,94 @@ function electricityKWh(definition, solved) {
   return total;
 }
 
+// ---------------------------------------------------------------------------
+// Read-only flowsheet (schema v2): the solved case graph, flows per kg of primary product.
+// Parallel streams between the same two nodes are merged; zero flows are dropped. Numbers
+// are rounded to FLOW_SIG_FIGS (display only — the recipe fields above stay exact).
+
+const FLOW_SIG_FIGS = 3;
+const FLOW_MIN_PER_KG = 1e-6;
+const ACRONYMS = new Set(['swro', 'pem', 'asu', 'dac', 'dri', 'mto', 'ft', 'sx', 'ew', 'med', 'msf', 'nh3', 'h2', 'co2', 'o2', 'n2', 'pv', 'reo', 'ndpr', 'dle', 'mg', 'si', 'pls', 'ticl4', 'ree', 'h2o2']);
+const FORMULA = { nh3: 'NH₃', h2: 'H₂', co2: 'CO₂', o2: 'O₂', n2: 'N₂', ticl4: 'TiCl₄', h2o2: 'H₂O₂' };
+
+const roundFlow = v => (Math.abs(v) < 1e-12 ? 0 : Number(Number(v).toPrecision(FLOW_SIG_FIGS)));
+
+function humanize(id) {
+  const words = String(id).replace(/([a-z])([A-Z])/g, '$1-$2').split(/[-_\s]+/).filter(Boolean);
+  return words.map((w, i) => {
+    const lw = w.toLowerCase();
+    if (FORMULA[lw]) return FORMULA[lw];
+    if (ACRONYMS.has(lw)) return lw.toUpperCase();
+    return i === 0 ? lw[0].toUpperCase() + lw.slice(1) : lw;
+  }).join(' ');
+}
+
+function nodeKind(unit) {
+  if (unit === 'material-source' || unit === 'consumable-source') return 'source';
+  if (unit === 'material-sink' || unit === 'consumable-sink') return 'sink';
+  if (unit === 'electricity-source') return 'electricity';
+  if (unit === 'electrical-bus') return 'bus';
+  if (unit === 'heat-source') return 'heat';
+  if (/sink$/.test(unit)) return 'sink';
+  return 'converter';
+}
+
+function topSubstances(stream) {
+  if (stream.kind !== 'material' || !stream.mol) return null;
+  const masses = Object.entries(stream.mol)
+    .map(([sub, mol]) => [sub, mol * (SUBSTANCES[sub]?.molarMassG || 0) / 1000])
+    .filter(([, kg]) => kg > 0)
+    .sort((a, b) => b[1] - a[1]);
+  return masses;
+}
+
+function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg) {
+  const nodes = definition.graph.nodes;
+  const edgesByKey = new Map();
+  for (const item of solved.streams || []) {
+    const stream = item?.stream;
+    if (!stream) continue;
+    const from = item.from.node;
+    const to = item.to.node;
+    const kind = stream.kind === 'electricity' ? 'electricity' : stream.kind === 'heat' ? 'heat' : 'material';
+    const amount = streamAmount(stream) / kg;
+    if (!(amount > FLOW_MIN_PER_KG)) continue;
+    const key = `${from}>${to}>${kind}`;
+    const edge = edgesByKey.get(key) || { from, to, kind, amount: 0, subs: new Map() };
+    edge.amount += amount;
+    for (const [sub, m] of topSubstances(stream) || []) edge.subs.set(sub, (edge.subs.get(sub) || 0) + m / kg);
+    edgesByKey.set(key, edge);
+  }
+  const edges = [...edgesByKey.values()].map(e => {
+    const out = { from: e.from, to: e.to, kind: e.kind };
+    if (e.kind === 'material') {
+      out.kgPerKg = roundFlow(e.amount);
+      const subs = [...e.subs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .filter(([, m]) => m / e.amount >= 0.001);
+      if (subs.length) out.substances = subs.map(([sub, m]) => [sub, roundFlow(m)]);
+    } else {
+      out.kWhPerKg = roundFlow(e.amount);
+    }
+    return out;
+  });
+  const linked = new Set(edges.flatMap(e => [e.from, e.to]));
+  const outNodes = [];
+  for (const node of nodes) {
+    const kind = nodeKind(node.unit);
+    if (!linked.has(node.id) && kind !== 'converter') continue;
+    const out = { id: node.id, unit: node.unit, kind, label: humanize(node.id) };
+    if (kind === 'sink') out.disposition = primarySinks.has(node.id) ? 'product' : saleSinks.has(node.id) ? 'coproduct' : 'waste';
+    if (kind === 'converter') {
+      const kWh = Number(solved.nodes[node.id]?.consumed?.electricity?.kWh) || 0;
+      if (kWh / kg > FLOW_MIN_PER_KG) out.kWhPerKg = roundFlow(kWh / kg);
+      const capex = nodeCapex.get(node.id) || 0;
+      if (capex > 0) out.capexUsdPerKgDay = roundFlow(capex / kg);
+    }
+    outNodes.push(out);
+  }
+  return { nodes: outNodes, edges };
+}
+
 function analyseCase(file, factoryName, factory) {
   const { result: definition, regions } = withTeaInstrumentation(() => factory());
   const solved = solveOperation(definition);
@@ -217,6 +305,7 @@ function analyseCase(file, factoryName, factory) {
     prev.revenuePerDay += sink.annualRevenue / periodDays;
     sales.set(groupKey, prev);
   }
+  const saleSinks = new Set(econ.sinks.filter(s => s.disposition === 'sale').map(s => s.id));
   const totalRevenue = [...sales.values()].reduce((s, x) => s + x.revenuePerDay, 0);
   const sizable = [...sales.entries()].filter(([, s]) => {
     if (!s.product || !SIZE_ALIAS[s.product] || !(s.kgPerDay > 0)) return false;
@@ -233,6 +322,7 @@ function analyseCase(file, factoryName, factory) {
 
   // Non-PV converters (per-node fold through evaluateEconomics so capex/O&M are the engine's).
   const converters = [];
+  const nodeCapex = new Map();
   let pvCapex = 0;
   for (const node of nodes) {
     const one = evaluateEconomics({ ...definition, graph: { nodes: [node], edges: [] } }, solved);
@@ -240,6 +330,7 @@ function analyseCase(file, factoryName, factory) {
     const variableOM = one.breakdown.variableOM;
     if (!(one.installedCapex > 0 || fixedOM > 0 || variableOM > 0)) continue;
     if (isPvNode(node)) { pvCapex += one.installedCapex; continue; }
+    nodeCapex.set(node.id, one.installedCapex);
     const ec = nodeEconomics(node, config);
     const life = Number(ec.assetLifeYears) > 0 ? Number(ec.assetLifeYears) : econ.projectLifeYears;
     converters.push({ id: node.id, cls: techClass(node.unit), capex: one.installedCapex, fixedOM, variableOM, life });
@@ -333,6 +424,7 @@ function analyseCase(file, factoryName, factory) {
       infiniteSourceShare: feedMass > 0 ? infiniteMass / feedMass : 1,
       quality: 'screening',
       notes: `${NAMES[file] || stem} at ${siteId || 'no map site'}; ${caveats.join('; ')}.`,
+      flowsheet: flowsheetFor(definition, solved, nodeCapex, new Set(primary.sinkIds), saleSinks, kg),
     };
   });
 }
@@ -362,6 +454,25 @@ export function currentGitSha() {
   try { return execSync('git rev-parse --short HEAD', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return null; }
 }
 
+// JSON.stringify(value, null, 2), except that each flowsheet node / edge sits on one line
+// (keeps data/pathways.js readable and its size down).
+function stringifyData(value, indent = '', key = null, parentKey = null) {
+  const inline = parentKey === 'flowsheet' && (key === 'nodes' || key === 'edges');
+  if (Array.isArray(value)) {
+    if (!value.length) return '[]';
+    const next = indent + '  ';
+    const items = value.map(v => (inline ? JSON.stringify(v) : stringifyData(v, next, null, key)));
+    return `[\n${items.map(i => next + i).join(',\n')}\n${indent}]`;
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value);
+    if (!entries.length) return '{}';
+    const next = indent + '  ';
+    return `{\n${entries.map(([k, v]) => `${next}${JSON.stringify(k)}: ${stringifyData(v, next, k, key)}`).join(',\n')}\n${indent}}`;
+  }
+  return JSON.stringify(value);
+}
+
 export function renderModule({ pathways, caseCount, skipped }, gitSha = null) {
   const data = { PATHWAYS: pathways, GENERATED_FROM: { gitSha, caseCount, skipped }, SCHEMA_VERSION };
   const skipLines = skipped.map(s => `//   ${s.file}: ${s.reason}`).join('\n') || '//   (none)';
@@ -378,7 +489,7 @@ ${skipLines}
   freeze(data);
   if (typeof module === 'object' && module.exports) module.exports = data;
   else root.FoundryPathways = data;
-})(globalThis, ${JSON.stringify(data, null, 2)});
+})(globalThis, ${stringifyData(data)});
 `;
 }
 

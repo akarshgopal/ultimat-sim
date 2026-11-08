@@ -6909,26 +6909,6 @@
     };
   }
 
-  function refreshLiftEconomics(current) {
-    const tea = teaApi();
-    if (!tea?.bindCapexPack) return;
-    if (current.unit === 'intake-pump') {
-      current.economics = {
-        ...tea.bindCapexPack('intake-pump', { capacity: current.capacity, region: siteRegionForTea() }),
-        ...(current.economics?.installedCapex != null && current.economics?.capexRate == null
-          ? { installedCapex: current.economics.installedCapex }
-          : {}),
-      };
-    } else if (current.unit === 'gas-blower') {
-      current.economics = {
-        ...tea.bindCapexPack('gas-blower', { capacity: current.capacity, region: siteRegionForTea() }),
-        ...(current.economics?.installedCapex != null && current.economics?.capexRate == null
-          ? { installedCapex: current.economics.installedCapex }
-          : {}),
-      };
-    }
-  }
-
   function defaultEconomics(current) {
     const kind = units[current.unit].kind;
     if (kind === 'source') {

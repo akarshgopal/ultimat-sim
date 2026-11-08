@@ -9,8 +9,8 @@ const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist');
 const BUILD_ID = getBuildId();
 
-const EXCLUDED_PATH_PREFIXES = ['.git', 'dist', 'node_modules', 'scripts', 'tests', '.github'];
-const EXCLUDED_ROOT_FILES = new Set(['.gitignore', 'package.json', 'package-lock.json', 'vercel.json']);
+const EXCLUDED_PATH_PREFIXES = ['.git', 'dist', 'node_modules', 'scripts', 'tests', '.github', '.hunt-run', 'docs'];
+const EXCLUDED_ROOT_FILES = new Set(['.gitignore', 'package.json', 'README.md']);
 await fs.rm(DIST, { recursive: true, force: true });
 await fs.mkdir(DIST, { recursive: true });
 await copyProjectTree(ROOT, DIST, '');

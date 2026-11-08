@@ -14,7 +14,7 @@ const EXCLUDED_ROOT_FILES = new Set(['.gitignore', 'package.json', 'README.md'])
 await fs.rm(DIST, { recursive: true, force: true });
 await fs.mkdir(DIST, { recursive: true });
 await copyProjectTree(ROOT, DIST, '');
-for (const entry of ['index.html', 'flowsheet.html']) {
+for (const entry of ['index.html', 'flowsheet.html', 'company.html']) {
   const entryPath = path.join(DIST, entry);
   const original = await fs.readFile(entryPath, 'utf8');
   await fs.writeFile(entryPath, rewriteLocalAssetUrls(original, BUILD_ID));

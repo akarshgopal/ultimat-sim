@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Molecular Foundry — company</title>
+  <meta name="description" content="Simulate a solar-powered materials company: what it builds, where, when, and what it becomes.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="flowsheet.css">
+  <link rel="stylesheet" href="company.css">
+</head>
+<body class="flowsheet-page company-page">
+  <header class="flowsheet-header company-header">
+    <div class="brand">
+      <h1>Molecular Foundry</h1>
+      <p class="status-meta">Company build-out · solar plants on seawater, brine, air and rock</p>
+    </div>
+    <nav class="view-switch" aria-label="Views">
+      <a href="index.html" class="view-link">Plant detail</a>
+      <span class="view-link is-current" aria-current="page">Company</span>
+    </nav>
+    <div class="flowsheet-status" aria-live="polite">
+      <span class="status-chip idle" id="runStatus">Loading data…</span>
+      <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false">Light</button>
+    </div>
+  </header>
+
+  <div class="company-layout">
+    <aside class="assumptions" aria-labelledby="assumptionsHeading">
+      <details class="assumptions-details" id="assumptionsDetails" open>
+        <summary><h2 id="assumptionsHeading">Assumptions</h2><span class="assumptions-hint">edits re-run the simulation</span></summary>
+        <form id="assumptionsForm" class="assumptions-form" autocomplete="off" novalidate>
+          <fieldset><legend>Horizon &amp; finance</legend><div class="field-grid" id="fieldsFinance"></div></fieldset>
+          <fieldset><legend>Build rules</legend><div class="field-grid" id="fieldsBuild"></div></fieldset>
+          <fieldset><legend>Solar &amp; learning</legend><div class="field-grid" id="fieldsLearning"></div></fieldset>
+          <fieldset class="feedstocks">
+            <legend>Feedstocks</legend>
+            <div class="origin-list" id="originList"></div>
+            <label class="toggle-row"><input type="checkbox" id="infiniteOnly"> Infinite sources only <small>(no purchased intermediates)</small></label>
+            <details class="pathway-picker">
+              <summary>Pathways <span id="pathwayCount"></span></summary>
+              <div class="pathway-actions">
+                <button type="button" id="pathwaysAll">All</button>
+                <button type="button" id="pathwaysNone">None</button>
+              </div>
+              <div class="pathway-list" id="pathwayList"></div>
+            </details>
+          </fieldset>
+          <div class="assumptions-actions">
+            <button type="button" class="primary-action" id="resetScenario">Reset to defaults</button>
+            <button type="button" class="ghost-action" id="copyLink">Copy link</button>
+          </div>
+          <p class="assumptions-note">The scenario is saved in the page URL, so the link reproduces it.</p>
+        </form>
+      </details>
+    </aside>
+
+    <main class="company-main" id="companyMain">
+      <p class="data-warning" id="dataWarning" hidden></p>
+
+      <section class="kpi-section" aria-labelledby="kpiHeading">
+        <div class="section-head">
+          <h2 id="kpiHeading">What the company becomes</h2>
+          <p class="section-sub" id="kpiSub">—</p>
+        </div>
+        <div class="kpi-grid" id="kpiGrid"></div>
+      </section>
+
+      <section class="chart-grid" aria-label="Charts">
+        <article class="chart-card chart-wide" id="chartMoney">
+          <header class="chart-head">
+            <div>
+              <h3>Money over time</h3>
+              <p class="chart-sub">Revenue, opex, capex spent, cash on hand and debt outstanding · USD per year</p>
+            </div>
+            <label class="chart-toggle"><input type="checkbox" id="moneyLog" checked> Log scale</label>
+          </header>
+          <div class="chart-legend"></div>
+          <div class="chart-body"></div>
+          <details class="chart-data"><summary>Data table</summary><div class="chart-table"></div></details>
+        </article>
+
+        <article class="chart-card" id="chartRevenue">
+          <header class="chart-head">
+            <div>
+              <h3>Revenue by product</h3>
+              <p class="chart-sub">Stacked, USD per year · largest products, rest in “Other”</p>
+            </div>
+          </header>
+          <div class="chart-legend"></div>
+          <div class="chart-body"></div>
+          <details class="chart-data"><summary>Data table</summary><div class="chart-table"></div></details>
+        </article>
+
+        <article class="chart-card" id="chartShare">
+          <header class="chart-head">
+            <div>
+              <h3>Share of world market</h3>
+              <p class="chart-sub">Operating output ÷ world demand, by market · ceiling is the max-share rule</p>
+            </div>
+          </header>
+          <div class="chart-legend"></div>
+          <div class="chart-body"></div>
+          <details class="chart-data"><summary>Data table</summary><div class="chart-table"></div></details>
+        </article>
+
+        <article class="chart-card" id="chartFootprint">
+          <header class="chart-head">
+            <div>
+              <h3>Solar fleet &amp; land</h3>
+              <p class="chart-sub">Operating PV capacity and the land under it</p>
+            </div>
+          </header>
+          <div class="chart-pair">
+            <div class="chart-mini" id="chartPv"><h4>PV · GWp</h4><div class="chart-body"></div></div>
+            <div class="chart-mini" id="chartLand"><h4>Land · km²</h4><div class="chart-body"></div></div>
+          </div>
+          <details class="chart-data"><summary>Data table</summary><div class="chart-table"></div></details>
+        </article>
+
+        <article class="chart-card" id="chartLearning">
+          <header class="chart-head">
+            <div>
+              <h3>Cost factors (learning)</h3>
+              <p class="chart-sub">Capex multiplier vs. year-one reference, by technology class · PV indexed from $/kWp</p>
+            </div>
+          </header>
+          <div class="chart-legend"></div>
+          <div class="chart-body"></div>
+          <details class="chart-data"><summary>Data table</summary><div class="chart-table"></div></details>
+        </article>
+      </section>
+
+      <section class="plants-section" aria-labelledby="plantsHeading">
+        <div class="section-head">
+          <h2 id="plantsHeading">Where it builds</h2>
+          <p class="section-sub" id="plantsSub">—</p>
+        </div>
+        <div class="plants-grid">
+          <div class="map-card">
+            <div class="plants-map" id="plantsMap" role="img" aria-label="Map of plant sites"></div>
+            <p class="map-note" id="mapNote"></p>
+          </div>
+          <div class="site-card">
+            <h3>Sites</h3>
+            <div class="table-scroll site-table-wrap"><table class="data-table" id="siteTable"></table></div>
+          </div>
+        </div>
+        <div class="buildlog-card">
+          <div class="buildlog-head">
+            <h3>Build log</h3>
+            <label class="inline-select">Year
+              <select id="buildYear"><option value="">All years</option></select>
+            </label>
+          </div>
+          <div class="table-scroll buildlog-wrap"><table class="data-table" id="buildLog"></table></div>
+        </div>
+      </section>
+
+      <section class="ranking-section" aria-labelledby="rankingHeading">
+        <div class="section-head">
+          <h2 id="rankingHeading">Opportunity ranking</h2>
+          <p class="section-sub">Best site per pathway at first-year costs, before any market-share price effect. Click a header to sort.</p>
+          <label class="inline-select">Plant size
+            <select id="rankSize">
+              <option value="1">1× reference</option>
+              <option value="10">10× reference</option>
+              <option value="100">100× reference</option>
+              <option value="1000">1000× reference</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-scroll"><table class="data-table ranking-table" id="rankingTable"></table></div>
+      </section>
+
+      <section class="caveats" aria-labelledby="caveatsHeading">
+        <h2 id="caveatsHeading">Read this before quoting a number</h2>
+        <div id="caveatsBody"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="chart-tooltip" id="chartTooltip" role="status" hidden></div>
+
+  <script src="engine/company.js"></script>
+  <script src="engine/map-site.js"></script>
+  <script src="data/pathways.js"></script>
+  <script src="data/markets.js"></script>
+  <script src="data/site-presets.js"></script>
+  <script src="data/land-prices.js"></script>
+  <script src="data/land-admin.js"></script>
+  <script src="data/pvgis-sites.js"></script>
+  <script src="js/company-app.js"></script>
+</body>
+</html>

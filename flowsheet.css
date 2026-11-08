@@ -198,6 +198,32 @@ button.primary-action:focus-visible {
   background: var(--electric);
 }
 
+/* —— View switch (Plant detail ↔ Company) —— */
+.view-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  margin-right: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.view-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 3px 12px;
+  color: var(--text-secondary);
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.view-link:hover,
+a.view-link:focus-visible { color: var(--text-primary); background: var(--bg-card-hover); outline: none; box-shadow: var(--focus-ring); }
+.view-link.is-current { color: #1a1408; background: var(--accent); }
+
 .status-chip {
   display: inline-flex;
   align-items: center;

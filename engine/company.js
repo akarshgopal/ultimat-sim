@@ -49,6 +49,9 @@
       allowPathways: null, // null = all; else array of pathway ids
       allowSites: null, // null = all; else array of site ids
       maxPvGWpPerSite: 10, // land / interconnection / permitting ceiling per site
+      // Only build plants whose every feed comes from ocean/brine/air/rock/water or a captive
+      // supplier: forces make-not-buy and skips plants that would still buy an intermediate.
+      infiniteSourcesOnly: false,
     }),
     scale: Object.freeze({
       exponent: 0.85, // process capex ∝ size^exponent (PV stays linear/modular)
@@ -72,6 +75,19 @@
     defaultLandUsdPerHa: 2000,
     // Products that draw on the same world market (see data/markets.js notes):
     // shares and headroom are computed on the group key's demand.
+    // Make-vs-buy for purchased intermediates (see planIntegration). feedProducts maps a
+    // recipe's purchased feed id to the product key a captive supplier pathway makes.
+    // CO₂ is not mapped: no CO₂ supplier recipe (DAC) undercuts $0.05–0.13/kg purchased CO₂.
+    integration: Object.freeze({
+      enabled: true,
+      mode: 'cheaper', // 'cheaper': make only when it beats buying; 'always': make whenever a supplier fits
+      feedProducts: Object.freeze({
+        'hydrogen-feed': 'hydrogen',
+        'ammonia-feed': 'ammonia',
+        'methanol-feed': 'methanol',
+        'float-glass': 'float-glass',
+      }),
+    }),
     marketGroups: Object.freeze({
       'ndpr-oxide-separated': 'ndpr-oxide',
       'light-reo': 'other-reo',
@@ -207,53 +223,144 @@
     return out;
   }
 
-  function referenceCapexByTechUsd(pathway, sizeKgPerDay) {
-    const perKgDay = capexByTech(pathway);
-    const out = {};
-    for (const cls of TECH_CLASSES) out[cls] = perKgDay[cls] * sizeKgPerDay;
-    return out;
+  // ---------------------------------------------------------------------------
+  // Vertical integration (make vs buy)
+  //
+  // A plant that buys an intermediate (H₂, NH₃, methanol, glass, …) can instead get it from a
+  // captive supplier unit built at the same site — another pathway whose product is that
+  // intermediate. The supplier's capex, PV, land, opex and its own coproduct sales (e.g.
+  // electrolyzer O₂) join the plant; the feed purchase disappears; the intermediate never
+  // touches the market. The plant integrates a feed only when the supplier's levelized cost
+  // (net of its coproducts) beats the purchase price + freight that year, so integration
+  // switches on as PV and electrolyzers get cheaper. One level deep: suppliers that themselves
+  // buy intermediates are not used.
+
+  function captiveSuppliers(cfg, pathways) {
+    const byProduct = new Map();
+    if (!cfg.integration?.enabled) return byProduct;
+    for (const pathway of pathways) {
+      if ((pathway.feeds || []).some(feed => feed.origin === 'intermediate' && feed.purchased)) continue;
+      if (!byProduct.has(pathway.product)) byProduct.set(pathway.product, []);
+      byProduct.get(pathway.product).push(pathway);
+    }
+    return byProduct;
   }
 
-  // ctx: { cfg, yearIndex, year, costFactors, pvUsdPerKWp, priceFor(productKey, fallback, extraKg) }
+  function planIntegration(pathway, site, sizeKgPerDay, ctx) {
+    const plan = [];
+    const feedProducts = ctx.cfg.integration?.feedProducts || {};
+    if (!ctx.suppliers?.size) return plan;
+    for (const feed of pathway.feeds || []) {
+      if (!feed.purchased || feed.origin !== 'intermediate') continue;
+      const product = feedProducts[feed.id];
+      const candidates = product ? ctx.suppliers.get(product) || [] : [];
+      const kgPerDay = (Number(feed.kgPerKg) || 0) * sizeKgPerDay;
+      if (!(kgPerDay > 0)) continue;
+      const buyUsdPerKg = (Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0);
+      let best = null;
+      for (const supplier of candidates) {
+        if (supplier.id === pathway.id) continue;
+        if (ctx.sitesById && !siteAllowsPathway(site, supplier, ctx.sitesById)) continue;
+        const unit = evaluatePlant(supplier, site, kgPerDay, { ...ctx, suppliers: null });
+        // Cost of making the intermediate, net of the supplier's own coproduct sales.
+        if (!best || unit.lcopUsdPerKg < best.unit.lcopUsdPerKg) best = { supplier, unit };
+      }
+      const always = ctx.cfg.integration.mode === 'always' || ctx.cfg.build.infiniteSourcesOnly;
+      if (best && (always || best.unit.lcopUsdPerKg < buyUsdPerKg)) {
+        plan.push({
+          feedId: feed.id,
+          product,
+          supplierId: best.supplier.id,
+          kgPerDay,
+          makeUsdPerKg: best.unit.lcopUsdPerKg,
+          buyUsdPerKg,
+          unit: best.unit,
+        });
+      }
+    }
+    return plan;
+  }
+
+  // ctx: { cfg, yearIndex, year, costFactors, pvUsdPerKWp, priceFor(productKey, fallback, extraKg),
+  //        suppliers?: Map(product → pathways), sitesById?: Map }  (suppliers enable integration)
   function evaluatePlant(pathway, site, sizeKgPerDay, ctx) {
     const { cfg } = ctx;
     const annualKg = sizeKgPerDay * 365;
     const sf = scaleFactor(cfg.scale, sizeKgPerDay, pathway.refOutputKgPerDay);
     const perKgDay = capexByTech(pathway);
     const siteMult = Number(site.capexMultiplier) || 1;
+    const integration = planIntegration(pathway, site, sizeKgPerDay, ctx);
+    const integrated = new Set(integration.map(item => item.feedId));
+
     const processByTech = {};
+    const refCapexByTech = {};
     let processCapex = 0;
     for (const cls of TECH_CLASSES) {
       const value = perKgDay[cls] * sizeKgPerDay * sf * ctx.costFactors[cls] * siteMult;
       processByTech[cls] = value;
+      refCapexByTech[cls] = perKgDay[cls] * sizeKgPerDay;
       processCapex += value;
     }
     const kWhPerKg = (Number(pathway.electricityKWhPerKg) || 0) + (Number(pathway.heatKWhPerKg) || 0);
-    const pvKWp = site.pvKWhPerKWpDay > 0 ? (kWhPerKg * sizeKgPerDay) / site.pvKWhPerKWpDay : 0;
-    const pvCapex = pvKWp * ctx.pvUsdPerKWp * siteMult;
-    const landHa = pvKWp * cfg.pv.landHaPerKWp;
+    let pvKWp = site.pvKWhPerKWpDay > 0 ? (kWhPerKg * sizeKgPerDay) / site.pvKWhPerKWpDay : 0;
+    let pvCapex = pvKWp * ctx.pvUsdPerKWp * siteMult;
+    let landHa = pvKWp * cfg.pv.landHaPerKWp;
     const landUsdPerHa = site.landUsdPerHa > 0 ? site.landUsdPerHa : cfg.defaultLandUsdPerHa;
-    const landCapex = landHa * landUsdPerHa;
-    const capexTotal = processCapex + pvCapex + landCapex;
+    let landCapex = landHa * landUsdPerHa;
+    let electricityKWhPerYear = kWhPerKg * annualKg;
 
     let feedUsdPerKg = 0;
+    const feedsKgPerYear = [];
+    const purchasedIntermediates = [];
     for (const feed of pathway.feeds || []) {
+      const kg = (Number(feed.kgPerKg) || 0) * annualKg;
+      if (integrated.has(feed.id)) continue;
+      feedsKgPerYear.push({ id: feed.id, origin: feed.origin || 'unknown', kg });
       if (!feed.purchased) continue;
+      if (feed.origin === 'intermediate') purchasedIntermediates.push(feed.id);
       feedUsdPerKg += (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0));
     }
-    const fixedOm = processCapex * (Number(pathway.fixedOmFracPerYear) || 0) + pvKWp * cfg.pv.fixedOmUsdPerKWpYear;
-    const variableOm = annualKg * ((Number(pathway.variableOmUsdPerKg) || 0) + feedUsdPerKg);
-    const opex = fixedOm + variableOm;
+    let fixedOm = processCapex * (Number(pathway.fixedOmFracPerYear) || 0) + pvKWp * cfg.pv.fixedOmUsdPerKWpYear;
+    let variableOm = annualKg * ((Number(pathway.variableOmUsdPerKg) || 0) + feedUsdPerKg);
 
     const price = ctx.priceFor(pathway.product, null, annualKg);
+    const sales = [{ product: pathway.product, kgPerYear: annualKg, fallbackUsdPerKg: null }];
     let coproductRevenue = 0;
     for (const co of pathway.coproducts || []) {
       const coKg = (Number(co.kgPerKg) || 0) * annualKg;
       coproductRevenue += coKg * ctx.priceFor(co.product, co.usdPerKg, coKg);
+      sales.push({ product: co.product || null, id: co.id, kgPerYear: coKg, fallbackUsdPerKg: co.usdPerKg });
     }
+
+    // Fold captive supplier units into this plant.
+    let lifeCapexWeighted = processCapex * (Number(pathway.assetLifeYears) || cfg.pv.lifeYears);
+    let lifeWeight = processCapex;
+    for (const item of integration) {
+      const u = item.unit;
+      for (const cls of TECH_CLASSES) {
+        processByTech[cls] += u.capex.byTech[cls];
+        refCapexByTech[cls] += u.refCapexByTech[cls];
+      }
+      processCapex += u.capex.process;
+      pvKWp += u.pvKWp;
+      pvCapex += u.capex.pv;
+      landHa += u.landHa;
+      landCapex += u.capex.land;
+      electricityKWhPerYear += u.electricityKWhPerYear;
+      fixedOm += u.opex.fixed;
+      variableOm += u.opex.variable;
+      coproductRevenue += u.coproductRevenue;
+      for (const sale of u.sales.slice(1)) sales.push(sale);
+      for (const feed of u.feedsKgPerYear) feedsKgPerYear.push(feed);
+      lifeCapexWeighted += u.capex.process * u.lifeYears;
+      lifeWeight += u.capex.process;
+    }
+    const capexTotal = processCapex + pvCapex + landCapex;
+    const opex = fixedOm + variableOm;
     const revenue = annualKg * price + coproductRevenue;
     const annualCash = revenue - opex;
-    const life = Math.max(1, Math.min(Number(pathway.assetLifeYears) || cfg.pv.lifeYears, cfg.pv.lifeYears));
+    const processLife = lifeWeight > 0 ? lifeCapexWeighted / lifeWeight : (Number(pathway.assetLifeYears) || cfg.pv.lifeYears);
+    const life = Math.max(1, Math.min(processLife, cfg.pv.lifeYears));
     const r = cfg.finance.discountRate;
     const af = annuityFactor(r, life);
     const lead = cfg.build.leadTimeYears || 0;
@@ -272,9 +379,10 @@
       annualKg,
       scaleFactor: sf,
       capex: { total: capexTotal, process: processCapex, byTech: processByTech, pv: pvCapex, land: landCapex },
+      refCapexByTech,
       pvKWp,
       landHa,
-      electricityKWhPerYear: kWhPerKg * annualKg,
+      electricityKWhPerYear,
       opex: { total: opex, fixed: fixedOm, variable: variableOm },
       priceUsdPerKg: price,
       revenue,
@@ -287,6 +395,10 @@
       grossCostUsdPerKg: grossCost,
       coproductCreditUsdPerKg: coproductCredit,
       marginUsdPerKg: price - lcop,
+      sales,
+      feedsKgPerYear,
+      purchasedIntermediates,
+      integration: integration.map(({ unit, ...item }) => item),
     };
   }
 
@@ -314,7 +426,7 @@
     };
   }
 
-  function yearContext(cfg, markets, state, yearIndex, year, committedKg) {
+  function yearContext(cfg, markets, state, yearIndex, year, committedKg, extras = {}) {
     const costFactors = {};
     for (const cls of TECH_CLASSES) costFactors[cls] = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]);
     const pvUsdPerKWp = pvCapexUsdPerKWp(cfg.pv, yearIndex);
@@ -328,7 +440,16 @@
       if (!product && !(fallback > 0)) return 0;
       return realizedPrice(cfg, product ? markets[product] : null, fallback, shareOf(product, extraKg));
     };
-    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, priceFor, shareOf };
+    // Share-ceiling cap in kg/year per market group, memoized for the year.
+    const caps = new Map();
+    const capKg = group => {
+      if (!caps.has(group)) {
+        const demandT = marketDemandT(markets[group], year);
+        caps.set(group, Number.isFinite(demandT) ? cfg.build.maxMarketShare * demandT * 1000 : Infinity);
+      }
+      return caps.get(group);
+    };
+    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, priceFor, shareOf, capKg, ...extras };
   }
 
   function marketGroupOf(cfg, product) {
@@ -361,15 +482,13 @@
     map[key] = (map[key] || 0) + kg;
   }
 
-  // Committed annual kg per product (operating + under construction), for share caps and prices.
-  function committedOutput(state, pathwaysById) {
+  // Committed annual kg per sold product of every plant not yet retired (operating or under
+  // construction): drives share caps and prices for new builds.
+  function committedOutput(state, year) {
     const out = {};
     for (const plant of state.plants) {
-      const annualKg = plant.sizeKgPerDay * 365;
-      addKg(out, plant.product, annualKg);
-      for (const co of pathwaysById.get(plant.pathwayId)?.coproducts || []) {
-        addKg(out, co.product, (Number(co.kgPerKg) || 0) * annualKg);
-      }
+      if (year >= plant.onlineYear + plant.lifeYears) continue;
+      for (const sale of plant.eval.sales) addKg(out, sale.product, sale.kgPerYear);
     }
     return out;
   }
@@ -383,31 +502,49 @@
     return [...sizes].sort((a, b) => a - b);
   }
 
+  // Market groups a pathway's plants can sell into, including captive suppliers' coproducts.
+  function candidateGroups(cfg, pathway, suppliers) {
+    const groups = productGroups(cfg, pathway);
+    const feedProducts = cfg.integration?.feedProducts || {};
+    for (const feed of pathway.feeds || []) {
+      for (const supplier of suppliers.get(feedProducts[feed.id]) || []) {
+        for (const group of productGroups(cfg, supplier)) groups.add(group);
+      }
+    }
+    return groups;
+  }
+
   function productGroups(cfg, pathway) {
     const groups = new Set([marketGroupOf(cfg, pathway.product)]);
     for (const co of pathway.coproducts || []) if (co.product) groups.add(marketGroupOf(cfg, co.product));
     return groups;
   }
 
-  // Every product a plant sells (not just its primary) must stay under the share ceiling.
-  function coproductsFit(cfg, ctx, markets, pathway, annualKg, committedKg) {
-    for (const co of pathway.coproducts || []) {
-      if (!co.product) continue;
-      const group = marketGroupOf(cfg, co.product);
-      const demandT = marketDemandT(markets[group], ctx.year);
-      if (!Number.isFinite(demandT)) continue;
-      const kg = groupKg(cfg, committedKg, group) + (Number(co.kgPerKg) || 0) * annualKg;
-      if (kg > cfg.build.maxMarketShare * demandT * 1000) return false;
+  // Every product a plant sells (primary, coproducts, captive suppliers' coproducts) must stay
+  // under the share ceiling.
+  function salesFit(cfg, ctx, ev, committedKg) {
+    if (!ev.salesByGroup) {
+      const add = new Map();
+      for (const sale of ev.sales) {
+        if (!sale.product) continue;
+        const group = marketGroupOf(cfg, sale.product);
+        add.set(group, (add.get(group) || 0) + sale.kgPerYear);
+      }
+      ev.salesByGroup = [...add];
+    }
+    for (const [group, kg] of ev.salesByGroup) {
+      if (groupKg(cfg, committedKg, group) + kg > ctx.capKg(group)) return false;
     }
     return true;
   }
 
   // cache: evaluations valid for this year until a build changes a market they sell into.
   // Per-run candidate structure: compatible sites and size ladder per pathway.
-  function buildCandidates(cfg, pathways, sites, sitesById) {
+  function buildCandidates(cfg, pathways, sites, sitesById, suppliers) {
     return pathways.map(pathway => ({
       pathway,
       group: marketGroupOf(cfg, pathway.product),
+      groups: candidateGroups(cfg, pathway, suppliers),
       sites: sites.filter(site => siteAllowsPathway(site, pathway, sitesById)),
       sizes: candidateSizes(cfg, pathway),
     })).filter(item => item.sites.length && item.sizes.length);
@@ -422,17 +559,13 @@
         pathwayCache = new Map();
         cache.set(pathway.id, pathwayCache);
       }
-      const demandT = marketDemandT(markets[group], ctx.year);
-      const headroomKg = Number.isFinite(demandT)
-        ? cfg.build.maxMarketShare * demandT * 1000 - groupKg(cfg, committedKg, group)
-        : Infinity;
+      const headroomKg = ctx.capKg(group) - groupKg(cfg, committedKg, group);
       if (!(headroomKg > 0)) continue;
       for (const site of pathwaySites) {
         const pvRoomKWp = sitePvCapKWp - (sitePvKWp[site.id] || 0);
         if (!(pvRoomKWp > 0)) continue;
         for (const size of sizes) {
           if (size * 365 > headroomKg) break;
-          if (!coproductsFit(cfg, ctx, markets, pathway, size * 365, committedKg)) break;
           const key = site.id + '|' + size;
           let ev = pathwayCache.get(key);
           if (!ev) {
@@ -440,9 +573,12 @@
             pathwayCache.set(key, ev);
           }
           if (ev.pvKWp > pvRoomKWp) break;
+          if (cfg.build.infiniteSourcesOnly && ev.purchasedIntermediates.length) break;
           if (!(ev.npv > 0) || ev.profitabilityIndex < cfg.build.minProfitabilityIndex) continue;
+          if (best && ev.npv <= best.npv) continue;
           const equity = ev.capex.total * (1 - cfg.finance.debtFraction);
           if (equity > budgetUsd) continue;
+          if (!salesFit(cfg, ctx, ev, committedKg)) break;
           // Rank by absolute NPV among affordable options: bigger good plants first.
           if (!best || ev.npv > best.npv) best = ev;
         }
@@ -458,7 +594,8 @@
     const state = createState(cfg);
     const timeline = [];
     let minCash = state.cash;
-    const candidates = buildCandidates(cfg, pathways, sites, sitesById);
+    const suppliers = captiveSuppliers(cfg, pathways);
+    const candidates = buildCandidates(cfg, pathways, sites, sitesById, suppliers);
 
     for (let yearIndex = 0; yearIndex < cfg.years; yearIndex += 1) {
       const year = cfg.startYear + yearIndex;
@@ -472,10 +609,7 @@
         && year < plant.onlineYear + plant.lifeYears);
       const operatingKg = {};
       for (const plant of operating) {
-        addKg(operatingKg, plant.product, plant.sizeKgPerDay * 365);
-        for (const co of pathwaysById.get(plant.pathwayId)?.coproducts || []) {
-          addKg(operatingKg, co.product, (Number(co.kgPerKg) || 0) * plant.sizeKgPerDay * 365);
-        }
+        for (const sale of plant.eval.sales) addKg(operatingKg, sale.product, sale.kgPerYear);
       }
       const opCtx = yearContext(cfg, markets, state, yearIndex, year, operatingKg);
       let revenue = 0;
@@ -483,32 +617,26 @@
       const revenueByProduct = {};
       const priceByProduct = {};
       const feedTByOrigin = {};
+      const captiveTByProduct = {};
       let pvKWp = 0;
       let landHa = 0;
       let electricityKWh = 0;
       for (const plant of operating) {
-        const pathway = pathwaysById.get(plant.pathwayId);
-        const annualKg = plant.sizeKgPerDay * 365;
-        const price = opCtx.priceFor(plant.product, null, 0);
-        priceByProduct[plant.product] = price;
-        let plantRevenue = annualKg * price;
-        addKg(revenueByProduct, plant.product, annualKg * price);
-        for (const co of pathway.coproducts || []) {
-          const coKg = (Number(co.kgPerKg) || 0) * annualKg;
-          const coPrice = opCtx.priceFor(co.product, co.usdPerKg, 0);
-          plantRevenue += coKg * coPrice;
-          addKg(revenueByProduct, co.product || co.id, coKg * coPrice);
-          if (co.product) priceByProduct[co.product] = coPrice;
+        let plantRevenue = 0;
+        for (const sale of plant.eval.sales) {
+          const price = opCtx.priceFor(sale.product, sale.fallbackUsdPerKg, 0);
+          plantRevenue += sale.kgPerYear * price;
+          addKg(revenueByProduct, sale.product || sale.id, sale.kgPerYear * price);
+          if (sale.product) priceByProduct[sale.product] = price;
         }
+        for (const item of plant.eval.integration) addKg(captiveTByProduct, item.product, item.kgPerDay * 365 / 1000);
         // Opex is fixed at build (fixed O&M on built capex; feed prices static).
         revenue += plantRevenue;
         opex += plant.eval.opex.total;
         pvKWp += plant.eval.pvKWp;
         landHa += plant.eval.landHa;
         electricityKWh += plant.eval.electricityKWhPerYear;
-        for (const feed of pathway.feeds || []) {
-          addKg(feedTByOrigin, feed.origin || 'unknown', (Number(feed.kgPerKg) || 0) * annualKg / 1000);
-        }
+        for (const feed of plant.eval.feedsKgPerYear) addKg(feedTByOrigin, feed.origin, feed.kg / 1000);
       }
 
       // 3. Debt service.
@@ -527,7 +655,7 @@
       state.cash += operatingCash - debtService;
 
       // 4. Build.
-      const committedKg = committedOutput(state, pathwaysById);
+      const committedKg = committedOutput(state, year);
       const built = [];
       let capexSpent = 0;
       let debtRaised = 0;
@@ -538,7 +666,7 @@
       }
       // Cost factors are fixed for the year (this year's learning lowers next year's costs);
       // prices read committedKg live, so only evaluations touching a built plant's markets go stale.
-      const ctx = yearContext(cfg, markets, state, yearIndex, year, committedKg);
+      const ctx = yearContext(cfg, markets, state, yearIndex, year, committedKg, { suppliers, sitesById });
       const cache = new Map();
       for (let n = 0; n < cfg.build.maxPlantsPerYear; n += 1) {
         const choice = pickBuild(cfg, ctx, candidates, committedKg, budget, markets, sitePvKWp, cache);
@@ -555,8 +683,7 @@
           state.loans.push({ principal: debt, payment, yearsLeft: term });
           debtRaised += debt;
         }
-        const refByTech = referenceCapexByTechUsd(pathway, choice.sizeKgPerDay);
-        for (const cls of TECH_CLASSES) state.cumRefUsd[cls] += refByTech[cls];
+        for (const cls of TECH_CLASSES) state.cumRefUsd[cls] += choice.refCapexByTech[cls];
         const plant = {
           id: state.nextId++,
           pathwayId: pathway.id,
@@ -570,14 +697,13 @@
           eval: choice,
         };
         state.plants.push(plant);
-        const touched = productGroups(cfg, pathway);
-        for (const other of pathways) {
-          if (![...productGroups(cfg, other)].some(group => touched.has(group))) continue;
-          cache.delete(other.id);
+        const touched = new Set(choice.sales.filter(sale => sale.product).map(sale => marketGroupOf(cfg, sale.product)));
+        for (const other of candidates) {
+          if (![...other.groups].some(group => touched.has(group))) continue;
+          cache.delete(other.pathway.id);
         }
         sitePvKWp[plant.siteId] = (sitePvKWp[plant.siteId] || 0) + choice.pvKWp;
-        addKg(committedKg, pathway.product, choice.annualKg);
-        for (const co of pathway.coproducts || []) addKg(committedKg, co.product, (Number(co.kgPerKg) || 0) * choice.annualKg);
+        for (const sale of choice.sales) addKg(committedKg, sale.product, sale.kgPerYear);
         built.push({
           plantId: plant.id,
           pathwayId: plant.pathwayId,
@@ -588,6 +714,7 @@
           npvUsd: choice.npv,
           lcopUsdPerKg: choice.lcopUsdPerKg,
           priceUsdPerKg: choice.priceUsdPerKg,
+          integration: choice.integration,
         });
       }
 
@@ -635,6 +762,7 @@
         shareByMarket,
         demandTByMarket,
         feedTByOrigin,
+        captiveTByProduct,
         pvGWp: pvKWp / 1e6,
         landHa,
         electricityTWh: electricityKWh / 1e9,
@@ -659,6 +787,7 @@
         pvKWp: plant.eval.pvKWp,
         landHa: plant.eval.landHa,
         npvAtBuildUsd: plant.eval.npv,
+        integration: plant.eval.integration,
       })),
       summary: {
         years: cfg.years,
@@ -683,7 +812,10 @@
     const sitesById = new Map((input.sites || []).map(s => [s.id, s]));
     const yearIndex = Number(opts.yearIndex) || 0;
     const state = createState(cfg);
-    const ctx = yearContext(cfg, markets, state, yearIndex, cfg.startYear + yearIndex, {});
+    const ctx = yearContext(cfg, markets, state, yearIndex, cfg.startYear + yearIndex, {}, {
+      suppliers: captiveSuppliers(cfg, pathways),
+      sitesById,
+    });
     const multiple = Number(opts.sizeMultiple) || 1;
     const rows = [];
     for (const pathway of pathways) {
@@ -692,6 +824,7 @@
       for (const site of sites) {
         if (!siteAllowsPathway(site, pathway, sitesById)) continue;
         const ev = evaluatePlant(pathway, site, size, ctx);
+        if (cfg.build.infiniteSourcesOnly && ev.purchasedIntermediates.length) continue;
         if (!best || ev.lcopUsdPerKg < best.lcopUsdPerKg) best = ev;
       }
       if (!best) continue;

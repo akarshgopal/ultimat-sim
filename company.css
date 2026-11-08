@@ -182,7 +182,9 @@ body.company-page {
 .toggle-row input,
 .pathway-item input { accent-color: var(--accent); margin: 0; }
 .toggle-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 0.75rem; cursor: pointer; }
-.toggle-row small { color: var(--text-muted); font-weight: 500; }
+.toggle-row { align-items: flex-start; }
+.toggle-row input { margin-top: 2px; }
+.toggle-row small { display: block; color: var(--text-muted); font-weight: 500; }
 .pathway-picker summary { cursor: pointer; font-size: 0.75rem; font-weight: 650; color: var(--text-secondary); padding: 4px 0; }
 .pathway-picker summary span { color: var(--text-muted); font-weight: 500; }
 .pathway-actions { display: flex; gap: 6px; margin: 6px 0; }
@@ -469,3 +471,6 @@ body.company-page {
   .company-header { position: static; }
   #siteTable { min-width: 460px; }
 }
+
+/* Plants that make an intermediate in-house (vertical integration). */
+.cell-sub.in-house { color: var(--accent, currentColor); }

@@ -48,6 +48,7 @@
     for (const f of FIELDS) s[f.key] = f.def;
     s.origins = ORIGINS.map(o => o.id);
     s.infinite = false;
+    s.make = true;
     s.off = [];
     s.size = '10';
     return s;
@@ -59,6 +60,7 @@
     for (const f of FIELDS) if (s[f.key] !== d[f.key]) params.set(f.key, String(s[f.key]));
     if (s.origins.length !== d.origins.length) params.set('origins', s.origins.join(','));
     if (s.infinite) params.set('infinite', '1');
+    if (!s.make) params.set('buy', '1');
     if (s.off.length) params.set('off', s.off.join(','));
     if (s.size !== d.size) params.set('size', s.size);
     return params.toString();
@@ -77,6 +79,7 @@
       s.origins = ORIGINS.map(o => o.id).filter(id => ids.has(id));
     }
     s.infinite = params.get('infinite') === '1';
+    s.make = params.get('buy') !== '1';
     if (params.has('off')) {
       const known = new Set(PATHWAYS.map(p => p.id));
       s.off = params.get('off').split(',').filter(id => known.has(id));
@@ -89,7 +92,6 @@
     const origins = new Set(s.origins);
     for (const feed of pathway.feeds || []) {
       if (!origins.has(feed.origin)) return false;
-      if (s.infinite && feed.origin === 'intermediate' && feed.purchased) return false;
     }
     return true;
   }
@@ -114,7 +116,9 @@
         leadTimeYears: Math.round(s.lead),
         maxPlantsPerYear: Math.round(s.perYear),
         allowPathways: forRanking ? null : allowedPathwayIds(s),
+        infiniteSourcesOnly: s.infinite,
       },
+      integration: { enabled: s.make || s.infinite },
       pv: { capexUsdPerKWp: s.pvCapex, exogenousDeclinePerYear: s.pvDecline / 100 },
       tech,
       scale: { exponent: s.scaleExp, floorFactor: s.scaleFloor },
@@ -177,6 +181,13 @@
   }
 
   const productName = key => MARKETS[key]?.name || key;
+  const shortName = key => ({ hydrogen: 'H₂', ammonia: 'NH₃', methanol: 'methanol', 'float-glass': 'glass' }[key] || productName(key));
+  // "makes H₂ in-house ($1.42 vs $2.08 bought)" for plants with captive suppliers.
+  function inHouseNote(integration) {
+    if (!integration?.length) return null;
+    const text = 'makes ' + integration.map(i => `${shortName(i.product)} in-house (${fmtUsdKg(i.makeUsdPerKg)} vs ${fmtUsdKg(i.buyUsdPerKg)} bought)`).join(', ');
+    return el('span', { class: 'cell-sub in-house', text });
+  }
   const pathwayById = new Map(PATHWAYS.map(p => [p.id, p]));
 
   // ---------------------------------------------------------------------------
@@ -795,7 +806,11 @@
         const p = pathwayById.get(b.pathwayId);
         tb.append(el('tr', {}, [
           el('td', { text: String(b.year) }),
-          el('td', {}, [el('span', { class: 'cell-main', text: productName(b.product) }), el('span', { class: 'cell-sub', text: p?.id || b.pathwayId })]),
+          el('td', {}, [
+            el('span', { class: 'cell-main', text: productName(b.product) }),
+            el('span', { class: 'cell-sub', text: p?.id || b.pathwayId }),
+            inHouseNote(b.integration),
+          ]),
           el('td', { text: siteById.get(b.siteId)?.name || b.siteId }),
           el('td', { class: 'num', text: fmtNum(b.sizeKgPerDay / 1000) + ' t/d' }),
           el('td', { class: 'num', text: fmtUsd(b.capexUsd) }),
@@ -860,6 +875,7 @@
       const nameCell = el('th', { scope: 'row' }, [
         el('span', { class: 'cell-main', text: r.name }),
         el('span', { class: 'cell-sub' }, [el('code', { text: p?.case?.file || '' }), allowed.has(r.pathwayId) ? null : el('span', { class: 'tag', text: 'excluded' })]),
+        inHouseNote(r.integration),
       ]);
       const quality = m?.quality || 'no market row';
       tb.append(el('tr', { class: allowed.has(r.pathwayId) ? '' : 'is-excluded' }, [
@@ -894,7 +910,9 @@
       'Screening model, not a bankable forecast: constant real prices and costs over each plant’s life, no tax, no inflation, no financing fees beyond a flat debt rate.',
       'Energy is daily-average solar (frozen PVGIS yields per site) with no seasonal storage, as in the source flowsheet cases. Curtailment, intermittency and grid backup are not modelled.',
       'Each pathway is a per-kg recipe reduced from one flowsheet case at one reference site; brine recipes only move to sites with the same brine assay.',
-      'Purchased intermediates stay purchased — the company never vertically integrates its own feeds. Use “Infinite sources only” to drop those pathways.',
+      cfg.integration.enabled
+        ? 'Make vs buy: a plant that buys H₂, NH₃, methanol or glass builds its own supplier unit on the same site when that is cheaper than buying (one level deep). CO₂ and other intermediates (TiCl₄, Mg, PLS, concentrates) are always bought: no supplier recipe undercuts them.'
+        : 'Purchased intermediates stay purchased (make-in-house is off).',
       `Prices fall linearly with the company’s share of the world market (elasticity per market) and growth is capped at ${fmtPct(cfg.build.maxMarketShare)} of each market.`,
       `Costs fall by an exogenous yearly decline plus Wright’s-law learning on the company’s own deployment; process capex scales with size^${cfg.scale.exponent} (floor ${cfg.scale.floorFactor}×). PV ${fmtUsd(cfg.pv.capexUsdPerKWp)}/kWp falling ${fmtPct(cfg.pv.exogenousDeclinePerYear)}/yr to ${fmtUsd(cfg.pv.floorUsdPerKWp)}.`,
       `Land price from the repo’s agricultural land layer where a site falls inside a priced region, else ${fmtUsd(cfg.defaultLandUsdPerHa)}/ha. Water, permits, logistics and offtake contracts are not costed.`,
@@ -953,6 +971,8 @@
     for (const f of FIELDS) $('f-' + f.key).value = String(s[f.key]);
     for (const box of document.querySelectorAll('[data-origin]')) box.checked = s.origins.includes(box.dataset.origin);
     $('infiniteOnly').checked = s.infinite;
+    $('makeInHouse').checked = s.make || s.infinite;
+    $('makeInHouse').disabled = s.infinite;
     const off = new Set(s.off);
     for (const box of document.querySelectorAll('[data-pathway]')) {
       const p = pathwayById.get(box.dataset.pathway);
@@ -974,6 +994,8 @@
       s.origins = ORIGINS.map(o => o.id).filter(id => set.has(id));
     } else if (t.id === 'infiniteOnly') {
       s.infinite = t.checked;
+    } else if (t.id === 'makeInHouse') {
+      s.make = t.checked;
     } else if (t.matches('[data-pathway]')) {
       const off = new Set(s.off);
       if (t.checked) off.delete(t.dataset.pathway); else off.add(t.dataset.pathway);

@@ -207,3 +207,94 @@ test('cost per kg reports gross, coproduct credit and net consistently; shares a
   close(last.shareByMarket.widget, last.shareByProduct.widget);
   assert.ok(last.demandTByMarket.widget > 0);
 });
+
+// Make-vs-buy fixtures: a consumer that buys 0.5 kg "h2" per kg, and a supplier recipe for h2.
+const consumer = {
+  ...good, id: 'consumer', product: 'widget',
+  feeds: [{ id: 'hydrogen-feed', kgPerKg: 0.5, usdPerKg: 2, freightUsdPerKg: 0, origin: 'intermediate', purchased: true }],
+};
+const cheapH2 = {
+  ...good, id: 'cheap-h2', product: 'hydrogen', electricityKWhPerKg: 1,
+  feeds: [{ id: 'sw', kgPerKg: 10, origin: 'ocean', purchased: false }],
+  coproducts: [{ id: 'oxygen', product: 'oxygen', kgPerKg: 8, usdPerKg: 0.01 }],
+  capexByTechUsdPerKgDay: { electrolyzer: 50 },
+};
+const dearH2 = { ...cheapH2, id: 'dear-h2', capexByTechUsdPerKgDay: { electrolyzer: 1e6 } };
+const H2_MARKETS = {
+  ...MARKETS,
+  hydrogen: { worldDemandTPerYear: 1e6, demandYear: 2027, growthPerYear: 0, priceUsdPerKg: 2, priceElasticity: 0.5 },
+  oxygen: { worldDemandTPerYear: 1e9, demandYear: 2027, growthPerYear: 0, priceUsdPerKg: 0.01, priceElasticity: 0.5 },
+};
+
+function rankOne(pathways, config) {
+  return C.rankOpportunities({ pathways, sites: SITES, markets: H2_MARKETS, config }).find(r => r.pathwayId === 'consumer');
+}
+
+test('make-vs-buy: a cheap same-site supplier replaces the purchased intermediate', () => {
+  const bought = rankOne([consumer], {});
+  const made = rankOne([consumer, cheapH2], {});
+  assert.equal(bought.integration.length, 0);
+  assert.equal(made.integration.length, 1);
+  const item = made.integration[0];
+  assert.equal(item.supplierId, 'cheap-h2');
+  assert.equal(item.product, 'hydrogen');
+  close(item.kgPerDay, 0.5 * made.sizeKgPerDay);
+  assert.ok(item.makeUsdPerKg < item.buyUsdPerKg);
+  assert.ok(made.siteId === 'coast', 'ocean-fed supplier forces a coastal site');
+  // Supplier capex, PV and opex join the plant; its O2 is sold; the H2 itself is never sold.
+  assert.ok(made.capex.byTech.electrolyzer > 0);
+  assert.ok(made.sales.some(s => s.product === 'oxygen'));
+  assert.ok(!made.sales.some(s => s.product === 'hydrogen'));
+  assert.ok(!made.feedsKgPerYear.some(f => f.id === 'hydrogen-feed'));
+  assert.ok(made.lcopUsdPerKg < bought.lcopUsdPerKg);
+});
+
+test('make-vs-buy: an expensive supplier, or integration disabled, keeps buying', () => {
+  assert.equal(rankOne([consumer, dearH2], {}).integration.length, 0);
+  assert.equal(rankOne([consumer, cheapH2], { integration: { enabled: false } }).integration.length, 0);
+});
+
+test('simulation records captive supply and keeps it out of the intermediate market', () => {
+  const result = C.simulateCompany({
+    pathways: [consumer, cheapH2], sites: SITES, markets: H2_MARKETS,
+    config: { years: 12, build: { maxMarketShare: 0.05 } },
+  });
+  const integrated = result.plants.filter(p => p.integration.length);
+  assert.ok(integrated.length > 0);
+  const last = result.timeline.at(-1);
+  assert.ok(last.captiveTByProduct.hydrogen > 0);
+  const captiveT = integrated.filter(p => p.onlineYear <= last.year)
+    .reduce((sum, p) => sum + p.integration[0].kgPerDay * 365 / 1000, 0);
+  close(last.captiveTByProduct.hydrogen, captiveT);
+  // Any H2 sold comes from merchant H2 plants, never from captive units.
+  const merchantT = result.plants.filter(p => p.pathwayId === 'cheap-h2' && p.onlineYear <= last.year)
+    .reduce((sum, p) => sum + p.sizeKgPerDay * 365 / 1000, 0);
+  close(last.outputTByProduct.hydrogen || 0, merchantT);
+});
+
+test('retired plants free their market share for new builds', () => {
+  const shortLived = { ...good, assetLifeYears: 3 };
+  const result = C.simulateCompany({
+    pathways: [shortLived], sites: SITES, markets: MARKETS,
+    config: { years: 12, build: { maxMarketShare: 0.01, leadTimeYears: 0 }, finance: { initialEquityUsd: 1e9 } },
+  });
+  const builtAfterRetirement = result.plants.filter(p => p.builtYear >= 2027 + 3);
+  assert.ok(builtAfterRetirement.length > 0, 'capacity is rebuilt once the first plants retire');
+  for (const year of result.timeline) assert.ok((year.shareByProduct.widget || 0) <= 0.01 + 1e-9);
+});
+
+test('infinite-sources-only builds the consumer only when it makes its intermediate in-house', () => {
+  const base = { pathways: [consumer], sites: SITES, markets: H2_MARKETS };
+  const without = C.simulateCompany({ ...base, config: { years: 6, build: { infiniteSourcesOnly: true } } });
+  assert.equal(without.plants.length, 0, 'buys H2 → not buildable');
+  const withDear = C.simulateCompany({
+    ...base, pathways: [consumer, dearH2],
+    config: { years: 6, build: { infiniteSourcesOnly: true, allowPathways: ['consumer', 'dear-h2'] } },
+  });
+  // Forced make-not-buy uses even an expensive supplier; whether it pays is then NPV's call.
+  const ranked = C.rankOpportunities({ ...base, pathways: [consumer, dearH2], config: { build: { infiniteSourcesOnly: true } } })
+    .find(r => r.pathwayId === 'consumer');
+  assert.equal(ranked.integration.length, 1);
+  assert.deepEqual(ranked.purchasedIntermediates, []);
+  assert.ok(withDear.plants.every(p => p.pathwayId !== 'consumer' || p.integration.length === 1));
+});

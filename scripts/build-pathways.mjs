@@ -51,6 +51,7 @@ const NAMES = {
   'float-glass.js': 'Float glass from purchased sand, soda ash + limestone',
   'ft-liquids.js': 'FT diesel from purchased H2 + CO2',
   'green-ammonia.js': 'Green ammonia (SWRO + PEM + ASU + Haber-Bosch)',
+  'green-hydrogen.js': 'Green hydrogen (SWRO + PEM electrolysis)',
   'green-ft.js': 'Green FT diesel (SWRO + PEM H2, purchased CO2)',
   'green-h2-dri.js': 'Green H2-DRI iron (SWRO + PEM H2, purchased ore)',
   'green-mto.js': 'Green ethylene via methanol-to-olefins (SWRO + PEM, purchased CO2)',

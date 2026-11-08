@@ -12,9 +12,9 @@ const INPUT_ONLY = new Set([
 const isSaleKey = (key) => !INPUT_ONLY.has(key) && !key.endsWith('-feed');
 const SALE_KEYS = Object.keys(tea.prices).filter(isSaleKey);
 // Extra market rows not in TeaScreening.prices, with the TeaScreening value they mirror.
-const EXTRA_PRICE_REF = { hydrogen: tea.costs['hydrogen-feed'].value };
+const EXTRA_PRICE_REF = {};
 
-test('markets schema version and key set match TeaScreening sale keys + hydrogen', () => {
+test('markets schema version and key set match TeaScreening sale keys', () => {
   assert.equal(SCHEMA_VERSION, 1);
   assert.ok(SALE_KEYS.length >= 30, `expected ≥30 sale keys, got ${SALE_KEYS.length}`);
   const expected = [...SALE_KEYS, ...Object.keys(EXTRA_PRICE_REF)].sort();
@@ -66,4 +66,8 @@ test('basis-sensitive rows use the documented conversions', () => {
   assert.ok(Math.abs(MARKETS['pv-module'].worldDemandTPerYear - 728e6 * 52.7 / 1000) < 1);
   // NdPr MREC and separated rows describe the same world market.
   assert.equal(MARKETS['ndpr-oxide'].worldDemandTPerYear, MARKETS['ndpr-oxide-separated'].worldDemandTPerYear);
+});
+
+test('hydrogen sells at the price the cases pay for purchased hydrogen-feed (make-vs-buy parity)', () => {
+  assert.equal(tea.prices.hydrogen.value, tea.costs['hydrogen-feed'].value);
 });

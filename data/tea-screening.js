@@ -159,6 +159,11 @@ const REGION_STRING_TO_ID = {
 };
 
 const prices = {
+  hydrogen: row(
+    2.00, '$/kg', 'screening', 'industrial/grey–blue H2 market price',
+    'Sale at the same screening industrial/grey–blue blend H₂ price the cases pay for purchased hydrogen-feed ($2.00/kg), so make-vs-buy compares like with like. Not a green premium and not a DOE $1/kg goal.',
+    [{ label: 'IEA Global Hydrogen Review 2024 (industrial/grey–blue H₂ family; screening $2.00/kg)', url: IEA_H2 }]
+  ),
   lithium: row(
     14, '$/kg', 'cited', 'USGS MCS 2025 lithium',
     'USGS MCS 2025 battery-grade Li₂CO₃ annual avg ~$14,000/t (2024e). Model product is Li salt / LiCl-like — LCE proxy for screening, not a LiCl contract.',

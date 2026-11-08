@@ -30,7 +30,7 @@ Each simulated year:
 1. **Plants come online** after a construction lead time.
 2. **Plants operate.** Revenue uses that year's realized price, which falls as the company's share of the world market grows (`price = p0 × (1 − elasticity × share)`). Opex is fixed O&M on built capex plus purchased feeds.
 3. **Debt is serviced** and cash is banked.
-4. **The company builds.** It ranks every pathway × site × plant size by NPV and builds the best affordable ones, using equity plus a debt fraction, until money, the yearly build limit, a per-product world-market share ceiling (applied to coproducts too) or a per-site PV ceiling stops it.
+4. **The company builds.** It ranks every pathway × site × plant size by NPV (deciding make-vs-buy for each purchased intermediate, below) and builds the best affordable ones, using equity plus a debt fraction, until money, the yearly build limit, a per-product world-market share ceiling (applied to coproducts too) or a per-site PV ceiling stops it.
 
 Costs fall three ways:
 
@@ -40,11 +40,13 @@ Costs fall three ways:
 
 PV is sized per site from frozen PVGIS yields (daily-average energy, as in the plant models). Siting rules: seawater recipes need a coast; brine recipes need the reference brine; inland salt-lake hubs host brine recipes only.
 
+**Make vs buy (vertical integration).** A plant that buys H₂, NH₃, methanol or glass can instead build its own supplier unit on the same site: another pathway whose product is that intermediate (seawater electrolysis for H₂, green ammonia, methanol, float glass). The supplier's capex, PV, land and opex join the plant, its coproducts (for example electrolyzer O₂) are sold, and the purchase disappears. The plant makes the intermediate only when the supplier's cost, net of its coproducts, beats the purchase price plus freight that year, so integration switches on as PV and electrolyzers get cheaper. In the default run every PV-module plant makes its own glass from year one, and H₂-DRI steel switches to in-house hydrogen later in the run. With "infinite sources only" on, in-house supply is forced and any plant that would still buy an intermediate is not built. CO₂ is always bought: no recipe undercuts $0.05–0.13/kg industrial CO₂.
+
 Every tunable lives in `FoundryCompany.DEFAULTS` (`engine/company.js`). The defaults are screening guesses, not sourced numbers. Change them and look at what moves.
 
 ## The data
 
-- **Pathways** (`data/pathways.js`, 23 recipes). Generated from the plant models by `npm run pathways`; a test fails if the committed file is stale. Each recipe gives electricity per kg, feeds by origin (`ocean`, `brine`, `air`, `crust`, `water`, or a purchased `intermediate` such as H₂ or TiCl₄), coproducts, and capex per kg/day split by technology class.
+- **Pathways** (`data/pathways.js`, 24 recipes). Generated from the plant models by `npm run pathways`; a test fails if the committed file is stale. Each recipe gives electricity per kg, feeds by origin (`ocean`, `brine`, `air`, `crust`, `water`, or a purchased `intermediate` such as H₂ or TiCl₄), coproducts, and capex per kg/day split by technology class.
 - **Markets** (`data/markets.js`, 31 products). World demand, year, growth, reference price (matching the plant models' prices) and a screening price elasticity. Rows are tagged `cited` (mostly USGS Mineral Commodity Summaries 2026, IEA) or `screening`, with sources. Overlapping rows (two NdPr oxides; other/light REO) share one market.
 - **Sites** (`data/site-presets.js`). 34 coasts and brine hubs with frozen PVGIS solar, seawater and brine assays, and land prices where a source exists.
 
@@ -93,7 +95,7 @@ Runs all regression checks (engine, data staleness, browser).
 
 - **Screening economics.** Constant real prices within a plant's life, no tax or inflation, simple annuity debt. Elasticities and learning rates are screening assumptions.
 - **No seasonal storage.** Daily-average solar energy, as in the plant models; batteries only where a case includes them.
-- **Purchased intermediates stay purchased.** The company does not yet integrate vertically, for example making its own H₂ for DRI.
+- **Make-vs-buy is one level deep and per plant.** A supplier unit serves only the plant it is built with. Suppliers that themselves buy intermediates are not used. TiCl₄, Mg, PLS and REE concentrates have no supplier recipe.
 - **Demo-scale recipes.** Some plant models are tiny (0.6–5 kg/day), so their per-kg capex is high and scale extrapolation is large; recipe notes flag this.
 - **Merchant vs captive markets.** Much ammonia, H₂, O₂ and DRI is captive; the share ceiling is the only guard.
 - **Multi-product plants.** Cost per kg is net of coproduct revenue, so it can be negative for brine hubs.

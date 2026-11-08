@@ -21,9 +21,4 @@ function expandAppFiles(files) {
   return files.flatMap(file => (file === ENTRY ? APP_FILES : [file]));
 }
 
-// Concatenated source of every app file, for source-text assertions.
-function readAppSource() {
-  return APP_FILES.map(file => fs.readFileSync(path.join(ROOT, file), 'utf8')).join('\n');
-}
-
-module.exports = { APP_FILES, ENTRY, expandAppFiles, readAppSource };
+module.exports = { APP_FILES, ENTRY, expandAppFiles };

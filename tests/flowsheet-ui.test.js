@@ -8,8 +8,7 @@ const ROOT = path.join(__dirname, '..');
 const INDEX_HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 // Boot exactly what the page loads, in page order (CDN and vendored decoders aside),
 // so a missing or misordered script fails here as a boot error. Every case file the
-// page lists (cases/mto.js, cases/ft-liquids.js, ...) is loaded and exercised by the
-// Overview demo test below.
+// page lists is loaded and exercised by the Overview demo test below.
 const PAGE_SCRIPTS = [...INDEX_HTML.matchAll(/<script src="([^"]+)"/g)]
   .map(match => match[1])
   .filter(file => !/^(https?:|vendor\/)/.test(file));

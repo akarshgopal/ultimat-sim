@@ -497,7 +497,7 @@
         const cfg = result.config;
         const items = [
           'Screening model, not a bankable forecast: constant real prices and costs over each plant’s life, no tax, no inflation.',
-          'Energy is daily-average solar per site (frozen PVGIS yields) with no seasonal storage; intermittency and curtailment are not modelled.',
+          'Solar-only operation: flexible units are sized for the sun hours of 12 monthly typical days per site, steady units are firmed by batteries or thermal stores (never below 70% turndown), intermediates between them are buffered; curtailed solar is lost. Half-sine typical days, no weather variability between days.',
           `The ${UI.pct(cfg.build.maxMarketShare)} market-share ceiling and each market’s price elasticity are assumptions; price relief scales with both.`,
           'Plant TEA is screening-grade: per-kg recipes reduced from one flowsheet case at one reference site.',
           cfg.integration.enabled

@@ -14,7 +14,7 @@ const BUILD_ID = getBuildId();
 // generators run in Node only (scripts/build-pathways.mjs, scripts/build-sites.mjs).
 const INCLUDE = [
   'index.html', 'app.css', 'css', 'js', 'favicon.svg', 'LICENSE', 'NOTICE',
-  'engine/company.js', 'data/pathways.js', 'data/markets.js', 'data/sites.js',
+  'engine/utilization.js', 'engine/company.js', 'data/pathways.js', 'data/markets.js', 'data/sites.js',
 ];
 await fs.rm(DIST, { recursive: true, force: true });
 await fs.mkdir(DIST, { recursive: true });

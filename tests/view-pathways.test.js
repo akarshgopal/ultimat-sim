@@ -21,7 +21,14 @@ test('evaluateAtYear matches rankOpportunities at year 0 and follows the cost fa
     costFactors: { electrolyzer: 0.5, process: 0.5, desal: 0.5, dac: 0.5, storage: 0.5 }, pvUsdPerKWp: 200,
   });
   assert.ok(cheaper.lcopUsdPerKg < ev.lcopUsdPerKg, 'lower cost factors and PV price lower the cost');
-  assert.ok(Math.abs(cheaper.capex.process - ev.capex.process * 0.5) < 1e-6 * ev.capex.process, 'process capex scales with the given factors');
+  // With the utilization design off, process capex scales exactly with the cost factors (with it
+  // on, cheaper PV and equipment re-optimize oversizing and storage, so the scaling is not linear).
+  const flat = { ...input, config: { utilization: { enabled: false } } };
+  const flat0 = Company.evaluateAtYear(flat, 'green-ammonia', row.siteId, row.sizeKgPerDay, 0);
+  const flatCheap = Company.evaluateAtYear(flat, 'green-ammonia', row.siteId, row.sizeKgPerDay, 5, {
+    costFactors: { electrolyzer: 0.5, process: 0.5, desal: 0.5, dac: 0.5, storage: 0.5 }, pvUsdPerKWp: 200,
+  });
+  assert.ok(Math.abs(flatCheap.capex.process - flat0.capex.process * 0.5) < 1e-6 * flat0.capex.process, 'process capex scales with the given factors');
   assert.equal(Company.evaluateAtYear(input, 'no-such-pathway', row.siteId, 1000, 0), null);
   assert.equal(Company.evaluateAtYear(input, 'green-ammonia', 'no-such-site', 1000, 0), null);
 });

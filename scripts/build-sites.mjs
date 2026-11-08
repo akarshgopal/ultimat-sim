@@ -17,18 +17,21 @@ export function buildSiteRows() {
   const Company = require('../engine/company.js');
   const Land = require('../engine/land.js');
   const presets = require('../data/site-presets.js');
+  const pvgis = require('../data/pvgis-sites.js');
+  const presetById = new Map(presets.map(p => [p.id, p]));
   const rows = Company.buildSites({
     sitePresets: presets,
-    pvgisSites: require('../data/pvgis-sites.js'),
+    pvgisSites: pvgis,
     landPriceAt: (lat, lon) => Land.landPriceAt(lat, lon),
   });
-  const presetById = new Map(presets.map(p => [p.id, p]));
   return rows.map(row => {
     const land = (() => { try { return Land.landPriceAt(row.latitude, row.longitude); } catch { return null; } })();
     const preset = presetById.get(row.id);
     return {
       ...row,
       pvKWhPerKWpDay: Number(row.pvKWhPerKWpDay.toPrecision(6)),
+      // Frozen PVGIS monthly E_d (kWh/kWp·day, Jan..Dec): the utilization model's 12 typical days.
+      pvMonthlyKWhPerKWpDay: (pvgis.frozenSolarFor(presetById.get(row.id))?.monthlyPVKWhPerKWp || []).slice(1).map(v => Number(Number(v).toPrecision(4))),
       landUsdPerHa: row.landUsdPerHa == null ? null : Math.round(row.landUsdPerHa),
       landSource: land?.source ? { name: land.name || null, quality: land.quality || null, url: land.citeUrl || null } : null,
       notes: preset?.notes || '',

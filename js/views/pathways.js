@@ -7,6 +7,36 @@
   const RANK_SIZE_MULTIPLE = 10; // Store.rank default: plants at 10× the case's reference output
 
   // ------------------------------------------------------------------ shared data
+  // The utilization design behind a plant's cost: sun-following vs firmed, equipment oversizing,
+  // storage and buffers, and how much of nameplate output it delivers over the year.
+  function operationOnSolar(UI, rank) {
+    const { el } = UI;
+    const u = rank?.utilization;
+    if (!u) {
+      return el('p', { class: 'muted', text: rank ? 'This recipe has no flowsheet, so it is costed on 24 h-average energy.' : 'No compatible site.' });
+    }
+    const perTpd = kWh => UI.num(kWh / (rank.sizeKgPerDay / 1000)) + ' kWh per t/day';
+    const rows = [
+      ['Strategy', u.strategy === 'sun-following'
+        ? 'Sun-following: flexible units run when the sun shines; steady units are firmed by storage'
+        : 'Firmed: every unit runs around the clock on PV + storage'],
+      ['Output vs nameplate', UI.pct(u.outputFactor, 0) + (u.outputFactor < 0.995 ? ' (steady units turn down in low-sun months)' : '')],
+      u.flexFullLoadHoursPerDay != null && u.flexFullLoadHoursPerDay < 24
+        ? ['Flexible units', `${UI.num(u.flexFullLoadHoursPerDay, 2)} full-load h/day → ${UI.num(u.flexNameplateFactor, 2)}× the nameplate of a 24 h plant`]
+        : null,
+      u.batteryKWh > 0 ? ['Battery', perTpd(u.batteryKWh)] : null,
+      u.thermalKWh > 0 ? ['Thermal store', perTpd(u.thermalKWh) + ' (heat-dominated units)'] : null,
+      ...(u.buffers || []).filter(b => b.kg > 0).map(b => ['Buffer', `${b.substance}: ${UI.num(b.kg / (rank.sizeKgPerDay / 1000))} kg per t/day of capacity (${UI.usd(b.usd)})`]),
+      ...(rank.integration || []).filter(i => i.bufferKg > 0).map(i => ['Buffer', `captive ${UI.shortName(i.product)}: ${UI.num(i.bufferKg / (rank.sizeKgPerDay / 1000))} kg per t/day (${UI.usd(i.bufferUsd)})`]),
+      ['Storage capex', `${UI.usd(u.storageUsd)} of ${UI.usd(rank.capex.total)} total`],
+    ].filter(Boolean);
+    const alt = (u.alternatives || []).filter(a => a.strategy !== u.strategy);
+    return el('div', {}, [
+      el('table', { class: 'data-table compact' }, el('tbody', {}, rows.map(([k, v]) => el('tr', {}, [el('th', { scope: 'row', text: k }), el('td', { text: v })])))),
+      alt.length ? el('p', { class: 'muted pw-foot', text: `Cheaper than ${alt.map(a => a.strategy).join(', ')} by ${UI.pct(alt[0].capexPerOutput / Math.max(1, (u.alternatives.find(a => a.strategy === u.strategy) || {}).capexPerOutput || 1) - 1, 0)} capex per unit of output.` }) : null,
+    ]);
+  }
+
   // Year-0 ranking rows keyed by pathway id, memoized per scenario.
   let rankCache = { key: null, rows: null };
   function rankById(Store) {
@@ -578,12 +608,14 @@
     const chartNote = el('div', { class: 'pw-chart-note' });
     const sitesHost = el('div');
     const plantsHost = el('div');
+    const opsHost = el('div');
     root.append(
       kpis,
       el('div', { class: 'grid grid-2 pw-grid' }, [
         UI.card('Recipe', 'per kg of ' + UI.productName(pathway.product), recipe(UI, Store, pathway, href)),
         UI.card('Cost vs year', 'at the best site, with this run’s PV price and cost factors', [chartHost, chartNote]),
       ]),
+      UI.card('Operation on solar', 'how the plant runs on sunlight alone at its best site, year-0 costs', opsHost),
       el('div', { class: 'grid grid-2 pw-grid' }, [
         UI.card('Best sites', `top 5 by net cost, ${Company.DEFAULTS.startYear}`, sitesHost),
         UI.card('Plants built', 'in the current simulation', plantsHost),
@@ -616,10 +648,15 @@
         UI.kpi('Net cost', rank ? UI.usdKg(rank.lcopUsdPerKg) + '/kg' : '—', rank ? (rank.coproductCreditUsdPerKg > 0 ? `gross ${UI.usdKg(rank.grossCostUsdPerKg)}, co-products −${UI.usdKg(rank.coproductCreditUsdPerKg)}` : 'no co-product credit') : 'no compatible site'),
         UI.kpi('Price', UI.usdKg(rank?.priceUsdPerKg ?? market?.priceUsdPerKg) + '/kg', market ? `world market ${UI.tonnes(market.worldDemandTPerYear)}/yr` : ''),
         UI.kpi('Margin', rank ? UI.usdKg(rank.marginUsdPerKg) : '—', rank && rank.priceUsdPerKg > 0 ? UI.pct(rank.marginUsdPerKg / rank.priceUsdPerKg, 0) + ' of price' : ''),
-        UI.kpi('Electricity', UI.num(pathway.electricityKWhPerKg) + ' kWh/kg', pathway.heatKWhPerKg > 0 ? `+ ${UI.num(pathway.heatKWhPerKg)} kWh/kg heat` : 'PV-powered'),
+        UI.kpi('Electricity', UI.num(pathway.electricityKWhPerKg) + ' kWh/kg', rank?.utilization
+          ? `${rank.utilization.strategy} · output ${UI.pct(rank.utilization.outputFactor, 0)} of nameplate`
+          : (pathway.heatKWhPerKg > 0 ? `+ ${UI.num(pathway.heatKWhPerKg)} kWh/kg heat` : 'PV-powered')),
         UI.kpi('Capex ex-PV', UI.usd(capexPerKgDay), `per kg/day · plant ${UI.tonnes(size * 365 / 1000)}/yr`),
         UI.kpi('Plants built', result ? String(plants.length) : '…', plants.length ? `${UI.tonnes(plants.reduce((s, p) => s + p.sizeKgPerDay * 365 / 1000, 0))}/yr capacity` : ''),
       );
+
+      // Operation on solar (utilization & storage design).
+      opsHost.replaceChildren(operationOnSolar(UI, rank));
 
       // Best sites.
       const sites = bestSites(Store, pathway, size);

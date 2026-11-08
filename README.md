@@ -36,6 +36,8 @@ Each simulated year:
 3. **Debt is serviced** and cash is banked.
 4. **The company builds.** Among plants that pay back their capital (NPV ≥ 0) and that it can afford, it picks the one with the most lifetime material: the plant's own tonnes plus the tonnes its surplus will fund when reinvested (`own kg + λ × NPV`, with λ the year's best kg per capex dollar). A `profit` objective (highest NPV) is kept for comparison. It decides make-vs-buy for each purchased intermediate (below) and builds the best affordable ones, using equity plus a debt fraction, until money, the yearly build limit, a per-product world-market share ceiling (applied to coproducts too) or a per-site PV ceiling stops it.
 
+**Running on sunlight alone (utilization).** Each plant is designed per site from the recipe's flowsheet and 12 monthly typical solar days. Flexible units are sized for the hours the sun shines, choosing the unit-to-PV ratio that minimizes PV plus oversized equipment; steady units (kilns, furnaces, Haber-Bosch, synthesis loops) are firmed with batteries, or thermal stores for heat-dominated units, never turning down below 70% of full load; an intermediate passed from a flexible to a steady unit (H₂ into Haber-Bosch or DRI) is buffered overnight. The cheaper of "sun-following" and "everything firmed" wins. At 2027 costs this puts solar-only green H₂ at about $6.6/kg and green NH₃ at about $1.55/kg at the best site, inside or near the published IEA (2024) and IRENA (2022) ranges; the old 24 h costing gave $4.8 and $1.18.
+
 Costs fall three ways:
 
 - **Exogenous decline:** each technology class (PV, electrolyzer, DAC, desalination, storage, other process) gets cheaper by a set percentage a year.
@@ -98,7 +100,7 @@ Runs all regression checks (engine, data staleness, browser).
 ## Known limits
 
 - **Screening economics.** Constant real prices within a plant's life, no tax or inflation, simple annuity debt. Elasticities and learning rates are screening assumptions.
-- **Equipment utilization is not modelled yet (the largest TEA gap).** Plant models size equipment to daily-average solar energy as if it ran 24 h; solar gives ~5 full-sun hours a day, so sun-following units (electrolyzers, DAC, SWRO) are under-costed ~4× and continuous units (kilns, float glass, Haber-Bosch) need storage that is not costed. No seasonal storage. Batteries only where a case includes them.
+- **Solar-only operation is modelled with typical days, not weather.** Equipment is sized for 12 monthly half-sine typical days per site (`engine/utilization.js`): flexible units (electrolyzers, SWRO, DAC, pumps, chlor-alkali, EW) follow the sun and are oversized accordingly; steady units are firmed by batteries or thermal stores and never turn down below 70%; intermediates between them are buffered. Day-to-day weather variability, multi-day storage and grid backup are not modelled; unit modes and storage costs are screening assumptions (all in `FoundryCompany.DEFAULTS.utilization`).
 - **Make-vs-buy is one level deep and per plant.** A supplier unit serves only the plant it is built with. Suppliers that themselves buy intermediates are not used. TiCl₄, Mg, PLS and REE concentrates have no supplier recipe.
 - **Demo-scale recipes.** Some plant models are tiny (0.6–5 kg/day), so their per-kg capex is high and scale extrapolation is large; recipe notes flag this.
 - **Merchant vs captive markets.** Much ammonia, H₂, O₂ and DRI is captive; the share ceiling is the only guard.

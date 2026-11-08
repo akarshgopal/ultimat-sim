@@ -20,10 +20,10 @@
 // inflation, no seasonal storage (daily-average energy as in the source cases),
 // purchased intermediates stay purchased. Not a bankable forecast.
 (function exposeCompany(root, factory) {
-  const api = factory();
+  const api = factory(typeof require === 'function' ? require('./utilization') : root.FoundryUtilization);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FoundryCompany = api;
-})(globalThis, () => {
+})(globalThis, Utilization => {
   const TECH_CLASSES = Object.freeze(['process', 'electrolyzer', 'dac', 'desal', 'storage']);
   const INFINITE_ORIGINS = Object.freeze(['ocean', 'brine', 'air', 'crust', 'water']);
 
@@ -86,6 +86,10 @@
       storage: Object.freeze({ exogenousDeclinePerYear: 0.06, learningRate: 0.1, seedUsd: 50e6, floorFraction: 0.3 }),
     }),
     defaultLandUsdPerHa: 2000,
+    // Solar-only utilization and storage design (engine/utilization.js): flexible units are sized
+    // for the hours the sun shines, baseload units are firmed with batteries / thermal stores,
+    // intermediates between them are buffered. Recipes without a flowsheet keep 24 h costing.
+    utilization: Utilization.DEFAULTS,
     // Products that draw on the same world market (see data/markets.js notes):
     // shares and headroom are computed on the group key's demand.
     // Make-vs-buy for purchased intermediates (see planIntegration). feedProducts maps a
@@ -248,6 +252,9 @@
   // switches on as PV and electrolyzers get cheaper. One level deep: suppliers that themselves
   // buy intermediates are not used.
 
+  // Dominant stored substance of an intermediate product, for buffer costing.
+  const PRODUCT_SUBSTANCE = Object.freeze({ hydrogen: 'H2', ammonia: 'NH3', methanol: 'CH3OH' });
+
   function captiveSuppliers(cfg, pathways) {
     const byProduct = new Map();
     if (!cfg.integration?.enabled) return byProduct;
@@ -298,7 +305,6 @@
   //        suppliers?: Map(product → pathways), sitesById?: Map }  (suppliers enable integration)
   function evaluatePlant(pathway, site, sizeKgPerDay, ctx) {
     const { cfg } = ctx;
-    const annualKg = sizeKgPerDay * 365;
     const sf = scaleFactor(cfg.scale, sizeKgPerDay, pathway.refOutputKgPerDay);
     const perKgDay = capexByTech(pathway);
     const siteMult = Number(site.capexMultiplier) || 1;
@@ -309,13 +315,50 @@
     const refCapexByTech = {};
     let processCapex = 0;
     for (const cls of TECH_CLASSES) {
-      const value = perKgDay[cls] * sizeKgPerDay * sf * ctx.costFactors[cls] * siteMult;
+      const value = perKgDay[cls] * sizeKgPerDay * sf * (ctx.costFactors[cls] ?? 1) * siteMult;
       processByTech[cls] = value;
       refCapexByTech[cls] = perKgDay[cls] * sizeKgPerDay;
       processCapex += value;
     }
     const kWhPerKg = (Number(pathway.electricityKWhPerKg) || 0) + (Number(pathway.heatKWhPerKg) || 0);
-    let pvKWp = site.pvKWhPerKWpDay > 0 ? (kWhPerKg * sizeKgPerDay) / site.pvKWhPerKWpDay : 0;
+    // Solar-only utilization: resize equipment for sun hours, add storage, derate output.
+    const util = Utilization.mergeCfg(cfg.utilization || Utilization.DEFAULTS);
+    const profile = util.enabled ? Utilization.operatingProfile(pathway, util) : null;
+    let design = null;
+    let pvKWp;
+    if (profile && site.pvKWhPerKWpDay > 0) {
+      const capex24ByClass = {};
+      for (const cls of TECH_CLASSES) if (cls !== 'storage') capex24ByClass[cls] = processByTech[cls];
+      const storageFactor = ctx.costFactors.storage ?? 1;
+      // Designs depend on this year's costs, not on market prices: cache them for the year.
+      const designKey = pathway.id + '|' + site.id + '|' + sizeKgPerDay;
+      design = ctx.designCache?.get(designKey);
+      if (!design) {
+        design = Utilization.designPlant(profile, site, sizeKgPerDay, {
+          pvUsdPerKWp: ctx.pvUsdPerKWp * siteMult,
+          batteryUsdPerKWh: util.battery.usdPerKWh * storageFactor * siteMult,
+          thermalUsdPerKWh: util.thermal.usdPerKWh * storageFactor * siteMult,
+          capex24ByClass,
+        }, util);
+        ctx.designCache?.set(designKey, design);
+      }
+      processCapex = 0;
+      for (const cls of TECH_CLASSES) {
+        if (cls !== 'storage') {
+          const before = processByTech[cls];
+          processByTech[cls] = design.capexByClass[cls] || 0;
+          if (before > 0) refCapexByTech[cls] *= processByTech[cls] / before;
+        }
+      }
+      processByTech.storage += design.storageUsd;
+      refCapexByTech.storage += design.storageUsd / Math.max(storageFactor, 1e-9) / siteMult;
+      for (const cls of TECH_CLASSES) processCapex += processByTech[cls];
+      pvKWp = design.pvKWp;
+    } else {
+      pvKWp = site.pvKWhPerKWpDay > 0 ? (kWhPerKg * sizeKgPerDay) / site.pvKWhPerKWpDay : 0;
+    }
+    const outputFactor = design ? design.outputFactor : 1;
+    const annualKg = sizeKgPerDay * 365 * outputFactor;
     let pvCapex = pvKWp * ctx.pvUsdPerKWp * siteMult;
     let landHa = pvKWp * cfg.pv.landHaPerKWp;
     const landUsdPerHa = site.landUsdPerHa > 0 ? site.landUsdPerHa : cfg.defaultLandUsdPerHa;
@@ -333,7 +376,11 @@
       if (feed.origin === 'intermediate') purchasedIntermediates.push(feed.id);
       feedUsdPerKg += (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0));
     }
-    let fixedOm = processCapex * (Number(pathway.fixedOmFracPerYear) || 0) + pvKWp * cfg.pv.fixedOmUsdPerKWpYear;
+    // Recipe fixed O&M applies to process equipment; stores carry their own O&M (below).
+    const storageUsd = design ? design.storageUsd : 0;
+    let fixedOm = (processCapex - storageUsd) * (Number(pathway.fixedOmFracPerYear) || 0)
+      + pvKWp * cfg.pv.fixedOmUsdPerKWpYear
+      + (design ? design.storageFixedOmUsdPerYear : 0);
     let variableOm = annualKg * ((Number(pathway.variableOmUsdPerKg) || 0) + feedUsdPerKg);
 
     const price = ctx.priceFor(pathway.product, null, annualKg);
@@ -346,8 +393,9 @@
     }
 
     // Fold captive supplier units into this plant.
-    let lifeCapexWeighted = processCapex * (Number(pathway.assetLifeYears) || cfg.pv.lifeYears);
-    let lifeWeight = processCapex;
+    // Stores are excluded from the life weighting: they are replaced on their own schedule (reserve below).
+    let lifeCapexWeighted = (processCapex - storageUsd) * (Number(pathway.assetLifeYears) || cfg.pv.lifeYears);
+    let lifeWeight = processCapex - storageUsd;
     for (const item of integration) {
       const u = item.unit;
       for (const cls of TECH_CLASSES) {
@@ -367,13 +415,33 @@
       for (const feed of u.feedsKgPerYear) feedsKgPerYear.push(feed);
       lifeCapexWeighted += u.capex.process * u.lifeYears;
       lifeWeight += u.capex.process;
+      // A sun-following captive supplier feeding a steady consumer: buffer the intermediate
+      // through the supplier's off-hours.
+      const flh = u.utilization?.flexFullLoadHoursPerDay;
+      if (profile?.hasBase && Number.isFinite(flh) && flh < 24) {
+        const substance = PRODUCT_SUBSTANCE[item.product] || 'default';
+        const prices = util.bufferUsdPerKg;
+        const kg = item.kgPerDay * outputFactor * (24 - flh) / 24;
+        const usd = kg * (prices[substance] ?? prices.default) * (ctx.costFactors.storage ?? 1) * siteMult;
+        item.bufferKg = kg;
+        item.bufferUsd = usd;
+        processByTech.storage += usd;
+        refCapexByTech.storage += usd / Math.max(ctx.costFactors.storage ?? 1, 1e-9) / siteMult;
+        processCapex += usd;
+      }
     }
     const capexTotal = processCapex + pvCapex + landCapex;
+    const processLife = lifeWeight > 0 ? lifeCapexWeighted / lifeWeight : (Number(pathway.assetLifeYears) || cfg.pv.lifeYears);
+    const life = Math.max(1, Math.min(processLife, cfg.pv.lifeYears));
+    // Replacement reserve for stores that wear out within the plant's life.
+    const storageReplacementUsdPerYear = design
+      ? design.batteryUsd * Math.max(0, 1 / design.batteryLifeYears - 1 / life)
+        + design.thermalUsd * Math.max(0, 1 / design.thermalLifeYears - 1 / life)
+      : 0;
+    fixedOm += storageReplacementUsdPerYear;
     const opex = fixedOm + variableOm;
     const revenue = annualKg * price + coproductRevenue;
     const annualCash = revenue - opex;
-    const processLife = lifeWeight > 0 ? lifeCapexWeighted / lifeWeight : (Number(pathway.assetLifeYears) || cfg.pv.lifeYears);
-    const life = Math.max(1, Math.min(processLife, cfg.pv.lifeYears));
     const r = cfg.finance.discountRate;
     const af = annuityFactor(r, life);
     const lead = cfg.build.leadTimeYears || 0;
@@ -413,6 +481,19 @@
       feedsKgPerYear,
       purchasedIntermediates,
       integration: integration.map(({ unit, ...item }) => item),
+      utilization: design ? {
+        strategy: design.strategy,
+        outputFactor: design.outputFactor,
+        flexFullLoadHoursPerDay: design.flexFullLoadHoursPerDay,
+        flexNameplateFactor: design.flexNameplateFactor,
+        batteryKWh: design.batteryKWh,
+        thermalKWh: design.thermalKWh,
+        bufferUsd: design.bufferUsd,
+        buffers: design.buffers,
+        storageUsd: design.storageUsd,
+        storageReplacementUsdPerYear,
+        alternatives: design.alternatives,
+      } : null,
     };
   }
 
@@ -463,7 +544,7 @@
       }
       return caps.get(group);
     };
-    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, priceFor, shareOf, capKg, ...extras };
+    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, priceFor, shareOf, capKg, designCache: new Map(), ...extras };
   }
 
   function marketGroupOf(cfg, product) {

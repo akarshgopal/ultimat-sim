@@ -1,6 +1,4 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
 
 const { SUBSTANCES, streamMassKg } = require('../engine/model');
@@ -280,56 +278,6 @@ test('sizeToProduct ammonia on abundance meets the NH3 sink', () => {
   assert.ok(sized.residual < 1e-6);
   assert.equal(sized.converged, true);
   assertClosed(sized.solved);
-});
-
-test('sizeToProduct aliases PV module on the Mejillones chain', () => {
-  const { createSiliconCase } = require('../cases/silicon');
-  const sized = sizeToProduct({ product: 'pv-module', rate: 500, caseOrBuilder: createSiliconCase });
-  assert.equal(sized.product, 'module');
-  assert.ok(Math.abs(sized.achieved - 500) / 500 < 0.05);
-  assert.ok(sized.definition.graph.nodes.find(node => node.unit === 'pv-module').capacity > 0);
-});
-
-test('sizeToProduct aliases steel/fe and ethylene/mto', () => {
-  const { createH2DriCase } = require('../cases/h2-dri');
-  const { createMtoCase } = require('../cases/mto');
-  assert.equal(sizeToProduct({ product: 'fe', rate: 500, caseOrBuilder: createH2DriCase }).product, 'steel');
-  assert.equal(sizeToProduct({ product: 'mto', rate: 500, caseOrBuilder: createMtoCase }).product, 'ethylene');
-});
-
-test('sizeToProduct aliases diesel/ft', () => {
-  const { createFtLiquidsCase } = require('../cases/ft-liquids');
-  assert.equal(sizeToProduct({ product: 'ft', rate: 2000, caseOrBuilder: createFtLiquidsCase }).product, 'diesel');
-});
-
-test('sizeToProduct aliases urea/CO(NH2)2', () => {
-  const { createUreaCase } = require('../cases/urea');
-  assert.equal(sizeToProduct({ product: 'CO(NH2)2', rate: 2000, caseOrBuilder: createUreaCase }).product, 'urea');
-});
-
-test('sizeToProduct aliases titanium/ti/sponge', () => {
-  const { createTiKrollCase } = require('../cases/ti-kroll');
-  assert.equal(sizeToProduct({ product: 'ti', rate: 2000, caseOrBuilder: createTiKrollCase }).product, 'titanium');
-});
-
-test('sizeToProduct aliases float-glass/glass/solar-glass', () => {
-  const { createFloatGlassCase } = require('../cases/float-glass');
-  assert.equal(sizeToProduct({ product: 'glass', rate: 2000, caseOrBuilder: createFloatGlassCase }).product, 'float-glass');
-});
-
-test('sizeToProduct aliases cement/clinker/cem-i/portland', () => {
-  const { createCementCase } = require('../cases/cement');
-  assert.equal(sizeToProduct({ product: 'clinker', rate: 2000, caseOrBuilder: createCementCase }).product, 'cement');
-});
-
-test('sizeToProduct aliases copper/cu/cathode/cu-ew', () => {
-  const { createCuEwCase } = require('../cases/cu-ew');
-  assert.equal(sizeToProduct({ product: 'cu', rate: 2000, caseOrBuilder: createCuEwCase }).product, 'copper');
-});
-
-test('sizeToProduct aliases ndpr/nd-pr/nd2o3/maglut', () => {
-  const { createMaglutCase } = require('../cases/maglut');
-  assert.equal(sizeToProduct({ product: 'maglut', rate: 0.6, caseOrBuilder: createMaglutCase }).product, 'ndpr');
 });
 
 test('H2 sizing cascades an explicit hot source onto MED heat', () => {

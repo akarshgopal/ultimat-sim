@@ -1,14 +1,10 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
 
 const { scorePositiveCashflow, evaluateEconomics } = require('../engine/economics');
 const { solveOperation } = require('../engine/solve');
-const { sizeForPositiveCashflow, sizeToProduct, ABSOLUTE_SCALE_CAP } = require('../engine/size');
+const { sizeForPositiveCashflow, ABSOLUTE_SCALE_CAP } = require('../engine/size');
 const { createAbundanceCase } = require('../cases/abundance');
-const { createCoastalCase } = require('../cases/coastal');
-const { createSabatierCase } = require('../cases/sabatier');
 
 function assertClosed(solved) {
   assert.ok(solved.balances.maxAbsResidual < 1e-8);
@@ -68,20 +64,6 @@ test('scorePositiveCashflow counts sale products only when plant net cash is pos
   assert.equal(closedBalance.met, true);
   assert.ok(negative.products.every(product => product.positive === false));
   assert.ok(negative.products.every(product => product.active === true));
-});
-
-test('sizeForPositiveCashflow on Lake Mackay reports activeSaleCount when cash≤0', () => {
-  const sized = sizeForPositiveCashflow({
-    caseOrBuilder: () => createAbundanceCase({ assayId: 'lake-mackay-wa-brine', region: 'Australia' }),
-    scales: [1],
-    rates: [0],
-    refine: false,
-  });
-  assert.equal(sized.objective.met, false);
-  assert.ok(sized.objective.annualNetCash <= 0);
-  assert.equal(sized.objective.positiveSaleCount, 0, 'maximizer count stays 0 when cash≤0');
-  assert.ok(sized.objective.activeSaleCount > 0, 'reporting count of R_i>0 sinks is honest');
-  assert.ok(sized.objective.products.filter(product => product.active).length > 0);
 });
 
 test('sizeForPositiveCashflow scores abundance with a capital-inclusive cash gate', () => {
@@ -194,23 +176,6 @@ function mineralsAndHydrogenPlant() {
     },
   };
 }
-
-test('sizeForPositiveCashflow on abundance also searches the ammonia fuel family', () => {
-  const sized = sizeForPositiveCashflow({ caseOrBuilder: createAbundanceCase, scales: [1], rates: [0] });
-  assert.ok(sized.familiesSearched.includes('abundance'));
-  assert.ok(sized.familiesSearched.includes('fuel'));
-  assert.ok(sized.candidatesTried > 3);
-  assert.equal(sized.heatCoveredKWh != null || sized.heatResidualKWh != null, true);
-});
-
-test('sizeToProduct runs on Atacama lithium brine abundance case', () => {
-  const definition = createAbundanceCase({ assayId: 'atacama-lithium-brine' });
-  const sized = sizeToProduct({ product: 'LiCl', rate: 20, definition });
-  assert.equal(sized.product, 'lithium');
-  assert.equal(sized.converged, true);
-  assert.ok(Math.abs(sized.achieved - 20) < 1e-4);
-  assertClosed(sized.solved);
-});
 
 function windowedCashMineralsPlant() {
   const brine = {

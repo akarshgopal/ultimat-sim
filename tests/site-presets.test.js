@@ -2,7 +2,6 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const SITE_PRESETS = require('../data/site-presets.js');
-const { RIGHT_KEYS, RIGHT_KINDS, authorizeForStatus } = require('../engine/uncertainty');
 
 const KINDS = new Set(['coastal-solar', 'brine-hub', 'desert-solar', 'industrial-coast']);
 
@@ -39,11 +38,8 @@ test('SITE_PRESETS export unique ids and finite lat/lon on globalThis and module
       assert.equal(site.rightsHints.seawaterIntake.authorize, true);
     }
     for (const [key, hint] of Object.entries(site.rightsHints)) {
-      assert.ok(RIGHT_KEYS.includes(key), `${site.id} unknown right ${key}`);
-      assert.equal(hint.kind, RIGHT_KINDS[key]);
       assert.ok(hint.status === 'unverified' || hint.status === 'assumed', `${site.id} ${key} status`);
       assert.notEqual(hint.status, 'authorized');
-      assert.equal(hint.authorize, authorizeForStatus(hint.status));
       assert.equal(hint.authorize, hint.status === 'assumed');
       assert.equal(typeof hint.note, 'string');
       assert.ok(hint.note.length > 0);

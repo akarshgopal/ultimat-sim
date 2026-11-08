@@ -2,8 +2,8 @@
 // Per-kg-product recipes reduced from each cases/*.js baseline solve + evaluateEconomics
 // (PV CAPEX excluded; non-PV CAPEX per kg/day of primary product, split by technology class).
 // Cases: 23; pathways: 24. Skipped:
+//   cases/brine-hubs.js: no create…Case factory export
 //   cases/dac.js: test fixture (DAC unit harness), not a production plant
-//   cases/network.js: aggregates other cases into a site network; its member plants are already rows
 (function exposePathways(root, data) {
   const freeze = value => {
     if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -2148,16 +2148,16 @@
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "b59c76d",
+    "gitSha": "e27d434",
     "caseCount": 23,
     "skipped": [
       {
-        "file": "cases/dac.js",
-        "reason": "test fixture (DAC unit harness), not a production plant"
+        "file": "cases/brine-hubs.js",
+        "reason": "no create…Case factory export"
       },
       {
-        "file": "cases/network.js",
-        "reason": "aggregates other cases into a site network; its member plants are already rows"
+        "file": "cases/dac.js",
+        "reason": "test fixture (DAC unit harness), not a production plant"
       }
     ]
   },

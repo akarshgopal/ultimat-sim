@@ -8,7 +8,7 @@ const tea = require('../data/tea-screening');
 const { evaluateEconomics } = require('../engine/economics');
 const { estimateFootprint, PROCESS_INTENSITIES } = require('../engine/footprint');
 const { solveOperation } = require('../engine/solve');
-const { siteZabuyeAbundance, siteDeadSeaAbundance } = require('../cases/network');
+const { siteZabuyeAbundance, siteDeadSeaAbundance } = require('../cases/brine-hubs');
 const { createCoastalCase } = require('../cases/coastal');
 const { createAbundanceCase } = require('../cases/abundance');
 

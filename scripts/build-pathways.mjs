@@ -39,7 +39,6 @@ const pvgisSites = fs.readFileSync(path.join(ROOT, 'data/pvgis-sites.js'), 'utf8
 
 const SKIP = {
   'dac.js': 'test fixture (DAC unit harness), not a production plant',
-  'network.js': 'aggregates other cases into a site network; its member plants are already rows',
 };
 
 const NAMES = {

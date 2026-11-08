@@ -1,23 +1,14 @@
-(function exposeNetworkCase(root, factory) {
+// Sited brine-hub plant models: the Dead Sea and Zabuye (Tibet) abundance hubs at their map
+// points, with frozen PVGIS solar and site rights. Built on cases/abundance.js.
+(function exposeBrineHubCases(root, factory) {
   const api = factory(
-    typeof require === 'function' ? require('./coastal') : root.CoastalCase,
     typeof require === 'function' ? require('./abundance') : root.AbundanceCase,
     typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('./silicon') : root.SiliconCase,
-    typeof require === 'function' ? require('./green-urea') : root.GreenUreaCase,
-    typeof require === 'function' ? require('./maglut') : root.MaglutCase,
-    typeof require === 'function' ? require('./cement') : root.CementCase,
-    typeof require === 'function' ? require('./cu-ew') : root.CuEwCase,
-    typeof require === 'function' ? require('./float-glass') : root.FloatGlassCase,
-    typeof require === 'function' ? require('./green-ft') : root.GreenFtCase,
-    typeof require === 'function' ? require('./green-mto') : root.GreenMtoCase,
-    typeof require === 'function' ? require('./green-h2-dri') : root.GreenH2DriCase,
-    typeof require === 'function' ? require('./h2-dri') : root.H2DriCase,
     typeof require === 'function' ? require('./_shared.js') : root.CaseShared
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.NetworkCase = api;
-})(globalThis, (coastal, abundance, model, silicon, greenUrea, maglut, cement, cuEw, floatGlass, greenFt, greenMto, greenH2Dri, h2Dri, shared) => {
+  else root.BrineHubCases = api;
+})(globalThis, (abundance, model, shared) => {
 const { streamMassKg } = model;
 const { right, nodeFinder, clone } = shared;
 const tea = abundance.TEA;
@@ -229,26 +220,6 @@ function siteZabuyeAbundance() {
   return definition;
 }
 
-function createFuelsAndMineralsNetwork(month = 6) {
-  return {
-    plants: [
-      { id: 'dead-sea-minerals', name: 'Dead Sea brine and ammonia', definition: siteDeadSeaAbundance() },
-      { id: 'almeria-fuels', name: 'Almería solar methane', definition: coastal.createCoastalCase(month) },
-      { id: 'mejillones-silicon', name: 'Mejillones silicon and PV', definition: silicon.createSiliconCase() },
-      { id: 'walvis-green-urea', name: 'Walvis Bay green urea', definition: greenUrea.createGreenUreaCase() },
-      { id: 'long-beach-maglut', name: 'Long Beach Maglut', definition: maglut.createMaglutCase() },
-      { id: 'mejillones-cement', name: 'Mejillones cement', definition: cement.createCementCase() },
-      { id: 'mejillones-cu-ew', name: 'Mejillones copper SX-EW', definition: cuEw.createCuEwCase() },
-      { id: 'mejillones-float-glass', name: 'Mejillones float glass', definition: floatGlass.createFloatGlassCase() },
-      { id: 'mejillones-green-ft', name: 'Mejillones green FT', definition: greenFt.createGreenFtCase() },
-      { id: 'mejillones-green-mto', name: 'Mejillones green MTO', definition: greenMto.createGreenMtoCase() },
-      { id: 'mejillones-green-h2-dri', name: 'Mejillones green H2-DRI', definition: greenH2Dri.createGreenH2DriCase() },
-      { id: 'mejillones-h2-dri', name: 'Mejillones H2-DRI (purchased)', definition: h2Dri.createH2DriCase() },
-    ],
-    corridors: [],
-  };
-}
-
 return {
   DEAD_SEA_PV,
   DAILY_PV,
@@ -256,6 +227,5 @@ return {
   ZABUYE_DAILY_PV,
   siteDeadSeaAbundance,
   siteZabuyeAbundance,
-  createFuelsAndMineralsNetwork,
 };
 });

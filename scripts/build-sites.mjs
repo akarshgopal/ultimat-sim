@@ -1,6 +1,6 @@
 // Generate data/sites.js: the company simulator's site rows (frozen PVGIS yield, land price,
 // seawater/brine tags) precomputed from data/site-presets.js, data/pvgis-sites.js and the
-// land-price layer, so the browser does not load PVGIS JSON or land geometry.
+// land-price lookup (engine/land.js), so the browser does not load PVGIS JSON or land geometry.
 //
 //   node scripts/build-sites.mjs          # write data/sites.js
 //   node scripts/build-sites.mjs --check  # exit 1 if data/sites.js is stale
@@ -15,16 +15,16 @@ const OUT = path.join(ROOT, 'data', 'sites.js');
 
 export function buildSiteRows() {
   const Company = require('../engine/company.js');
-  const MapSite = require('../engine/map-site.js');
+  const Land = require('../engine/land.js');
   const presets = require('../data/site-presets.js');
   const rows = Company.buildSites({
     sitePresets: presets,
     pvgisSites: require('../data/pvgis-sites.js'),
-    landPriceAt: (lat, lon) => MapSite.landPriceAt(lat, lon),
+    landPriceAt: (lat, lon) => Land.landPriceAt(lat, lon),
   });
   const presetById = new Map(presets.map(p => [p.id, p]));
   return rows.map(row => {
-    const land = (() => { try { return MapSite.landPriceAt(row.latitude, row.longitude); } catch { return null; } })();
+    const land = (() => { try { return Land.landPriceAt(row.latitude, row.longitude); } catch { return null; } })();
     const preset = presetById.get(row.id);
     return {
       ...row,

@@ -5,8 +5,7 @@ const { SUBSTANCES, streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
 const { sizeToTarget, sizeToProduct } = require('../engine/size');
 const { createCoastalCase, DAILY_PV, INTAKE_M3_PER_DAY } = require('../cases/coastal');
-const { siteDeadSeaAbundance, DEAD_SEA_PV } = require('../cases/network');
-const { classifyQuality } = require('../engine/uncertainty');
+const { siteDeadSeaAbundance, DEAD_SEA_PV } = require('../cases/brine-hubs');
 
 const warned = (solved, right) => solved.warnings.some(message => message.includes(`unverified site right: ${right}`));
 
@@ -14,7 +13,6 @@ test('Almería site truth binds monthly PV and a full-ion seawater intake; solve
   const definition = createCoastalCase(6);
   const { site } = definition;
   assert.equal(site.dailyPVKWhPerKWp, DAILY_PV[6]);
-  assert.equal(classifyQuality({ kind: 'meteo', quality: site.meteo.quality, sourceNote: site.meteo.cite.label }), 'cited');
   const seawater = site.resources.seawater.stream;
   assert.ok(seawater.mol['Mg+2'] > 0 && seawater.mol['SO4-2'] > 0, 'not a NaCl proxy');
   assert.ok(Math.abs(streamMassKg(seawater) - INTAKE_M3_PER_DAY * 1026) < 1e-9);

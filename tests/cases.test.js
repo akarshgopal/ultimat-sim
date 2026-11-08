@@ -8,7 +8,7 @@ const test = require('node:test');
 
 const { solveOperation } = require('../engine/solve');
 const { evaluateEconomics } = require('../engine/economics');
-const { siteDeadSeaAbundance } = require('../cases/network');
+const { siteDeadSeaAbundance } = require('../cases/brine-hubs');
 
 const CASES_DIR = path.join(__dirname, '..', 'cases');
 // Units whose feeds/products are lumped pseudo-substances (clinker, bauxite,

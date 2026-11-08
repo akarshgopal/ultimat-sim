@@ -14,7 +14,7 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 function startServer() {
   const server = http.createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const file = path.normalize(path.join(ROOT, pathname === '/' ? 'app.html' : pathname));
+    const file = path.normalize(path.join(ROOT, pathname === '/' ? 'index.html' : pathname));
     if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
     fs.readFile(file, (err, body) => {
       if (err) { res.writeHead(404); res.end('not found'); return; }
@@ -38,7 +38,7 @@ test('company view: abundance KPIs, charts, build log, objective and share re-ru
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
     await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, route => route.abort());
     const { port } = server.address();
-    await page.goto(`http://127.0.0.1:${port}/app.html#/company`);
+    await page.goto(`http://127.0.0.1:${port}/index.html#/company`);
     await page.waitForFunction(() => Number(document.getElementById('view').dataset.runs) >= 1, null, { timeout: 10000 });
 
     const kpis = await page.$$eval('#view .kpi-value', nodes => nodes.map(n => n.textContent.trim()));

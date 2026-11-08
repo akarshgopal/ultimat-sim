@@ -12,7 +12,7 @@ const require = createRequire(import.meta.url);
 const Company = require('../engine/company.js');
 const { PATHWAYS } = require('../data/pathways.js');
 const { MARKETS } = require('../data/markets.js');
-const MapSite = require('../engine/map-site.js');
+const { SITES } = require('../data/sites.js');
 
 const FLAGS = {
   '--years': (cfg, v) => { cfg.years = Number(v); },
@@ -49,12 +49,7 @@ const money = usd => {
 };
 
 const { config, opts } = parseArgs(process.argv.slice(2));
-const sites = Company.buildSites({
-  sitePresets: require('../data/site-presets.js'),
-  pvgisSites: require('../data/pvgis-sites.js'),
-  landPriceAt: (lat, lon) => MapSite.landPriceAt(lat, lon),
-});
-const input = { pathways: PATHWAYS, markets: MARKETS, sites, config };
+const input = { pathways: PATHWAYS, markets: MARKETS, sites: SITES, config };
 
 if (opts.rank) {
   const rows = Company.rankOpportunities(input, { sizeMultiple: opts.sizeMultiple });

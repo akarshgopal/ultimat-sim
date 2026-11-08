@@ -51,7 +51,6 @@ test('pathways schema v2: header, ids, products, feeds, capex classes', () => {
     assert.ok(skip.reason.length > 0);
   }
   assert.ok(GENERATED_FROM.skipped.some(s => s.file === 'cases/dac.js'));
-  assert.ok(GENERATED_FROM.skipped.some(s => s.file === 'cases/network.js'));
   assert.deepEqual(PATHWAYS.map(p => p.id), PATHWAYS.map(p => p.id).slice().sort(), 'stable id ordering');
   assert.equal(new Set(PATHWAYS.map(p => p.id)).size, PATHWAYS.length, 'unique ids');
 

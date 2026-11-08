@@ -2,25 +2,29 @@
 
 **What would a company look like that makes the world's materials from sunlight, seawater, air and rock?**
 
-Molecular Foundry simulates that company. Pick starting capital and technology assumptions; it builds solar-powered plants year by year, choosing what to make, where, and how big, and shows what the company becomes: revenue, plants, gigawatts of PV, land, share of world markets, and which technologies' learning curves made it possible.
+Molecular Foundry simulates that company. Its first prerogative is **material abundance through feasible economics**: it builds solar-powered plants year by year, choosing what to make, where and how big, so as to make as much material as possible while every plant pays back its capital. It shows what the company produces, what share of world supply that is and how far prices fall, and whether it all stays self-funding.
 
 It is a screening tool for exploring the Terraform Industries thesis — very cheap local solar, low-capex intermittent hardware, colocated conversion — across materials, not a bankable forecast.
 
 Live: https://akarshgopal.github.io/ultimat-sim/
 
-## Two levels
+## The app
 
-| View | Question | Code |
-|---|---|---|
-| **Company** | What does the company build over 25 years, and what does it become? | `engine/company.js`, `data/pathways.js`, `data/markets.js` |
-| **Plant detail** | How does one plant work — mass and energy balance, heat, sizing, cash? | `index.html`, `engine/` solver, `cases/` |
+One page (`index.html`), four views. The scenario lives in the URL, so a link reproduces both the screen and the assumptions.
 
-The levels are linked: each plant model in `cases/` is reduced to a per-kg **pathway** recipe that the company simulator reuses, so the company view never drifts from the physics.
+| View | Question |
+|---|---|
+| **Company** | What does the company make, how much of the world's supply is that, and is it feasible and self-funding? Scenario panel, abundance first, economics as the constraint. |
+| **Pathways** | Each recipe: cost vs price over the years at its best site, when it becomes feasible, make-vs-buy, best sites, and the solved plant flowsheet per kg of product. |
+| **Sites** | The 34 sites: solar, land price, seawater/brine, which recipes they can host, what the run builds there. |
+| **Markets** | The 31 world markets: demand, price, sources, the company's share and the price relief it delivers. |
+
+The simulation runs in a Web Worker. The browser loads only `engine/company.js` and three generated data files; plant models and the flowsheet solver run in Node when the data is regenerated:
 
 ```
-cases/*.js  ──solve + economics──▶  scripts/build-pathways.mjs  ──▶  data/pathways.js ┐
-data/markets.js (world demand, price, growth; cited)  ────────────────────────────────┼─▶ engine/company.js ─▶ company view / CLI
-data/site-presets.js + data/pvgis-sites.js + land prices (34 sites)  ─────────────────┘
+cases/*.js ──solve + economics──▶ scripts/build-pathways.mjs ──▶ data/pathways.js (recipes + flowsheets) ┐
+data/markets.js (world demand, price, growth; cited) ─────────────────────────────────────────────────────┼─▶ engine/company.js ─▶ app / CLI
+data/site-presets.js + PVGIS + engine/land.js ──▶ scripts/build-sites.mjs ──▶ data/sites.js ──────────────┘
 ```
 
 ## How the company simulator works
@@ -30,7 +34,7 @@ Each simulated year:
 1. **Plants come online** after a construction lead time.
 2. **Plants operate.** Revenue uses that year's realized price, which falls as the company's share of the world market grows (`price = p0 × (1 − elasticity × share)`). Opex is fixed O&M on built capex plus purchased feeds.
 3. **Debt is serviced** and cash is banked.
-4. **The company builds.** It ranks every pathway × site × plant size by NPV (deciding make-vs-buy for each purchased intermediate, below) and builds the best affordable ones, using equity plus a debt fraction, until money, the yearly build limit, a per-product world-market share ceiling (applied to coproducts too) or a per-site PV ceiling stops it.
+4. **The company builds.** Among plants that pay back their capital (NPV ≥ 0) and that it can afford, it picks the one with the most lifetime material: the plant's own tonnes plus the tonnes its surplus will fund when reinvested (`own kg + λ × NPV`, with λ the year's best kg per capex dollar). A `profit` objective (highest NPV) is kept for comparison. It decides make-vs-buy for each purchased intermediate (below) and builds the best affordable ones, using equity plus a debt fraction, until money, the yearly build limit, a per-product world-market share ceiling (applied to coproducts too) or a per-site PV ceiling stops it.
 
 Costs fall three ways:
 
@@ -48,7 +52,7 @@ Every tunable lives in `FoundryCompany.DEFAULTS` (`engine/company.js`). The defa
 
 - **Pathways** (`data/pathways.js`, 24 recipes). Generated from the plant models by `npm run pathways`; a test fails if the committed file is stale. Each recipe gives electricity per kg, feeds by origin (`ocean`, `brine`, `air`, `crust`, `water`, or a purchased `intermediate` such as H₂ or TiCl₄), coproducts, and capex per kg/day split by technology class.
 - **Markets** (`data/markets.js`, 31 products). World demand, year, growth, reference price (matching the plant models' prices) and a screening price elasticity. Rows are tagged `cited` (mostly USGS Mineral Commodity Summaries 2026, IEA) or `screening`, with sources. Overlapping rows (two NdPr oxides; other/light REO) share one market.
-- **Sites** (`data/site-presets.js`). 34 coasts and brine hubs with frozen PVGIS solar, seawater and brine assays, and land prices where a source exists.
+- **Sites** (`data/sites.js`, generated by `npm run sites` from `data/site-presets.js`). 34 coasts and brine hubs with frozen PVGIS solar, seawater and brine assays, and land prices where a source exists.
 
 ## Quickstart
 
@@ -58,7 +62,7 @@ Requires Node.js 18+. No dependencies.
 npm run dev
 ```
 
-Serves the app locally with caching disabled. Open the company view from the header.
+Serves the app locally with caching disabled.
 
 ```bash
 npm run company
@@ -94,7 +98,7 @@ Runs all regression checks (engine, data staleness, browser).
 ## Known limits
 
 - **Screening economics.** Constant real prices within a plant's life, no tax or inflation, simple annuity debt. Elasticities and learning rates are screening assumptions.
-- **No seasonal storage.** Daily-average solar energy, as in the plant models; batteries only where a case includes them.
+- **Equipment utilization is not modelled yet (the largest TEA gap).** Plant models size equipment to daily-average solar energy as if it ran 24 h; solar gives ~5 full-sun hours a day, so sun-following units (electrolyzers, DAC, SWRO) are under-costed ~4× and continuous units (kilns, float glass, Haber-Bosch) need storage that is not costed. No seasonal storage. Batteries only where a case includes them.
 - **Make-vs-buy is one level deep and per plant.** A supplier unit serves only the plant it is built with. Suppliers that themselves buy intermediates are not used. TiCl₄, Mg, PLS and REE concentrates have no supplier recipe.
 - **Demo-scale recipes.** Some plant models are tiny (0.6–5 kg/day), so their per-kg capex is high and scale extrapolation is large; recipe notes flag this.
 - **Merchant vs captive markets.** Much ammonia, H₂, O₂ and DRI is captive; the share ceiling is the only guard.
@@ -104,12 +108,13 @@ Detailed per-plant notes, citations and engine reference: [`docs/plant-models.md
 
 ## Repository map
 
-- `engine/`: solver (`model`, `units`, `solve`, `heat`), plant economics, sizing (`size.js`), footprint, map helpers, and the company simulator (`company.js`).
-- `cases/`: plant models (one per pathway family) and shared builders (`_shared.js`).
-- `data/`: TEA prices and capex (`tea-screening.js`), markets, pathways, sites, assays, PVGIS, land prices.
-- `js/flowsheet-app.js` + `js/app/*.js`: plant-detail UI (entry file plus one file per panel).
-- `scripts/`: dev server, build, deploy, pathway generator, company CLI, site-search tools.
-- `tests/`: `node --test` suites, including Playwright browser checks.
+- `index.html`, `app.css`, `css/`: the app and its design system (one stylesheet per view).
+- `js/app.js` (router), `js/store.js` (scenario ↔ engine config, worker client), `js/sim-worker.js`, `js/ui/` (kit, charts), `js/views/` (company, pathways, sites, markets).
+- `engine/company.js`: the company simulator. `engine/` also holds the plant solver (`model`, `units`, `solve`, `heat`), plant economics, sizing (`size.js`), footprint and land-price lookup (`land.js`), used in Node by the generators.
+- `cases/`: plant models (one per pathway family), shared builders (`_shared.js`) and sited brine hubs (`brine-hubs.js`).
+- `data/`: generated `pathways.js` and `sites.js`, cited `markets.js`, TEA prices and capex (`tea-screening.js`), site presets, assays, PVGIS, land prices.
+- `scripts/`: dev server, build (ships only what the browser loads), deploy, generators (`build-pathways`, `build-sites`, `build-land-prices`, `build-seawater-assays`), company CLI.
+- `tests/`: `node --test` suites, including Playwright checks of every view.
 
 ## License
 

@@ -35,7 +35,7 @@ const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css
 function startServer() {
   const server = http.createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const file = path.normalize(path.join(ROOT, pathname === '/' ? 'app.html' : pathname));
+    const file = path.normalize(path.join(ROOT, pathname === '/' ? 'index.html' : pathname));
     if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
     fs.readFile(file, (err, body) => {
       if (err) { res.writeHead(404); res.end('not found'); return; }
@@ -59,7 +59,7 @@ test('pathways view: list, detail with recipe, cost-vs-year chart and flowsheet'
     page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
     await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, route => route.abort());
     const { port } = server.address();
-    const base = `http://127.0.0.1:${port}/app.html`;
+    const base = `http://127.0.0.1:${port}/index.html`;
 
     // List.
     await page.goto(`${base}#/pathways`);

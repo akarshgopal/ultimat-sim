@@ -193,3 +193,17 @@ test('coproducts are held to the market-share ceiling too', () => {
   assert.ok(result.plants.length > 0);
   for (const year of result.timeline) assert.ok((year.shareByProduct.gadget || 0) <= 0.02 + 1e-9);
 });
+
+test('cost per kg reports gross, coproduct credit and net consistently; shares are per market', () => {
+  const withCo = { ...good, id: 'withco', coproducts: [{ id: 'gadget', product: 'gadget', kgPerKg: 5, usdPerKg: 1 }] };
+  const [row] = C.rankOpportunities({ pathways: [withCo], sites: SITES, markets: MARKETS });
+  close(row.lcopUsdPerKg, row.grossCostUsdPerKg - row.coproductCreditUsdPerKg);
+  assert.ok(row.coproductCreditUsdPerKg > 4.9);
+  const twin = { ...good, id: 'twin', product: 'widget-sep' };
+  const markets = { ...MARKETS, 'widget-sep': { ...MARKETS.widget } };
+  const result = C.simulateCompany({ pathways: [good, twin], sites: SITES, markets, config: { years: 10, marketGroups: { 'widget-sep': 'widget' } } });
+  const last = result.timeline.at(-1);
+  assert.ok(!('widget-sep' in last.shareByMarket));
+  close(last.shareByMarket.widget, last.shareByProduct.widget);
+  assert.ok(last.demandTByMarket.widget > 0);
+});

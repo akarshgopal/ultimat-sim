@@ -531,14 +531,9 @@
     const top = ranked.length > SLOT_COUNT ? ranked.slice(0, SLOT_COUNT - 1) : ranked;
     const rest = ranked.slice(top.length);
     // Share chart products (by peak share) also need slots; union keeps colors shared.
-    const groupOf = p => Company.marketGroupOf(p, result.config);
     const peakShare = {};
     for (const r of tl) {
-      for (const [p, v] of Object.entries(r.shareByProduct || {})) {
-        if (v == null) continue;
-        const g = groupOf(p);
-        peakShare[g] = Math.max(peakShare[g] || 0, v);
-      }
+      for (const [g, v] of Object.entries(r.shareByMarket || {})) peakShare[g] = Math.max(peakShare[g] || 0, v);
     }
     const shareKeys = Object.keys(peakShare).filter(k => peakShare[k] > 0).sort((a, b) => peakShare[b] - peakShare[a]);
     // Slots are shared between both product charts: revenue leaders first, then share leaders.
@@ -561,11 +556,7 @@
     const shareTop = shareKeys.filter(k => productSlot.has(k)).slice(0, 6);
     const shareSeries = shareTop.map(g => ({
       key: g, label: productName(g), color: colorOf(g),
-      values: tl.map(r => {
-        let v = null;
-        for (const [p, sv] of Object.entries(r.shareByProduct || {})) if (groupOf(p) === g && sv != null) v = sv;
-        return v ?? 0;
-      }),
+      values: tl.map(r => r.shareByMarket?.[g] ?? 0),
     }));
     const ceiling = scenario.share / 100;
     const shareCard = $('chartShare');
@@ -825,7 +816,7 @@
     { key: 'name', label: 'Pathway', type: 'text', get: r => r.name },
     { key: 'product', label: 'Product', type: 'text', get: r => productName(r.product) },
     { key: 'site', label: 'Best site', type: 'text', get: r => siteById.get(r.siteId)?.name || r.siteId },
-    { key: 'lcop', label: 'LCOP $/kg', type: 'num', get: r => r.lcopUsdPerKg },
+    { key: 'lcop', label: 'Cost $/kg, net of co-products', type: 'num', get: r => r.lcopUsdPerKg },
     { key: 'price', label: 'Price $/kg', type: 'num', get: r => r.priceUsdPerKg },
     { key: 'margin', label: 'Margin', type: 'num', get: r => (r.priceUsdPerKg > 0 ? r.marginUsdPerKg / r.priceUsdPerKg : -Infinity) },
     { key: 'pi', label: 'PI', type: 'num', get: r => r.profitabilityIndex },
@@ -875,7 +866,10 @@
         nameCell,
         el('td', { text: productName(r.product) }),
         el('td', { text: siteById.get(r.siteId)?.name || r.siteId }),
-        el('td', { class: 'num', text: fmtUsdKg(r.lcopUsdPerKg) }),
+        el('td', { class: 'num', title: r.coproductCreditUsdPerKg > 0 ? `Gross ${fmtUsdKg(r.grossCostUsdPerKg)} − co-product credit ${fmtUsdKg(r.coproductCreditUsdPerKg)}` : '' }, [
+          el('span', { text: fmtUsdKg(r.lcopUsdPerKg) }),
+          r.coproductCreditUsdPerKg > 0 ? el('span', { class: 'cell-sub', text: `gross ${fmtUsdKg(r.grossCostUsdPerKg)}` }) : null,
+        ]),
         el('td', { class: 'num', text: fmtUsdKg(r.priceUsdPerKg) }),
         el('td', { class: 'num ' + (marginFrac >= 0 ? 'is-pos' : 'is-neg'), text: Number.isFinite(marginFrac) ? (marginFrac >= 0 ? '+' : '−') + fmtPct(Math.abs(marginFrac), 0) : '—' }),
         el('td', { class: 'num', text: Number.isFinite(r.profitabilityIndex) ? r.profitabilityIndex.toFixed(2) : '—' }),

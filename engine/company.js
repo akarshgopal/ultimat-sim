@@ -259,7 +259,11 @@
     const lead = cfg.build.leadTimeYears || 0;
     const npv = -capexTotal + (annualCash * af) / (1 + r) ** lead;
     const crf = af > 0 ? 1 / af : 0;
-    const lcop = annualKg > 0 ? (capexTotal * crf + opex - coproductRevenue) / annualKg : Infinity;
+    // Gross: full plant cost per kg of primary product. Net (LCOP): after crediting coproduct
+    // revenue — can go negative for multi-product plants (e.g. brine hubs) whose coproducts pay for everything.
+    const grossCost = annualKg > 0 ? (capexTotal * crf + opex) / annualKg : Infinity;
+    const coproductCredit = annualKg > 0 ? coproductRevenue / annualKg : 0;
+    const lcop = grossCost - coproductCredit;
     return {
       pathwayId: pathway.id,
       product: pathway.product,
@@ -280,6 +284,8 @@
       npv,
       profitabilityIndex: capexTotal > 0 ? npv / capexTotal : 0,
       lcopUsdPerKg: lcop,
+      grossCostUsdPerKg: grossCost,
+      coproductCreditUsdPerKg: coproductCredit,
       marginUsdPerKg: price - lcop,
     };
   }
@@ -593,11 +599,17 @@
       minCash = Math.min(minCash, state.cash);
       const outputTByProduct = {};
       const shareByProduct = {};
+      const shareByMarket = {};
+      const demandTByMarket = {};
       for (const [product, kg] of Object.entries(operatingKg)) {
         outputTByProduct[product] = kg / 1000;
         const group = marketGroupOf(cfg, product);
         const demandT = marketDemandT(markets[group], year);
         shareByProduct[product] = Number.isFinite(demandT) ? groupKg(cfg, operatingKg, group) / 1000 / demandT : null;
+        if (Number.isFinite(demandT)) {
+          shareByMarket[group] = shareByProduct[product];
+          demandTByMarket[group] = demandT;
+        }
       }
       timeline.push({
         year,
@@ -620,6 +632,8 @@
         revenueByProduct,
         priceByProduct,
         shareByProduct,
+        shareByMarket,
+        demandTByMarket,
         feedTByOrigin,
         pvGWp: pvKWp / 1e6,
         landHa,

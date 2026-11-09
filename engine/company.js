@@ -335,7 +335,7 @@
     for (const node of pathway.flowsheet?.nodes || []) {
       const d = designUnits[node.unit];
       if (!d || node.kind !== 'converter') continue;
-      if (Number(d.consumablesFactor) >= 0 && consumablesFactor === 1) consumablesFactor = Number(d.consumablesFactor);
+      if (Number(d.consumablesFactor) >= 0) consumablesFactor *= Number(d.consumablesFactor);
       for (const [id, f] of Object.entries(d.feedFactors || {})) if (Number(f) >= 0) feedFactors[id] = (feedFactors[id] ?? 1) * Number(f);
       if (Number(d.variableOmFactor) >= 0) variableOmDelta += (Number(node.variableOmUsdPerKg) || 0) * (Number(d.variableOmFactor) - 1);
     }
@@ -1167,9 +1167,15 @@
         }
       }
       const priceReliefByMarket = {};
+      // A market group's relief is that of its largest-selling member, against the group's own price.
+      const reliefKg = {};
       for (const [product, price] of Object.entries(priceByProduct)) {
-        const p0 = Number(markets[product]?.priceUsdPerKg);
-        if (p0 > 0) priceReliefByMarket[marketGroupOf(cfg, product)] = Math.max(0, 1 - price / p0);
+        const group = marketGroupOf(cfg, product);
+        const p0 = Number(markets[group]?.priceUsdPerKg ?? markets[product]?.priceUsdPerKg);
+        const t = outputTByProduct[product] || 0;
+        if (!(p0 > 0) || (reliefKg[group] ?? -1) >= t) continue;
+        reliefKg[group] = t;
+        priceReliefByMarket[group] = Math.max(0, 1 - price / p0);
       }
       const materialTPerYear = Object.entries(outputTByProduct)
         .reduce((sum, [product, t]) => sum + (markets[marketGroupOf(cfg, product)] ? t : 0), 0);
@@ -1324,12 +1330,12 @@
   //     or price is the barrier); breakevenUsdPerKWh = null.
   //   limitedBy 'feasible-at-any-price': still feasible at opts.maxUsdPerKWh; breakevenUsdPerKWh = that cap.
   //   limitedBy 'energy': breakevenUsdPerKWh found by bisection.
-  // build.allowSites is ignored: every site with solar data is scanned.
   function energyBreakevens(input = {}, opts = {}) {
     const base = mergeConfig(input.config);
     const maxUsdPerKWh = opts.maxUsdPerKWh ?? 0.5;
     const sizeMultiple = Number(opts.sizeMultiple) || 100;
-    const allSites = (input.sites || []).filter(s => s.pvKWhPerKWpDay > 0);
+    const allSites = (input.sites || []).filter(s => s.pvKWhPerKWpDay > 0
+      && (!base.build.allowSites || base.build.allowSites.includes(s.id)));
     const sitesById = new Map((input.sites || []).map(s => [s.id, s]));
     const pathways = allowedPathways(base, input.pathways);
     const ids = opts.pathwayIds ? new Set(opts.pathwayIds) : null;

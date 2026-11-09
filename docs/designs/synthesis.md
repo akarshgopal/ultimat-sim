@@ -1,5 +1,7 @@
 # Design: sun-following catalytic synthesis reactors (methanol, Sabatier, MTO)
 
+> **Update — recipes resized.** The e-methanol and e-methane recipes (`methanol`, `sabatier`, `coastal`) were demo cases with units fixed at bench capacity (DAC, electrolyzer and synthesis packs oversized ~7–100×). `scripts/build-pathways.mjs` now sizes them to 1 t/day with `engine/size.js` before reducing them to recipes, so the scoreboard figures in this doc are from before that fix. With honest sizing and every lean design, e-methane reaches ~0.90× its price at the frontier, and e-methanol ~1.1× (blocked by energy and variable O&M). Regenerate with the Abundance view.
+
 Status: concept design + build plan. Model: `engine/designs/synthesis.js` (parametric, tested in `tests/design-synthesis.test.js`). It covers three flowsheet units: `methanol`, `sabatier` and `mto`. Costs are screening estimates: a bill of materials at 2024–25 commodity prices (`data/bom.js`, plus zinc, alumina, ruthenium and a SAPO-34 raw-material mix in `DEFAULTS.extraCommodities`) times explicit manufacturing factors. Every number below comes from the module and the company simulator (the commands are under "Reproduce").
 
 ## The question

@@ -62,8 +62,8 @@
   });
   const RECIPE_BLOWER_NM3_PER_KG = 1 / (0.9 * 422.45e-6 * (44.01 / 28.965)) / 1.2929; // 90 % capture at 422 ppm
   const RECIPE = Object.freeze({
-    'dac-solid': Object.freeze({ ...RECIPE_DAC, pathwayId: 'methanol', product: 'CO₂', demoOversize: 14.6 }),
-    dac: Object.freeze({ ...RECIPE_DAC, pathwayId: 'sabatier', product: 'CO₂', demoOversize: 7.3 }),
+    'dac-solid': Object.freeze({ ...RECIPE_DAC, pathwayId: 'methanol', product: 'CO₂' }),
+    dac: Object.freeze({ ...RECIPE_DAC, pathwayId: 'sabatier', product: 'CO₂' }),
     'gas-blower': Object.freeze({
       usdPerKgDay: 1.5 * RECIPE_BLOWER_NM3_PER_KG, // packs['gas-blower'] $1.5/(Nm³/day)
       kWhPerKg: 0.001 * RECIPE_BLOWER_NM3_PER_KG, // case blowerKWhPerNm3 0.001

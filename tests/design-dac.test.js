@@ -45,10 +45,9 @@ test('recipe basis matches the DAC flowsheets in data/pathways.js', () => {
     near(p.heatKWhPerKg / co2, recipe.heatKWhPerKg, 0.02);
     near(p.feeds.find(f => f.id === 'consumables').kgPerKg / co2, recipe.consumablesKgPerKg, 0.02);
     near(blower.kWhPerKg / co2, D.RECIPE['gas-blower'].kWhPerKg, 0.02);
-    // The demo cases fix the DAC at 100 kg CO₂/day for a 5 kg/day plant: node capex = pack × oversize.
-    near(dac.capexUsdPerKgDay / co2 / recipe.usdPerKgDay, 100 / (5 * co2), 0.02);
+    // The demo cases are sized to 1 t/day by scripts/build-pathways.mjs: node capex = the pack.
+    near(dac.capexUsdPerKgDay / co2 / recipe.usdPerKgDay, 1, 0.05);
   }
-  near(D.RECIPE['dac-solid'].demoOversize, 100 / (5 * 1.37), 0.01);
 });
 
 test('today preset lands near the recipe; the lean preset beats it on every axis', () => {

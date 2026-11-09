@@ -589,7 +589,7 @@
       },
       "refSiteId": "spain-almeria",
       "refRegion": "Europe",
-      "refOutputKgPerDay": 5,
+      "refOutputKgPerDay": 1000,
       "electricityKWhPerKg": 33.70934,
       "heatKWhPerKg": 4.114971,
       "feeds": [
@@ -627,18 +627,18 @@
         }
       ],
       "capexByTechUsdPerKgDay": {
-        "process": 6000,
-        "electrolyzer": 65000,
-        "dac": 22614.59,
-        "desal": 3004.192,
+        "process": 300,
+        "electrolyzer": 1633.567,
+        "dac": 8809.243,
+        "desal": 10.93029,
         "storage": 0
       },
-      "fixedOmFracPerYear": 0.03165599,
+      "fixedOmFracPerYear": 0.03204083,
       "variableOmUsdPerKg": 0.3421037,
-      "assetLifeYears": 12.93023,
+      "assetLifeYears": 15.40545,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
-      "notes": "Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria at almeria-pvgis-2026-09-05; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day.",
+      "notes": "Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria at almeria-pvgis-2026-09-05; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -648,11 +648,11 @@
           {"id":"electricity","unit":"electricity-source","kind":"electricity","label":"Electricity"},
           {"id":"heat","unit":"heat-source","kind":"heat","label":"Heat"},
           {"id":"consumables","unit":"consumable-source","kind":"source","label":"Consumables"},
-          {"id":"dac","unit":"dac-solid","kind":"converter","label":"DAC","kWhPerKg":1.37,"capexUsdPerKgDay":16000},
-          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0139,"capexUsdPerKgDay":3000},
+          {"id":"dac","unit":"dac-solid","kind":"converter","label":"DAC","kWhPerKg":1.37,"capexUsdPerKgDay":2190},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0139,"capexUsdPerKgDay":6.74},
           {"id":"electrical-bus","unit":"electrical-bus","kind":"bus","label":"Electrical bus"},
-          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":27.6,"capexUsdPerKgDay":65000},
-          {"id":"sabatier","unit":"sabatier","kind":"converter","label":"Sabatier","kWhPerKg":1,"capexUsdPerKgDay":6000},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":27.6,"capexUsdPerKgDay":1630},
+          {"id":"sabatier","unit":"sabatier","kind":"converter","label":"Sabatier","kWhPerKg":1,"capexUsdPerKgDay":300},
           {"id":"depleted-air","unit":"material-sink","kind":"sink","label":"Depleted air","disposition":"waste"},
           {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"},
           {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
@@ -1548,7 +1548,7 @@
       },
       "refSiteId": "chile-mejillones",
       "refRegion": "Atacama/Chile",
-      "refOutputKgPerDay": 5,
+      "refOutputKgPerDay": 1000,
       "electricityKWhPerKg": 13.41414,
       "heatKWhPerKg": 2.06025,
       "feeds": [
@@ -1586,18 +1586,18 @@
         }
       ],
       "capexByTechUsdPerKgDay": {
-        "process": 4000,
-        "electrolyzer": 65000,
-        "dac": 18897.77,
-        "desal": 3001.377,
+        "process": 200,
+        "electrolyzer": 613.411,
+        "dac": 3996.573,
+        "desal": 3.907582,
         "storage": 0
       },
-      "fixedOmFracPerYear": 0.03176019,
+      "fixedOmFracPerYear": 0.03228256,
       "variableOmUsdPerKg": 0.1649125,
-      "assetLifeYears": 12.68982,
+      "assetLifeYears": 15.71595,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
-      "notes": "Coastal e-methanol (DAC + SWRO + PEM), Mejillones at mejillones-pvgis-2026-09-14; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day.",
+      "notes": "Coastal e-methanol (DAC + SWRO + PEM), Mejillones at mejillones-pvgis-2026-09-14; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -1607,11 +1607,11 @@
           {"id":"electricity","unit":"electricity-source","kind":"electricity","label":"Electricity"},
           {"id":"heat","unit":"heat-source","kind":"heat","label":"Heat"},
           {"id":"consumables","unit":"consumable-source","kind":"source","label":"Consumables"},
-          {"id":"dac","unit":"dac-solid","kind":"converter","label":"DAC","kWhPerKg":0.687,"capexUsdPerKgDay":16000},
-          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.00523,"capexUsdPerKgDay":3000},
+          {"id":"dac","unit":"dac-solid","kind":"converter","label":"DAC","kWhPerKg":0.687,"capexUsdPerKgDay":1100},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.00523,"capexUsdPerKgDay":2.53},
           {"id":"electrical-bus","unit":"electrical-bus","kind":"bus","label":"Electrical bus"},
-          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":10.4,"capexUsdPerKgDay":65000},
-          {"id":"methanol","unit":"methanol","kind":"converter","label":"Methanol","kWhPerKg":0.5,"capexUsdPerKgDay":4000},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":10.4,"capexUsdPerKgDay":613},
+          {"id":"methanol","unit":"methanol","kind":"converter","label":"Methanol","kWhPerKg":0.5,"capexUsdPerKgDay":200},
           {"id":"depleted-air","unit":"material-sink","kind":"sink","label":"Depleted air","disposition":"waste"},
           {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"},
           {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
@@ -1857,7 +1857,7 @@
       },
       "refSiteId": null,
       "refRegion": null,
-      "refOutputKgPerDay": 5,
+      "refOutputKgPerDay": 1000,
       "electricityKWhPerKg": 32.15377,
       "heatKWhPerKg": 4.114971,
       "feeds": [
@@ -1895,18 +1895,18 @@
         }
       ],
       "capexByTechUsdPerKgDay": {
-        "process": 6000,
-        "electrolyzer": 65000,
-        "dac": 21440.68,
-        "desal": 3003.494,
+        "process": 300,
+        "electrolyzer": 1633.567,
+        "dac": 7635.333,
+        "desal": 10.23155,
         "storage": 0
       },
-      "fixedOmFracPerYear": 0.03167637,
+      "fixedOmFracPerYear": 0.03229107,
       "variableOmUsdPerKg": 0.2820468,
-      "assetLifeYears": 12.90472,
+      "assetLifeYears": 15.4548,
       "infiniteSourceShare": 0.9999883,
       "quality": "screening",
-      "notes": "Reference e-methane (DAC + SWRO + PEM + Sabatier) on grid power at no map site; size-to-target product; purchased consumables; case buys grid power (no PV CAPEX in case); DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg; demo scale 5 kg/day.",
+      "notes": "Reference e-methane (DAC + SWRO + PEM + Sabatier) on grid power at no map site; size-to-target product; purchased consumables; case buys grid power (no PV CAPEX in case); DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -1916,11 +1916,11 @@
           {"id":"electricity","unit":"electricity-source","kind":"electricity","label":"Electricity"},
           {"id":"heat","unit":"heat-source","kind":"heat","label":"Heat"},
           {"id":"consumables","unit":"consumable-source","kind":"source","label":"Consumables"},
-          {"id":"dac","unit":"dac","kind":"converter","label":"DAC","kWhPerKg":1.37,"capexUsdPerKgDay":16000},
-          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0139,"capexUsdPerKgDay":3000},
+          {"id":"dac","unit":"dac","kind":"converter","label":"DAC","kWhPerKg":1.37,"capexUsdPerKgDay":2190},
+          {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.0139,"capexUsdPerKgDay":6.74},
           {"id":"electrical-bus","unit":"electrical-bus","kind":"bus","label":"Electrical bus"},
-          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":26.1,"capexUsdPerKgDay":65000},
-          {"id":"sabatier","unit":"sabatier","kind":"converter","label":"Sabatier","kWhPerKg":1,"capexUsdPerKgDay":6000},
+          {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":26.1,"capexUsdPerKgDay":1630},
+          {"id":"sabatier","unit":"sabatier","kind":"converter","label":"Sabatier","kWhPerKg":1,"capexUsdPerKgDay":300},
           {"id":"depleted-air","unit":"material-sink","kind":"sink","label":"Depleted air","disposition":"waste"},
           {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"},
           {"id":"brine","unit":"material-sink","kind":"sink","label":"Brine","disposition":"waste"},
@@ -2228,7 +2228,7 @@
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "79d79c9",
+    "gitSha": "1343797",
     "caseCount": 24,
     "skipped": [
       {

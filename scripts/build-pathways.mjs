@@ -283,8 +283,19 @@ function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg
   return { nodes: outNodes, edges };
 }
 
+// Demo cases whose units are fixed at bench capacities (100 kg/day packs around a ~5 kg/day plant,
+// i.e. oversized 7–100×): size them to a real output with engine/size.js before reducing to a recipe.
+const SIZE_TO = {
+  'methanol.js': { product: 'methanol', rate: 1000 },
+  'sabatier.js': { product: 'CH4', rate: 1000 },
+  'coastal.js': { product: 'CH4', rate: 1000 },
+};
+
 function analyseCase(file, factoryName, factory) {
-  const { result: definition, regions } = withTeaInstrumentation(() => factory());
+  const sizing = SIZE_TO[file];
+  const { result: definition, regions } = withTeaInstrumentation(() => (sizing
+    ? sizeToProduct({ ...sizing, definition: factory() }).definition
+    : factory()));
   const solved = solveOperation(definition);
   if (!solved?.convergence?.converged) throw new Error('baseline solve did not converge');
   const econ = evaluateEconomics(definition, solved);

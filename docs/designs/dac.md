@@ -1,5 +1,7 @@
 # Design: solar-matched direct air capture (DAC) unit
 
+> **Update — recipes resized.** The e-methanol and e-methane recipes (`methanol`, `sabatier`, `coastal`) were demo cases with units fixed at bench capacity (DAC, electrolyzer and synthesis packs oversized ~7–100×). `scripts/build-pathways.mjs` now sizes them to 1 t/day with `engine/size.js` before reducing them to recipes, so the scoreboard figures in this doc are from before that fix. With honest sizing and every lean design, e-methane reaches ~0.90× its price at the frontier, and e-methanol ~1.1× (blocked by energy and variable O&M). Regenerate with the Abundance view.
+
 Status: concept design + build plan. Model: `engine/designs/dac.js` (parametric, tested in `tests/design-dac.test.js`). It replaces three flowsheet units: `dac-solid` (e-methanol `methanol`, coastal e-methane `coastal`), `dac` (e-methane `sabatier`) and the `gas-blower` that feeds them air. Costs are screening estimates: a bill of materials at 2024–25 commodity prices (`data/bom.js`) times explicit manufacturing factors. Every number below comes from the model and the company simulator, as described under each table.
 
 ## Why this unit

@@ -39,7 +39,7 @@
   //   mto: 'mto' / 'green-mto' pathways, $192 per kg C₂H₄/day at 1,000 kg/day, 4 kWh/kg (total-energy proxy).
   const RECIPE = Object.freeze({
     methanol: Object.freeze({ usdPerKgDay: 480 / 2.284364, kWhPerKg: 1.14 / 2.284364, refKgPerDay: 1000 * 2.284364, pathwayId: 'green-mto', alsoIn: ['methanol'] }),
-    sabatier: Object.freeze({ usdPerKgDay: 6000, kWhPerKg: 1, refKgPerDay: 5, pathwayId: 'sabatier', alsoIn: ['coastal'] }),
+    sabatier: Object.freeze({ usdPerKgDay: 300, kWhPerKg: 1, refKgPerDay: 1000, pathwayId: 'sabatier', alsoIn: ['coastal'] }), // pack $300/(kg CH₄/day) once the demo case is sized to 1 t/day
     mto: Object.freeze({ usdPerKgDay: 192.15, kWhPerKg: 4, refKgPerDay: 1000, pathwayId: 'mto', alsoIn: ['green-mto'] }),
   });
   const PRODUCT = Object.freeze({ methanol: 'methanol', sabatier: 'methane', mto: 'ethylene' });

@@ -123,7 +123,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Dead Sea brine minerals hub (DLE Li, salt, Br2, Mg, potash, chlor-alkali, NH3) at no map site; one of 2 size-to-target primaries (whole plant normalized to lithium); case buys grid power (no PV CAPEX in case); on-site intake keeps the case screening $/kg as usdPerKg; demo scale 7.979853 kg/day.",
+      "notes": "One of 2 main products: the whole plant is counted per kg of lithium. The plant model runs on grid power; the simulator powers it with on-site PV. Modelled at demo scale (8 kg/day).",
       "flowsheet": {
         "nodes": [
           {"id":"brine","unit":"material-source","kind":"source","label":"Brine"},
@@ -292,7 +292,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Dead Sea brine minerals hub (DLE Li, salt, Br2, Mg, potash, chlor-alkali, NH3) at no map site; one of 2 size-to-target primaries (whole plant normalized to salt); case buys grid power (no PV CAPEX in case); on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "One of 2 main products: the whole plant is counted per kg of salt. The plant model runs on grid power; the simulator powers it with on-site PV.",
       "flowsheet": {
         "nodes": [
           {"id":"brine","unit":"material-source","kind":"source","label":"Brine"},
@@ -404,7 +404,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.8862492,
       "quality": "screening",
-      "notes": "Primary aluminium from bauxite (Bayer + Hall–Héroult) at chile-mejillones; highest-revenue sale (no size-to-target product); electricity-as-total-energy proxy; purchased caustic-makeup, carbon-anode.",
+      "notes": "Process heat is counted as electricity. Buys caustic-makeup, carbon-anode.",
       "flowsheet": {
         "nodes": [
           {"id":"bauxite","unit":"material-source","kind":"source","label":"Bauxite"},
@@ -491,7 +491,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.2172918,
       "quality": "screening",
-      "notes": "Gluconic acid + H2O2 from purchased dextrose (Bioforge) at us-marshall; highest-revenue sale (no size-to-target product); purchased dextrose; case buys grid power (no PV CAPEX in case).",
+      "notes": "Buys dextrose. The plant model runs on grid power; the simulator powers it with on-site PV.",
       "flowsheet": {
         "nodes": [
           {"id":"dextrose","unit":"material-source","kind":"source","label":"Dextrose"},
@@ -558,7 +558,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Clinker from purchased limestone + clay at chile-mejillones-cement; size-to-target product; electricity-as-total-energy proxy.",
+      "notes": "Process heat is counted as electricity.",
       "flowsheet": {
         "nodes": [
           {"id":"limestone-feed","unit":"material-source","kind":"source","label":"Limestone feed"},
@@ -638,7 +638,7 @@
       "assetLifeYears": 15.40545,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
-      "notes": "Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria at almeria-pvgis-2026-09-05; size-to-target product; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Sorbent regeneration heat counted at a screening $/kWh.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -725,7 +725,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Copper cathode by SX-EW from purchased PLS at chile-mejillones-cu-ew; size-to-target product; purchased pls-copper.",
+      "notes": "Buys pls-copper.",
       "flowsheet": {
         "nodes": [
           {"id":"pls-feed","unit":"material-source","kind":"source","label":"PLS feed"},
@@ -778,7 +778,7 @@
       "assetLifeYears": 16.42384,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "CO2 from air by solid-sorbent DAC on PV, Mejillones at chile-mejillones-dac-co2; highest-revenue sale (no size-to-target product); DAC heat bought at screening $/kWh; consumable makeup counted as kg feed.",
+      "notes": "Sorbent regeneration heat counted at a screening $/kWh.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -856,7 +856,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Float glass from purchased sand, soda ash + limestone at chile-mejillones-float-glass; size-to-target product; electricity-as-total-energy proxy.",
+      "notes": "Process heat is counted as electricity.",
       "flowsheet": {
         "nodes": [
           {"id":"sand-feed","unit":"material-source","kind":"source","label":"Sand feed"},
@@ -923,7 +923,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "FT diesel from purchased H2 + CO2 at chile-mejillones-ft-liquids; size-to-target product; purchased hydrogen-feed, co2-feed.",
+      "notes": "Buys hydrogen-feed, co2-feed.",
       "flowsheet": {
         "nodes": [
           {"id":"hydrogen-feed","unit":"material-source","kind":"source","label":"Hydrogen feed"},
@@ -995,7 +995,7 @@
       "assetLifeYears": 18.01601,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Green ammonia (SWRO + PEM + ASU + Haber-Bosch) at namibia-walvis-bay; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Screening plant model.",
       "flowsheet": {
         "nodes": [
           {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
@@ -1084,7 +1084,7 @@
       "assetLifeYears": 12.39899,
       "infiniteSourceShare": 0.7511615,
       "quality": "screening",
-      "notes": "Green FT diesel (SWRO + PEM H2, purchased CO2) at chile-mejillones-green-ft; size-to-target product; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Buys co2-feed.",
       "flowsheet": {
         "nodes": [
           {"id":"co2-feed","unit":"material-source","kind":"source","label":"CO₂ feed"},
@@ -1168,7 +1168,7 @@
       "assetLifeYears": 18.61477,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Green H2-DRI iron (SWRO + PEM H2, purchased ore) at chile-mejillones-green-h2-dri; size-to-target product; electricity-as-total-energy proxy; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Process heat is counted as electricity.",
       "flowsheet": {
         "nodes": [
           {"id":"iron-ore","unit":"material-source","kind":"source","label":"Iron ore"},
@@ -1249,7 +1249,7 @@
       "assetLifeYears": 10.04312,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Green hydrogen (SWRO + PEM electrolysis) at namibia-walvis-bay; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Screening plant model.",
       "flowsheet": {
         "nodes": [
           {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
@@ -1326,7 +1326,7 @@
       "assetLifeYears": 13.15525,
       "infiniteSourceShare": 0.746005,
       "quality": "screening",
-      "notes": "Green ethylene via methanol-to-olefins (SWRO + PEM, purchased CO2) at chile-mejillones-green-mto; size-to-target product; electricity-as-total-energy proxy; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Process heat is counted as electricity. Buys co2-feed.",
       "flowsheet": {
         "nodes": [
           {"id":"co2-feed","unit":"material-source","kind":"source","label":"CO₂ feed"},
@@ -1425,7 +1425,7 @@
       "assetLifeYears": 18.85149,
       "infiniteSourceShare": 0.7910646,
       "quality": "screening",
-      "notes": "Green urea (SWRO + PEM + ASU + NH3, purchased CO2) at namibia-walvis-bay-green-urea; size-to-target product; electricity-as-total-energy proxy; purchased co2-feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Process heat is counted as electricity. Buys co2-feed.",
       "flowsheet": {
         "nodes": [
           {"id":"seawater","unit":"material-source","kind":"source","label":"Seawater"},
@@ -1514,7 +1514,7 @@
       "assetLifeYears": 20.36878,
       "infiniteSourceShare": 0.9647397,
       "quality": "screening",
-      "notes": "H2-DRI iron from purchased H2 + iron ore at chile-mejillones-h2-dri; size-to-target product; electricity-as-total-energy proxy; purchased hydrogen-feed.",
+      "notes": "Process heat is counted as electricity. Buys hydrogen-feed.",
       "flowsheet": {
         "nodes": [
           {"id":"iron-ore","unit":"material-source","kind":"source","label":"Iron ore"},
@@ -1589,7 +1589,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Separated NdPr oxide by chromatography (purchased REO concentrate) at us-long-beach; size-to-target product; purchased mixed-reo-concentrate; demo scale 0.637401 kg/day.",
+      "notes": "Buys mixed-reo-concentrate. Modelled at demo scale (0.64 kg/day).",
       "flowsheet": {
         "nodes": [
           {"id":"concentrate","unit":"material-source","kind":"source","label":"Concentrate"},
@@ -1669,7 +1669,7 @@
       "assetLifeYears": 15.71595,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
-      "notes": "Coastal e-methanol (DAC + SWRO + PEM), Mejillones at mejillones-pvgis-2026-09-14; size-to-target product; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Sorbent regeneration heat counted at a screening $/kWh.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -1756,7 +1756,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Ethylene from purchased methanol (MTO) at chile-mejillones-mto; size-to-target product; electricity-as-total-energy proxy; purchased methanol-feed.",
+      "notes": "Process heat is counted as electricity. Buys methanol-feed.",
       "flowsheet": {
         "nodes": [
           {"id":"methanol-feed","unit":"material-source","kind":"source","label":"Methanol feed"},
@@ -1819,7 +1819,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.7143852,
       "quality": "screening",
-      "notes": "Solar-grade polysilicon from quartz (MG-Si + Siemens) at chile-mejillones; highest-revenue sale (no size-to-target product); purchased carbon-reductant.",
+      "notes": "Buys carbon-reductant.",
       "flowsheet": {
         "nodes": [
           {"id":"quartz","unit":"material-source","kind":"source","label":"Quartz"},
@@ -1896,7 +1896,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.9940852,
       "quality": "screening",
-      "notes": "Mixed REO + NdPr from ionic-clay heap leach (Minacu) at brazil-minacu; highest-revenue sale (no size-to-target product); purchased ammonium-sulfate.",
+      "notes": "Buys ammonium-sulfate.",
       "flowsheet": {
         "nodes": [
           {"id":"clay","unit":"material-source","kind":"source","label":"Clay"},
@@ -1968,7 +1968,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Separated NdPr oxide by solvent extraction (purchased REO concentrate) at us-long-beach; size-to-target product; purchased mixed-reo-concentrate; demo scale 0.637401 kg/day.",
+      "notes": "Buys mixed-reo-concentrate. Modelled at demo scale (0.64 kg/day).",
       "flowsheet": {
         "nodes": [
           {"id":"concentrate","unit":"material-source","kind":"source","label":"Concentrate"},
@@ -2048,7 +2048,7 @@
       "assetLifeYears": 15.4548,
       "infiniteSourceShare": 0.9999883,
       "quality": "screening",
-      "notes": "Reference e-methane (DAC + SWRO + PEM + Sabatier) on grid power at no map site; size-to-target product; case buys grid power (no PV CAPEX in case); DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "The plant model runs on grid power; the simulator powers it with on-site PV. Sorbent regeneration heat counted at a screening $/kWh.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -2189,7 +2189,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.3957975,
       "quality": "screening",
-      "notes": "PV modules from quartz + bauxite chain (MG-Si, polysilicon, Al) at chile-mejillones; size-to-target product; electricity-as-total-energy proxy; purchased carbon-reductant, caustic-makeup, carbon-anode, silver, float-glass, eva-encapsulant.",
+      "notes": "Process heat is counted as electricity. Buys carbon-reductant, caustic-makeup, carbon-anode, silver, float-glass, eva-encapsulant.",
       "flowsheet": {
         "nodes": [
           {"id":"quartz","unit":"material-source","kind":"source","label":"Quartz"},
@@ -2282,7 +2282,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0.7143852,
       "quality": "screening",
-      "notes": "Silicon metal (MG-Si) from quartz in a submerged-arc furnace at chile-mejillones; highest-revenue sale (no size-to-target product); purchased carbon-reductant.",
+      "notes": "Buys carbon-reductant.",
       "flowsheet": {
         "nodes": [
           {"id":"quartz","unit":"material-source","kind":"source","label":"Quartz"},
@@ -2347,7 +2347,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Titanium sponge by Kroll from purchased TiCl4 + Mg at chile-mejillones-ti-kroll; size-to-target product; purchased titanium-tetrachloride, magnesium-metal.",
+      "notes": "Buys titanium-tetrachloride, magnesium-metal.",
       "flowsheet": {
         "nodes": [
           {"id":"ticl4-feed","unit":"material-source","kind":"source","label":"TiCl₄ feed"},
@@ -2412,7 +2412,7 @@
       "assetLifeYears": 20,
       "infiniteSourceShare": 0,
       "quality": "screening",
-      "notes": "Urea from purchased NH3 + CO2 at namibia-walvis-bay-urea; size-to-target product; electricity-as-total-energy proxy; purchased ammonia-feed, co2-feed.",
+      "notes": "Process heat is counted as electricity. Buys ammonia-feed, co2-feed.",
       "flowsheet": {
         "nodes": [
           {"id":"ammonia-feed","unit":"material-source","kind":"source","label":"Ammonia feed"},
@@ -2435,7 +2435,7 @@
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "0c37638",
+    "gitSha": "7313e16",
     "caseCount": 27,
     "skipped": [
       {

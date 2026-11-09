@@ -1236,6 +1236,7 @@
         sizeKgPerDay: plant.sizeKgPerDay,
         builtYear: plant.builtYear,
         onlineYear: plant.onlineYear,
+        retireYear: plant.onlineYear + plant.lifeYears, // first year it no longer operates
         capexUsd: plant.capexUsd,
         pvKWp: plant.eval.pvKWp,
         landHa: plant.eval.landHa,
@@ -1436,13 +1437,15 @@
     const costItems = (pathway, ev) => {
       const b = ev.costBreakdownUsdPerKg;
       const items = [];
+      // 'hydrogen-feed' → 'hydrogen', 'pls-copper' → 'pls copper'.
+      const feedName = id => id.replace(/-feed$/, '').replace(/-/g, ' ');
       // Feeds made in-house are one item each (the captive unit's full cost per kg of product);
       // equipment, energy and other O&M of the plant itself are what remains.
       let inHouse = 0;
       for (const item of ev.integration || []) {
         const usd = (item.kgPerDay / ev.sizeKgPerDay) * item.makeGrossUsdPerKg;
         inHouse += usd;
-        items.push({ kind: 'feed', id: item.feedId, label: `${item.feedId} (made in-house)`, usdPerKg: usd, supplierId: item.supplierId });
+        items.push({ kind: 'feed', id: item.feedId, label: `${feedName(item.feedId)} made in-house`, usdPerKg: usd, supplierId: item.supplierId });
       }
       const purchased = [];
       const integrated = new Set((ev.integration || []).map(item => item.feedId));
@@ -1451,7 +1454,7 @@
         if (!feed.purchased || integrated.has(feed.id)) continue;
         const usd = (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0))
           * feedFactor(feed.id);
-        if (usd > 0) purchased.push({ kind: 'feed', id: feed.id, label: feed.label || feed.id, usdPerKg: usd });
+        if (usd > 0) purchased.push({ kind: 'feed', id: feed.id, label: `Bought ${feedName(feed.id)}`, usdPerKg: usd });
       }
       const own = b.equipment + b.energy + b.other;
       const ownScale = own > 0 ? Math.max(0, own - inHouse + (b.feedstock - purchased.reduce((a, i) => a + i.usdPerKg, 0))) / own : 1;

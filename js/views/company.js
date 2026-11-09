@@ -455,7 +455,7 @@
         const logTable = UI.sortableTable([
           { key: 'year', label: 'Year', num: true, get: r => r.year },
           { key: 'pathway', label: 'Pathway', get: r => r.pathwayId, render: r => el('span', {}, [
-            el('a', { href: href('pathways', r.pathwayId), title: pathwayName(r.pathwayId), text: r.pathwayId }),
+            el('a', { href: href('pathways', r.pathwayId), title: pathwayName(r.pathwayId), text: UI.pathwayLabel(Store.pathwayById.get(r.pathwayId)) }),
             el('span', { class: 'cell-sub', text: label(groupOf(r.product, result.config)) }),
           ]) },
           { key: 'site', label: 'Site', get: r => siteName(r.siteId), render: r => el('a', { href: href('sites', r.siteId), text: siteName(r.siteId) }) },

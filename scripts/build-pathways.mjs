@@ -323,12 +323,10 @@ function analyseCase(file, factoryName, factory) {
     try { sizeToProduct({ product: SIZE_ALIAS[s.product], rate: s.kgPerDay, definition: factory() }); return true; } catch { return false; }
   });
   let primaries = sizable.filter(([, s]) => totalRevenue <= 0 || s.revenuePerDay / totalRevenue >= PRIMARY_MIN_REVENUE_SHARE);
-  let primaryRule = 'size-to-target product';
   if (!primaries.length) {
     const best = [...sales.entries()].filter(([, s]) => s.kgPerDay > 0).sort((a, b) => b[1].revenuePerDay - a[1].revenuePerDay)[0];
     if (!best) throw new Error('no sale product with positive flow');
     primaries = [best];
-    primaryRule = 'highest-revenue sale (no size-to-target product)';
   }
 
   // Non-PV converters (per-node fold through evaluateEconomics so capex/O&M are the engine's).
@@ -395,18 +393,15 @@ function analyseCase(file, factoryName, factory) {
 
   return primaries.map(([groupKey, primary]) => {
     const kg = primary.kgPerDay;
+    // Plain-language caveats shown with the recipe in the app.
     const caveats = [];
-    caveats.push(primaryRule === 'size-to-target product' && primaries.length > 1
-      ? `one of ${primaries.length} size-to-target primaries (whole plant normalized to ${primary.product})`
-      : primaryRule);
-    if (/total-energy/.test(caseNotes)) caveats.push('electricity-as-total-energy proxy');
+    if (primaries.length > 1) caveats.push(`One of ${primaries.length} main products: the whole plant is counted per kg of ${primary.product}`);
+    if (/total-energy/.test(caseNotes)) caveats.push('Process heat is counted as electricity');
     const purchasedIntermediates = feeds.filter(f => f.origin === 'intermediate' && f.purchased).map(f => f.id);
-    if (purchasedIntermediates.length) caveats.push(`purchased ${purchasedIntermediates.join(', ')}`);
-    if (gridPower) caveats.push('case buys grid power (no PV CAPEX in case)');
-    if (heatKWh > 0) caveats.push('DAC heat bought at screening $/kWh');
-    if (feeds.some(f => f.consumable)) caveats.push('consumable makeup counted as kg feed');
-    if (feeds.some(f => ON_SITE_ORIGINS.has(f.origin) && f.usdPerKg > 0)) caveats.push('on-site intake keeps the case screening $/kg as usdPerKg');
-    if (kg < 50) caveats.push(`demo scale ${roundSig(kg)} kg/day`);
+    if (purchasedIntermediates.length) caveats.push(`Buys ${purchasedIntermediates.join(', ')}`);
+    if (gridPower) caveats.push('The plant model runs on grid power; the simulator powers it with on-site PV');
+    if (heatKWh > 0) caveats.push('Sorbent regeneration heat counted at a screening $/kWh');
+    if (kg < 50) caveats.push(`Modelled at demo scale (${Number(kg.toPrecision(2))} kg/day)`);
     const coproducts = [...sales.entries()]
       .filter(([k]) => k !== groupKey)
       .map(([k, s]) => ({
@@ -437,7 +432,7 @@ function analyseCase(file, factoryName, factory) {
       assetLifeYears: lifeWeighted,
       infiniteSourceShare: feedMass > 0 ? infiniteMass / feedMass : 1,
       quality: 'screening',
-      notes: `${NAMES[file] || stem} at ${siteId || 'no map site'}; ${caveats.join('; ')}.`,
+      notes: caveats.length ? `${caveats.join('. ')}.` : 'Screening plant model.',
       flowsheet: flowsheetFor(definition, solved, nodeCapex, new Set(primary.sinkIds), saleSinks, kg, nodeVarOm),
     };
   });

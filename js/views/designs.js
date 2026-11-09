@@ -126,13 +126,15 @@
         const recipes = Object.values(D.RECIPE || {});
         const recipe = recipes.length === 1 ? recipes[0] : null;
         const product = UI.productName(D.product);
+        // Generic tiles, unless the design reports the same quantity itself (with more detail).
+        const own = new Set((d.kpis || []).map(k => k.label));
         const base = [
-          UI.kpi('Installed', UI.usd(d.installedUsdPerKgDay), `per kg/day of ${product}` + (recipe ? ` · recipe ${UI.usd(recipe.usdPerKgDay)}` : '')),
-          UI.kpi('Raw materials', UI.usd(d.materialsUsdPerKgDay), `per kg/day · idiot index ${UI.num(d.idiotIndex, 2)}×`),
-          UI.kpi('Energy', UI.num(d.kWhPerKg, 3) + ' kWh/kg', recipe ? `recipe ${UI.num(recipe.kWhPerKg, 3)} kWh/kg` : ''),
-          UI.kpi('In the simulator', 'capex ×' + UI.num(Object.values(o)[0]?.capexFactor, 2), factors),
-        ];
-        const extra = (d.kpis || []).map(k => UI.kpi(k.label, k.value, k.sub));
+          !own.has('Installed') && UI.kpi('Installed', UI.usd(d.installedUsdPerKgDay), `per kg/day of ${product}` + (recipe ? ` · recipe ${UI.usd(recipe.usdPerKgDay)}` : '')),
+          !own.has('Idiot index') && UI.kpi('Raw materials', UI.usd(d.materialsUsdPerKgDay), `per kg/day · idiot index ${UI.num(d.idiotIndex, 2)}×`),
+          !own.has('Energy') && UI.kpi('Energy', UI.num(d.kWhPerKg, 3) + ' kWh/kg', recipe ? `recipe ${UI.num(recipe.kWhPerKg, 3)} kWh/kg` : ''),
+        ].filter(Boolean);
+        const extra = [...(d.kpis || []).map(k => UI.kpi(k.label, k.value, k.sub)),
+          UI.kpi('In the simulator', 'capex ×' + UI.num(Object.values(o)[0]?.capexFactor, 2), factors)];
         if (isElectrolyzer) {
           const site = Store.siteById.get(siteId);
           const pv = pvPrice();
@@ -161,13 +163,16 @@
         const rows = d.bom || d.parts || [];
         const total = rows.reduce((a, r) => a + (r.usd || 0), 0);
         const basis = d.basis || 'per kg/day';
+        const multiUnit = new Set(rows.map(r => r.unit).filter(Boolean)).size > 1;
         bomCard.querySelector('.card-head h2').textContent = `Bill of materials ${basis}`;
         bomHost.replaceChildren(UI.sortableTable([
-          { key: 'part', label: 'Part', get: r => r.part, render: r => [r.part, el('span', { class: 'cell-sub', text: r.note || '' })] },
+          { key: 'part', label: 'Part', get: r => r.part,
+            render: r => [r.part, el('span', { class: 'cell-sub', text: [multiUnit && r.unit, r.note].filter(Boolean).join(' · ') })] },
           { key: 'material', label: 'Material', get: r => r.material || '—' },
-          { key: 'kg', label: 'kg', num: true, get: r => r.kg ?? -1, render: r => (r.kg == null ? '—' : UI.num(r.kg, 3)) },
-          { key: 'mat', label: 'Materials $', num: true, get: r => r.usdMaterials ?? -1, render: r => (r.usdMaterials == null ? '—' : UI.usd(r.usdMaterials, 3)) },
-          { key: 'factor', label: 'Mfg ×', num: true, get: r => r.manufacturing ?? -1, render: r => (r.manufacturing == null ? '—' : r.manufacturing + '×') },
+          // Bought-in rows (no material) have no mass or materials cost of their own.
+          { key: 'kg', label: 'kg', num: true, get: r => r.kg ?? -1, render: r => (!r.material || r.kg == null ? '—' : UI.num(r.kg, 3)) },
+          { key: 'mat', label: 'Materials $', num: true, get: r => r.usdMaterials ?? -1, render: r => (!r.material || r.usdMaterials == null ? '—' : UI.usd(r.usdMaterials, 3)) },
+          { key: 'factor', label: 'Mfg ×', num: true, get: r => r.manufacturing ?? -1, render: r => (r.manufacturing == null ? '—' : UI.num(r.manufacturing, 2) + '×') },
           { key: 'usd', label: '$', num: true, get: r => r.usd, render: r => el('strong', { text: UI.usd(r.usd, 3) }) },
           { key: 'share', label: 'Share', num: true, get: r => r.usd / total, render: r => UI.pct(r.usd / total, 0) },
         ], rows, { sortKey: 'usd', sortDir: 'desc', compact: true }));

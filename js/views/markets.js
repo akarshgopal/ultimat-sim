@@ -27,7 +27,7 @@
       href: href('pathways', pathway.id),
       class: role === 'primary' ? 'is-primary' : 'is-co',
       title: `${pathway.name} (${role})`,
-      text: pathway.id,
+      text: UI.pathwayLabel(pathway),
     });
     const primary = list.filter(r => r.role === 'primary');
     const co = list.filter(r => r.role !== 'primary');

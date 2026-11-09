@@ -73,6 +73,8 @@
   ]);
   const productName = key => MARKETS()[key]?.name || key || '—';
   const shortName = key => SHORT[key] || productName(key);
+  // A recipe's name without its parenthetical detail: 'Green ammonia (SWRO + PEM + …)' → 'Green ammonia'.
+  const pathwayLabel = pathway => (pathway?.name || '').replace(/\s*\([^)]*\)/g, '').trim() || pathway?.id || '—';
   const originLabel = id => ORIGINS.find(o => o.id === id)?.label || id;
   const originDot = id => el('span', { class: 'origin-dot', 'data-origin': id, title: originLabel(id) });
   function qualityTag(quality) {
@@ -178,7 +180,7 @@
   globalThis.UI = Object.freeze({
     el, svg, clamp,
     num, usd, usdKg, pct, tonnes,
-    ORIGINS, productName, shortName, originLabel, originDot, qualityTag, inHouseText,
+    ORIGINS, productName, shortName, pathwayLabel, originLabel, originDot, qualityTag, inHouseText,
     sortableTable, kpi, legend, meter, card,
   });
 })();

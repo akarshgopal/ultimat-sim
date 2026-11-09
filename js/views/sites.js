@@ -34,9 +34,13 @@
   }
 
   // ---------------------------------------------------------------- data helpers
+  // PV of plants still operating in the final year (retired plants free their share of the ceiling).
   function pvBySite(result) {
     const out = {};
-    for (const plant of result?.plants || []) out[plant.siteId] = (out[plant.siteId] || 0) + (plant.pvKWp || 0);
+    const year = result?.timeline?.at(-1)?.year ?? Infinity;
+    for (const plant of result?.plants || []) {
+      if (year < plant.retireYear) out[plant.siteId] = (out[plant.siteId] || 0) + (plant.pvKWp || 0);
+    }
     return out;
   }
   function plantsBySite(result) {

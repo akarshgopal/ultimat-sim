@@ -1217,6 +1217,8 @@
         pvCapexUsdPerKWp: opCtx.pvUsdPerKWp,
         solarUsdPerKWh: solarLcoe(cfg.pv, cfg.finance, opCtx.pvUsdPerKWp),
         costFactors: { ...opCtx.costFactors },
+        rawFactors: { ...opCtx.rawFactors },
+        storagePrices: opCtx.storagePrices,
         commodityPriceFactors: { ...opCtx.commodityFactors },
         materialsFloors: Object.fromEntries(Object.entries(opCtx.floors || {}).map(([cls, f]) => [cls, f.materialsUsdPerUnit ?? f.floorFraction])),
       });
@@ -1306,8 +1308,8 @@
 
   // One pathway at one site in a given year, with no company market share (list prices).
   // Cost factors and PV price default to the exogenous decline only (no company learning);
-  // pass opts.costFactors / opts.pvUsdPerKWp (e.g. from a simulateCompany timeline row) to
-  // price that year as the simulation did. Integration (make vs buy) follows cfg.integration.
+  // pass opts.costFactors / rawFactors / storagePrices / pvUsdPerKWp (a simulateCompany timeline
+  // row) to price that year as the simulation did. Integration (make vs buy) follows cfg.integration.
   // Returns evaluatePlant()'s result, or null when the pathway/site is unknown or incompatible.
   function evaluateAtYear(input, pathwayId, siteId, sizeKgPerDay, yearIndex = 0, opts = {}) {
     const { cfg, markets, sitesById, pathways } = normalizeInputs(input);
@@ -1319,6 +1321,8 @@
       sitesById,
     });
     if (opts.costFactors) ctx.costFactors = { ...ctx.costFactors, ...opts.costFactors };
+    if (opts.rawFactors) ctx.rawFactors = { ...ctx.rawFactors, ...opts.rawFactors };
+    if (opts.storagePrices) ctx.storagePrices = opts.storagePrices;
     if (Number.isFinite(opts.pvUsdPerKWp)) ctx.pvUsdPerKWp = opts.pvUsdPerKWp;
     return evaluatePlant(pathway, site, sizeKgPerDay, ctx);
   }

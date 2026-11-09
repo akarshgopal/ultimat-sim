@@ -275,7 +275,7 @@
   function costCurve(Store, pathway, siteId, size, result) {
     const input = simInput(Store);
     return result.timeline.map((row, i) => Company.evaluateAtYear(input, pathway.id, siteId, size, i, {
-      costFactors: row.costFactors, pvUsdPerKWp: row.pvCapexUsdPerKWp,
+      costFactors: row.costFactors, rawFactors: row.rawFactors, storagePrices: row.storagePrices, pvUsdPerKWp: row.pvCapexUsdPerKWp,
     }));
   }
 

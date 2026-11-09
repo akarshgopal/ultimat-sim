@@ -54,14 +54,19 @@
     }),
     build: Object.freeze({
       leadTimeYears: 1,
-      maxPlantsPerYear: 12,
+      // Construction capacity: capex the organisation can put in the ground per year. It starts at
+      // initialBuildUsdPerYear and next year's capacity is (1 + buildGrowthPerYear) × this year's
+      // actual capex (never below the start): a company can only scale construction it is doing.
+      initialBuildUsdPerYear: 250e6,
+      buildGrowthPerYear: 0.5,
+      maxPlantsPerYear: null, // optional hard cap on plant count per year (null = none)
       maxMarketShare: 0.1, // company share of world demand per product
       minProfitabilityIndex: 0, // NPV / capex hurdle
-      sizeMultiples: Object.freeze([1, 10, 100, 1000]), // × pathway reference output
+      sizeMultiples: Object.freeze([1, 10, 100, 1000, 5000]), // × pathway reference output (capped at maxPlantKgPerDay)
       maxPlantKgPerDay: 5e6,
       allowPathways: null, // null = all; else array of pathway ids
       allowSites: null, // null = all; else array of site ids
-      maxPvGWpPerSite: 10, // land / interconnection / permitting ceiling per site
+      maxPvGWpPerSite: 50, // land / interconnection / permitting ceiling per site (~800 km² at 1.6 ha/MWp)
       // Only build plants whose every feed comes from ocean/brine/air/rock/water or a captive
       // supplier: forces make-not-buy and skips plants that would still buy an intermediate.
       infiniteSourcesOnly: false,
@@ -99,7 +104,25 @@
     //   pv / battery / thermalStore / h2Storage: { materialsUsdPerUnit } ($/kWp, $/kWh, $/kWh_th, $/kg H₂)
     //   electrolyzer / desal / dac / process:     { floorFraction } (materials $ per $ of today's recipe capex)
     // target null = today's prices (no squeeze).
-    idiotIndex: Object.freeze({ target: null, floors: Object.freeze({}) }),
+    // Optional bom = { commodities: { material: usdPerKg }, classes: { cls: { lines: [{ material, kgPerUnit }],
+    // todayUsdPerUnit, absolute: bool } } } makes the floors live (the Terraform loop): each year the
+    // floors are re-priced at commodity prices lowered by the relief the company's own supply caused
+    // in the matching market last year (commodityMarkets: material → market key, with a weight for
+    // partial links such as cement in concrete).
+    idiotIndex: Object.freeze({
+      target: null,
+      floors: Object.freeze({}),
+      bom: null,
+      commodityMarkets: Object.freeze({
+        steel: { market: 'steel', weight: 1 },
+        aluminium: { market: 'aluminium', weight: 1 },
+        copper: { market: 'copper-cathode', weight: 1 },
+        'solar-glass': { market: 'float-glass', weight: 1 },
+        polysilicon: { market: 'polysilicon', weight: 1 },
+        'lithium-carbonate': { market: 'lithium', weight: 1 },
+        concrete: { market: 'cement', weight: 0.3 },
+      }),
+    }),
     // Solar-only utilization and storage design (engine/utilization.js): flexible units are sized
     // for the hours the sun shines, baseload units are firmed with batteries / thermal stores,
     // intermediates between them are buffered. Recipes without a flowsheet keep 24 h costing.
@@ -578,42 +601,70 @@
       plants: [], // { id, pathwayId, siteId, product, sizeKgPerDay, onlineYear, builtYear, eval, bookUsd, lifeYears }
       cumRefUsd: Object.fromEntries(TECH_CLASSES.map(cls => [cls, 0])),
       nextId: 1,
+      buildCapacityUsd: Number.isFinite(cfg.build.initialBuildUsdPerYear) ? cfg.build.initialBuildUsdPerYear : Infinity,
     };
   }
 
+  // Materials floors for this year. With a bom, re-price each class's bill of materials at commodity
+  // prices reduced by last year's market relief from the company's own supply; else static floors.
+  function liveFloors(cfg, reliefByMarket) {
+    const ii = cfg.idiotIndex || {};
+    if (!ii.bom?.classes || !ii.bom?.commodities) return { floors: ii.floors || {}, commodityFactors: {} };
+    const commodityFactors = {};
+    for (const [material, usd] of Object.entries(ii.bom.commodities)) {
+      const link = ii.commodityMarkets?.[material];
+      const relief = link ? (reliefByMarket?.[link.market] || 0) * (link.weight ?? 1) : 0;
+      commodityFactors[material] = Math.max(0, 1 - relief);
+      void usd;
+    }
+    const floors = {};
+    for (const [cls, row] of Object.entries(ii.bom.classes)) {
+      if (!row) continue;
+      let materials = 0;
+      for (const line of row.lines || []) {
+        materials += (Number(line.kgPerUnit) || 0) * (Number(ii.bom.commodities[line.material]) || 0) * (commodityFactors[line.material] ?? 1);
+      }
+      floors[cls] = row.absolute
+        ? { materialsUsdPerUnit: materials }
+        : { floorFraction: row.todayUsdPerUnit > 0 ? materials / row.todayUsdPerUnit : 0 };
+    }
+    return { floors, commodityFactors };
+  }
+
   // Cap a cost at its materials floor × the target idiot index (absolute $ per unit).
-  function squashUsd(cfg, cls, usd) {
+  function squashUsd(cfg, cls, usd, floors = cfg.idiotIndex?.floors) {
     const target = cfg.idiotIndex?.target;
-    const materials = cfg.idiotIndex?.floors?.[cls]?.materialsUsdPerUnit;
+    const materials = floors?.[cls]?.materialsUsdPerUnit;
     return target > 0 && materials > 0 ? Math.min(usd, materials * target) : usd;
   }
   // Same for a cost factor relative to today's recipe price (floorFraction = materials / today).
-  function squashFactor(cfg, cls, factor) {
+  function squashFactor(cfg, cls, factor, floors = cfg.idiotIndex?.floors) {
     const target = cfg.idiotIndex?.target;
-    const ff = cfg.idiotIndex?.floors?.[cls]?.floorFraction;
+    const ff = floors?.[cls]?.floorFraction;
     return target > 0 && ff > 0 ? Math.min(factor, ff * target) : factor;
   }
 
   function yearContext(cfg, markets, state, yearIndex, year, committedKg, extras = {}) {
     const costFactors = {};
     const equipment = Number.isFinite(cfg.equipmentCostMultiplier) ? cfg.equipmentCostMultiplier : 1;
+    const { floors, commodityFactors } = liveFloors(cfg, state.lastReliefByMarket);
     for (const cls of TECH_CLASSES) {
       const learned = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]);
-      costFactors[cls] = cls === 'storage' ? learned : squashFactor(cfg, cls, learned * equipment);
+      costFactors[cls] = cls === 'storage' ? learned : squashFactor(cfg, cls, learned * equipment, floors);
     }
-    const pvUsdPerKWp = squashUsd(cfg, 'pv', pvCapexUsdPerKWp(cfg.pv, yearIndex));
+    const pvUsdPerKWp = squashUsd(cfg, 'pv', pvCapexUsdPerKWp(cfg.pv, yearIndex), floors);
     // Storage prices for this year: learning/decline on the storage class, then the squeeze.
     const util = Utilization.mergeCfg(cfg.utilization || Utilization.DEFAULTS);
     const sf = costFactors.storage;
     const bufferUsdPerKg = {};
     for (const [substance, usd] of Object.entries(util.bufferUsdPerKg)) {
       bufferUsdPerKg[substance] = substance === 'H2'
-        ? squashUsd(cfg, 'h2Storage', usd * sf)
-        : usd * squashFactor(cfg, 'process', sf);
+        ? squashUsd(cfg, 'h2Storage', usd * sf, floors)
+        : usd * squashFactor(cfg, 'process', sf, floors);
     }
     const storagePrices = {
-      battery: squashUsd(cfg, 'battery', util.battery.usdPerKWh * sf),
-      thermal: squashUsd(cfg, 'thermalStore', util.thermal.usdPerKWh * sf),
+      battery: squashUsd(cfg, 'battery', util.battery.usdPerKWh * sf, floors),
+      thermal: squashUsd(cfg, 'thermalStore', util.thermal.usdPerKWh * sf, floors),
       bufferUsdPerKg,
     };
     const shareOf = (product, extraKg = 0) => {
@@ -635,7 +686,7 @@
       }
       return caps.get(group);
     };
-    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, storagePrices, priceFor, shareOf, capKg, designCache: new Map(), ...extras };
+    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, storagePrices, floors, commodityFactors, priceFor, shareOf, capKg, designCache: new Map(), ...extras };
   }
 
   function marketGroupOf(cfg, product) {
@@ -736,9 +787,40 @@
     })).filter(item => item.sites.length && item.sizes.length);
   }
 
+  // Re-price a cached plant evaluation after market shares moved: costs, design and integration
+  // are market-independent for the year; only prices, revenue and NPV change.
+  function repriceEval(ev, ctx) {
+    const cfg = ctx.cfg;
+    const price = ctx.priceFor(ev.product, null, ev.annualKg);
+    let coproductRevenue = 0;
+    for (let i = 1; i < ev.sales.length; i += 1) {
+      const sale = ev.sales[i];
+      coproductRevenue += sale.kgPerYear * ctx.priceFor(sale.product, sale.fallbackUsdPerKg, sale.kgPerYear);
+    }
+    const revenue = ev.annualKg * price + coproductRevenue;
+    const annualCash = revenue - ev.opex.total;
+    const r = cfg.finance.discountRate;
+    const af = annuityFactor(r, ev.lifeYears);
+    const npv = -ev.capex.total + (annualCash * af) / (1 + r) ** (cfg.build.leadTimeYears || 0);
+    const coproductCredit = ev.annualKg > 0 ? coproductRevenue / ev.annualKg : 0;
+    const lcop = ev.grossCostUsdPerKg - coproductCredit;
+    return {
+      ...ev,
+      priceUsdPerKg: price,
+      revenue,
+      coproductRevenue,
+      annualCash,
+      npv,
+      profitabilityIndex: ev.capex.total > 0 ? npv / ev.capex.total : 0,
+      lcopUsdPerKg: lcop,
+      coproductCreditUsdPerKg: coproductCredit,
+      marginUsdPerKg: price - lcop,
+    };
+  }
+
   const lifetimeKgPerUsd = ev => (ev.capex.total > 0 ? (ev.materialKgPerYear * ev.lifeYears) / ev.capex.total : 0);
 
-  function pickBuild(cfg, ctx, candidates, committedKg, budgetUsd, markets, sitePvKWp, cache) {
+  function pickBuild(cfg, ctx, candidates, committedKg, budgetUsd, markets, sitePvKWp, cache, capexRoomUsd = Infinity) {
     const sitePvCapKWp = (Number(cfg.build.maxPvGWpPerSite) || Infinity) * 1e6;
     // Pass 1: feasible (NPV ≥ 0, hurdle met) and affordable options; per pathway × site, sizes
     // are ascending and stop at the first that breaks a site or market ceiling.
@@ -757,15 +839,21 @@
         for (const size of sizes) {
           if (size * 365 > headroomKg) break;
           const key = site.id + '|' + size;
-          let ev = pathwayCache.get(key);
-          if (!ev) {
-            ev = evaluatePlant(pathway, site, size, ctx);
-            pathwayCache.set(key, ev);
+          const stamp = cache.stamps?.get(pathway.id) || 0;
+          let entry = pathwayCache.get(key);
+          if (!entry) {
+            entry = { ev: evaluatePlant(pathway, site, size, ctx), stamp };
+            pathwayCache.set(key, entry);
+          } else if (entry.stamp !== stamp) {
+            entry = { ev: repriceEval(entry.ev, ctx), stamp };
+            pathwayCache.set(key, entry);
           }
+          const ev = entry.ev;
           if (ev.pvKWp > pvRoomKWp) break;
           if (cfg.build.infiniteSourcesOnly && ev.purchasedIntermediates.length) break;
           if (!(ev.npv >= 0) || ev.profitabilityIndex < cfg.build.minProfitabilityIndex) continue;
           if (ev.capex.total * (1 - cfg.finance.debtFraction) > budgetUsd) continue;
+          if (ev.capex.total > capexRoomUsd) continue;
           feasible.push(ev);
         }
       }
@@ -780,9 +868,18 @@
       for (const ev of feasible) lambda = Math.max(lambda, lifetimeKgPerUsd(ev));
       score = ev => ev.materialKgPerYear * ev.lifeYears + lambda * ev.npv;
     }
-    const ranked = feasible.map(ev => ({ ev, s: score(ev) })).sort((a, b) => b.s - a.s);
-    for (const { ev } of ranked) if (salesFit(cfg, ctx, ev, committedKg)) return ev;
-    return null;
+    // Best-scoring option that also fits every market it sells into. Linear argmax with
+    // rejection (salesFit rarely fails), instead of sorting every option on every pick.
+    const scores = feasible.map(score);
+    for (;;) {
+      let bestIndex = -1;
+      for (let i = 0; i < feasible.length; i += 1) {
+        if (scores[i] > -Infinity && (bestIndex < 0 || scores[i] > scores[bestIndex])) bestIndex = i;
+      }
+      if (bestIndex < 0) return null;
+      if (salesFit(cfg, ctx, feasible[bestIndex], committedKg)) return feasible[bestIndex];
+      scores[bestIndex] = -Infinity;
+    }
   }
 
   function simulateCompany(input = {}) {
@@ -867,8 +964,11 @@
       // prices read committedKg live, so only evaluations touching a built plant's markets go stale.
       const ctx = yearContext(cfg, markets, state, yearIndex, year, committedKg, { suppliers, sitesById });
       const cache = new Map();
-      for (let n = 0; n < cfg.build.maxPlantsPerYear; n += 1) {
-        const choice = pickBuild(cfg, ctx, candidates, committedKg, budget, markets, sitePvKWp, cache);
+      cache.stamps = new Map(); // pathway id → price-staleness stamp (see repriceEval)
+      const buildCapacityUsd = state.buildCapacityUsd;
+      const maxPlants = Number.isFinite(cfg.build.maxPlantsPerYear) ? cfg.build.maxPlantsPerYear : 10000;
+      for (let n = 0; n < maxPlants; n += 1) {
+        const choice = pickBuild(cfg, ctx, candidates, committedKg, budget, markets, sitePvKWp, cache, buildCapacityUsd - capexSpent);
         if (!choice) break;
         const pathway = pathwaysById.get(choice.pathwayId);
         const debt = choice.capex.total * cfg.finance.debtFraction;
@@ -899,7 +999,8 @@
         const touched = new Set(choice.sales.filter(sale => sale.product).map(sale => marketGroupOf(cfg, sale.product)));
         for (const other of candidates) {
           if (![...other.groups].some(group => touched.has(group))) continue;
-          cache.delete(other.pathway.id);
+          // Its markets moved: cached costs stay valid for the year; prices are refreshed on next use.
+          cache.stamps.set(other.pathway.id, (cache.stamps.get(other.pathway.id) || 0) + 1);
         }
         sitePvKWp[plant.siteId] = (sitePvKWp[plant.siteId] || 0) + choice.pvKWp;
         for (const sale of choice.sales) addKg(committedKg, sale.product, sale.kgPerYear);
@@ -917,6 +1018,10 @@
         });
       }
 
+      // Next year's construction capacity grows from what was actually built this year.
+      if (Number.isFinite(cfg.build.initialBuildUsdPerYear)) {
+        state.buildCapacityUsd = Math.max(cfg.build.initialBuildUsdPerYear, capexSpent * (1 + (cfg.build.buildGrowthPerYear || 0)));
+      }
       const debtOutstanding = state.loans.reduce((sum, loan) => sum + loan.principal, 0);
       const bookValue = state.plants.reduce((sum, plant) => {
         const age = year + 1 - plant.builtYear;
@@ -944,6 +1049,8 @@
       }
       const materialTPerYear = Object.values(outputTByProduct).reduce((sum, t) => sum + t, 0);
       cumulativeMaterialT += materialTPerYear;
+      // The Terraform loop: this year's relief re-prices next year's materials floors.
+      state.lastReliefByMarket = priceReliefByMarket;
       timeline.push({
         year,
         materialTPerYear,
@@ -956,6 +1063,7 @@
         interestUsd: interest,
         debtServiceUsd: debtService,
         capexUsd: capexSpent,
+        buildCapacityUsd: Number.isFinite(buildCapacityUsd) ? buildCapacityUsd : null,
         debtRaisedUsd: debtRaised,
         cashUsd: state.cash,
         debtUsd: debtOutstanding,
@@ -978,6 +1086,8 @@
         pvCapexUsdPerKWp: opCtx.pvUsdPerKWp,
         solarUsdPerKWh: solarLcoe(cfg.pv, cfg.finance, opCtx.pvUsdPerKWp),
         costFactors: { ...opCtx.costFactors },
+        commodityPriceFactors: { ...opCtx.commodityFactors },
+        materialsFloors: Object.fromEntries(Object.entries(opCtx.floors || {}).map(([cls, f]) => [cls, f.materialsUsdPerUnit ?? f.floorFraction])),
       });
     }
 
@@ -1102,7 +1212,10 @@
       // (it still applies to equipment and storage).
       const cfg = merge(base, {
         pv: { capexUsdPerKWp: pvCapexFromLcoe(usdPerKWh, base.pv, base.finance), floorUsdPerKWp: 0 },
-        idiotIndex: { floors: { ...(base.idiotIndex?.floors || {}), pv: undefined } },
+        idiotIndex: {
+          floors: { ...(base.idiotIndex?.floors || {}), pv: undefined },
+          bom: base.idiotIndex?.bom ? { ...base.idiotIndex.bom, classes: { ...base.idiotIndex.bom.classes, pv: undefined } } : null,
+        },
       });
       return yearContext(cfg, input.markets || {}, createState(cfg), 0, cfg.startYear, {}, { suppliers, sitesById });
     };
@@ -1169,6 +1282,7 @@
     solarLcoe,
     pvCapexFromLcoe,
     squashUsd,
+    liveFloors,
     squashFactor,
     energyBreakevens,
     INFINITE_ORIGINS,

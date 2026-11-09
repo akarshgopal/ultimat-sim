@@ -29,6 +29,14 @@
     ABSOLUTE_FLOORS.includes(cls)
       ? { materialsUsdPerUnit: BOM.materialsUsdPerUnit(cls) }
       : { floorFraction: BOM.floorFraction(cls) }])) : {});
+  // Live bill of materials for the Terraform loop (floors re-priced as the company's supply lowers
+  // commodity prices).
+  const BOM_LIVE = BOM ? Object.freeze({
+    commodities: Object.fromEntries(Object.entries(BOM.COMMODITIES).map(([m, c]) => [m, c.usdPerKg])),
+    classes: Object.fromEntries(Object.entries(BOM.CLASSES).map(([cls, c]) => [cls, {
+      lines: c.lines, todayUsdPerUnit: c.todayUsdPerUnit, absolute: ABSOLUTE_FLOORS.includes(cls),
+    }])),
+  }) : null;
   const MARGIN_PRESETS = Object.freeze([
     { id: 'today', label: 'Today', ii: 0, hint: 'today’s prices (no squeeze)' },
     { id: '5', label: '5× materials', ii: 5 },
@@ -53,7 +61,10 @@
     { group: 'finance', key: 'rate', label: 'Discount rate', unit: '%', min: 0, max: 30, step: 0.5, def: pct(D.finance.discountRate) },
     { group: 'build', key: 'pvSite', label: 'Max PV per site', unit: 'GWp', min: 0.1, max: 1000, step: 1, def: D.build.maxPvGWpPerSite },
     { group: 'build', key: 'lead', label: 'Build lead time', unit: 'yr', min: 0, max: 10, step: 1, def: D.build.leadTimeYears },
-    { group: 'build', key: 'perYear', label: 'Plants per year', unit: 'max', min: 0, max: 200, step: 1, def: D.build.maxPlantsPerYear },
+    { group: 'build', key: 'buildStart', label: 'Construction capacity, year 1', unit: '$M/yr', min: 1, max: 1e6, step: 50, def: D.build.initialBuildUsdPerYear / 1e6,
+      hint: 'Capex the company can put in the ground in its first year.' },
+    { group: 'build', key: 'buildGrowth', label: 'Construction ramp', unit: '%/yr', min: 0, max: 300, step: 5, def: pct(D.build.buildGrowthPerYear),
+      hint: 'How fast construction capacity can grow over last year’s actual build.' },
     { group: 'energy', key: 'kwh', label: 'Solar electricity, start year', unit: '$/kWh', min: 0.0001, max: 0.3, step: 0.0005, def: KWH_TODAY,
       hint: 'At 2,000 kWh/kWp·yr; sunnier sites pay less. Moves PV capex and O&M together.' },
     { group: 'energy', key: 'kwhDecline', label: 'Solar price decline', unit: '%/yr', min: 0, max: 30, step: 0.5, def: pct(D.pv.exogenousDeclinePerYear) },
@@ -73,7 +84,7 @@
   const ORIGIN_IDS = globalThis.UI.ORIGINS.map(o => o.id);
 
   function defaults() {
-    const s = { objective: D.objective, make: true, infinite: false, origins: ORIGIN_IDS.slice(), off: [] };
+    const s = { objective: D.objective, make: true, infinite: false, loop: true, origins: ORIGIN_IDS.slice(), off: [] };
     for (const f of FIELDS) s[f.key] = f.def;
     return s;
   }
@@ -84,6 +95,7 @@
     for (const f of FIELDS) if (s[f.key] !== d[f.key]) q.set(f.key, String(s[f.key]));
     if (s.objective !== d.objective) q.set('objective', s.objective);
     if (!s.make) q.set('buy', '1');
+    if (!s.loop) q.set('noloop', '1');
     if (s.infinite) q.set('infinite', '1');
     if (s.origins.length !== d.origins.length) q.set('origins', s.origins.join(','));
     if (s.off.length) q.set('off', s.off.join(','));
@@ -100,6 +112,7 @@
     }
     if (['abundance', 'profit'].includes(q.get('objective'))) s.objective = q.get('objective');
     s.make = q.get('buy') !== '1';
+    s.loop = q.get('noloop') !== '1';
     s.infinite = q.get('infinite') === '1';
     if (q.has('origins')) {
       const ids = new Set(q.get('origins').split(','));
@@ -127,7 +140,8 @@
         maxMarketShare: s.share / 100,
         maxPvGWpPerSite: s.pvSite,
         leadTimeYears: Math.round(s.lead),
-        maxPlantsPerYear: Math.round(s.perYear),
+        initialBuildUsdPerYear: s.buildStart * 1e6,
+        buildGrowthPerYear: s.buildGrowth / 100,
         allowPathways: PATHWAYS.filter(p => pathwayAllowed(p, s)).map(p => p.id),
         infiniteSourcesOnly: s.infinite,
       },
@@ -138,7 +152,7 @@
         exogenousDeclinePerYear: s.kwhDecline / 100,
       },
       equipmentCostMultiplier: s.equip,
-      idiotIndex: { target: s.ii > 0 ? s.ii : null, floors: BOM_FLOORS },
+      idiotIndex: { target: s.ii > 0 ? s.ii : null, floors: BOM_FLOORS, bom: s.loop ? BOM_LIVE : null },
       utilization: { battery: { usdPerKWh: s.battery } },
       tech: {
         electrolyzer: { learningRate: s.lrElec / 100 },

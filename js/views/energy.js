@@ -65,6 +65,7 @@
       const energySeg = el('div', { class: 'segmented', role: 'group', 'aria-label': 'Solar electricity price' });
       const equipSeg = el('div', { class: 'segmented', role: 'group', 'aria-label': 'Equipment cost' });
       const marginSeg = el('div', { class: 'segmented', role: 'group', 'aria-label': 'Target idiot index' });
+      const loopBox = el('input', { type: 'checkbox', onchange: e => Store.update({ loop: e.target.checked }, { immediate: true }) });
       for (const p of Store.MARGIN_PRESETS) {
         marginSeg.append(el('button', { type: 'button', 'data-ii': p.ii, title: p.hint || `every cost capped at ${p.ii}× its raw materials`, text: p.label, onclick: () => Store.update({ ii: p.ii }, { immediate: true }) }));
       }
@@ -82,6 +83,8 @@
           el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Equipment cost (electrolyzers, DAC, desal, process)' }), equipSeg]),
           el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Margins: cap every cost at raw materials × (idiot index)' }), marginSeg]),
         ]),
+        el('label', { class: 'check' }, [loopBox, el('span', {}, ['Terraform loop',
+          el('small', { text: 'The company’s own steel, glass, aluminium, copper, polysilicon, lithium and cement lower commodity prices, and so the materials floors, year by year.' })])]),
         leverNote,
         kpis,
       ]));
@@ -144,6 +147,8 @@
         for (const b of energySeg.children) b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.kwh) - s.kwh) < 1e-9));
         for (const b of equipSeg.children) b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.equip) - s.equip) < 1e-9));
         for (const b of marginSeg.children) b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.ii) - s.ii) < 1e-9));
+        loopBox.checked = s.loop;
+        loopBox.disabled = !(s.ii > 0);
         drawIdiot(s);
         const result = Store.result;
         const tl = result?.timeline || [];

@@ -414,3 +414,30 @@ test('energy break-evens scan electricity price even when PV margins are squeeze
   assert.ok(squeezed.breakevenUsdPerKWh > plain.breakevenUsdPerKWh);
   assert.notEqual(squeezed.limitedBy, 'feasible-at-any-price');
 });
+
+test('construction capacity: capex per year never exceeds it, and it grows from last year\'s build', () => {
+  const r = run({ build: { initialBuildUsdPerYear: 2e5, buildGrowthPerYear: 0.5 }, finance: { initialEquityUsd: 1e9 } });
+  let capacity = 2e5;
+  for (const y of r.timeline) {
+    close(y.buildCapacityUsd, capacity, 1e-9);
+    assert.ok(y.capexUsd <= capacity + 1e-6, `${y.year}: ${y.capexUsd} > ${capacity}`);
+    capacity = Math.max(2e5, y.capexUsd * 1.5);
+  }
+  const unlimited = run({ build: { initialBuildUsdPerYear: Infinity }, finance: { initialEquityUsd: 1e9 } });
+  assert.ok(unlimited.timeline[0].capexUsd > r.timeline[0].capexUsd);
+});
+
+test('Terraform loop: the company\'s own supply lowers commodity prices and so the materials floors', () => {
+  const cfg = C.mergeConfig({
+    idiotIndex: {
+      target: 2,
+      bom: { commodities: { steel: 1, silver: 1000 }, classes: { pv: { lines: [{ material: 'steel', kgPerUnit: 10 }, { material: 'silver', kgPerUnit: 0.01 }], absolute: true } } },
+      commodityMarkets: { steel: { market: 'widget', weight: 1 } },
+    },
+  });
+  const none = C.liveFloors(cfg, {});
+  close(none.floors.pv.materialsUsdPerUnit, 20);
+  const half = C.liveFloors(cfg, { widget: 0.5 });
+  close(half.commodityFactors.steel, 0.5);
+  close(half.floors.pv.materialsUsdPerUnit, 15); // steel halves, silver (no market link) does not
+});

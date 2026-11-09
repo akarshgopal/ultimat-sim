@@ -46,6 +46,9 @@
     // storage must hold them at ≥ this fraction of full load around the clock. Kilns, glass
     // furnaces and synthesis loops typically turn down to ~60–70%.
     baseloadMinTurndown: 0.7,
+    // Per-unit energy multipliers vs the recipes (e.g. a designed electrolyzer at 49 kWh/kg instead of
+    // the recipes' 52: { electrolyzer: 49 / 52 }).
+    unitEnergyScale: Object.freeze({}),
     battery: Object.freeze({
       usdPerKWh: 350, roundTrip: 0.88, depthOfDischarge: 0.9, lifeYears: 15, fixedOmFrac: 0.025,
       source: 'NREL ATB 2024 utility-scale battery (4-h, moderate) cost order; screening',
@@ -72,12 +75,14 @@
     if (mergedCache.has(cfg)) return mergedCache.get(cfg);
     const merged = {
       [MERGED]: true,
-      profileKey: [...(cfg.flexibleUnits || DEFAULTS.flexibleUnits)].join(',') + '|' + [...(cfg.thermalUnits || DEFAULTS.thermalUnits)].join(','),
+      profileKey: [...(cfg.flexibleUnits || DEFAULTS.flexibleUnits)].join(',') + '|' + [...(cfg.thermalUnits || DEFAULTS.thermalUnits)].join(',')
+        + '|' + JSON.stringify(cfg.unitEnergyScale || {}),
       ...DEFAULTS,
       ...cfg,
       battery: { ...DEFAULTS.battery, ...(cfg.battery || {}) },
       thermal: { ...DEFAULTS.thermal, ...(cfg.thermal || {}) },
       bufferUsdPerKg: { ...DEFAULTS.bufferUsdPerKg, ...(cfg.bufferUsdPerKg || {}) },
+      unitEnergyScale: { ...(cfg.unitEnergyScale || {}) },
     };
     mergedCache.set(cfg, merged);
     return merged;
@@ -105,12 +110,14 @@
     let flexKWh = 0;
     let baseKWh = 0;
     let baseThermalKWh = 0;
+    let energyDelta = 0;
     const capex = { flex: {}, base: {} };
     for (const node of pathway.flowsheet.nodes) {
       if (node.kind !== 'converter') continue;
       const mode = flexible.has(node.unit) ? 'flex' : 'base';
       modeById.set(node.id, mode);
-      const kWh = Number(node.kWhPerKg) || 0;
+      const kWh = (Number(node.kWhPerKg) || 0) * (cfg.unitEnergyScale[node.unit] ?? 1);
+      energyDelta += (Number(node.kWhPerKg) || 0) * ((cfg.unitEnergyScale[node.unit] ?? 1) - 1);
       if (mode === 'flex') flexKWh += kWh;
       else if (thermal.has(node.unit)) baseThermalKWh += kWh;
       else baseKWh += kWh;
@@ -125,7 +132,7 @@
     }
     // Reconcile node energy with the recipe total (rounding in the flowsheet).
     const nodeTotal = flexKWh + baseKWh + baseThermalKWh;
-    const recipeTotal = (Number(pathway.electricityKWhPerKg) || 0) + heat;
+    const recipeTotal = (Number(pathway.electricityKWhPerKg) || 0) + heat + energyDelta;
     if (nodeTotal > 0 && recipeTotal > 0) {
       const scale = recipeTotal / nodeTotal;
       flexKWh *= scale;
@@ -146,7 +153,7 @@
       buffers.push({ from: edge.from, to: edge.to, substance, kgPerKg: Number(edge.kgPerKg) || 0 });
     }
     const profile = {
-      flexKWh, baseKWh, baseThermalKWh, flexShareByClass, buffers,
+      flexKWh, baseKWh, baseThermalKWh, flexShareByClass, buffers, energyDeltaKWhPerKg: energyDelta,
       hasFlex: [...modeById.values()].includes('flex'),
       hasBase: [...modeById.values()].includes('base'),
     };

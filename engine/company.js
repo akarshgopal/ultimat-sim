@@ -102,6 +102,9 @@
     // Scenario lever: multiplies equipment capex (process, electrolyzer, DAC, desal classes; not
     // PV or storage). 0.1 = equipment 10× cheaper than the recipes' screening packs.
     equipmentCostMultiplier: 1,
+    // Engineered designs that replace a class's recipe basis: { electrolyzer: { capexFactor } } (energy
+    // goes through utilization.unitEnergyScale). See engine/designs/*.js.
+    designs: Object.freeze({}),
     // Idiot-index squeeze (Musk: installed cost ÷ raw-material cost). With a target T, every cost
     // class is capped at its materials floor × T: price = min(today's price after learning and
     // decline, floor × T). floors come from data/bom.js (the app's store passes them in):
@@ -376,10 +379,12 @@
       refCapexByTech[cls] = perKgDay[cls] * sizeKgPerDay;
       processCapex += value;
     }
-    const kWhPerKg = (Number(pathway.electricityKWhPerKg) || 0) + (Number(pathway.heatKWhPerKg) || 0);
     // Solar-only utilization: resize equipment for sun hours, add storage, derate output.
     const util = Utilization.mergeCfg(cfg.utilization || Utilization.DEFAULTS);
     const profile = util.enabled ? Utilization.operatingProfile(pathway, util) : null;
+    // A designed unit (e.g. electrolyzer) can change the recipe's kWh/kg (utilization.unitEnergyScale).
+    const kWhPerKg = (Number(pathway.electricityKWhPerKg) || 0) + (Number(pathway.heatKWhPerKg) || 0)
+      + (profile ? profile.energyDeltaKWhPerKg : 0);
     let design = null;
     let pvKWp;
     if (profile && site.pvKWhPerKWpDay > 0) {
@@ -654,7 +659,9 @@
     const { floors, commodityFactors } = liveFloors(cfg, state.lastReliefByMarket);
     for (const cls of TECH_CLASSES) {
       const learned = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]);
-      costFactors[cls] = cls === 'storage' ? learned : squashFactor(cfg, cls, learned * equipment, floors);
+      // A designed unit replaces the recipe's capex basis for its class (e.g. electrolyzer $/(kg/day)).
+      const designed = Number(cfg.designs?.[cls]?.capexFactor) > 0 ? cfg.designs[cls].capexFactor : 1;
+      costFactors[cls] = cls === 'storage' ? learned : squashFactor(cfg, cls, learned * equipment * designed, floors);
     }
     const pvUsdPerKWp = squashUsd(cfg, 'pv', pvCapexUsdPerKWp(cfg.pv, yearIndex), floors);
     // Storage prices for this year: learning/decline on the storage class, then the squeeze.

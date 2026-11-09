@@ -22,6 +22,14 @@
     { id: '3x', label: '3× cheaper', kwh: round4(KWH_TODAY / 3), floor: round4(KWH_FLOOR / 3), hint: 'record sunbelt PPA territory' },
     { id: '10x', label: '10× cheaper', kwh: round4(KWH_TODAY / 10), floor: round4(KWH_FLOOR / 10), hint: 'the Terraform thesis' },
   ]);
+  const ElectrolyzerDesign = globalThis.ElectrolyzerDesign;
+  // Full parameter set of a scenario's electrolyzer design (preset + overrides).
+  function electrolyzerParams(el) {
+    if (!el || !ElectrolyzerDesign) return null;
+    const base = ElectrolyzerDesign.PRESETS[el.preset]?.params || {};
+    return { ...base, ...(el.overrides || {}) };
+  }
+
   // Idiot-index floors from the bill-of-materials dataset (data/bom.js).
   const BOM = globalThis.FoundryBom;
   const ABSOLUTE_FLOORS = ['pv', 'battery', 'thermalStore', 'h2Storage'];
@@ -84,7 +92,7 @@
   const ORIGIN_IDS = globalThis.UI.ORIGINS.map(o => o.id);
 
   function defaults() {
-    const s = { objective: D.objective, make: true, infinite: false, loop: true, origins: ORIGIN_IDS.slice(), off: [] };
+    const s = { objective: D.objective, make: true, infinite: false, loop: true, origins: ORIGIN_IDS.slice(), off: [], el: null };
     for (const f of FIELDS) s[f.key] = f.def;
     return s;
   }
@@ -96,6 +104,7 @@
     if (s.objective !== d.objective) q.set('objective', s.objective);
     if (!s.make) q.set('buy', '1');
     if (!s.loop) q.set('noloop', '1');
+    if (s.el) q.set('el', JSON.stringify(s.el));
     if (s.infinite) q.set('infinite', '1');
     if (s.origins.length !== d.origins.length) q.set('origins', s.origins.join(','));
     if (s.off.length) q.set('off', s.off.join(','));
@@ -113,6 +122,12 @@
     if (['abundance', 'profit'].includes(q.get('objective'))) s.objective = q.get('objective');
     s.make = q.get('buy') !== '1';
     s.loop = q.get('noloop') !== '1';
+    if (q.has('el')) {
+      try {
+        const el = JSON.parse(q.get('el'));
+        if (el && typeof el === 'object' && ElectrolyzerDesign?.PRESETS?.[el.preset]) s.el = { preset: el.preset, overrides: el.overrides || {} };
+      } catch { /* ignore a malformed design */ }
+    }
     s.infinite = q.get('infinite') === '1';
     if (q.has('origins')) {
       const ids = new Set(q.get('origins').split(','));
@@ -153,7 +168,16 @@
       },
       equipmentCostMultiplier: s.equip,
       idiotIndex: { target: s.ii > 0 ? s.ii : null, floors: BOM_FLOORS, bom: s.loop ? BOM_LIVE : null },
-      utilization: { battery: { usdPerKWh: s.battery } },
+      ...(() => {
+        const params = electrolyzerParams(s.el);
+        if (!params) return {};
+        const o = ElectrolyzerDesign.simulatorOverride(params);
+        return { designs: { electrolyzer: { capexFactor: o.capexFactor } } };
+      })(),
+      utilization: {
+        battery: { usdPerKWh: s.battery },
+        unitEnergyScale: (() => { const p = electrolyzerParams(s.el); return p ? { electrolyzer: ElectrolyzerDesign.simulatorOverride(p).energyFactor } : {}; })(),
+      },
       tech: {
         electrolyzer: { learningRate: s.lrElec / 100 },
         process: { learningRate: s.lrProc / 100 },
@@ -232,6 +256,7 @@
 
   globalThis.Store = Object.freeze({
     FIELDS, FIELD_BY_KEY, PATHWAYS, MARKETS, SITES, ENERGY_PRESETS, EQUIPMENT_PRESETS, MARGIN_PRESETS, BOM, BOM_FLOORS,
+    electrolyzerParams,
     pathwayById: new Map(PATHWAYS.map(p => [p.id, p])),
     siteById: new Map(SITES.map(s => [s.id, s])),
     defaults, toQuery, fromQuery, toConfig, pathwayAllowed,

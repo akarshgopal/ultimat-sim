@@ -15,6 +15,7 @@
   const NAV = [
     { id: 'company', label: 'Company' },
     { id: 'energy', label: 'Energy' },
+    { id: 'designs', label: 'Designs' },
     { id: 'pathways', label: 'Pathways' },
     { id: 'sites', label: 'Sites' },
     { id: 'markets', label: 'Markets' },

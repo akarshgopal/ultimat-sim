@@ -13,6 +13,7 @@
   const Store = globalThis.Store;
   const Views = globalThis.Views;
   const NAV = [
+    { id: 'abundance', label: 'Abundance' },
     { id: 'company', label: 'Company' },
     { id: 'energy', label: 'Energy' },
     { id: 'designs', label: 'Designs' },
@@ -25,7 +26,7 @@
     const raw = location.hash.replace(/^#\/?/, '');
     const [pathPart, query = ''] = raw.split('?');
     const path = pathPart.split('/').filter(Boolean).map(decodeURIComponent);
-    return { view: path[0] || 'company', id: path[1] || null, path, query };
+    return { view: path[0] || 'abundance', id: path[1] || null, path, query };
   }
 
   // Build an in-app link that keeps the current scenario query.
@@ -70,7 +71,7 @@
   Store.subscribe(({ scenario, result, busy }) => {
     const { path } = parseHash();
     const q = Store.toQuery(scenario);
-    const next = '#/' + (path.length ? path.map(encodeURIComponent).join('/') : 'company') + (q ? '?' + q : '');
+    const next = '#/' + (path.length ? path.map(encodeURIComponent).join('/') : 'abundance') + (q ? '?' + q : '');
     if (next !== location.hash) {
       history.replaceState(null, '', next);
       lastQuery = q;

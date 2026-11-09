@@ -1,0 +1,20 @@
+/* Abundance view — scoped by .v-abundance. */
+.v-abundance .card + .card { margin-top: var(--gap); }
+.v-abundance .ab-bars { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 10px; }
+.v-abundance .ab-bar-row { display: grid; grid-template-columns: 80px minmax(0, 1fr) minmax(160px, 220px); gap: 10px; align-items: center; font-size: 12px; }
+.v-abundance .ab-track { display: flex; height: 16px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.v-abundance .ab-track span { height: 100%; }
+.v-abundance .ab-bar-value { color: var(--text-2); white-space: nowrap; }
+.v-abundance .ab-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; }
+.v-abundance .ab-actions p { margin: 0; flex: 1 1 260px; }
+.v-abundance .ab-blockers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.v-abundance .ab-blockers h3 { font-size: 13px; margin: 0 0 6px; }
+.v-abundance .ab-blocker-list { margin: 0; padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.v-abundance .ab-status { font-size: 12px; font-weight: 600; }
+.v-abundance .ab-abundant { color: var(--pos); }
+.v-abundance .ab-feasible { color: var(--pos); font-weight: 500; }
+.v-abundance .ab-blocked { color: var(--neg); font-weight: 500; }
+.v-abundance .ab-coproduct, .v-abundance .ab-no-pathway { color: var(--text-3); font-weight: 400; }
+@media (max-width: 680px) {
+  .v-abundance .ab-bar-row { grid-template-columns: 1fr; gap: 2px; }
+}

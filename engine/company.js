@@ -379,6 +379,7 @@
           supplierId: best.supplier.id,
           kgPerDay,
           makeUsdPerKg: best.unit.lcopUsdPerKg,
+          makeGrossUsdPerKg: best.unit.grossCostUsdPerKg,
           buyUsdPerKg,
           unit: best.unit,
         });
@@ -1335,6 +1336,135 @@
     return rows;
   }
 
+  // ---------------------------------------------------------------------------
+  // Abundance scoreboard: for every world material market, can the company make it from sun, air,
+  // water and rock below today's price, and if not, what stands in the way?
+  //   status  'abundant'   best pathway's cost ≤ abundantCostRatio × today's price (default ½)
+  //           'feasible'   NPV ≥ 0 at today's price
+  //           'blocked'    a pathway exists but does not pay back its capital
+  //           'coproduct'  only made as another plant's coproduct (volume follows the main product)
+  //           'no-pathway' nothing in the library makes it
+  //   costItems: the best pathway's cost per kg split into single items, largest first: each
+  //   flowsheet unit's equipment (by its capex share, after designs.units), each purchased feed,
+  //   energy (PV + storage + land) and other O&M. blocker = costItems[0], i.e. what to design (a
+  //   unit), make cheaper (a feed) or power more cheaply (energy) next for this material.
+  // Year 0, best site, plants at opts.sizeMultiple × reference size, no company market share.
+  function abundanceScoreboard(input = {}, opts = {}) {
+    const cfg = merge(DEFAULTS, input.config || {});
+    const markets = input.markets || {};
+    const pathways = input.pathways || [];
+    const abundantRatio = opts.abundantCostRatio ?? 0.5;
+    const ranked = rankOpportunities(input, { sizeMultiple: opts.sizeMultiple || 100 });
+    const groupOf = product => marketGroupOf(cfg, product);
+    const coproductOf = new Map();
+    for (const p of pathways) {
+      for (const co of p.coproducts || []) {
+        const g = groupOf(co.product);
+        if (g && !coproductOf.has(g)) coproductOf.set(g, p.id);
+      }
+    }
+    const units = cfg.designs?.units || {};
+    const costItems = (pathway, ev) => {
+      const b = ev.costBreakdownUsdPerKg;
+      const items = [];
+      // Feeds made in-house are one item each (the captive unit's full cost per kg of product);
+      // equipment, energy and other O&M of the plant itself are what remains.
+      let inHouse = 0;
+      for (const item of ev.integration || []) {
+        const usd = (item.kgPerDay / ev.sizeKgPerDay) * item.makeGrossUsdPerKg;
+        inHouse += usd;
+        items.push({ kind: 'feed', id: item.feedId, label: `${item.feedId} (made in-house)`, usdPerKg: usd, supplierId: item.supplierId });
+      }
+      const purchased = [];
+      const integrated = new Set((ev.integration || []).map(item => item.feedId));
+      for (const feed of pathway?.feeds || []) {
+        if (!feed.purchased || integrated.has(feed.id)) continue;
+        const usd = (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0));
+        if (usd > 0) purchased.push({ kind: 'feed', id: feed.id, label: feed.label || feed.id, usdPerKg: usd });
+      }
+      const own = b.equipment + b.energy + b.other;
+      const ownScale = own > 0 ? Math.max(0, own - inHouse + (b.feedstock - purchased.reduce((a, i) => a + i.usdPerKg, 0))) / own : 1;
+      const equipment = b.equipment * ownScale;
+      const nodes = (pathway?.flowsheet?.nodes || []).filter(n => n.kind === 'converter' && n.capexUsdPerKgDay > 0);
+      const capex = nodes.map(n => n.capexUsdPerKgDay * (Number(units[n.unit]?.capexFactor) > 0 ? units[n.unit].capexFactor : 1));
+      const total = capex.reduce((x, y) => x + y, 0);
+      if (total > 0) {
+        nodes.forEach((n, i) => items.push({ kind: 'unit', id: n.unit, label: n.label || n.unit,
+          usdPerKg: equipment * capex[i] / total, designed: Boolean(units[n.unit]) }));
+      } else if (equipment > 0) {
+        items.push({ kind: 'unit', id: 'equipment', label: 'Process equipment', usdPerKg: equipment, designed: false });
+      }
+      items.push(...purchased);
+      if (b.energy > 0) items.push({ kind: 'energy', id: 'energy', label: 'Electricity (PV + storage + land)', usdPerKg: b.energy * ownScale });
+      if (b.other > 0) items.push({ kind: 'other', id: 'other', label: 'Other O&M', usdPerKg: b.other * ownScale });
+      return items.sort((x, y) => y.usdPerKg - x.usdPerKg);
+    };
+    const pathwayById = new Map(pathways.map(p => [p.id, p]));
+    const rows = [];
+    for (const [key, market] of Object.entries(markets)) {
+      if (groupOf(key) !== key || !(market.worldDemandTPerYear > 0)) continue;
+      const options = ranked.filter(r => groupOf(r.product) === key && r.priceUsdPerKg > 0);
+      const best = options.reduce((a, r) => (!a || r.lcopUsdPerKg / r.priceUsdPerKg < a.lcopUsdPerKg / a.priceUsdPerKg ? r : a), null);
+      const row = {
+        product: key,
+        name: market.name || key,
+        worldDemandT: marketDemandT(market, cfg.startYear),
+        priceUsdPerKg: Number(market.priceUsdPerKg) || null,
+        status: best ? 'blocked' : coproductOf.has(key) ? 'coproduct' : 'no-pathway',
+        pathwayId: best?.pathwayId ?? coproductOf.get(key) ?? null,
+        pathwayCount: options.length,
+      };
+      if (best) {
+        const b = best.costBreakdownUsdPerKg;
+        const items = costItems(pathwayById.get(best.pathwayId), best);
+        Object.assign(row, {
+          siteId: best.siteId,
+          lcopUsdPerKg: best.lcopUsdPerKg,
+          costRatio: best.lcopUsdPerKg / best.priceUsdPerKg,
+          npv: best.npv,
+          energyKWhPerKg: best.energyKWhPerKg,
+          effectiveEnergyUsdPerKWh: best.effectiveEnergyUsdPerKWh,
+          costBreakdownUsdPerKg: b,
+          // Cost per kg with the energy line removed: the floor no electricity price can beat.
+          nonEnergyUsdPerKg: best.lcopUsdPerKg - b.energy,
+          costItems: items,
+          blocker: items[0] || null,
+        });
+        if (best.npv >= 0) row.status = row.costRatio <= abundantRatio ? 'abundant' : 'feasible';
+      }
+      rows.push(row);
+    }
+    rows.sort((a, b) => b.worldDemandT - a.worldDemandT);
+    const sumT = pred => rows.filter(pred).reduce((t, r) => t + r.worldDemandT, 0);
+    const totalT = sumT(() => true);
+    const ok = r => r.status === 'feasible' || r.status === 'abundant';
+    // World tonnage held back by each blocker (blocked markets only): the priority list.
+    const blockers = new Map();
+    for (const r of rows) {
+      if (r.status !== 'blocked' || !r.blocker) continue;
+      const u = r.blocker.kind + ':' + r.blocker.id;
+      const e = blockers.get(u) || { kind: r.blocker.kind, id: r.blocker.id, label: r.blocker.label, worldDemandT: 0, products: [] };
+      e.worldDemandT += r.worldDemandT;
+      e.products.push(r.product);
+      blockers.set(u, e);
+    }
+    return {
+      rows,
+      totals: {
+        worldDemandT: totalT,
+        feasibleT: sumT(ok),
+        abundantT: sumT(r => r.status === 'abundant'),
+        blockedT: sumT(r => r.status === 'blocked'),
+        uncoveredT: sumT(r => r.status === 'no-pathway' || r.status === 'coproduct'),
+        feasibleShare: totalT > 0 ? sumT(ok) / totalT : 0,
+        abundantShare: totalT > 0 ? sumT(r => r.status === 'abundant') / totalT : 0,
+        markets: rows.length,
+        feasibleMarkets: rows.filter(ok).length,
+      },
+      blockers: [...blockers.values()].sort((a, b) => b.worldDemandT - a.worldDemandT),
+    };
+  }
+
   return {
     DEFAULTS,
     TECH_CLASSES,
@@ -1344,6 +1474,7 @@
     liveFloors,
     squashFactor,
     energyBreakevens,
+    abundanceScoreboard,
     INFINITE_ORIGINS,
     annuityFactor,
     techCostFactor,

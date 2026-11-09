@@ -245,6 +245,17 @@
     });
   }
 
+  // The frontier: what the program aims at. 10× cheaper solar, every cost squeezed to 1.5× its raw
+  // materials, the lean solar-matched electrolyzer. Applied on top of the current scenario.
+  const FRONTIER = Object.freeze({ kwh: ENERGY_PRESETS[2].kwh, kwhFloor: ENERGY_PRESETS[2].floor, ii: 1.5, el: { preset: 'lean' } });
+
+  // Abundance scoreboard (year 0) for a scenario; by default the current one.
+  function abundance(s = scenario) {
+    const config = toConfig(s);
+    config.build.allowPathways = null;
+    return Company.abundanceScoreboard({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
+  }
+
   function rank(sizeMultiple = 10) {
     const config = toConfig(scenario);
     config.build.allowPathways = null; // rank every pathway; views mark excluded ones
@@ -266,5 +277,7 @@
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     rank,
     breakevens,
+    abundance,
+    FRONTIER,
   });
 })();

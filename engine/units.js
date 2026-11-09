@@ -1444,15 +1444,7 @@ const UNITS = Object.freeze({
     kind: 'source',
     ports: { out: { direction: 'out', kind: 'electricity', required: true } },
   },
-  'nuclear-electricity': {
-    kind: 'source',
-    ports: { out: { direction: 'out', kind: 'electricity', required: true } },
-  },
   'heat-source': {
-    kind: 'source',
-    ports: { out: { direction: 'out', kind: 'heat', required: true } },
-  },
-  'solar-thermal': {
     kind: 'source',
     ports: { out: { direction: 'out', kind: 'heat', required: true } },
   },
@@ -1525,14 +1517,6 @@ const UNITS = Object.freeze({
       out: { direction: 'out', kind: 'electricity', required: true },
     },
     evaluate: energyStorage('electricity'),
-  },
-  'thermal-storage': {
-    kind: 'converter',
-    ports: {
-      in: { direction: 'in', kind: 'heat', required: true },
-      out: { direction: 'out', kind: 'heat', required: true },
-    },
-    evaluate: energyStorage('heat'),
   },
   swro: {
     kind: 'converter',

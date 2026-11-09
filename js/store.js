@@ -172,12 +172,9 @@
         const params = electrolyzerParams(s.el);
         if (!params) return {};
         const o = ElectrolyzerDesign.simulatorOverride(params);
-        return { designs: { electrolyzer: { capexFactor: o.capexFactor } } };
+        return { designs: { units: { electrolyzer: { capexFactor: o.capexFactor, energyFactor: o.energyFactor } } } };
       })(),
-      utilization: {
-        battery: { usdPerKWh: s.battery },
-        unitEnergyScale: (() => { const p = electrolyzerParams(s.el); return p ? { electrolyzer: ElectrolyzerDesign.simulatorOverride(p).energyFactor } : {}; })(),
-      },
+      utilization: { battery: { usdPerKWh: s.battery } },
       tech: {
         electrolyzer: { learningRate: s.lrElec / 100 },
         process: { learningRate: s.lrProc / 100 },

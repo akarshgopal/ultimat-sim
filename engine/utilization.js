@@ -98,10 +98,11 @@
 
   // Per kg of primary product, from the pathway's solved flowsheet. null → no flowsheet (legacy
   // recipes and test fixtures): the caller keeps the 24 h-average costing.
-  function operatingProfile(pathway, cfgIn) {
+  // designUnits: { <unit>: { capexFactor } } — designed units re-weight the flexible/baseload capex split.
+  function operatingProfile(pathway, cfgIn, designUnits = null) {
     if (!pathway?.flowsheet?.nodes?.length) return null;
     const cfg = mergeCfg(cfgIn);
-    const key = cfg.profileKey;
+    const key = cfg.profileKey + '|' + (designUnits ? JSON.stringify(designUnits) : '');
     const cached = profileCache.get(pathway);
     if (cached && cached.key === key) return cached.profile;
     const flexible = new Set(cfg.flexibleUnits);
@@ -122,7 +123,8 @@
       else if (thermal.has(node.unit)) baseThermalKWh += kWh;
       else baseKWh += kWh;
       const cls = UNIT_TECH[node.unit] || 'process';
-      capex[mode][cls] = (capex[mode][cls] || 0) + (Number(node.capexUsdPerKgDay) || 0);
+      const capexFactor = Number(designUnits?.[node.unit]?.capexFactor) > 0 ? designUnits[node.unit].capexFactor : 1;
+      capex[mode][cls] = (capex[mode][cls] || 0) + (Number(node.capexUsdPerKgDay) || 0) * capexFactor;
     }
     // Purchased heat (DAC regeneration) follows the flexible DAC units when there are any.
     const heat = Number(pathway.heatKWhPerKg) || 0;
@@ -393,5 +395,5 @@
     return { ...candidates[0], alternatives: candidates.map(c => ({ strategy: c.strategy, capexPerOutput: c.capexPerOutput, outputFactor: c.outputFactor })) };
   }
 
-  return { DEFAULTS, mergeCfg, operatingProfile, siteSolar, dayLengthHours, flexDesign, baseDesign, designPlant, R_GRID, K_GRID };
+  return { DEFAULTS, UNIT_TECH, mergeCfg, operatingProfile, siteSolar, dayLengthHours, flexDesign, baseDesign, designPlant, R_GRID, K_GRID };
 });

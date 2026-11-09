@@ -102,9 +102,10 @@
     // Scenario lever: multiplies equipment capex (process, electrolyzer, DAC, desal classes; not
     // PV or storage). 0.1 = equipment 10× cheaper than the recipes' screening packs.
     equipmentCostMultiplier: 1,
-    // Engineered designs that replace a class's recipe basis: { electrolyzer: { capexFactor } } (energy
-    // goes through utilization.unitEnergyScale). See engine/designs/*.js.
-    designs: Object.freeze({}),
+    // Engineered unit designs (engine/designs/*.js): { units: { <flowsheet unit>: { capexFactor,
+    // energyFactor } } }. Each scales that unit's own capex and kWh in every recipe flowsheet that
+    // contains it (other units in the same cost class are untouched).
+    designs: Object.freeze({ units: Object.freeze({}) }),
     // Idiot-index squeeze (Musk: installed cost ÷ raw-material cost). With a target T, every cost
     // class is capped at its materials floor × T: price = min(today's price after learning and
     // decline, floor × T). floors come from data/bom.js (the app's store passes them in):
@@ -293,10 +294,36 @@
   // ---------------------------------------------------------------------------
   // Plant economics
 
-  function capexByTech(pathway) {
+  // Recipe capex per kg/day by class, with designed units re-priced from their flowsheet share.
+  function capexByTech(pathway, cfg) {
     const out = {};
     for (const cls of TECH_CLASSES) out[cls] = Number(pathway.capexByTechUsdPerKgDay?.[cls]) || 0;
+    const units = cfg?.designs?.units;
+    if (units && pathway.flowsheet?.nodes) {
+      for (const node of pathway.flowsheet.nodes) {
+        const factor = Number(units[node.unit]?.capexFactor);
+        if (node.kind !== 'converter' || !(factor > 0) || factor === 1) continue;
+        const cls = Utilization.UNIT_TECH[node.unit] || 'process';
+        out[cls] = Math.max(0, out[cls] + (Number(node.capexUsdPerKgDay) || 0) * (factor - 1));
+      }
+    }
     return out;
+  }
+
+  // Utilization config with designed units' energy factors folded into unitEnergyScale (memoized).
+  const utilCache = new WeakMap();
+  function utilFor(cfg) {
+    if (utilCache.has(cfg)) return utilCache.get(cfg);
+    const base = cfg.utilization || Utilization.DEFAULTS;
+    const energy = {};
+    for (const [unit, d] of Object.entries(cfg.designs?.units || {})) {
+      if (Number(d?.energyFactor) > 0) energy[unit] = d.energyFactor;
+    }
+    const util = Utilization.mergeCfg(Object.keys(energy).length
+      ? { ...base, unitEnergyScale: { ...(base.unitEnergyScale || {}), ...energy } }
+      : base);
+    utilCache.set(cfg, util);
+    return util;
   }
 
   // ---------------------------------------------------------------------------
@@ -365,7 +392,7 @@
   function evaluatePlant(pathway, site, sizeKgPerDay, ctx) {
     const { cfg } = ctx;
     const sf = scaleFactor(cfg.scale, sizeKgPerDay, pathway.refOutputKgPerDay);
-    const perKgDay = capexByTech(pathway);
+    const perKgDay = capexByTech(pathway, cfg);
     const siteMult = Number(site.capexMultiplier) || 1;
     const integration = planIntegration(pathway, site, sizeKgPerDay, ctx);
     const integrated = new Set(integration.map(item => item.feedId));
@@ -380,8 +407,8 @@
       processCapex += value;
     }
     // Solar-only utilization: resize equipment for sun hours, add storage, derate output.
-    const util = Utilization.mergeCfg(cfg.utilization || Utilization.DEFAULTS);
-    const profile = util.enabled ? Utilization.operatingProfile(pathway, util) : null;
+    const util = utilFor(cfg);
+    const profile = util.enabled ? Utilization.operatingProfile(pathway, util, cfg.designs?.units) : null;
     // A designed unit (e.g. electrolyzer) can change the recipe's kWh/kg (utilization.unitEnergyScale).
     const kWhPerKg = (Number(pathway.electricityKWhPerKg) || 0) + (Number(pathway.heatKWhPerKg) || 0)
       + (profile ? profile.energyDeltaKWhPerKg : 0);
@@ -659,9 +686,7 @@
     const { floors, commodityFactors } = liveFloors(cfg, state.lastReliefByMarket);
     for (const cls of TECH_CLASSES) {
       const learned = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]);
-      // A designed unit replaces the recipe's capex basis for its class (e.g. electrolyzer $/(kg/day)).
-      const designed = Number(cfg.designs?.[cls]?.capexFactor) > 0 ? cfg.designs[cls].capexFactor : 1;
-      costFactors[cls] = cls === 'storage' ? learned : squashFactor(cfg, cls, learned * equipment * designed, floors);
+      costFactors[cls] = cls === 'storage' ? learned : squashFactor(cfg, cls, learned * equipment, floors);
     }
     const pvUsdPerKWp = squashUsd(cfg, 'pv', pvCapexUsdPerKWp(cfg.pv, yearIndex), floors);
     // Storage prices for this year: learning/decline on the storage class, then the squeeze.

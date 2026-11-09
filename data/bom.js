@@ -538,6 +538,15 @@ function materialBreakdown(c, variant) {
   return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([material, usd]) => ({ material, usd }));
 }
 
+// Idiot-index floors for company config.idiotIndex.floors: classes priced per unit of capacity (PV,
+// stores) floor at their raw materials in $; the rest floor as a fraction of today's recipe price.
+const ABSOLUTE_FLOOR_CLASSES = ['pv', 'battery', 'thermalStore', 'h2Storage'];
+function floors() {
+  return Object.fromEntries(Object.keys(CLASSES).map(cls => [cls, ABSOLUTE_FLOOR_CLASSES.includes(cls)
+    ? { materialsUsdPerUnit: materialsUsdPerUnit(cls) }
+    : { floorFraction: floorFraction(cls) }]));
+}
+
 return {
   SCHEMA_VERSION,
   COMMODITIES,
@@ -547,5 +556,6 @@ return {
   idiotIndex,
   floorFraction,
   materialBreakdown,
+  floors,
 };
 });

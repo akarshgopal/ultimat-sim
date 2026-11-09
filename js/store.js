@@ -49,17 +49,13 @@
 
   // Idiot-index floors from the bill-of-materials dataset (data/bom.js).
   const BOM = globalThis.FoundryBom;
-  const ABSOLUTE_FLOORS = ['pv', 'battery', 'thermalStore', 'h2Storage'];
-  const BOM_FLOORS = Object.freeze(BOM ? Object.fromEntries(Object.keys(BOM.CLASSES).map(cls => [cls,
-    ABSOLUTE_FLOORS.includes(cls)
-      ? { materialsUsdPerUnit: BOM.materialsUsdPerUnit(cls) }
-      : { floorFraction: BOM.floorFraction(cls) }])) : {});
+  const BOM_FLOORS = Object.freeze(BOM ? BOM.floors() : {});
   // Live bill of materials for the Terraform loop (floors re-priced as the company's supply lowers
   // commodity prices).
   const BOM_LIVE = BOM ? Object.freeze({
     commodities: Object.fromEntries(Object.entries(BOM.COMMODITIES).map(([m, c]) => [m, c.usdPerKg])),
     classes: Object.fromEntries(Object.entries(BOM.CLASSES).map(([cls, c]) => [cls, {
-      lines: c.lines, todayUsdPerUnit: c.todayUsdPerUnit, absolute: ABSOLUTE_FLOORS.includes(cls),
+      lines: c.lines, todayUsdPerUnit: c.todayUsdPerUnit, absolute: 'materialsUsdPerUnit' in BOM_FLOORS[cls],
     }])),
   }) : null;
   const MARGIN_PRESETS = Object.freeze([

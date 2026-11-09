@@ -439,7 +439,8 @@
       if (d && cls !== 'storage') {
         const raw = ctx.rawFactors?.[cls] ?? ctx.costFactors[cls] ?? 1;
         let designed = d.usd * raw;
-        if (target && !d.unfloored) designed = Math.min(designed, d.floorUsd * target);
+        // Same rule as recipe units: squeezed only when the class has a materials floor configured.
+        if (target && !d.unfloored && ctx.floors?.[cls]) designed = Math.min(designed, d.floorUsd * target);
         usdPerKgDay = Math.max(0, perKgDay[cls] - d.usd) * (ctx.costFactors[cls] ?? 1) + designed;
       }
       const value = usdPerKgDay * sizeKgPerDay * sf * siteMult;

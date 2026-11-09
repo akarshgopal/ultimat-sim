@@ -13,7 +13,7 @@
   const round4 = v => Math.round(v * 1e4) / 1e4;
   // Solar electricity is quoted in $/kWh at the reference yield (2,000 kWh/kWp·yr); a site's own
   // price scales with its sun. Converted to PV capex with the scenario's discount rate.
-  const lcoeOf = capex => Company.solarLcoe({ ...D.pv, capexUsdPerKWp: D.pv.capexUsdPerKWp }, D.finance, capex);
+  const lcoeOf = capex => Company.solarLcoe(D.pv, D.finance, capex);
   const KWH_TODAY = round4(lcoeOf(D.pv.capexUsdPerKWp));
   const KWH_FLOOR = round4(lcoeOf(D.pv.floorUsdPerKWp));
   // Presets for the energy and equipment levers.
@@ -90,7 +90,7 @@
       hint: 'At 2,000 kWh/kWp·yr; sunnier sites pay less. Moves PV capex and O&M together.' },
     { group: 'energy', key: 'kwhDecline', label: 'Solar price decline', unit: '%/yr', min: 0, max: 30, step: 0.5, def: pct(D.pv.exogenousDeclinePerYear) },
     { group: 'energy', key: 'kwhFloor', label: 'Solar price floor', unit: '$/kWh', min: 0, max: 0.3, step: 0.0005, def: KWH_FLOOR },
-    { group: 'energy', key: 'battery', label: 'Battery', unit: '$/kWh', min: 1, max: 2000, step: 5, def: Company.DEFAULTS.utilization.battery.usdPerKWh },
+    { group: 'energy', key: 'battery', label: 'Battery', unit: '$/kWh', min: 1, max: 2000, step: 5, def: D.utilization.battery.usdPerKWh },
     { group: 'energy', key: 'ii', label: 'Target idiot index', unit: '×', min: 0, max: 50, step: 0.5, def: 0,
       hint: 'Cap every cost (PV, batteries, electrolyzers, desal, DAC, process plant, stores) at its raw-materials cost × this. 0 = today’s prices.' },
     { group: 'energy', key: 'equip', label: 'Equipment cost', unit: '×', min: 0.01, max: 3, step: 0.05, def: D.equipmentCostMultiplier,
@@ -101,7 +101,6 @@
     { group: 'cost', key: 'scaleExp', label: 'Scale exponent', unit: '', min: 0.3, max: 1, step: 0.01, def: D.scale.exponent },
     { group: 'cost', key: 'scaleFloor', label: 'Scale floor', unit: '×', min: 0, max: 1, step: 0.05, def: D.scale.floorFactor },
   ]);
-  const FIELD_BY_KEY = Object.fromEntries(FIELDS.map(f => [f.key, f]));
   const ORIGIN_IDS = globalThis.UI.ORIGINS.map(o => o.id);
 
   function defaults() {
@@ -137,7 +136,6 @@
     s.loop = q.get('noloop') !== '1';
     try {
       if (q.has('ds')) s.ds = cleanDesigns(JSON.parse(q.get('ds')));
-      else if (q.has('el')) s.ds = cleanDesigns({ electrolyzer: JSON.parse(q.get('el')) }); // older links
     } catch { /* ignore malformed designs */ }
     s.infinite = q.get('infinite') === '1';
     if (q.has('origins')) {
@@ -196,9 +194,7 @@
     worker = new Worker('js/sim-worker.js');
     // If the worker cannot start or crashes, fall back to the main thread and re-run.
     worker.onerror = () => { worker = null; runNow(); };
-  } catch {
-    worker = null;
-  }
+  } catch { /* no workers (e.g. file://): run on the main thread */ }
   let scenario = defaults();
   let result = null;
   let busy = false;
@@ -240,7 +236,6 @@
     notify();
   }
 
-  // Year-0 opportunity ranking for the current scenario (fast, main thread).
   // Energy break-even ($/kWh) per pathway for the current scenario at several equipment multipliers.
   function breakevens(equipMultipliers = [1, 0.5, 0.25, 0.1]) {
     return equipMultipliers.map(equip => {
@@ -265,6 +260,7 @@
     return Company.abundanceScoreboard({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
   }
 
+  // Year-0 opportunity ranking for the current scenario (fast, main thread).
   function rank(sizeMultiple = 10) {
     const config = toConfig(scenario);
     config.build.allowPathways = null; // rank every pathway; views mark excluded ones
@@ -272,11 +268,11 @@
   }
 
   globalThis.Store = Object.freeze({
-    FIELDS, FIELD_BY_KEY, PATHWAYS, MARKETS, SITES, ENERGY_PRESETS, EQUIPMENT_PRESETS, MARGIN_PRESETS, BOM, BOM_FLOORS,
-    DESIGNS, designParams, designUnits,
+    FIELDS, PATHWAYS, MARKETS, SITES, ENERGY_PRESETS, EQUIPMENT_PRESETS, MARGIN_PRESETS, BOM,
+    DESIGNS, designParams,
     pathwayById: new Map(PATHWAYS.map(p => [p.id, p])),
     siteById: new Map(SITES.map(s => [s.id, s])),
-    defaults, toQuery, fromQuery, toConfig, pathwayAllowed,
+    defaults, toQuery, toConfig, pathwayAllowed,
     get scenario() { return scenario; },
     get result() { return result; },
     get busy() { return busy; },

@@ -1,4 +1,4 @@
-// Utilization & storage design for solar-only plants (TEA fidelity step 1).
+// Utilization and storage design for solar-only plants.
 //
 // Plant models (cases/*.js) cost equipment per kg/day of *daily-average* throughput, as if every
 // unit ran 24 h. On solar alone that is wrong in two ways:
@@ -96,12 +96,13 @@
   });
   const profileCache = new WeakMap();
 
-  // Per kg of primary product, from the pathway's solved flowsheet. null → no flowsheet (legacy
-  // recipes and test fixtures): the caller keeps the 24 h-average costing.
-  // designUnits: { <unit>: { capexFactor, flexible, thermal } } — designed units re-weight the
-  // flexible/baseload capex split; flexible: true/false overrides whether the unit follows the sun (e.g.
-  // a wide-turndown synthesis loop designed to ramp with PV) or must be firmed; thermal: true lets a
-  // firmed unit whose energy is really heat (a DRI shaft's gas preheat) be firmed by a heat store.
+  // Per kg of primary product, from the pathway's solved flowsheet. null → no flowsheet (recipes
+  // without one, test fixtures): the caller keeps the 24 h-average costing.
+  // designUnits: { <unit>: { capexFactor, flexible, thermal, minTurndown, heatFactor } } — designed
+  // units re-weight the flexible/baseload capex split; flexible: true/false overrides whether the unit
+  // follows the sun (e.g. a wide-turndown synthesis loop designed to ramp with PV) or must be firmed;
+  // thermal: true lets a firmed unit whose energy is really heat (a DRI shaft's gas preheat) be firmed
+  // by a heat store; minTurndown overrides baseloadMinTurndown for that unit.
   function operatingProfile(pathway, cfgIn, designUnits = null) {
     if (!pathway?.flowsheet?.nodes?.length) return null;
     const cfg = mergeCfg(cfgIn);
@@ -122,33 +123,37 @@
     const capex = { flex: {}, base: {} };
     for (const node of pathway.flowsheet.nodes) {
       if (node.kind !== 'converter') continue;
-      const forced = designUnits?.[node.unit]?.flexible;
+      const d = designUnits?.[node.unit];
+      const forced = d?.flexible;
       const mode = forced === true ? 'flex' : forced === false ? 'base' : flexible.has(node.unit) ? 'flex' : 'base';
       modeById.set(node.id, mode);
-      const kWh = (Number(node.kWhPerKg) || 0) * (cfg.unitEnergyScale[node.unit] ?? 1);
-      energyDelta += (Number(node.kWhPerKg) || 0) * ((cfg.unitEnergyScale[node.unit] ?? 1) - 1);
-      const t = Number(designUnits?.[node.unit]?.minTurndown);
+      const recipeKWh = Number(node.kWhPerKg) || 0;
+      const energyScale = cfg.unitEnergyScale[node.unit] ?? 1;
+      const kWh = recipeKWh * energyScale;
+      energyDelta += recipeKWh * (energyScale - 1);
+      const t = Number(d?.minTurndown);
       const turndown = t >= 0 && t <= 1 ? t : cfg.baseloadMinTurndown;
       if (mode === 'flex') flexKWh += kWh;
-      else if (thermal.has(node.unit) || designUnits?.[node.unit]?.thermal === true) {
+      else if (thermal.has(node.unit) || d?.thermal === true) {
         baseThermalKWh += kWh;
         thermalTurndownKWh += kWh * turndown;
       } else {
         baseKWh += kWh;
         baseTurndownKWh += kWh * turndown;
       }
-      if (Number(designUnits?.[node.unit]?.heatFactor) >= 0 && heatFactor == null) heatFactor = Number(designUnits[node.unit].heatFactor);
+      if (Number(d?.heatFactor) >= 0 && heatFactor == null) heatFactor = Number(d.heatFactor);
       const cls = UNIT_TECH[node.unit] || 'process';
-      const capexFactor = Number(designUnits?.[node.unit]?.capexFactor) > 0 ? designUnits[node.unit].capexFactor : 1;
+      const capexFactor = Number(d?.capexFactor) > 0 ? d.capexFactor : 1;
       capex[mode][cls] = (capex[mode][cls] || 0) + (Number(node.capexUsdPerKgDay) || 0) * capexFactor;
     }
     // Purchased heat (DAC regeneration) follows the flexible DAC units when there are any; a designed
     // DAC scales it (designs.units.<unit>.heatFactor).
+    const hasFlex = [...modeById.values()].includes('flex');
     const recipeHeat = Number(pathway.heatKWhPerKg) || 0;
     const heat = recipeHeat * (heatFactor ?? 1);
     energyDelta += heat - recipeHeat;
     if (heat > 0) {
-      if ([...modeById.values()].includes('flex')) flexKWh += heat;
+      if (hasFlex) flexKWh += heat;
       else baseThermalKWh += heat;
     }
     // Reconcile node energy with the recipe total (rounding in the flowsheet).
@@ -178,7 +183,7 @@
       // Energy-weighted minimum turndown of the baseload block (null: the config default applies).
       baseMinTurndown: baseKWh > 0 && designUnits ? baseTurndownKWh / baseKWh : null,
       thermalMinTurndown: baseThermalKWh > 0 && designUnits ? thermalTurndownKWh / baseThermalKWh : null,
-      hasFlex: [...modeById.values()].includes('flex'),
+      hasFlex,
       hasBase: [...modeById.values()].includes('base'),
     };
     profileCache.set(pathway, { key, profile });
@@ -283,7 +288,7 @@
   // ------------------------------------------------------------------ block designs
   // Flexible block: annual energy E (kWh), equipment capex at 24 h nameplate K24 ($), PV $/kWp.
   function flexDesign(solar, energyKWhYr, k24Usd, pvUsdPerKWp) {
-    if (!(energyKWhYr > 0)) return { pvKWp: 0, nameplateFactor: 1, fullLoadHoursPerDay: 24, ratio: null, capexScale: 1 };
+    if (!(energyKWhYr > 0)) return { pvKWp: 0, nameplateFactor: 1, fullLoadHoursPerDay: 24, ratio: null };
     const avgKW = energyKWhYr / 8760;
     let best = null;
     R_GRID.forEach((r, i) => {
@@ -296,7 +301,7 @@
         best = { cost, ratio: r, pvKWp, nameplateFactor, fullLoadHoursPerDay: used / 365 / r };
       }
     });
-    return { ...best, capexScale: best.nameplateFactor };
+    return best;
   }
 
   // Baseload block on one store type: steady load L (kW), units capex K24 ($).
@@ -328,8 +333,8 @@
   }
 
   // ------------------------------------------------------------------ plant design
-  // costs: { pvUsdPerKWp, batteryUsdPerKWh, thermalUsdPerKWh, capex24ByClass: {cls: $} } — all already
-  // at this year's prices and this plant's size. Returns the cheaper of the two strategies.
+  // costs: { pvUsdPerKWp, batteryUsdPerKWh, thermalUsdPerKWh, bufferUsdPerKg?, capex24ByClass: {cls: $} }
+  // — all already at this year's prices and this plant's size. Returns the cheaper of the two strategies.
   function designPlant(profile, site, sizeKgPerDay, costs, cfgIn) {
     const cfg = mergeCfg(cfgIn);
     const solar = siteSolar(site, cfg);
@@ -352,24 +357,26 @@
     // Strategy A: sun-following flexible units, firmed baseload, buffered intermediates.
     {
       const { flex, base } = split(cls => profile.flexShareByClass[cls] || 0);
-      const baseElec = baseDesign(solar, (profile.baseKWh * sizeKgPerDay) / 24, sum(base) * (profile.baseKWh / Math.max(profile.baseKWh + profile.baseThermalKWh, 1e-12)), costs.pvUsdPerKWp, battery, profile.baseMinTurndown ?? cfg.baseloadMinTurndown);
-      const baseHeat = baseDesign(solar, (profile.baseThermalKWh * sizeKgPerDay) / 24, sum(base) * (profile.baseThermalKWh / Math.max(profile.baseKWh + profile.baseThermalKWh, 1e-12)), costs.pvUsdPerKWp, thermal, profile.thermalMinTurndown ?? cfg.baseloadMinTurndown);
+      const baseUsd = sum(base);
+      const baseTotalKWh = Math.max(profile.baseKWh + profile.baseThermalKWh, 1e-12);
+      const baseElec = baseDesign(solar, (profile.baseKWh * sizeKgPerDay) / 24, baseUsd * (profile.baseKWh / baseTotalKWh), costs.pvUsdPerKWp, battery, profile.baseMinTurndown ?? cfg.baseloadMinTurndown);
+      const baseHeat = baseDesign(solar, (profile.baseThermalKWh * sizeKgPerDay) / 24, baseUsd * (profile.baseThermalKWh / baseTotalKWh), costs.pvUsdPerKWp, thermal, profile.thermalMinTurndown ?? cfg.baseloadMinTurndown);
       const outputFactor = Math.min(baseElec.outputFactor, baseHeat.outputFactor);
       const flexD = flexDesign(solar, profile.flexKWh * sizeKgPerDay * 365 * outputFactor, sum(flex), costs.pvUsdPerKWp);
       const offHours = Math.max(0, 24 - flexD.fullLoadHoursPerDay);
       let bufferUsd = 0;
       const buffers = [];
       if (profile.hasBase) {
+        const prices = costs.bufferUsdPerKg || cfg.bufferUsdPerKg;
         for (const b of profile.buffers) {
           const kg = b.kgPerKg * sizeKgPerDay * outputFactor * (offHours / 24);
-          const prices = costs.bufferUsdPerKg || cfg.bufferUsdPerKg;
           const usd = kg * (prices[b.substance] ?? prices.default);
           bufferUsd += usd;
           buffers.push({ substance: b.substance, kg, usd });
         }
       }
       const capexByClass = {};
-      for (const cls of Object.keys(k24)) capexByClass[cls] = flex[cls] * flexD.capexScale + base[cls];
+      for (const cls of Object.keys(k24)) capexByClass[cls] = flex[cls] * flexD.nameplateFactor + base[cls];
       candidates.push({
         strategy: profile.hasFlex ? 'sun-following' : 'firmed',
         outputFactor,
@@ -379,7 +386,7 @@
         bufferUsd,
         buffers,
         capexByClass,
-        flexNameplateFactor: flexD.capexScale,
+        flexNameplateFactor: flexD.nameplateFactor,
         flexFullLoadHoursPerDay: profile.hasFlex ? flexD.fullLoadHoursPerDay : null,
       });
     }
@@ -404,11 +411,11 @@
       });
     }
     for (const c of candidates) {
-      c.storageUsd = c.batteryKWh * battery.usdPerKWh + c.thermalKWh * thermal.usdPerKWh + c.bufferUsd;
-      c.capexUsd = sum(c.capexByClass) + c.pvKWp * costs.pvUsdPerKWp + c.storageUsd;
-      c.capexPerOutput = c.capexUsd / Math.max(c.outputFactor, 1e-6);
       c.batteryUsd = c.batteryKWh * battery.usdPerKWh;
       c.thermalUsd = c.thermalKWh * thermal.usdPerKWh;
+      c.storageUsd = c.batteryUsd + c.thermalUsd + c.bufferUsd;
+      c.capexUsd = sum(c.capexByClass) + c.pvKWp * costs.pvUsdPerKWp + c.storageUsd;
+      c.capexPerOutput = c.capexUsd / Math.max(c.outputFactor, 1e-6);
       c.batteryLifeYears = battery.lifeYears;
       c.thermalLifeYears = thermal.lifeYears;
       c.storageFixedOmUsdPerYear = c.batteryUsd * battery.fixedOmFrac + c.thermalUsd * thermal.fixedOmFrac;
@@ -417,5 +424,5 @@
     return { ...candidates[0], alternatives: candidates.map(c => ({ strategy: c.strategy, capexPerOutput: c.capexPerOutput, outputFactor: c.outputFactor })) };
   }
 
-  return { DEFAULTS, UNIT_TECH, mergeCfg, operatingProfile, siteSolar, dayLengthHours, flexDesign, baseDesign, designPlant, R_GRID, K_GRID };
+  return { DEFAULTS, UNIT_TECH, mergeCfg, operatingProfile, siteSolar, dayLengthHours, flexDesign, baseDesign, designPlant };
 });

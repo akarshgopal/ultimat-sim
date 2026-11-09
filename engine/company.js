@@ -138,8 +138,6 @@
     // for the hours the sun shines, baseload units are firmed with batteries / thermal stores,
     // intermediates between them are buffered. Recipes without a flowsheet keep 24 h costing.
     utilization: Utilization.DEFAULTS,
-    // Products that draw on the same world market (see data/markets.js notes):
-    // shares and headroom are computed on the group key's demand.
     // Make-vs-buy for purchased intermediates (see planIntegration). feedProducts maps a
     // recipe's purchased feed id to the product key a captive supplier pathway makes.
     // CO₂ is made by the DAC recipe (dac-co2) once it undercuts $0.05–0.13/kg purchased CO₂.
@@ -154,6 +152,8 @@
         'co2-feed': 'co2',
       }),
     }),
+    // Products that draw on the same world market (see data/markets.js notes): shares and
+    // headroom are computed on the group key's demand.
     marketGroups: Object.freeze({
       'ndpr-oxide-separated': 'ndpr-oxide',
       'light-reo': 'other-reo',
@@ -299,13 +299,14 @@
   // Plant economics
 
   // Recipe capex per kg/day by class, with designed units re-priced from their flowsheet share.
-  // out.designed[cls] = { usd, floorUsd }: the designed units' own capex in that class and their
-  // raw-materials floor (designs.units.<unit>.materialsFactor × recipe capex), so the class-wide
-  // idiot-index cap does not squeeze a design a second time (see evaluatePlant).
+  // out.designed[cls] = { usd, floorUsd, unfloored }: the designed units' own capex in that class
+  // and their raw-materials floor (designs.units.<unit>.materialsFactor × recipe capex), so the
+  // class-wide idiot-index cap does not squeeze a design a second time (see evaluatePlant).
+  // unfloored: some designed unit in the class has no materialsFactor, so it is not squeezed.
   function capexByTech(pathway, cfg) {
     const out = { designed: null };
     for (const cls of TECH_CLASSES) out[cls] = Number(pathway.capexByTechUsdPerKgDay?.[cls]) || 0;
-    const units = cfg?.designs?.units;
+    const units = cfg.designs?.units;
     if (units && pathway.flowsheet?.nodes) {
       for (const node of pathway.flowsheet.nodes) {
         const d = units[node.unit];
@@ -340,7 +341,7 @@
     }
     // Multiplier on a feed's kg per kg (designs.units.<unit>.feedFactors, consumablesFactor).
     const feedFactor = id => (feedFactors[id] ?? 1) * (id === 'consumables' ? consumablesFactor : 1);
-    return { consumablesFactor, variableOmDelta, feedFactor };
+    return { variableOmDelta, feedFactor };
   }
 
   // Utilization config with designed units' energy factors folded into unitEnergyScale (memoized).
@@ -421,8 +422,14 @@
     return plan;
   }
 
-  // ctx: { cfg, yearIndex, year, costFactors, pvUsdPerKWp, priceFor(productKey, fallback, extraKg),
-  //        suppliers?: Map(product → pathways), sitesById?: Map }  (suppliers enable integration)
+  // NPV at build: capex now, constant annual cash from first operation (after the lead time).
+  function plantNpv(cfg, capexUsd, annualCash, af) {
+    const r = cfg.finance.discountRate;
+    return -capexUsd + (annualCash * af) / (1 + r) ** (cfg.build.leadTimeYears || 0);
+  }
+
+  // ctx: a yearContext() result; its optional suppliers (Map product → pathways) and sitesById enable
+  // integration.
   function evaluatePlant(pathway, site, sizeKgPerDay, ctx) {
     const { cfg } = ctx;
     const sf = scaleFactor(cfg.scale, sizeKgPerDay, pathway.refOutputKgPerDay);
@@ -517,12 +524,11 @@
     // Recipe fixed O&M applies to process equipment; stores carry their own O&M (below).
     const storageUsd = design ? design.storageUsd : 0;
     // PV O&M scales with PV capex (constant O&M/capex ratio), so cheap solar is cheap to run too.
-    let pvOm = pvKWp * ctx.pvUsdPerKWp * siteMult * pvOmFraction(cfg.pv);
+    let pvOm = pvCapex * pvOmFraction(cfg.pv);
     let storageOm = design ? design.storageFixedOmUsdPerYear : 0;
     let equipmentOm = (processCapex - storageUsd) * (Number(pathway.fixedOmFracPerYear) || 0);
     let feedCost = annualKg * feedUsdPerKg;
     let otherVariable = annualKg * Math.max(0, (Number(pathway.variableOmUsdPerKg) || 0) + variableOmDelta);
-    let storageCapex = storageUsd;
 
     const price = ctx.priceFor(pathway.product, null, annualKg);
     const sales = [{ product: pathway.product, kgPerYear: annualKg, fallbackUsdPerKg: null }];
@@ -533,8 +539,8 @@
       sales.push({ product: co.product || null, id: co.id, kgPerYear: coKg, fallbackUsdPerKg: co.usdPerKg });
     }
 
-    // Fold captive supplier units into this plant.
-    // Stores are excluded from the life weighting: they are replaced on their own schedule (reserve below).
+    // Fold captive supplier units into this plant. The plant life is the capex-weighted life of its
+    // equipment; stores are excluded because they are replaced on their own schedule (reserve below).
     let lifeCapexWeighted = (processCapex - storageUsd) * (Number(pathway.assetLifeYears) || cfg.pv.lifeYears);
     let lifeWeight = processCapex - storageUsd;
     for (const item of integration) {
@@ -554,7 +560,6 @@
       equipmentOm += u.costParts.equipmentOm;
       feedCost += u.costParts.feedCost;
       otherVariable += u.costParts.otherVariable;
-      storageCapex += u.capex.byTech.storage;
       coproductRevenue += u.coproductRevenue;
       for (const sale of u.sales.slice(1)) sales.push(sale);
       for (const feed of u.feedsKgPerYear) feedsKgPerYear.push(feed);
@@ -590,20 +595,17 @@
     const opex = fixedOm + variableOm;
     const revenue = annualKg * price + coproductRevenue;
     const annualCash = revenue - opex;
-    const r = cfg.finance.discountRate;
-    const af = annuityFactor(r, life);
-    const lead = cfg.build.leadTimeYears || 0;
-    const npv = -capexTotal + (annualCash * af) / (1 + r) ** lead;
+    const af = annuityFactor(cfg.finance.discountRate, life);
+    const npv = plantNpv(cfg, capexTotal, annualCash, af);
     const crf = af > 0 ? 1 / af : 0;
     // Gross: full plant cost per kg of primary product. Net (LCOP): after crediting coproduct
     // revenue — can go negative for multi-product plants (e.g. brine hubs) whose coproducts pay for everything.
     const grossCost = annualKg > 0 ? (capexTotal * crf + opex) / annualKg : Infinity;
     const coproductCredit = annualKg > 0 ? coproductRevenue / annualKg : 0;
     const lcop = grossCost - coproductCredit;
-    // Cost per kg by driver. Energy = PV + land + stores (capital recovery + O&M + replacements):
-    // what cheaper electricity would cut. effectiveEnergyUsdPerKWh is that over the kWh used.
-    // (Captive buffers sit in storage capex.)
-    const capexBuffers = processByTech.storage - storageCapex;
+    // Cost per kg by driver. Energy = PV + land + stores, captive buffers included (capital recovery
+    // + O&M + replacements): what cheaper electricity would cut. effectiveEnergyUsdPerKWh is that
+    // over the kWh used.
     const energyAnnual = (pvCapex + landCapex + processByTech.storage) * crf + pvOm + storageOm + storageReplacementUsdPerYear;
     const equipmentAnnual = (processCapex - processByTech.storage) * crf + equipmentOm;
     const perKg = v => (annualKg > 0 ? v / annualKg : Infinity);
@@ -613,7 +615,6 @@
       feedstock: perKg(feedCost),
       other: perKg(otherVariable),
     };
-    void capexBuffers;
     return {
       pathwayId: pathway.id,
       product: pathway.product,
@@ -666,14 +667,26 @@
   // ---------------------------------------------------------------------------
   // Simulation
 
+  const mergeConfig = override => merge(DEFAULTS, override || {});
+
+  function allowedPathways(cfg, pathways) {
+    return (pathways || []).filter(p => p.refOutputKgPerDay > 0
+      && (!cfg.build.allowPathways || cfg.build.allowPathways.includes(p.id)));
+  }
+
+  // sitesById covers every input site (brine recipes look up their reference site even when it is
+  // not buildable); sites are the buildable ones.
   function normalizeInputs(input) {
-    const cfg = merge(DEFAULTS, input.config || {});
-    const markets = input.markets || {};
+    const cfg = mergeConfig(input.config);
     const sites = (input.sites || []).filter(site => site.pvKWhPerKWpDay > 0
       && (!cfg.build.allowSites || cfg.build.allowSites.includes(site.id)));
-    const pathways = (input.pathways || []).filter(p => p.refOutputKgPerDay > 0
-      && (!cfg.build.allowPathways || cfg.build.allowPathways.includes(p.id)));
-    return { cfg, markets, sites, pathways };
+    return {
+      cfg,
+      markets: input.markets || {},
+      sites,
+      sitesById: new Map((input.sites || []).map(s => [s.id, s])),
+      pathways: allowedPathways(cfg, input.pathways),
+    };
   }
 
   function createState(cfg) {
@@ -681,8 +694,9 @@
       cash: cfg.finance.initialEquityUsd,
       equityInUsd: cfg.finance.initialEquityUsd,
       loans: [], // { principal, payment, yearsLeft }
-      plants: [], // { id, pathwayId, siteId, product, sizeKgPerDay, onlineYear, builtYear, eval, bookUsd, lifeYears }
+      plants: [], // { id, pathwayId, siteId, product, sizeKgPerDay, builtYear, onlineYear, lifeYears, capexUsd, eval }
       cumRefUsd: Object.fromEntries(TECH_CLASSES.map(cls => [cls, 0])),
+      lastReliefByMarket: {}, // market → price relief caused by the company last year (Terraform loop)
       nextId: 1,
       buildCapacityUsd: Number.isFinite(cfg.build.initialBuildUsdPerYear) ? cfg.build.initialBuildUsdPerYear : Infinity,
     };
@@ -694,11 +708,10 @@
     const ii = cfg.idiotIndex || {};
     if (!ii.bom?.classes || !ii.bom?.commodities) return { floors: ii.floors || {}, commodityFactors: {} };
     const commodityFactors = {};
-    for (const [material, usd] of Object.entries(ii.bom.commodities)) {
+    for (const material of Object.keys(ii.bom.commodities)) {
       const link = ii.commodityMarkets?.[material];
       const relief = link ? (reliefByMarket?.[link.market] || 0) * (link.weight ?? 1) : 0;
       commodityFactors[material] = Math.max(0, 1 - relief);
-      void usd;
     }
     const floors = {};
     for (const [cls, row] of Object.entries(ii.bom.classes)) {
@@ -739,7 +752,7 @@
     }
     const pvUsdPerKWp = squashUsd(cfg, 'pv', pvCapexUsdPerKWp(cfg.pv, yearIndex), floors);
     // Storage prices for this year: learning/decline on the storage class, then the squeeze.
-    const util = Utilization.mergeCfg(cfg.utilization || Utilization.DEFAULTS);
+    const util = utilFor(cfg);
     const sf = costFactors.storage;
     const bufferUsdPerKg = {};
     for (const [substance, usd] of Object.entries(util.bufferUsdPerKg)) {
@@ -801,9 +814,9 @@
     return total;
   }
 
-  function addKg(map, key, kg) {
+  function addTo(map, key, value) {
     if (!key) return;
-    map[key] = (map[key] || 0) + kg;
+    map[key] = (map[key] || 0) + value;
   }
 
   // Committed annual kg per sold product of every plant not yet retired (operating or under
@@ -812,7 +825,7 @@
     const out = {};
     for (const plant of state.plants) {
       if (year >= plant.onlineYear + plant.lifeYears) continue;
-      for (const sale of plant.eval.sales) addKg(out, sale.product, sale.kgPerYear);
+      for (const sale of plant.eval.sales) addTo(out, sale.product, sale.kgPerYear);
     }
     return out;
   }
@@ -862,7 +875,6 @@
     return true;
   }
 
-  // cache: evaluations valid for this year until a build changes a market they sell into.
   // Per-run candidate structure: compatible sites and size ladder per pathway.
   function buildCandidates(cfg, pathways, sites, sitesById, suppliers) {
     return pathways.map(pathway => ({
@@ -877,7 +889,6 @@
   // Re-price a cached plant evaluation after market shares moved: costs, design and integration
   // are market-independent for the year; only prices, revenue and NPV change.
   function repriceEval(ev, ctx) {
-    const cfg = ctx.cfg;
     const price = ctx.priceFor(ev.product, null, ev.annualKg);
     let coproductRevenue = 0;
     for (let i = 1; i < ev.sales.length; i += 1) {
@@ -886,9 +897,7 @@
     }
     const revenue = ev.annualKg * price + coproductRevenue;
     const annualCash = revenue - ev.opex.total;
-    const r = cfg.finance.discountRate;
-    const af = annuityFactor(r, ev.lifeYears);
-    const npv = -ev.capex.total + (annualCash * af) / (1 + r) ** (cfg.build.leadTimeYears || 0);
+    const npv = plantNpv(ctx.cfg, ev.capex.total, annualCash, annuityFactor(ctx.cfg.finance.discountRate, ev.lifeYears));
     const coproductCredit = ev.annualKg > 0 ? coproductRevenue / ev.annualKg : 0;
     const lcop = ev.grossCostUsdPerKg - coproductCredit;
     return {
@@ -907,7 +916,9 @@
 
   const lifetimeKgPerUsd = ev => (ev.capex.total > 0 ? (ev.materialKgPerYear * ev.lifeYears) / ev.capex.total : 0);
 
-  function pickBuild(cfg, ctx, candidates, committedKg, budgetUsd, markets, sitePvKWp, cache, capexRoomUsd = Infinity) {
+  // cache: pathway id → Map(site|size → { ev, stamp }); an evaluation's costs hold for the year, and a
+  // stale stamp (a build moved one of its markets) only re-prices it.
+  function pickBuild(cfg, ctx, candidates, committedKg, budgetUsd, sitePvKWp, cache, capexRoomUsd) {
     const sitePvCapKWp = (Number(cfg.build.maxPvGWpPerSite) || Infinity) * 1e6;
     // Pass 1: feasible (NPV ≥ 0, hurdle met) and affordable options; per pathway × site, sizes
     // are ascending and stop at the first that breaks a site or market ceiling.
@@ -920,13 +931,13 @@
       }
       const headroomKg = ctx.capKg(group) - groupKg(cfg, committedKg, group);
       if (!(headroomKg > 0)) continue;
+      const stamp = cache.stamps.get(pathway.id) || 0;
       for (const site of pathwaySites) {
         const pvRoomKWp = sitePvCapKWp - (sitePvKWp[site.id] || 0);
         if (!(pvRoomKWp > 0)) continue;
         for (const size of sizes) {
           if (size * 365 > headroomKg) break;
           const key = site.id + '|' + size;
-          const stamp = cache.stamps?.get(pathway.id) || 0;
           let entry = pathwayCache.get(key);
           if (!entry) {
             entry = { ev: evaluatePlant(pathway, site, size, ctx), stamp };
@@ -993,9 +1004,8 @@
   }
 
   function simulateCompany(input = {}) {
-    const { cfg, markets, sites, pathways } = normalizeInputs(input);
+    const { cfg, markets, sites, sitesById, pathways } = normalizeInputs(input);
     const pathwaysById = new Map(pathways.map(p => [p.id, p]));
-    const sitesById = new Map((input.sites || []).map(s => [s.id, s]));
     const state = createState(cfg);
     const timeline = [];
     let minCash = state.cash;
@@ -1015,7 +1025,7 @@
         && year < plant.onlineYear + plant.lifeYears);
       const operatingKg = {};
       for (const plant of operating) {
-        for (const sale of plant.eval.sales) addKg(operatingKg, sale.product, sale.kgPerYear);
+        for (const sale of plant.eval.sales) addTo(operatingKg, sale.product, sale.kgPerYear);
       }
       const opCtx = yearContext(cfg, markets, state, yearIndex, year, operatingKg);
       let revenue = 0;
@@ -1032,17 +1042,17 @@
         for (const sale of plant.eval.sales) {
           const price = opCtx.priceFor(sale.product, sale.fallbackUsdPerKg, 0);
           plantRevenue += sale.kgPerYear * price;
-          addKg(revenueByProduct, sale.product || sale.id, sale.kgPerYear * price);
+          addTo(revenueByProduct, sale.product || sale.id, sale.kgPerYear * price);
           if (sale.product) priceByProduct[sale.product] = price;
         }
-        for (const item of plant.eval.integration) addKg(captiveTByProduct, item.product, item.kgPerDay * 365 / 1000);
+        for (const item of plant.eval.integration) addTo(captiveTByProduct, item.product, item.kgPerDay * 365 / 1000);
         // Opex is fixed at build (fixed O&M on built capex; feed prices static).
         revenue += plantRevenue;
         opex += plant.eval.opex.total;
         pvKWp += plant.eval.pvKWp;
         landHa += plant.eval.landHa;
         electricityKWh += plant.eval.electricityKWhPerYear;
-        for (const feed of plant.eval.feedsKgPerYear) addKg(feedTByOrigin, feed.origin, feed.kg / 1000);
+        for (const feed of plant.eval.feedsKgPerYear) addTo(feedTByOrigin, feed.origin, feed.kg / 1000);
       }
 
       // 3. Debt service.
@@ -1078,7 +1088,7 @@
       const buildCapacityUsd = state.buildCapacityUsd;
       const maxPlants = Number.isFinite(cfg.build.maxPlantsPerYear) ? cfg.build.maxPlantsPerYear : 10000;
       for (let n = 0; n < maxPlants; n += 1) {
-        const choice = pickBuild(cfg, ctx, candidates, committedKg, budget, markets, sitePvKWp, cache, buildCapacityUsd - capexSpent);
+        const choice = pickBuild(cfg, ctx, candidates, committedKg, budget, sitePvKWp, cache, buildCapacityUsd - capexSpent);
         if (!choice) break;
         const pathway = pathwaysById.get(choice.pathwayId);
         const debt = choice.capex.total * cfg.finance.debtFraction;
@@ -1113,7 +1123,7 @@
           cache.stamps.set(other.pathway.id, (cache.stamps.get(other.pathway.id) || 0) + 1);
         }
         sitePvKWp[plant.siteId] = (sitePvKWp[plant.siteId] || 0) + choice.pvKWp;
-        for (const sale of choice.sales) addKg(committedKg, sale.product, sale.kgPerYear);
+        for (const sale of choice.sales) addTo(committedKg, sale.product, sale.kgPerYear);
         built.push({
           plantId: plant.id,
           pathwayId: plant.pathwayId,
@@ -1245,10 +1255,22 @@
     };
   }
 
+  // Best evaluation of a pathway over the compatible sites; better(a, b) is true when a beats b.
+  // Skips plants that still buy an intermediate when build.infiniteSourcesOnly is set.
+  function bestSite(pathway, sites, sizeKgPerDay, ctx, better) {
+    let best = null;
+    for (const site of sites) {
+      if (!siteAllowsPathway(site, pathway, ctx.sitesById)) continue;
+      const ev = evaluatePlant(pathway, site, sizeKgPerDay, ctx);
+      if (ctx.cfg.build.infiniteSourcesOnly && ev.purchasedIntermediates.length) continue;
+      if (!best || better(ev, best)) best = ev;
+    }
+    return best;
+  }
+
   // Static snapshot: best site per pathway at a given size multiple, year 0 costs, no market share.
   function rankOpportunities(input = {}, opts = {}) {
-    const { cfg, markets, sites, pathways } = normalizeInputs(input);
-    const sitesById = new Map((input.sites || []).map(s => [s.id, s]));
+    const { cfg, markets, sites, sitesById, pathways } = normalizeInputs(input);
     const yearIndex = Number(opts.yearIndex) || 0;
     const state = createState(cfg);
     const ctx = yearContext(cfg, markets, state, yearIndex, cfg.startYear + yearIndex, {}, {
@@ -1259,13 +1281,7 @@
     const rows = [];
     for (const pathway of pathways) {
       const size = Math.min(cfg.build.maxPlantKgPerDay, pathway.refOutputKgPerDay * multiple);
-      let best = null;
-      for (const site of sites) {
-        if (!siteAllowsPathway(site, pathway, sitesById)) continue;
-        const ev = evaluatePlant(pathway, site, size, ctx);
-        if (cfg.build.infiniteSourcesOnly && ev.purchasedIntermediates.length) continue;
-        if (!best || ev.lcopUsdPerKg < best.lcopUsdPerKg) best = ev;
-      }
+      const best = bestSite(pathway, sites, size, ctx, (a, b) => a.lcopUsdPerKg < b.lcopUsdPerKg);
       if (!best) continue;
       const infinite = (pathway.feeds || []).reduce((sum, feed) => sum
         + (INFINITE_ORIGINS.includes(feed.origin) ? Number(feed.kgPerKg) || 0 : 0), 0);
@@ -1288,17 +1304,12 @@
   // price that year as the simulation did. Integration (make vs buy) follows cfg.integration.
   // Returns evaluatePlant()'s result, or null when the pathway/site is unknown or incompatible.
   function evaluateAtYear(input, pathwayId, siteId, sizeKgPerDay, yearIndex = 0, opts = {}) {
-    const cfg = merge(DEFAULTS, input.config || {});
-    const allSites = input.sites || [];
-    const allPathways = input.pathways || [];
-    const pathway = allPathways.find(p => p.id === pathwayId);
-    const site = allSites.find(s => s.id === siteId);
-    const sitesById = new Map(allSites.map(s => [s.id, s]));
+    const { cfg, markets, sitesById, pathways } = normalizeInputs(input);
+    const pathway = (input.pathways || []).find(p => p.id === pathwayId);
+    const site = sitesById.get(siteId);
     if (!pathway || !site || !siteAllowsPathway(site, pathway, sitesById)) return null;
-    const state = createState(cfg);
-    const ctx = yearContext(cfg, input.markets || {}, state, yearIndex, cfg.startYear + yearIndex, {}, {
-      suppliers: captiveSuppliers(cfg, allPathways.filter(p => p.refOutputKgPerDay > 0
-        && (!cfg.build.allowPathways || cfg.build.allowPathways.includes(p.id)))),
+    const ctx = yearContext(cfg, markets, createState(cfg), yearIndex, cfg.startYear + yearIndex, {}, {
+      suppliers: captiveSuppliers(cfg, pathways),
       sitesById,
     });
     if (opts.costFactors) ctx.costFactors = { ...ctx.costFactors, ...opts.costFactors };
@@ -1308,18 +1319,19 @@
 
   // ---------------------------------------------------------------------------
   // Energy break-even: the solar electricity price ($/kWh at the reference yield) at which each
-  // pathway's best site reaches NPV = 0 at year-0 equipment, feedstock and storage costs.
-  //   breakevenUsdPerKWh = null and limitedBy 'not-energy' when even free electricity does not make
-  //   it feasible (equipment, feedstock or price is the barrier); Infinity-like ≥ maxUsdPerKWh when
-  //   it is feasible at any price in range.
+  // pathway's best site (highest NPV) reaches NPV = 0 at year-0 equipment, feedstock and storage costs.
+  //   limitedBy 'not-energy': even free electricity does not make it feasible (equipment, feedstock
+  //     or price is the barrier); breakevenUsdPerKWh = null.
+  //   limitedBy 'feasible-at-any-price': still feasible at opts.maxUsdPerKWh; breakevenUsdPerKWh = that cap.
+  //   limitedBy 'energy': breakevenUsdPerKWh found by bisection.
+  // build.allowSites is ignored: every site with solar data is scanned.
   function energyBreakevens(input = {}, opts = {}) {
-    const base = merge(DEFAULTS, input.config || {});
+    const base = mergeConfig(input.config);
     const maxUsdPerKWh = opts.maxUsdPerKWh ?? 0.5;
     const sizeMultiple = Number(opts.sizeMultiple) || 100;
     const allSites = (input.sites || []).filter(s => s.pvKWhPerKWpDay > 0);
     const sitesById = new Map((input.sites || []).map(s => [s.id, s]));
-    const pathways = (input.pathways || []).filter(p => p.refOutputKgPerDay > 0
-      && (!base.build.allowPathways || base.build.allowPathways.includes(p.id)));
+    const pathways = allowedPathways(base, input.pathways);
     const ids = opts.pathwayIds ? new Set(opts.pathwayIds) : null;
     const suppliers = captiveSuppliers(base, pathways);
     const ctxFor = usdPerKWh => {
@@ -1334,17 +1346,8 @@
       });
       return yearContext(cfg, input.markets || {}, createState(cfg), 0, cfg.startYear, {}, { suppliers, sitesById });
     };
-    const bestAt = (pathway, usdPerKWh, ctx) => {
-      const size = Math.min(base.build.maxPlantKgPerDay, pathway.refOutputKgPerDay * sizeMultiple);
-      let best = null;
-      for (const site of allSites) {
-        if (!siteAllowsPathway(site, pathway, sitesById)) continue;
-        const ev = evaluatePlant(pathway, site, size, ctx);
-        if (base.build.infiniteSourcesOnly && ev.purchasedIntermediates.length) continue;
-        if (!best || ev.npv > best.npv) best = ev;
-      }
-      return best;
-    };
+    const bestAt = (pathway, ctx) => bestSite(pathway, allSites,
+      Math.min(base.build.maxPlantKgPerDay, pathway.refOutputKgPerDay * sizeMultiple), ctx, (a, b) => a.npv > b.npv);
     const ctxCache = new Map();
     const ctxAt = usdPerKWh => {
       const key = usdPerKWh.toPrecision(6);
@@ -1355,9 +1358,9 @@
     const todayUsdPerKWh = solarLcoe(base.pv, base.finance);
     for (const pathway of pathways) {
       if (ids && !ids.has(pathway.id)) continue;
-      const atZero = bestAt(pathway, 0, ctxAt(0));
+      const atZero = bestAt(pathway, ctxAt(0));
       if (!atZero) continue;
-      const today = bestAt(pathway, todayUsdPerKWh, ctxAt(todayUsdPerKWh));
+      const today = bestAt(pathway, ctxAt(todayUsdPerKWh));
       const row = {
         pathwayId: pathway.id,
         product: pathway.product,
@@ -1371,7 +1374,7 @@
       };
       if (!(atZero.npv >= 0)) {
         row.limitedBy = 'not-energy';
-      } else if (bestAt(pathway, maxUsdPerKWh, ctxAt(maxUsdPerKWh)).npv >= 0) {
+      } else if (bestAt(pathway, ctxAt(maxUsdPerKWh)).npv >= 0) {
         row.breakevenUsdPerKWh = maxUsdPerKWh;
         row.limitedBy = 'feasible-at-any-price';
       } else {
@@ -1380,7 +1383,7 @@
         let hi = Math.log(maxUsdPerKWh);
         for (let i = 0; i < 28; i += 1) {
           const mid = (lo + hi) / 2;
-          if (bestAt(pathway, Math.exp(mid), ctxFor(Math.exp(mid))).npv >= 0) lo = mid; else hi = mid;
+          if (bestAt(pathway, ctxFor(Math.exp(mid))).npv >= 0) lo = mid; else hi = mid;
         }
         row.breakevenUsdPerKWh = Math.exp(lo);
         row.limitedBy = 'energy';
@@ -1403,9 +1406,10 @@
   //   flowsheet unit's equipment (by its capex share, after designs.units), each purchased feed,
   //   energy (PV + storage + land) and other O&M. blocker = costItems[0], i.e. what to design (a
   //   unit), make cheaper (a feed) or power more cheaply (energy) next for this material.
-  // Year 0, best site, plants at opts.sizeMultiple × reference size, no company market share.
+  // Year 0, best site (lowest LCOP), plants at opts.sizeMultiple (default 100) × reference size, no
+  // company market share.
   function abundanceScoreboard(input = {}, opts = {}) {
-    const cfg = merge(DEFAULTS, input.config || {});
+    const cfg = mergeConfig(input.config);
     const markets = input.markets || {};
     const pathways = input.pathways || [];
     const abundantRatio = opts.abundantCostRatio ?? 0.5;
@@ -1432,8 +1436,8 @@
       }
       const purchased = [];
       const integrated = new Set((ev.integration || []).map(item => item.feedId));
-      const { feedFactor } = designedOpex(pathway || {}, cfg);
-      for (const feed of pathway?.feeds || []) {
+      const { feedFactor } = designedOpex(pathway, cfg);
+      for (const feed of pathway.feeds || []) {
         if (!feed.purchased || integrated.has(feed.id)) continue;
         const usd = (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0))
           * feedFactor(feed.id);
@@ -1442,7 +1446,7 @@
       const own = b.equipment + b.energy + b.other;
       const ownScale = own > 0 ? Math.max(0, own - inHouse + (b.feedstock - purchased.reduce((a, i) => a + i.usdPerKg, 0))) / own : 1;
       const equipment = b.equipment * ownScale;
-      const nodes = (pathway?.flowsheet?.nodes || []).filter(n => n.kind === 'converter' && n.capexUsdPerKgDay > 0);
+      const nodes = (pathway.flowsheet?.nodes || []).filter(n => n.kind === 'converter' && n.capexUsdPerKgDay > 0);
       const capex = nodes.map(n => n.capexUsdPerKgDay * (Number(units[n.unit]?.capexFactor) > 0 ? units[n.unit].capexFactor : 1));
       const total = capex.reduce((x, y) => x + y, 0);
       if (total > 0) {
@@ -1493,8 +1497,10 @@
     }
     rows.sort((a, b) => b.worldDemandT - a.worldDemandT);
     const sumT = pred => rows.filter(pred).reduce((t, r) => t + r.worldDemandT, 0);
-    const totalT = sumT(() => true);
     const ok = r => r.status === 'feasible' || r.status === 'abundant';
+    const totalT = sumT(() => true);
+    const feasibleT = sumT(ok);
+    const abundantT = sumT(r => r.status === 'abundant');
     // World tonnage held back by each blocker (blocked markets only): the priority list.
     const blockers = new Map();
     for (const r of rows) {
@@ -1509,12 +1515,12 @@
       rows,
       totals: {
         worldDemandT: totalT,
-        feasibleT: sumT(ok),
-        abundantT: sumT(r => r.status === 'abundant'),
+        feasibleT,
+        abundantT,
         blockedT: sumT(r => r.status === 'blocked'),
         uncoveredT: sumT(r => r.status === 'no-pathway' || r.status === 'coproduct'),
-        feasibleShare: totalT > 0 ? sumT(ok) / totalT : 0,
-        abundantShare: totalT > 0 ? sumT(r => r.status === 'abundant') / totalT : 0,
+        feasibleShare: totalT > 0 ? feasibleT / totalT : 0,
+        abundantShare: totalT > 0 ? abundantT / totalT : 0,
         markets: rows.length,
         feasibleMarkets: rows.filter(ok).length,
       },
@@ -1541,11 +1547,11 @@
     realizedPrice,
     buildSites,
     siteAllowsPathway,
-    marketGroupOf: (product, config) => marketGroupOf(merge(DEFAULTS, config || {}), product),
+    marketGroupOf: (product, config) => marketGroupOf(mergeConfig(config), product),
     evaluatePlant,
     evaluateAtYear,
     simulateCompany,
     rankOpportunities,
-    mergeConfig: override => merge(DEFAULTS, override || {}),
+    mergeConfig,
   };
 });

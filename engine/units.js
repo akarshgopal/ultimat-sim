@@ -16,6 +16,22 @@ function reached(activity, requested) {
   return requested - activity <= Math.max(1, requested) * 1e-12;
 }
 
+// Names of the limits that bind (equal the smallest, within tolerance); none when the request is met.
+function limitingNames(activity, requested, limits) {
+  if (reached(activity, requested)) return [];
+  const limitingValue = Math.min(...Object.values(limits));
+  return Object.entries(limits)
+    .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+    .map(([name]) => name);
+}
+
+function requirePure(port, stream, substance) {
+  if (!Object.hasOwn(stream.mol, substance)) throw new Error(`${port} must contain ${substance}`);
+  if (Object.entries(stream.mol).some(([other, mol]) => other !== substance && mol > 1e-12)) {
+    throw new Error(`${port} must be pure ${substance}`);
+  }
+}
+
 function swro({ inlets, requestedActivity, capacity, params = {} }) {
   const feed = validateStream(inlets.feed, 'material');
   const electricity = validateStream(inlets.electricity, 'electricity');
@@ -67,12 +83,7 @@ function swro({ inlets, requestedActivity, capacity, params = {} }) {
       amount - productMol[substance],
     ])
   );
-  const limitingValue = Math.min(limits.capacity, limits.feed, limits.electricity);
-  const limitedBy = reached(activity, requested)
-    ? []
-    : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name);
+  const limitedBy = limitingNames(activity, requested, limits);
 
   return {
     activity,
@@ -125,10 +136,7 @@ function thermalDesalination({ inlets, requestedActivity, capacity, params = {} 
   };
   const actual = swro({ inlets: { feed, electricity }, requestedActivity: activity, capacity: installed, params: separationParams });
   const requestedFlow = swro({ inlets: { feed, electricity }, requestedActivity: requested, capacity: installed, params: separationParams });
-  const limitingValue = Math.min(...Object.values(limits));
-  const limitedBy = reached(activity, requested) ? [] : Object.entries(limits)
-    .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-    .map(([name]) => name);
+  const limitedBy = limitingNames(activity, requested, limits);
 
   return {
     ...actual,
@@ -178,12 +186,7 @@ function electrolyzer({ inlets, requestedActivity, capacity, params = {} }) {
     ...water.mol,
     H2O: water.mol.H2O - waterMol,
   };
-  const limitingValue = Math.min(limits.capacity, limits.water, limits.electricity);
-  const limitedBy = reached(activity, requested)
-    ? []
-    : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name);
+  const limitedBy = limitingNames(activity, requested, limits);
 
   return {
     activity,
@@ -213,15 +216,13 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
   const installed = nonnegative(capacity, 'capacity');
   // Solid-sorbent screening 0.9; liquid 0.75 is Keith 2018 Table 1 74.5% rounded; electroswing 0.5 screening.
   const captureFraction = Number(params.captureFraction ?? 0.9);
-  // Solid-sorbent screening (IEA DAC 2022 family): 0.5 kWh/kg e = 1.8 GJ/t; 1.5 kWh/kg th = 5.4 GJ/t.
+  // Solid-sorbent screening (IEA DAC 2022 family; NASEM 2019 heat-dominated):
+  // 0.5 kWh/kg e = 1.8 GJ/t; 1.5 kWh/kg th = 5.4 GJ/t.
   const electricityKWhPerKgCO2 = nonnegative(
     Number(params.electricityKWhPerKgCO2 ?? 0.5),
     'electricityKWhPerKgCO2'
   );
-  const heatKWhPerKgCO2 = nonnegative(
-    Number(params.heatKWhPerKgCO2 ?? 1.5), // solid default; IEA S-DAC family / NASEM 2019 heat-dominated
-    'heatKWhPerKgCO2'
-  );
+  const heatKWhPerKgCO2 = nonnegative(Number(params.heatKWhPerKgCO2 ?? 1.5), 'heatKWhPerKgCO2');
   const minHeatT_C = Number(params.minHeatT_C ?? 80);
   // Screening makeup: 0.02 solid / 0.01 liquid / 0.005 electroswing kg/kg CO2 — not IEA/Keith/Voskian table values.
   const consumablesPerKgCO2 = nonnegative(Number(params.consumablesPerKgCO2 ?? 0.02), 'consumablesPerKgCO2');
@@ -255,12 +256,7 @@ function dac({ inlets, requestedActivity, capacity, params = {} }) {
     ...acceptedAir.mol,
     CO2: Math.max(0, acceptedAir.mol.CO2 - capturedMol),
   };
-  const limitingValue = Math.min(...Object.values(limits));
-  const limitedBy = reached(activity, requested)
-    ? []
-    : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name);
+  const limitedBy = limitingNames(activity, requested, limits);
 
   return {
     activity,
@@ -366,15 +362,11 @@ function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
   const consumedHydrogen = { ...cloneStream(hydrogen), mol: { H2: reactionMol * 4 } };
   const outputT_C = co2.T_C;
   const outputP_bar = co2.P_bar;
-  const limitingValue = Math.min(...Object.values(limits));
   const limitedBy = reached(activity, requested)
     ? []
     : installed <= Math.min(limits.co2, limits.hydrogen, limits.electricity)
       ? ['capacity']
-      : Object.entries(limits)
-        .filter(([name, value]) => name !== 'capacity'
-          && Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-        .map(([name]) => name);
+      : limitingNames(activity, requested, limits).filter(name => name !== 'capacity');
 
   return {
     activity,
@@ -391,7 +383,7 @@ function sabatier({ inlets, requestedActivity, capacity, params = {} }) {
     outlets: {
       methane: {
         kind: 'material',
-        mol: { CH4: activity * 1000 / SUBSTANCES.CH4.molarMassG },
+        mol: { CH4: reactionMol },
         phase: 'gas',
         T_C: outputT_C,
         P_bar: outputP_bar,
@@ -421,8 +413,7 @@ function reaction(specification) {
     const electricity = validateStream(inlets.electricity, 'electricity');
     const feeds = Object.fromEntries(Object.entries(specification.inputs).map(([port, input]) => {
       const stream = validateStream(inlets[port], 'material');
-      if (!Object.hasOwn(stream.mol, input.substance)) throw new Error(`${port} must contain ${input.substance}`);
-      if (Object.entries(stream.mol).some(([substance, mol]) => substance !== input.substance && mol > 1e-12)) throw new Error(`${port} must be pure ${input.substance}`);
+      requirePure(port, stream, input.substance);
       return [port, stream];
     }));
     const productMolPerKg = 1000 / SUBSTANCES[specification.product].molarMassG;
@@ -445,7 +436,6 @@ function reaction(specification) {
     const consumed = Object.fromEntries(Object.entries(specification.inputs).map(([port, input]) => [
       port, stream(input.substance, productMol * input.molPerProductMol, feeds[port].phase),
     ]));
-    const limitingValue = Math.min(...Object.values(limits));
     const wasteHeatKWhPerKg = nonnegative(Number(
       params.wasteHeatKWhPerKg ?? params.heatKWhPerKg ?? specification.heatKWhPerKg ?? 0
     ), 'wasteHeatKWhPerKg');
@@ -461,9 +451,7 @@ function reaction(specification) {
       requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * electricitySEC } },
       consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * electricitySEC } },
       outlets,
-      limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-        .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-        .map(([name]) => name),
+      limitedBy: limitingNames(activity, requested, limits),
     };
   };
 }
@@ -486,7 +474,6 @@ function airSeparation({ inlets, requestedActivity, capacity, params = {} }) {
   const nitrogenMol = activity * 1000 / SUBSTANCES.N2.molarMassG;
   const oxygenMol = (accepted.mol.O2 || 0) * oxygenRecovery;
   const offgasMol = { ...accepted.mol, N2: (accepted.mol.N2 || 0) - nitrogenMol, O2: (accepted.mol.O2 || 0) - oxygenMol };
-  const limitingValue = Math.min(...Object.values(limits));
   return {
     activity,
     requestedInputs: {
@@ -499,9 +486,7 @@ function airSeparation({ inlets, requestedActivity, capacity, params = {} }) {
       oxygen: { kind: 'material', mol: { O2: oxygenMol }, phase: 'gas', T_C: air.T_C, P_bar: air.P_bar },
       offgas: { ...cloneStream(accepted), mol: offgasMol },
     },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy: limitingNames(activity, requested, limits),
   };
 }
 
@@ -531,15 +516,12 @@ function brineMinerals({ inlets, requestedActivity, capacity, params = {} }) {
   const potash = recover('KCl', 'K+', 1, 'Cl-', 1, params.potashRecovery ?? 0.7);
   const gypsum = recover('CaSO4', 'Ca+2', 1, 'SO4-2', 1, params.gypsumRecovery ?? 0.7);
   const salt = recover('NaCl', 'Na+', 1, 'Cl-', 1, params.saltRecovery ?? 0.5);
-  const limitingValue = Math.min(...Object.values(limits));
   return {
     activity,
     requestedInputs: { brine: scaleStream(feed, feedKg ? planned / feedKg : 0), electricity: { kind: 'electricity', kWh: planned * sec } },
     consumed: { brine: processed, electricity: { kind: 'electricity', kWh: activity * sec } },
     outlets: { lithium, bromide, magnesium, potash, gypsum, salt, raffinate: { ...cloneStream(processed), mol: residual } },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy: limitingNames(activity, requested, limits),
   };
 }
 
@@ -645,11 +627,60 @@ const polysilicon = reaction({
   outputs: { polysilicon: { substance: 'Si', molPerProductMol: 1, phase: 'solid' }, bleed: { substance: 'Si', molPerProductMol: 0.05, phase: 'solid' } },
 });
 
+// Feeds sized by kg feed per kg product. Each port must be a pure stream of its substance;
+// spec.kgPerKg can be overridden through params[spec.param]. Activity = kg product / day.
+function massIntensityFeeds(feedSpecs, inlets, params, { requested, installed, sec, electricity }) {
+  const feeds = {};
+  const intensities = {};
+  for (const [port, spec] of Object.entries(feedSpecs)) {
+    const stream = validateStream(inlets[port], 'material');
+    requirePure(port, stream, spec.substance);
+    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
+    feeds[port] = stream;
+    intensities[port] = { substance: spec.substance, kgPerKg };
+  }
+  const planned = Math.min(requested, installed);
+  const limits = { capacity: installed };
+  for (const [port, spec] of Object.entries(intensities)) {
+    limits[port] = spec.kgPerKg === 0 ? Infinity : streamMassKg(feeds[port]) / spec.kgPerKg;
+  }
+  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
+  const activity = Math.min(planned, ...Object.values(limits));
+  const streamKg = (port, kg) => {
+    const template = feeds[port];
+    const substance = intensities[port].substance;
+    return {
+      kind: 'material',
+      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
+      phase: template.phase,
+      T_C: template.T_C,
+      P_bar: template.P_bar,
+    };
+  };
+  const feedsAt = rate => Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
+    port, streamKg(port, rate * spec.kgPerKg),
+  ]));
+  return {
+    activity,
+    intensities,
+    firstFeed: Object.values(feeds)[0],
+    requestedInputs: { ...feedsAt(planned), electricity: { kind: 'electricity', kWh: planned * sec } },
+    consumed: { ...feedsAt(activity), electricity: { kind: 'electricity', kWh: activity * sec } },
+    limitedBy: limitingNames(activity, requested, limits),
+  };
+}
+
+// Feed mass above 1 kg per kg product leaves as CO2 (carbonate calcination).
+function carbonateRemainderKgPerKg(intensities) {
+  const feedKgPerKg = Object.values(intensities).reduce((sum, spec) => sum + spec.kgPerKg, 0);
+  return Math.max(0, feedKgPerKg - 1);
+}
+
 // PV module assembly screening. Fraunhofer ISE Photovoltaics Report 2021 mass shares
 // on 11.6 kg/m², expressed as kg feed / kg finished module:
 //   poly-Si 0.0273, Ag 0.0003, float glass 0.6745, EVA 0.0669, Al frame 0.1273.
 // Sum of these five = 0.8963. Remaining ~10.4% (backsheet, J-box, cables, silicones,
-// cell Al/PbO paste extras) is YAGNI-omitted — no filler substances.
+// cell Al/PbO paste extras) is omitted; there are no filler substances.
 // Activity = kg module / day. SEC 0.05 kWh/kg is assembly/laminator screening order,
 // not a cell fab, not TOPCon, not backsheet chemistry. No heatKWhPerKg / no wasteHeat.
 // Extra feed substances with mol > 1e-12 throw.
@@ -666,49 +697,13 @@ function pvModuleAssembly({ inlets, requestedActivity, capacity, params = {} }) 
   const installed = nonnegative(capacity, 'capacity');
   const sec = nonnegative(Number(params.electricityKWhPerKg ?? 0.05), 'electricityKWhPerKg');
   const electricity = validateStream(inlets.electricity, 'electricity');
-  const feeds = {};
-  const intensities = {};
-  for (const [port, spec] of Object.entries(PV_MODULE_FEEDS)) {
-    const stream = validateStream(inlets[port], 'material');
-    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
-    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
-      throw new Error(`${port} must be pure ${spec.substance}`);
-    }
-    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
-    feeds[port] = stream;
-    intensities[port] = { substance: spec.substance, kgPerKg };
-  }
-  const kgOf = (port) => streamMassKg(feeds[port]);
-  const planned = Math.min(requested, installed);
-  const limits = { capacity: installed };
-  for (const [port, spec] of Object.entries(intensities)) {
-    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
-  }
-  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
-  const activity = Math.min(planned, ...Object.values(limits));
-  const streamKg = (port, kg) => {
-    const template = feeds[port];
-    const substance = intensities[port].substance;
-    return {
-      kind: 'material',
-      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-      phase: template.phase,
-      T_C: template.T_C,
-      P_bar: template.P_bar,
-    };
-  };
-  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, planned * spec.kgPerKg),
-  ]));
-  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, activity * spec.kgPerKg),
-  ]));
-  const firstFeed = Object.values(feeds)[0];
-  const limitingValue = Math.min(...Object.values(limits));
+  const { activity, firstFeed, requestedInputs, consumed, limitedBy } = massIntensityFeeds(
+    PV_MODULE_FEEDS, inlets, params, { requested, installed, sec, electricity }
+  );
   return {
     activity,
-    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
-    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    requestedInputs,
+    consumed,
     outlets: {
       module: {
         kind: 'material',
@@ -718,9 +713,7 @@ function pvModuleAssembly({ inlets, requestedActivity, capacity, params = {} }) 
         P_bar: firstFeed.P_bar,
       },
     },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy,
   };
 }
 
@@ -745,49 +738,13 @@ function bayerAlumina({ inlets, requestedActivity, capacity, params = {} }) {
   const sec = nonnegative(Number(params.electricityKWhPerKg ?? 3.5), 'electricityKWhPerKg');
   const redMudKgPerKg = nonnegative(Number(params.redMudKgPerKg ?? BAYER_RED_MUD_KG_PER_KG), 'redMudKgPerKg');
   const electricity = validateStream(inlets.electricity, 'electricity');
-  const feeds = {};
-  const intensities = {};
-  for (const [port, spec] of Object.entries(BAYER_FEEDS)) {
-    const stream = validateStream(inlets[port], 'material');
-    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
-    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
-      throw new Error(`${port} must be pure ${spec.substance}`);
-    }
-    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
-    feeds[port] = stream;
-    intensities[port] = { substance: spec.substance, kgPerKg };
-  }
-  const kgOf = (port) => streamMassKg(feeds[port]);
-  const planned = Math.min(requested, installed);
-  const limits = { capacity: installed };
-  for (const [port, spec] of Object.entries(intensities)) {
-    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
-  }
-  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
-  const activity = Math.min(planned, ...Object.values(limits));
-  const streamKg = (port, kg) => {
-    const template = feeds[port];
-    const substance = intensities[port].substance;
-    return {
-      kind: 'material',
-      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-      phase: template.phase,
-      T_C: template.T_C,
-      P_bar: template.P_bar,
-    };
-  };
-  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, planned * spec.kgPerKg),
-  ]));
-  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, activity * spec.kgPerKg),
-  ]));
-  const firstFeed = Object.values(feeds)[0];
-  const limitingValue = Math.min(...Object.values(limits));
+  const { activity, firstFeed, requestedInputs, consumed, limitedBy } = massIntensityFeeds(
+    BAYER_FEEDS, inlets, params, { requested, installed, sec, electricity }
+  );
   return {
     activity,
-    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
-    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    requestedInputs,
+    consumed,
     outlets: {
       alumina: {
         kind: 'material',
@@ -804,9 +761,7 @@ function bayerAlumina({ inlets, requestedActivity, capacity, params = {} }) {
         P_bar: firstFeed.P_bar,
       },
     },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy,
   };
 }
 
@@ -814,7 +769,7 @@ function bayerAlumina({ inlets, requestedActivity, capacity, params = {} }) {
 // Glass for Europe 2011 LCA Table 1 gate-to-gate kg feed / kg float glass
 // (25 European sites, ~50% market): sand 0.65, soda ash 0.20, limestone 0.04,
 // dolomite 0.17. Dolomite is folded into the limestone port as carbonate stone
-// (0.21 kg/kg). External cullet 0.04, feldspar, sulfate, slag omitted (YAGNI).
+// (0.21 kg/kg). External cullet 0.04, feldspar, sulfate, slag omitted.
 // Activity = kg glass / day. SEC 2.5 kWh/kg is GfE NG 6.1 + HFO 2.1 + grid
 // 0.80 = 9.0 MJ/kg as a total-energy-as-electricity proxy — real float is
 // heat-dominated. No wasteHeat. Extra feed mol > 1e-12 throws.
@@ -832,51 +787,14 @@ function floatGlass({ inlets, requestedActivity, capacity, params = {} }) {
   const installed = nonnegative(capacity, 'capacity');
   const sec = nonnegative(Number(params.electricityKWhPerKg ?? 2.5), 'electricityKWhPerKg');
   const electricity = validateStream(inlets.electricity, 'electricity');
-  const feeds = {};
-  const intensities = {};
-  for (const [port, spec] of Object.entries(FLOAT_GLASS_FEEDS)) {
-    const stream = validateStream(inlets[port], 'material');
-    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
-    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
-      throw new Error(`${port} must be pure ${spec.substance}`);
-    }
-    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
-    feeds[port] = stream;
-    intensities[port] = { substance: spec.substance, kgPerKg };
-  }
-  const kgOf = (port) => streamMassKg(feeds[port]);
-  const planned = Math.min(requested, installed);
-  const limits = { capacity: installed };
-  for (const [port, spec] of Object.entries(intensities)) {
-    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
-  }
-  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
-  const activity = Math.min(planned, ...Object.values(limits));
-  const streamKg = (port, kg) => {
-    const template = feeds[port];
-    const substance = intensities[port].substance;
-    return {
-      kind: 'material',
-      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-      phase: template.phase,
-      T_C: template.T_C,
-      P_bar: template.P_bar,
-    };
-  };
-  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, planned * spec.kgPerKg),
-  ]));
-  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, activity * spec.kgPerKg),
-  ]));
-  const firstFeed = Object.values(feeds)[0];
-  const feedKgPerKg = Object.values(intensities).reduce((sum, spec) => sum + spec.kgPerKg, 0);
-  const co2KgPerKg = Math.max(0, feedKgPerKg - 1);
-  const limitingValue = Math.min(...Object.values(limits));
+  const { activity, intensities, firstFeed, requestedInputs, consumed, limitedBy } = massIntensityFeeds(
+    FLOAT_GLASS_FEEDS, inlets, params, { requested, installed, sec, electricity }
+  );
+  const co2KgPerKg = carbonateRemainderKgPerKg(intensities);
   return {
     activity,
-    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
-    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    requestedInputs,
+    consumed,
     outlets: {
       glass: {
         kind: 'material',
@@ -893,9 +811,7 @@ function floatGlass({ inlets, requestedActivity, capacity, params = {} }) {
         P_bar: firstFeed.P_bar,
       },
     },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy,
   };
 }
 
@@ -906,8 +822,8 @@ function floatGlass({ inlets, requestedActivity, capacity, params = {} }) {
 // 0.337 kg/kg is the non-carbonate remainder so 1 kg product closes
 // (1.183+0.337−0.520=1.000). BREF ~1.57 t raw/t clinker is wet-raw including
 // moisture/dust — screening is dry close. Clay port is SiO2 as shale/clay/silica
-// kiln feed, not kaolinite dehydroxylation. Gypsum ~4–5% (EN 197-1 CEM I) omitted
-// (YAGNI); product is clinker sold at USGS portland mill value, labeled as such.
+// kiln feed, not kaolinite dehydroxylation. Gypsum ~4–5% (EN 197-1 CEM I) is omitted;
+// the product is clinker sold at USGS portland mill value, labeled as such.
 // SEC 1.05 kWh/kg is IEA ~3.4 GJ/t clinker thermal (0.944 kWh/kg) + GCCA/IEA
 // ~100 kWh/t cement electricity as electricity-as-total-energy — real kiln is
 // heat-dominated. No wasteHeat. Extra feed mol > 1e-12 throws.
@@ -921,51 +837,14 @@ function cementKiln({ inlets, requestedActivity, capacity, params = {} }) {
   const installed = nonnegative(capacity, 'capacity');
   const sec = nonnegative(Number(params.electricityKWhPerKg ?? 1.05), 'electricityKWhPerKg');
   const electricity = validateStream(inlets.electricity, 'electricity');
-  const feeds = {};
-  const intensities = {};
-  for (const [port, spec] of Object.entries(CEMENT_FEEDS)) {
-    const stream = validateStream(inlets[port], 'material');
-    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
-    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
-      throw new Error(`${port} must be pure ${spec.substance}`);
-    }
-    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
-    feeds[port] = stream;
-    intensities[port] = { substance: spec.substance, kgPerKg };
-  }
-  const kgOf = (port) => streamMassKg(feeds[port]);
-  const planned = Math.min(requested, installed);
-  const limits = { capacity: installed };
-  for (const [port, spec] of Object.entries(intensities)) {
-    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
-  }
-  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
-  const activity = Math.min(planned, ...Object.values(limits));
-  const streamKg = (port, kg) => {
-    const template = feeds[port];
-    const substance = intensities[port].substance;
-    return {
-      kind: 'material',
-      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-      phase: template.phase,
-      T_C: template.T_C,
-      P_bar: template.P_bar,
-    };
-  };
-  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, planned * spec.kgPerKg),
-  ]));
-  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, activity * spec.kgPerKg),
-  ]));
-  const firstFeed = Object.values(feeds)[0];
-  const feedKgPerKg = Object.values(intensities).reduce((sum, spec) => sum + spec.kgPerKg, 0);
-  const co2KgPerKg = Math.max(0, feedKgPerKg - 1);
-  const limitingValue = Math.min(...Object.values(limits));
+  const { activity, intensities, firstFeed, requestedInputs, consumed, limitedBy } = massIntensityFeeds(
+    CEMENT_FEEDS, inlets, params, { requested, installed, sec, electricity }
+  );
+  const co2KgPerKg = carbonateRemainderKgPerKg(intensities);
   return {
     activity,
-    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
-    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    requestedInputs,
+    consumed,
     outlets: {
       cement: {
         kind: 'material',
@@ -982,16 +861,14 @@ function cementKiln({ inlets, requestedActivity, capacity, params = {} }) {
         P_bar: firstFeed.P_bar,
       },
     },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy,
   };
 }
 
 // Heap-leach SX-EW screening island: purchased Cu-in-PLS → LME-grade cathode.
 // Not a mine, not a heap pad, not a smelter, not electrorefining of anodes.
 // Faraday: Cu²⁺ + 2e⁻ → Cu; anode H₂O → ½O₂ + 2H⁺. Acid regenerates to raffinate
-// (returned / not a sale). O₂ vents unlabeled (YAGNI). Screening mass is 1.00 kg
+// (returned / not a sale). O₂ vents unlabeled. Screening mass is 1.00 kg
 // contained Cu in PLS per kg cathode (closed electrolyte; raffinate Cu is inventory,
 // not a second product). SEC 2.2 kWh/kg is industrial EW+SX island electricity
 // (Jenkins ~1.9–2.0 kWh/kg; industrial 1.8–2.5; Marimaca SX/TF/EW 2.28; Minerals
@@ -1006,49 +883,13 @@ function copperEw({ inlets, requestedActivity, capacity, params = {} }) {
   const installed = nonnegative(capacity, 'capacity');
   const sec = nonnegative(Number(params.electricityKWhPerKg ?? 2.2), 'electricityKWhPerKg');
   const electricity = validateStream(inlets.electricity, 'electricity');
-  const feeds = {};
-  const intensities = {};
-  for (const [port, spec] of Object.entries(COPPER_EW_FEEDS)) {
-    const stream = validateStream(inlets[port], 'material');
-    if (!Object.hasOwn(stream.mol, spec.substance)) throw new Error(`${port} must contain ${spec.substance}`);
-    if (Object.entries(stream.mol).some(([substance, mol]) => substance !== spec.substance && mol > 1e-12)) {
-      throw new Error(`${port} must be pure ${spec.substance}`);
-    }
-    const kgPerKg = nonnegative(Number(params[spec.param] ?? spec.kgPerKg), spec.param);
-    feeds[port] = stream;
-    intensities[port] = { substance: spec.substance, kgPerKg };
-  }
-  const kgOf = (port) => streamMassKg(feeds[port]);
-  const planned = Math.min(requested, installed);
-  const limits = { capacity: installed };
-  for (const [port, spec] of Object.entries(intensities)) {
-    limits[port] = spec.kgPerKg === 0 ? Infinity : kgOf(port) / spec.kgPerKg;
-  }
-  limits.electricity = sec === 0 ? Infinity : electricity.kWh / sec;
-  const activity = Math.min(planned, ...Object.values(limits));
-  const streamKg = (port, kg) => {
-    const template = feeds[port];
-    const substance = intensities[port].substance;
-    return {
-      kind: 'material',
-      mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-      phase: template.phase,
-      T_C: template.T_C,
-      P_bar: template.P_bar,
-    };
-  };
-  const materialInputs = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, planned * spec.kgPerKg),
-  ]));
-  const consumed = Object.fromEntries(Object.entries(intensities).map(([port, spec]) => [
-    port, streamKg(port, activity * spec.kgPerKg),
-  ]));
-  const firstFeed = Object.values(feeds)[0];
-  const limitingValue = Math.min(...Object.values(limits));
+  const { activity, firstFeed, requestedInputs, consumed, limitedBy } = massIntensityFeeds(
+    COPPER_EW_FEEDS, inlets, params, { requested, installed, sec, electricity }
+  );
   return {
     activity,
-    requestedInputs: { ...materialInputs, electricity: { kind: 'electricity', kWh: planned * sec } },
-    consumed: { ...consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    requestedInputs,
+    consumed,
     outlets: {
       cathode: {
         kind: 'material',
@@ -1058,9 +899,7 @@ function copperEw({ inlets, requestedActivity, capacity, params = {} }) {
         P_bar: firstFeed.P_bar,
       },
     },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy,
   };
 }
 
@@ -1095,7 +934,6 @@ function pelletPlant({ inlets, requestedActivity, capacity, params = {} }) {
   const consumed = atActivity(activity);
   const { Fe2O3, ...rest } = consumed.mol;
   const gangueMol = Object.keys(rest).length ? rest : { SiO2: 0 };
-  const limitingValue = Math.min(...Object.values(limits));
   return {
     activity,
     requestedInputs: { concentrate: atActivity(planned), electricity: { kind: 'electricity', kWh: planned * sec } },
@@ -1104,9 +942,7 @@ function pelletPlant({ inlets, requestedActivity, capacity, params = {} }) {
       pellets: { kind: 'material', mol: { Fe2O3 }, phase: 'solid', T_C: feed.T_C, P_bar: feed.P_bar },
       gangue: { kind: 'material', mol: gangueMol, phase: 'solid', T_C: feed.T_C, P_bar: feed.P_bar },
     },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy: limitingNames(activity, requested, limits),
   };
 }
 const titaniumKroll = reaction({
@@ -1207,7 +1043,6 @@ function iacLeach({ inlets, requestedActivity, capacity, params = {} }) {
     else otherMol[oxide] = recovered;
   }
   const liquorMol = { [IAC_AMS]: consumedLix.mol[IAC_AMS] || 0 };
-  const limitingValue = Math.min(...Object.values(limits));
 
   return {
     activity,
@@ -1233,163 +1068,92 @@ function iacLeach({ inlets, requestedActivity, capacity, params = {} }) {
         P_bar: lixiviant.P_bar,
       },
     },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    limitedBy: limitingNames(activity, requested, limits),
   };
 }
 
-// ARC-1-style REE chromatography screening. Oxide-equivalent mixed concentrate in;
-// NdPr / DyTb / light REO out. Not a solvent-extraction train. No wasteHeat port.
-// 90.25% precip/calcine company figure is NOT multiplied (inspector can lower recovery).
-// Purity is not simulated.
-function reeChromatography({ inlets, requestedActivity, capacity, params = {} }) {
-  const concentrate = validateStream(inlets.concentrate, 'material');
-  const electricity = validateStream(inlets.electricity, 'electricity');
-  const requested = nonnegative(requestedActivity, 'requestedActivity');
-  const installed = nonnegative(capacity, 'capacity');
-  const recovery = Number(params.recovery ?? 0.914);
-  const sec = nonnegative(Number(params.electricityKWhPerKgReo ?? 5), 'electricityKWhPerKgReo');
-  if (!Number.isFinite(recovery) || recovery < 0 || recovery > 1) {
-    throw new Error('recovery must be between 0 and 1');
-  }
-  for (const oxide of IAC_LISTED_OXIDES) {
-    if (!Object.hasOwn(concentrate.mol, oxide)) {
-      throw new Error(`ree-chromatography concentrate must contain ${oxide}`);
+// REE separation screening: listed-oxide-equivalent concentrate in; NdPr / DyTb / light REO
+// and raffinate out. Purity is not simulated. No wasteHeat port.
+function reeSeparation(unitId, defaultRecovery, defaultSec) {
+  return ({ inlets, requestedActivity, capacity, params = {} }) => {
+    const concentrate = validateStream(inlets.concentrate, 'material');
+    const electricity = validateStream(inlets.electricity, 'electricity');
+    const requested = nonnegative(requestedActivity, 'requestedActivity');
+    const installed = nonnegative(capacity, 'capacity');
+    const recovery = Number(params.recovery ?? defaultRecovery);
+    const sec = nonnegative(Number(params.electricityKWhPerKgReo ?? defaultSec), 'electricityKWhPerKgReo');
+    if (!Number.isFinite(recovery) || recovery < 0 || recovery > 1) {
+      throw new Error('recovery must be between 0 and 1');
     }
-  }
-  if (Object.entries(concentrate.mol).some(([substance, mol]) => (
-    !IAC_LISTED_OXIDES.includes(substance) && mol > 1e-12
-  ))) {
-    throw new Error('ree-chromatography concentrate must be listed-oxide equivalent (no extra substances)');
-  }
+    for (const oxide of IAC_LISTED_OXIDES) {
+      if (!Object.hasOwn(concentrate.mol, oxide)) {
+        throw new Error(`${unitId} concentrate must contain ${oxide}`);
+      }
+    }
+    if (Object.entries(concentrate.mol).some(([substance, mol]) => (
+      !IAC_LISTED_OXIDES.includes(substance) && mol > 1e-12
+    ))) {
+      throw new Error(`${unitId} concentrate must be listed-oxide equivalent (no extra substances)`);
+    }
 
-  const oxideMassKg = oxide => (concentrate.mol[oxide] || 0) * SUBSTANCES[oxide].molarMassG / 1000;
-  const listedMass = IAC_LISTED_OXIDES.reduce((sum, oxide) => sum + oxideMassKg(oxide), 0);
-  const concentrateLimit = listedMass * recovery;
-  const planned = Math.min(requested, installed);
-  const limits = {
-    capacity: installed,
-    concentrate: concentrateLimit,
-    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
-  };
-  const activity = Math.min(planned, ...Object.values(limits));
-  const feedFraction = concentrateLimit > 0 ? activity / concentrateLimit : 0;
-  const requestedFraction = concentrateLimit > 0 ? planned / concentrateLimit : 0;
-  const consumedFeed = scaleStream(concentrate, feedFraction);
+    const oxideMassKg = oxide => (concentrate.mol[oxide] || 0) * SUBSTANCES[oxide].molarMassG / 1000;
+    const listedMass = IAC_LISTED_OXIDES.reduce((sum, oxide) => sum + oxideMassKg(oxide), 0);
+    const concentrateLimit = listedMass * recovery;
+    const planned = Math.min(requested, installed);
+    const limits = {
+      capacity: installed,
+      concentrate: concentrateLimit,
+      electricity: sec === 0 ? Infinity : electricity.kWh / sec,
+    };
+    const activity = Math.min(planned, ...Object.values(limits));
+    const feedFraction = concentrateLimit > 0 ? activity / concentrateLimit : 0;
+    const requestedFraction = concentrateLimit > 0 ? planned / concentrateLimit : 0;
+    const consumedFeed = scaleStream(concentrate, feedFraction);
 
-  const ndprMol = {};
-  const dytbMol = {};
-  const lightMol = {};
-  const raffinateMol = {};
-  for (const oxide of IAC_LISTED_OXIDES) {
-    const available = consumedFeed.mol[oxide] || 0;
-    const recovered = available * recovery;
-    raffinateMol[oxide] = available - recovered;
-    if (IAC_NDPR_OXIDES.includes(oxide)) ndprMol[oxide] = recovered;
-    else if (IAC_DYTB_OXIDES.includes(oxide)) dytbMol[oxide] = recovered;
-    else lightMol[oxide] = recovered;
-  }
-  const limitingValue = Math.min(...Object.values(limits));
+    const ndprMol = {};
+    const dytbMol = {};
+    const lightMol = {};
+    const raffinateMol = {};
+    for (const oxide of IAC_LISTED_OXIDES) {
+      const available = consumedFeed.mol[oxide] || 0;
+      const recovered = available * recovery;
+      raffinateMol[oxide] = available - recovered;
+      if (IAC_NDPR_OXIDES.includes(oxide)) ndprMol[oxide] = recovered;
+      else if (IAC_DYTB_OXIDES.includes(oxide)) dytbMol[oxide] = recovered;
+      else lightMol[oxide] = recovered;
+    }
 
-  return {
-    activity,
-    requestedInputs: {
-      concentrate: scaleStream(concentrate, requestedFraction),
-      electricity: { kind: 'electricity', kWh: planned * sec },
-    },
-    consumed: {
-      concentrate: consumedFeed,
-      electricity: { kind: 'electricity', kWh: activity * sec },
-    },
-    outlets: {
-      ndpr: { kind: 'material', mol: ndprMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
-      dytb: { kind: 'material', mol: dytbMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
-      lightReo: { kind: 'material', mol: lightMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
-      raffinate: { kind: 'material', mol: raffinateMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
-    },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
+    return {
+      activity,
+      requestedInputs: {
+        concentrate: scaleStream(concentrate, requestedFraction),
+        electricity: { kind: 'electricity', kWh: planned * sec },
+      },
+      consumed: {
+        concentrate: consumedFeed,
+        electricity: { kind: 'electricity', kWh: activity * sec },
+      },
+      outlets: {
+        ndpr: { kind: 'material', mol: ndprMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+        dytb: { kind: 'material', mol: dytbMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+        lightReo: { kind: 'material', mol: lightMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+        raffinate: { kind: 'material', mol: raffinateMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
+      },
+      limitedBy: limitingNames(activity, requested, limits),
+    };
   };
 }
 
-// peer solvent-extraction screening · not Maglut chromatography · not a Lynas/MP Materials quote · purity not simulated.
-// Purchased listed-oxide concentrate in; NdPr / DyTb / light REO out. No wasteHeat.
-// No extractant, solvent, water, or acid ports — solvent makeup is second-order vs DyTb payability.
+// ARC-1-style chromatography, not a solvent-extraction train. The 90.25% precip/calcine
+// company figure is not multiplied in (lower `recovery` to apply it).
+const reeChromatography = reeSeparation('ree-chromatography', 0.914, 5);
+
+// Peer solvent extraction; not a Lynas/MP Materials quote. No extractant, solvent, water or
+// acid ports: solvent makeup is second-order next to DyTb payability.
 // Recovery 0.95 is a commercial SX screening mid (~90–98%), not Maglut’s 0.914.
 // SEC 5.3 kWh/kg is the Talens Peiró & Villalba JOM 2013 SX electricity mid
 // (15.6–22.7 GJ/t REM = 4.33–6.31 kWh/kg → 5.32, rounded 5.3). Native SX number.
-function reeSx({ inlets, requestedActivity, capacity, params = {} }) {
-  const concentrate = validateStream(inlets.concentrate, 'material');
-  const electricity = validateStream(inlets.electricity, 'electricity');
-  const requested = nonnegative(requestedActivity, 'requestedActivity');
-  const installed = nonnegative(capacity, 'capacity');
-  const recovery = Number(params.recovery ?? 0.95);
-  const sec = nonnegative(Number(params.electricityKWhPerKgReo ?? 5.3), 'electricityKWhPerKgReo');
-  if (!Number.isFinite(recovery) || recovery < 0 || recovery > 1) {
-    throw new Error('recovery must be between 0 and 1');
-  }
-  for (const oxide of IAC_LISTED_OXIDES) {
-    if (!Object.hasOwn(concentrate.mol, oxide)) {
-      throw new Error(`ree-sx concentrate must contain ${oxide}`);
-    }
-  }
-  if (Object.entries(concentrate.mol).some(([substance, mol]) => (
-    !IAC_LISTED_OXIDES.includes(substance) && mol > 1e-12
-  ))) {
-    throw new Error('ree-sx concentrate must be listed-oxide equivalent (no extra substances)');
-  }
-
-  const oxideMassKg = oxide => (concentrate.mol[oxide] || 0) * SUBSTANCES[oxide].molarMassG / 1000;
-  const listedMass = IAC_LISTED_OXIDES.reduce((sum, oxide) => sum + oxideMassKg(oxide), 0);
-  const concentrateLimit = listedMass * recovery;
-  const planned = Math.min(requested, installed);
-  const limits = {
-    capacity: installed,
-    concentrate: concentrateLimit,
-    electricity: sec === 0 ? Infinity : electricity.kWh / sec,
-  };
-  const activity = Math.min(planned, ...Object.values(limits));
-  const feedFraction = concentrateLimit > 0 ? activity / concentrateLimit : 0;
-  const requestedFraction = concentrateLimit > 0 ? planned / concentrateLimit : 0;
-  const consumedFeed = scaleStream(concentrate, feedFraction);
-
-  const ndprMol = {};
-  const dytbMol = {};
-  const lightMol = {};
-  const raffinateMol = {};
-  for (const oxide of IAC_LISTED_OXIDES) {
-    const available = consumedFeed.mol[oxide] || 0;
-    const recovered = available * recovery;
-    raffinateMol[oxide] = available - recovered;
-    if (IAC_NDPR_OXIDES.includes(oxide)) ndprMol[oxide] = recovered;
-    else if (IAC_DYTB_OXIDES.includes(oxide)) dytbMol[oxide] = recovered;
-    else lightMol[oxide] = recovered;
-  }
-  const limitingValue = Math.min(...Object.values(limits));
-
-  return {
-    activity,
-    requestedInputs: {
-      concentrate: scaleStream(concentrate, requestedFraction),
-      electricity: { kind: 'electricity', kWh: planned * sec },
-    },
-    consumed: {
-      concentrate: consumedFeed,
-      electricity: { kind: 'electricity', kWh: activity * sec },
-    },
-    outlets: {
-      ndpr: { kind: 'material', mol: ndprMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
-      dytb: { kind: 'material', mol: dytbMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
-      lightReo: { kind: 'material', mol: lightMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
-      raffinate: { kind: 'material', mol: raffinateMol, phase: 'solid', T_C: concentrate.T_C, P_bar: concentrate.P_bar },
-    },
-    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name),
-  };
-}
+const reeSx = reeSeparation('ree-sx', 0.95, 5.3);
 
 function energyStorage(kind) {
   return ({ inlets, requestedActivity, capacity, params = {} }) => {
@@ -1420,12 +1184,10 @@ function energyStorage(kind) {
   };
 }
 
-
-// Liquid transfer / open-intake pump. Screening SEC is lift only — SWRO plant SEC
-// still includes a literature intake share unless the user lowers it (see MECH8 audit).
-// Screening head → SEC (SI). kWh/m³ = ρ·g·H / (η·3.6e6). Not a vendor curve.
-// headM unset → pumpKWhPerM3 (default 0.4), bit-identical to MECH8.
-// pumpSecOverride keeps an explicit kWh/m³ even when headM is set.
+// Liquid pump SEC. Precedence: pumpKWhPerKg (kg basis); else headM via
+// kWh/m³ = ρ·g·H / (η·3.6e6) unless pumpSecOverride is true; else pumpKWhPerM3 (default 0.4).
+// Screening lift only, not a vendor curve. SWRO plant SEC still includes a literature intake
+// share unless the user lowers it.
 function resolveLiquidPumpSec(params = {}, densityKgM3 = 1025) {
   const density = nonnegative(Number(densityKgM3 ?? params.densityKgM3 ?? 1025), 'densityKgM3');
   if (density === 0) throw new Error('densityKgM3 must be greater than zero');
@@ -1459,10 +1221,9 @@ function resolveLiquidPumpSec(params = {}, densityKgM3 = 1025) {
   };
 }
 
-// Mild part-load vs Q/Qrated. SEC × (1 + k(1−q)²), q = min(1, Q/Qrated).
-// partLoadK unset → ×1, bit-identical. Screening, not a vendor curve.
-// k > 3 is clamped to 3 so energy stays monotone in flow; negative k still throws.
-// MECH21: when k is set, electricity uses this shape at the delivered flow.
+// Part-load SEC multiplier 1 + k(1−q)², q = min(1, Q/Qrated); ×1 when partLoadK is unset.
+// k > 3 is clamped to 3 so energy stays monotone in flow; negative k throws.
+// Screening, not a vendor curve.
 function pumpPartLoad(params = {}, flow, rated) {
   const raw = params.partLoadK;
   if (raw == null || raw === '') return { multiplier: 1 };
@@ -1478,8 +1239,7 @@ function pumpPartLoad(params = {}, flow, rated) {
   return { multiplier: 1 + k * (1 - q) ** 2, k, q, ...flag };
 }
 
-// Largest flow in [0, cap] with flow × shaped SEC ≤ kWh.
-// Energy rises with flow for k ≤ 3 (slider max is 2). k > 3 is clamped to 3.
+// Largest flow in [0, cap] with flow × shaped SEC ≤ kWh (bisection; energy is monotone for k ≤ 3).
 function flowWithinShapedSec(sec, params, cap, rated, kWh) {
   const energy = (flow) => flow * sec * pumpPartLoad(params, flow, rated).multiplier;
   if (!(sec > 0) || !Number.isFinite(kWh)) return cap;
@@ -1494,7 +1254,8 @@ function flowWithinShapedSec(sec, params, cap, rated, kWh) {
   return lo;
 }
 
-// Shared by the intake pump and gas blower. k unset keeps SEC ×1.
+// Delivered flow for the intake pump and gas blower. With partLoadK set, electricity is
+// evaluated on the part-load shape at the delivered flow.
 function shapedDelivery(sec, params, planned, feedAmount, installed, electricityKWh) {
   const demandPart = pumpPartLoad(params, planned, installed);
   const demandSec = sec * demandPart.multiplier;
@@ -1555,12 +1316,7 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   };
   const fraction = feedAmount === 0 ? 0 : activity / feedAmount;
   const consumedFeed = scaleStream(feed, fraction);
-  const limitingValue = Math.min(limits.capacity, limits.in, limits.electricity);
-  const limitedBy = reached(activity, requested)
-    ? []
-    : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name);
+  const limitedBy = limitingNames(activity, requested, limits);
   return {
     activity,
     requestedInputs: {
@@ -1587,9 +1343,9 @@ function intakePump({ inlets, requestedActivity, capacity, params = {} }) {
   };
 }
 
-// Gas ΔP → SEC (SI screening). kWh/Nm³ = ΔP_kPa / (η·3600) because 1 kPa·m³ = 1 kJ.
-// deltaP_kPa unset → blowerKWhPerNm3 (default 0.001). blowerSecOverride keeps the slider.
-// Twin of liquid head → SEC. Not a fan curve.
+// Blower SEC. Precedence: blowerKWhPerKg (kg basis); else deltaP_kPa via
+// kWh/Nm³ = ΔP_kPa / (η·3600) (1 kPa·m³ = 1 kJ) unless blowerSecOverride is true;
+// else blowerKWhPerNm3 (default 0.001). Screening, not a fan curve.
 function resolveGasBlowerSec(params = {}) {
   const secKgRaw = params.blowerKWhPerKg;
   if (secKgRaw != null && secKgRaw !== '') {
@@ -1619,10 +1375,8 @@ function resolveGasBlowerSec(params = {}) {
   };
 }
 
-// Gas transfer / intake blower (air, flue). Screening fan SEC is duct move only —
-// DAC/ASU plant electricity still excludes or folds BOP unless the user lowers it
-// (see MECH10 audit). Twin of intake-pump for gas phase.
-// MECH22 part-load matches the pump (same k·(1−Q/Qrated)²). Not a fan curve.
+// Gas transfer / intake blower (air, flue); the gas-phase counterpart of intakePump.
+// Screening fan SEC covers duct movement only; DAC/ASU plant electricity is separate.
 function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
   const feed = validateStream(inlets.in, 'material');
   const electricity = validateStream(inlets.electricity, 'electricity');
@@ -1650,29 +1404,21 @@ function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
   };
   const fraction = feedAmount === 0 ? 0 : activity / feedAmount;
   const consumedFeed = scaleStream(feed, fraction);
-  const limitingValue = Math.min(limits.capacity, limits.in, limits.electricity);
-  const limitedBy = reached(activity, requested)
-    ? []
-    : Object.entries(limits)
-      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
-      .map(([name]) => name);
-  // k unset: multiply by the slider SEC directly so the default path stays bit-identical.
-  const demandSecUsed = part.k == null ? sec : demandSec;
-  const usedSec = part.k == null ? sec : secEff;
+  const limitedBy = limitingNames(activity, requested, limits);
   return {
     activity,
     requestedInputs: {
       in: scaleStream(feed, feedAmount === 0 ? 0 : planned / feedAmount),
-      electricity: { kind: 'electricity', kWh: planned * demandSecUsed },
+      electricity: { kind: 'electricity', kWh: planned * demandSec },
     },
     consumed: {
       in: consumedFeed,
-      electricity: { kind: 'electricity', kWh: activity * usedSec },
+      electricity: { kind: 'electricity', kWh: activity * secEff },
     },
     outlets: { out: cloneStream(consumedFeed) },
     limitedBy,
     blowerBasis: useKg ? 'kg' : 'nm3',
-    blowerKWhPerUnit: usedSec,
+    blowerKWhPerUnit: secEff,
     blowerSecSource: resolved.source,
     nm3PerKmol,
     ...(resolved.deltaP_kPa != null ? { blowerDeltaP_kPa: resolved.deltaP_kPa, blowerEta: resolved.blowerEta } : {}),
@@ -1695,10 +1441,6 @@ const UNITS = Object.freeze({
     ports: { out: { direction: 'out', kind: 'electricity', required: true } },
   },
   'solar-pv': {
-    kind: 'source',
-    ports: { out: { direction: 'out', kind: 'electricity', required: true } },
-  },
-  'grid-electricity': {
     kind: 'source',
     ports: { out: { direction: 'out', kind: 'electricity', required: true } },
   },
@@ -2122,7 +1864,6 @@ const UNITS = Object.freeze({
 
 return {
   UNITS,
-  DAC_TECHNOLOGIES,
   resolveLiquidPumpSec,
   resolveGasBlowerSec,
   pumpPartLoad,

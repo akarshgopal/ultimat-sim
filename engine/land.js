@@ -16,7 +16,6 @@ function finiteNumber(value, fallback = NaN) {
 }
 
 function distanceKm(from, to) {
-  if (![from?.latitude, from?.longitude, to?.latitude, to?.longitude].every(Number.isFinite)) return Infinity;
   const toRad = value => value * Math.PI / 180;
   const lat1 = toRad(from.latitude);
   const lat2 = toRad(to.latitude);
@@ -24,19 +23,6 @@ function distanceKm(from, to) {
   const dLon = toRad(to.longitude - from.longitude);
   const chord = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
   return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(chord), Math.sqrt(1 - chord));
-}
-
-function coordsFrom(latitude, longitude) {
-  if (latitude && typeof latitude === 'object' && !Array.isArray(latitude)) {
-    return {
-      latitude: finiteNumber(latitude.latitude ?? latitude.lat),
-      longitude: finiteNumber(latitude.longitude ?? latitude.lon ?? latitude.lng),
-    };
-  }
-  return {
-    latitude: finiteNumber(latitude),
-    longitude: finiteNumber(longitude),
-  };
 }
 
 function pointInRing(lon, lat, ring) {
@@ -93,7 +79,8 @@ function minVertexDistanceKm(latitude, longitude, geometry) {
 }
 
 function pricedRecordForFeature(feature, bundle) {
-  const record = landPriceById(feature?.properties?.id, bundle);
+  const id = feature?.properties?.id;
+  const record = id ? landPriceIndex(bundle).get(id) : null;
   if (record && Number.isFinite(record.usdPerHa) && record.usdPerHa > 0) return record;
   return null;
 }
@@ -101,7 +88,7 @@ function pricedRecordForFeature(feature, bundle) {
 function getLandPricesBundle() {
   if (globalThis.LAND_PRICES && typeof globalThis.LAND_PRICES === 'object') return globalThis.LAND_PRICES;
   if (typeof require === 'function') {
-    try { return require('../data/land-prices.js'); } catch { /* optional in browser */ }
+    try { return require('../data/land-prices.js'); } catch { /* no data: no price */ }
   }
   return null;
 }
@@ -111,12 +98,12 @@ function getLandAdminGeoJSON() {
     return globalThis.LAND_ADMIN_GEOJSON;
   }
   if (typeof require === 'function') {
-    try { return require('../data/land-admin.js'); } catch { /* optional */ }
+    try { return require('../data/land-admin.js'); } catch { /* no data: no price */ }
   }
   return null;
 }
 
-function landPriceIndex(bundle = getLandPricesBundle()) {
+function landPriceIndex(bundle) {
   const map = new Map();
   const records = bundle?.records;
   if (!Array.isArray(records)) return map;
@@ -127,13 +114,8 @@ function landPriceIndex(bundle = getLandPricesBundle()) {
   return map;
 }
 
-function landPriceById(id, bundle = getLandPricesBundle()) {
-  if (!id) return null;
-  return landPriceIndex(bundle).get(id) || null;
-}
-
 function landPriceAt(latitude, longitude, bundle = getLandPricesBundle(), admin = getLandAdminGeoJSON()) {
-  const coords = coordsFrom(latitude, longitude);
+  const coords = { latitude: finiteNumber(latitude), longitude: finiteNumber(longitude) };
   if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude) || coords.latitude < -90 || coords.latitude > 90) {
     return null;
   }
@@ -152,5 +134,5 @@ function landPriceAt(latitude, longitude, bundle = getLandPricesBundle(), admin 
   return pricedRecordForFeature(nearest.feature, bundle);
 }
 
-return { landPriceAt, landPriceById, landPriceIndex, getLandPricesBundle, getLandAdminGeoJSON, LAND_ADMIN_SNAP_KM };
+return { landPriceAt };
 });

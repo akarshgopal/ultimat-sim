@@ -8,7 +8,6 @@ const {
   estimateFootprint,
   estimateSolar,
   estimateSolarLandHa,
-  pvLandHa,
   layoutSpacingMultiplier,
   groundCoverageRatio,
 } = require('../engine/footprint');
@@ -35,7 +34,6 @@ const MAIN_UNITS = [
 test('solar land uses panel area / GCR rather than 1.6 ha/MWp', () => {
   const solarKWp = 50000;
   const ha = estimateSolarLandHa(solarKWp);
-  assert.equal(ha, pvLandHa(solarKWp));
   assert.notEqual(ha, 80);
   const panelAreaM2 = (solarKWp / 1000) * 1e6 / ((20 / 100) * 1000);
   const landAreaM2 = panelAreaM2 / 0.45;

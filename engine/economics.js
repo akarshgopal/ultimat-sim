@@ -5,7 +5,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FlowsheetEconomics = api;
 })(globalThis, model => {
-const { streamMassKg } = model || {};
+const { streamMassKg } = model;
 
 function evaluateEconomics(caseDefinition = {}, solved = {}) {
   const graph = caseDefinition.graph || {};
@@ -152,7 +152,7 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
 
 function nativeAmount(stream) {
   if (!stream) return 0;
-  if (stream.kind === 'material') return streamMassKg ? streamMassKg(stream) : number(stream.kg, 0);
+  if (stream.kind === 'material') return streamMassKg(stream);
   if (stream.kind === 'consumable') return number(stream.amount, 0);
   return number(stream.kWh, 0);
 }
@@ -224,6 +224,13 @@ function approximateIRR(cashFlows) {
   return null;
 }
 
+// When maxAbsResidual is provided, the objective also requires a closed balance
+// (< 1e-8). Cash-only callers omit that field and stay gated on cash.
+function balanceAllowsObjective(economics) {
+  if (!Object.prototype.hasOwnProperty.call(economics, 'maxAbsResidual')) return true;
+  const residual = Number(economics.maxAbsResidual);
+  return Number.isFinite(residual) && residual < 1e-8;
+}
 
 // Co-product cashflow score (post-solve dollars only).
 // Gate cash is capital-inclusive: annualNetCash = R − C − annualizedCapex.
@@ -232,14 +239,7 @@ function approximateIRR(cashFlows) {
 // Maximizer field: positiveSaleCount = |{R_i>0}| when met, else 0 (max count s.t. cash>0).
 // Reporting field: activeSaleCount = |{sale sinks with R_i>0}| regardless of met.
 // product.active is R_i>0; product.positive follows CM_i (same sign as plant cash).
-// When maxAbsResidual is provided, met also requires a closed balance (< 1e-8).
-// Cash-only callers omit that field and stay gated on cash.
-function balanceAllowsObjective(economics = {}) {
-  if (!Object.prototype.hasOwnProperty.call(economics, 'maxAbsResidual')) return true;
-  const residual = Number(economics.maxAbsResidual);
-  return Number.isFinite(residual) && residual < 1e-8;
-}
-
+// product.allocatedOpex is A_i (it includes the capital charge).
 function scorePositiveCashflow(economics = {}) {
   const sinks = Array.isArray(economics.sinks) ? economics.sinks : [];
   const annualOperatingCost = number(economics.annualOperatingCost, 0);

@@ -20,6 +20,13 @@ const {
 const { UNITS, pumpPartLoad, flowWithinShapedSec } = units;
 const { cascadeHeat } = heat;
 
+// Converter inlet ports that carry feed. A downstream converter limited only by
+// one of these (other than the edge's own port) is starved, not blocked.
+const FEED_PORTS = new Set([
+  'in', 'feed', 'air', 'brine', 'co2', 'hydrogen', 'water', 'salt',
+  'nitrogen', 'chlorine', 'bromide', 'consumables', 'electricity', 'heat',
+]);
+
 function solveOperation(caseDefinition) {
   const { nodes, edges } = caseDefinition.graph;
   validateGraph(nodes, edges);
@@ -56,7 +63,7 @@ function solveOperation(caseDefinition) {
   }
   for (const node of nodes.filter(node => UNITS[node.unit].kind === 'source')) {
     const edge = edges.find(candidate => candidate.from.node === node.id);
-    if (!edge) continue; // orphan sources (e.g. after route change) have no outlet
+    if (!edge) continue; // orphan source with no outlet
     const stream = solved.edgeStreams.get(edge);
     if (!stream) continue;
     solved.nodeResults[node.id].supplied = cloneStream(stream);
@@ -103,9 +110,8 @@ function streamAmount(stream) {
   return stream.kWh;
 }
 
-
 function finiteEdgeCapacity(edge) {
-  if (!edge || edge.capacity == null || edge.capacity === '') return Infinity;
+  if (edge.capacity == null || edge.capacity === '') return Infinity;
   const capacity = Number(edge.capacity);
   if (!Number.isFinite(capacity)) return Infinity;
   if (capacity < 0) throw new Error(`Edge capacity must be ≥ 0 (${edge.from?.node} → ${edge.to?.node})`);
@@ -113,7 +119,7 @@ function finiteEdgeCapacity(edge) {
 }
 
 function applyEdgeCapacity(edge, stream, edgeLimits) {
-  if (!edge || !stream) return stream;
+  if (!stream) return stream;
   const capacity = finiteEdgeCapacity(edge);
   if (!Number.isFinite(capacity)) return stream;
   const requested = streamAmount(stream);
@@ -133,12 +139,9 @@ function applyEdgeCapacity(edge, stream, edgeLimits) {
 }
 
 function tagLogisticsLimits(nodes, edges, nodeResults, edgeLimits) {
-  if (!edgeLimits?.length) return;
+  if (!edgeLimits.length) return;
   const clampedInlets = new Map();
-  for (const limit of edgeLimits) {
-    const key = `${limit.to.node}:${limit.to.port}`;
-    clampedInlets.set(key, limit);
-  }
+  for (const limit of edgeLimits) clampedInlets.set(`${limit.to.node}:${limit.to.port}`, limit);
   for (const node of nodes) {
     const result = nodeResults[node.id];
     if (!result) continue;
@@ -163,12 +166,6 @@ function tagLogisticsLimits(nodes, edges, nodeResults, edgeLimits) {
           break;
         }
       }
-      // Sources/junctions feeding a limited consumer: if activity is below planned
-      // solely because this inlet was clamped, unit.limitedBy already names the port.
-      if (limits.length && limits.some(name => name === port || (port === 'electricity' && name === 'electricity'))) {
-        logisticsBinding = true;
-        break;
-      }
     }
     if (logisticsBinding) {
       result.limitedBy = [...new Set([...(result.limitedBy || []), 'logistics'])];
@@ -176,27 +173,48 @@ function tagLogisticsLimits(nodes, edges, nodeResults, edgeLimits) {
   }
 }
 
-
-
 // Walk limitedBy upstream into a readable cause chain (symptom ← … ← root).
 // Diagnosis only — does not change activities, streams, or balances.
-function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
-  const nodes = caseDefinition?.graph?.nodes || [];
-  const edges = caseDefinition?.graph?.edges || [];
+function attachCauseChains(caseDefinition, nodeResults, edgeLimits) {
+  const { nodes, edges } = caseDefinition.graph;
   const nodeById = new Map(nodes.map(node => [node.id, node]));
   const limitsByInlet = new Map();
-  for (const limit of edgeLimits || []) {
+  for (const limit of edgeLimits) {
     limitsByInlet.set(`${limit.to.node}:${limit.to.port}`, limit);
   }
 
   function nodeLabel(nodeId) {
-    const node = nodeById.get(nodeId);
-    return node?.label || nodeId;
+    return nodeById.get(nodeId)?.label || nodeId;
   }
 
-  function streamQty(stream) {
-    if (!stream) return 0;
-    return streamAmount(stream);
+  function logisticsStep(nodeId, edgeLimit, port) {
+    return {
+      code: 'logistics',
+      nodeId,
+      text: `${edgeLimit.from.node}→${edgeLimit.to.node} logistics`,
+      edge: {
+        from: { ...edgeLimit.from },
+        to: { ...edgeLimit.to },
+        capacity: edgeLimit.capacity,
+      },
+      port,
+    };
+  }
+
+  // Follow one outlet edge to the sink / buffer / splitter (directly or through a
+  // junction or mixer) that blocks it.
+  function explainDownstream(edge, seen) {
+    const down = nodeById.get(edge.to.node);
+    if (!down) return [];
+    const downKind = UNITS[down.unit]?.kind;
+    if (downKind === 'sink' || downKind === 'buffer' || downKind === 'splitter') {
+      return explainNode(edge.to.node, new Set(seen));
+    }
+    if (downKind === 'junction' || downKind === 'mixer') {
+      const through = edges.find(item => item.from.node === edge.to.node && !item.recycle);
+      if (through) return explainNode(through.to.node, new Set(seen));
+    }
+    return [];
   }
 
   function passthroughIn(nodeId) {
@@ -255,7 +273,7 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
     }
 
     if (kind === 'sink' && limits.includes('export')) {
-      const curtail = nodeById.get(nodeId)?.unit === 'electricity-sink';
+      const curtail = node.unit === 'electricity-sink';
       steps.push({
         code: 'export-capped',
         nodeId,
@@ -274,38 +292,16 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
       });
       const downEdges = edges.filter(edge => edge.from.node === nodeId && !edge.recycle);
       for (const edge of downEdges) {
-        const edgeLimit = (edgeLimits || []).find(item => (
-          item.from?.node === edge.from.node && item.from?.port === edge.from.port
-          && item.to?.node === edge.to.node
+        const edgeLimit = edgeLimits.find(item => (
+          item.from.node === edge.from.node && item.from.port === edge.from.port
+          && item.to.node === edge.to.node
         ));
         if (edgeLimit) {
-          steps.push({
-            code: 'logistics',
-            nodeId,
-            text: `${edgeLimit.from.node}→${edgeLimit.to.node} logistics`,
-            edge: {
-              from: { ...edgeLimit.from },
-              to: { ...edgeLimit.to },
-              capacity: edgeLimit.capacity,
-            },
-            port: edge.to.port,
-          });
+          steps.push(logisticsStep(nodeId, edgeLimit, edge.to.port));
           return steps;
         }
-        const down = nodeById.get(edge.to.node);
-        if (!down) continue;
-        const downKind = UNITS[down.unit]?.kind;
-        if (downKind === 'sink' || downKind === 'buffer' || downKind === 'splitter') {
-          const more = explainNode(edge.to.node, new Set(seen));
-          if (more.length) return steps.concat(more);
-        }
-        if (['junction', 'mixer'].includes(downKind)) {
-          const through = edges.find(item => item.from.node === edge.to.node && !item.recycle);
-          if (through) {
-            const more = explainNode(through.to.node, new Set(seen));
-            if (more.length) return steps.concat(more);
-          }
-        }
+        const more = explainDownstream(edge, seen);
+        if (more.length) return steps.concat(more);
       }
       return steps;
     }
@@ -318,41 +314,18 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
       });
       const downEdges = edges.filter(edge => edge.from.node === nodeId && !edge.recycle);
       for (const edge of downEdges) {
-        const down = nodeById.get(edge.to.node);
-        if (!down) continue;
-        const downKind = UNITS[down.unit]?.kind;
-        if (downKind === 'sink' || downKind === 'buffer' || downKind === 'splitter') {
-          const more = explainNode(edge.to.node, new Set(seen));
-          if (more.length) return steps.concat(more);
-        }
-        if (['junction', 'mixer'].includes(downKind)) {
-          const through = edges.find(item => item.from.node === edge.to.node && !item.recycle);
-          if (through) {
-            const more = explainNode(through.to.node, new Set(seen));
-            if (more.length) return steps.concat(more);
-          }
-        }
+        const more = explainDownstream(edge, seen);
+        if (more.length) return steps.concat(more);
       }
       return steps;
     }
 
     if (limits.includes('logistics')) {
-      // Inlet clamp (consumer) or outlet clamp (buffer/source transfer line — MECH15).
-      const edgeLimit = (edgeLimits || []).find(item => item.to.node === nodeId)
-        || (edgeLimits || []).find(item => item.from.node === nodeId)
-        || null;
+      // Inlet clamp (consumer) or outlet clamp (buffer/source transfer line).
+      const edgeLimit = edgeLimits.find(item => item.to.node === nodeId)
+        || edgeLimits.find(item => item.from.node === nodeId);
       if (edgeLimit) {
-        steps.push({
-          code: 'logistics',
-          nodeId,
-          text: `${edgeLimit.from.node}→${edgeLimit.to.node} logistics`,
-          edge: {
-            from: { ...edgeLimit.from },
-            to: { ...edgeLimit.to },
-            capacity: edgeLimit.capacity,
-          },
-          port: edgeLimit.to.port,
-        });
+        steps.push(logisticsStep(nodeId, edgeLimit, edgeLimit.to.port));
         // Logistics clamp is usually the root; only keep walking if the
         // supplier itself is independently limited (site budget / inventory).
         const supplier = explainUpstream(edgeLimit.from.node, new Set(seen));
@@ -375,14 +348,9 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
     inletLimits.sort((a, b) => Number(a === 'electricity') - Number(b === 'electricity'));
 
     let foundRoot = false;
-    for (const limit of inletLimits) {
+    for (const port of inletLimits) {
       if (foundRoot) break;
-      const port = limit;
-      const edge = edges.find(item => (
-        item.to.node === nodeId
-        && (item.to.port === port || (port === 'electricity' && item.to.port === 'electricity'))
-        && !item.recycle
-      ));
+      const edge = edges.find(item => item.to.node === nodeId && item.to.port === port && !item.recycle);
       if (!edge) {
         const declared = UNITS[node.unit]?.ports?.[port];
         if (declared?.direction === 'in') {
@@ -393,11 +361,11 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
             text: `${nodeLabel(nodeId)} missing ${port}`,
           });
           foundRoot = true;
-        } else if (limit === 'capacity') {
+        } else if (port === 'capacity') {
           steps.push({
             code: 'local',
             nodeId,
-            limit,
+            limit: port,
             text: `${nodeLabel(nodeId)} nameplate capacity`,
           });
           foundRoot = true;
@@ -405,8 +373,8 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
           steps.push({
             code: 'local',
             nodeId,
-            limit,
-            text: `${nodeLabel(nodeId)} limited by ${limit}`,
+            limit: port,
+            text: `${nodeLabel(nodeId)} limited by ${port}`,
           });
         }
         continue;
@@ -415,17 +383,7 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
       const edgeLimit = limitsByInlet.get(`${edge.to.node}:${edge.to.port}`);
       const branch = [];
       if (edgeLimit && !limits.includes('logistics')) {
-        branch.push({
-          code: 'logistics',
-          nodeId,
-          text: `${edgeLimit.from.node}→${edgeLimit.to.node} logistics`,
-          edge: {
-            from: { ...edgeLimit.from },
-            to: { ...edgeLimit.to },
-            capacity: edgeLimit.capacity,
-          },
-          port: edge.to.port,
-        });
+        branch.push(logisticsStep(nodeId, edgeLimit, edge.to.port));
         foundRoot = true;
       } else {
         branch.push({
@@ -448,7 +406,8 @@ function attachCauseChains(caseDefinition, nodeResults, edgeLimits = []) {
       const upResult = nodeResults[edge.from.node];
       if (upNode && upResult) {
         const upKind = UNITS[upNode.unit]?.kind;
-        if (upKind === 'source' && streamQty(upResult.supplied || upResult.available) <= 1e-9) {
+        const upSupply = upResult.supplied || upResult.available;
+        if (upKind === 'source' && (upSupply ? streamAmount(upSupply) : 0) <= 1e-9) {
           branch.push({
             code: 'empty-source',
             nodeId: upNode.id,
@@ -623,7 +582,7 @@ function evaluateBuffer(node, inlets, requestedActivity) {
   }
 
   // Prefer stored composition; else learn from this hour's accepted inlet.
-  // Empty inlet + initialKg without storedStream must not throw (MECH15).
+  // Empty inlet + initialKg without storedStream must not throw.
   const template = stored && streamMassKg(stored) > 0
     ? stored
     : (acceptedMass > 0 ? accepted : inlet);
@@ -664,33 +623,24 @@ function evaluateBuffer(node, inlets, requestedActivity) {
 }
 
 function sinkPeriodDays(caseDefinition) {
-  const days = Number(caseDefinition?.operation?.periodDays);
+  const days = Number(caseDefinition.operation?.periodDays);
   return Number.isFinite(days) && days > 0 ? days : 365;
-}
-
-function hasManualSinkAccept(node, setpoint) {
-  const params = node.params || {};
-  for (const key of ['acceptKg', 'acceptAmount', 'acceptKWh']) {
-    if (params[key] != null && params[key] !== '') return true;
-  }
-  return setpoint != null && setpoint !== '';
 }
 
 function demandBackedAcceptKg(node, periodDays) {
   // Offtake honesty is for sale products. Vent/disposal/reinjection keep
   // EDITOR_DEMAND_DEFAULT on economics for the inspector seed only — not physics.
-  if (node?.economics?.disposition !== 'sale') return null;
-  const annual = Number(node?.economics?.annualDemandLimit);
+  if (node.economics?.disposition !== 'sale') return null;
+  const annual = Number(node.economics.annualDemandLimit);
   if (!Number.isFinite(annual) || annual < 0) return null;
-  const days = Number(periodDays);
-  const period = Number.isFinite(days) && days > 0 ? days : 365;
-  return annual / period;
+  return annual / periodDays;
 }
 
-// Manual acceptKg / acceptAmount / acceptKWh / sink setpoint win. Else TEA
-// economics.annualDemandLimit / periodDays on material-sink only (MECH7).
-// Blank+no demand = unlimited. Energy sinks never demand-back (different units).
-function finiteSinkAccept(node, setpoint, periodDays = 365) {
+// Daily sink accept limit and where it came from. Manual acceptKg / acceptAmount /
+// acceptKWh / sink setpoint win ('manual'). Else a material-sink sale caps at TEA
+// economics.annualDemandLimit / periodDays ('demand'). Otherwise unlimited.
+// Energy sinks never demand-back (different units).
+function sinkAccept(node, setpoint, periodDays) {
   const params = node.params || {};
   const candidates = [];
   for (const key of ['acceptKg', 'acceptAmount', 'acceptKWh']) {
@@ -700,15 +650,14 @@ function finiteSinkAccept(node, setpoint, periodDays = 365) {
   if (setpoint != null && setpoint !== '') {
     candidates.push(nonnegative(Number(setpoint), 'sinkAccept'));
   }
-  if (candidates.length) return Math.min(...candidates);
-  if (node?.unit === 'material-sink') {
+  if (candidates.length) return { cap: Math.min(...candidates), source: 'manual' };
+  if (node.unit === 'material-sink') {
     const demandDaily = demandBackedAcceptKg(node, periodDays);
-    if (demandDaily != null) return demandDaily;
+    if (demandDaily != null) return { cap: demandDaily, source: 'demand' };
   }
-  return Infinity;
+  return { cap: Infinity, source: null };
 }
 
-// Optional offtake / disposal rate. Blank accept = unlimited (legacy infinite sink).
 function scrubTinyNegativeMols(stream) {
   if (!stream || stream.kind !== 'material' || !stream.mol) return stream;
   let changed = false;
@@ -729,10 +678,10 @@ function safeStreamAmount(stream) {
   return streamAmount(scrubTinyNegativeMols(stream));
 }
 
-function evaluateSink(node, inlet, setpoint, periodDays = 365) {
+function evaluateSink(node, inlet, setpoint, periodDays) {
   const clean = scrubTinyNegativeMols(inlet);
   const requested = streamAmount(clean);
-  const acceptCap = finiteSinkAccept(node, setpoint, periodDays);
+  const { cap: acceptCap, source: acceptSource } = sinkAccept(node, setpoint, periodDays);
   const acceptedAmt = Math.min(requested, acceptCap);
   const limitedBy = [];
   const isEnergy = clean.kind === 'electricity' || clean.kind === 'heat';
@@ -748,10 +697,6 @@ function evaluateSink(node, inlet, setpoint, periodDays = 365) {
     limitedBy.push('export');
   }
   const accepted = scaleStream(clean, requested === 0 ? 0 : acceptedAmt / requested);
-  let acceptSource = null;
-  if (Number.isFinite(acceptCap)) {
-    acceptSource = hasManualSinkAccept(node, setpoint) ? 'manual' : 'demand';
-  }
   return {
     received: accepted,
     acceptKg: !isEnergy && Number.isFinite(acceptCap) ? acceptCap : null,
@@ -764,7 +709,7 @@ function evaluateSink(node, inlet, setpoint, periodDays = 365) {
 }
 
 function scaleNodeStreams(result, scale) {
-  if (!(scale < 1 - 1e-15)) return result;
+  if (!(scale < 1 - 1e-15)) return;
   if (result.activity != null) result.activity *= scale;
   for (const group of ['requestedInputs', 'consumed', 'outlets']) {
     const bag = result[group];
@@ -773,26 +718,17 @@ function scaleNodeStreams(result, scale) {
       bag[port] = scaleStream(stream, scale);
     }
   }
-  return result;
 }
 
-
-// MECH12 + MECH13: Factorio splitter overflow with optional priority fill.
-// Capacities are per-branch maxima (sink accept / edge cap, or frozen delivered
-// for non-sink targets). Among eligible outlets, water-fill only the current
-// highest-priority tier by weight; when that tier saturates, spill to the next
-// (MECH12). Equal / unset priorities (default 0) → bit-identical to MECH12.
-// Inlet rejects only after every useful tier saturates.
-function allocateSplitterOverflow(available, weights, capacities, priorities = null) {
+// Factorio-style splitter overflow with priority tiers. Capacities are per-branch
+// maxima (sink accept / edge cap, or frozen delivered for non-sink targets).
+// Among eligible outlets, water-fill only the highest-priority tier by weight;
+// when that tier saturates, spill to the next. Equal priorities give a plain
+// weighted overflow. Inlet rejects only after every useful tier saturates.
+function allocateSplitterOverflow(available, weights, capacities, prios) {
   const n = weights.length;
   const alloc = Array(n).fill(0);
   let remaining = Math.max(0, available);
-  const prios = priorities && priorities.length === n
-    ? priorities.map(value => {
-      const number = Number(value);
-      return Number.isFinite(number) ? number : 0;
-    })
-    : Array(n).fill(0);
   const eligible = new Set();
   for (let i = 0; i < n; i += 1) {
     if (weights[i] > 0 && capacities[i] > 1e-15) eligible.add(i);
@@ -835,15 +771,10 @@ function allocateSplitterOverflow(available, weights, capacities, priorities = n
   return alloc;
 }
 
-function bufferOutletEdge(bufferNode, edges) {
-  if (!bufferNode) return null;
-  return edges.find(edge => edge.from.node === bufferNode.id && !edge.recycle) || null;
-}
-
-// MECH14 sink absorb + MECH16 converter absorb. Mixer / nested splitter /
-// buffer→buffer stay frozen (need a fuller cascade pass).
+// A buffer can take splitter overflow when its outlet feeds a sink or converter.
+// Mixer / nested splitter / buffer→buffer stay frozen (need a fuller cascade pass).
 function bufferOutletCanAbsorbOverflow(bufferNode, edges, nodeById) {
-  const outEdge = bufferOutletEdge(bufferNode, edges);
+  const outEdge = edges.find(edge => edge.from.node === bufferNode.id && !edge.recycle);
   if (!outEdge) return false;
   const target = nodeById.get(outEdge.to.node);
   if (!target) return false;
@@ -851,61 +782,57 @@ function bufferOutletCanAbsorbOverflow(bufferNode, edges, nodeById) {
   return kind === 'sink' || kind === 'converter';
 }
 
-function bankBufferOutletReject(result, delivered, reason = 'export') {
-  if (!result?.outlets?.out || !delivered) return;
+// Put the part of a buffer's outlet that downstream did not take back into the
+// tank (clamped to capacity). Returns true when anything was rejected.
+function bankBufferOutletReject(result, delivered, reason) {
   const produced = scrubTinyNegativeMols(result.outlets.out);
   const gotStream = scrubTinyNegativeMols(delivered);
   const want = safeStreamAmount(produced);
   const got = safeStreamAmount(gotStream);
-  if (!(want > 1e-15) || !(got + Math.max(1, got) * 1e-9 < want)) return;
+  if (!(want > 1e-15) || !(got + Math.max(1, got) * 1e-9 < want)) return false;
   const rejected = want - got;
   result.outlets.out = cloneStream(gotStream);
   result.activity = got;
   result.inventoryKg = (result.inventoryKg || 0) + rejected;
-  if (result.capacityKg != null && Number.isFinite(result.capacityKg)) {
+  if (Number.isFinite(result.capacityKg)) {
     result.inventoryKg = Math.min(result.inventoryKg, result.capacityKg);
     result.fill = result.capacityKg > 0 ? result.inventoryKg / result.capacityKg : null;
   }
   if (result.storedStream && result.inventoryKg > 1e-12) {
-    try {
-      result.storedStream = scaleMaterialToMass(
-        streamMassKg(result.storedStream) > 1e-15 ? result.storedStream : produced,
-        result.inventoryKg
-      );
-    } catch {
-      result.storedStream = cloneStream(produced.kind === 'material' ? produced : result.storedStream);
-    }
+    result.storedStream = scaleMaterialToMass(
+      streamMassKg(result.storedStream) > 1e-15 ? result.storedStream : produced,
+      result.inventoryKg
+    );
   }
-  result.limitedBy = [...new Set([...(result.limitedBy || []), reason || 'export'])];
+  result.limitedBy = [...new Set([...(result.limitedBy || []), reason])];
+  return true;
 }
 
-function bufferOverflowRoomKg(down, downResult) {
+function bufferOverflowRoomKg(downResult) {
   if (!downResult) return 0;
   const start = Number(downResult.startInventoryKg);
   const startInv = Number.isFinite(start) ? Math.max(0, start) : 0;
-  const capacityKg = downResult.capacityKg;
-  if (capacityKg == null || !Number.isFinite(capacityKg)) return Infinity;
-  return Math.max(0, capacityKg - startInv);
+  if (!Number.isFinite(downResult.capacityKg)) return Infinity;
+  return Math.max(0, downResult.capacityKg - startInv);
+}
+
+function sinkAcceptCap(sinkResult) {
+  if (Number.isFinite(sinkResult?.acceptKg)) return sinkResult.acceptKg;
+  if (Number.isFinite(sinkResult?.acceptKWh)) return sinkResult.acceptKWh;
+  return Infinity;
 }
 
 function splitterBranchCapacity(edge, deliveredAmt, down, downResult, edges, nodeById) {
   const downKind = down ? UNITS[down.unit]?.kind : null;
   const edgeCap = finiteEdgeCapacity(edge);
   if (downKind === 'sink') {
-    let cap = Infinity;
-    if (downResult?.acceptKg != null && Number.isFinite(downResult.acceptKg)) {
-      cap = downResult.acceptKg;
-    } else if (downResult?.acceptKWh != null && Number.isFinite(downResult.acceptKWh)) {
-      cap = downResult.acceptKWh;
-    }
+    let cap = sinkAcceptCap(downResult);
     if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
     return Math.max(0, cap);
   }
-  // MECH14/16: free material-buffer legs absorb leftover up to remaining tank
-  // room when outlet feeds a sink or converter. Mixer / nested splitter /
-  // buffer→buffer stay frozen.
+  // Absorbing buffer legs take leftover up to the remaining tank room.
   if (downKind === 'buffer' && bufferOutletCanAbsorbOverflow(down, edges, nodeById)) {
-    let cap = bufferOverflowRoomKg(down, downResult);
+    let cap = bufferOverflowRoomKg(downResult);
     if (Number.isFinite(edgeCap)) cap = Math.min(cap, edgeCap);
     return Math.max(0, cap);
   }
@@ -915,24 +842,21 @@ function splitterBranchCapacity(edge, deliveredAmt, down, downResult, edges, nod
   return cap;
 }
 
-function refreshSinkFromOffer(sink, sinkResult, next) {
-  if (!sink || !sinkResult || !next) return;
+// Rewrite a sink's receipt to a new offer and re-tag 'export' against its accept
+// limit. `got` defaults to the offer's amount.
+function refreshSinkFromOffer(sinkResult, next, got = safeStreamAmount(next)) {
+  if (!sinkResult) return;
   sinkResult.received = cloneStream(next);
   if (sinkResult.consumed) sinkResult.consumed.in = cloneStream(next);
   if (sinkResult.requestedInputs) {
+    // Keep requested at the pre-overflow offer when larger; else match.
     const prevReq = sinkResult.requestedInputs.in;
     const prevAmt = prevReq ? safeStreamAmount(prevReq) : 0;
-    const got = safeStreamAmount(next);
     if (got + Math.max(1, got) * 1e-9 >= prevAmt) {
       sinkResult.requestedInputs.in = cloneStream(next);
     }
   }
-  const accept = sinkResult.acceptKg != null && Number.isFinite(sinkResult.acceptKg)
-    ? sinkResult.acceptKg
-    : (sinkResult.acceptKWh != null && Number.isFinite(sinkResult.acceptKWh)
-      ? sinkResult.acceptKWh
-      : Infinity);
-  const got = safeStreamAmount(next);
+  const accept = sinkAcceptCap(sinkResult);
   if (Number.isFinite(accept) && got + Math.max(1, got) * 1e-9 >= accept && accept >= 0) {
     sinkResult.limitedBy = [...new Set([...(sinkResult.limitedBy || []), 'export'])];
   } else if (Number.isFinite(accept) && got + Math.max(1, accept) * 1e-9 < accept) {
@@ -940,11 +864,9 @@ function refreshSinkFromOffer(sink, sinkResult, next) {
   }
 }
 
-// MECH16: after buffer outlet grows, re-craft the downstream converter from
-// current edgeStreams inlets and bank any unconsumed feed back into the tank.
 function inletOfferForConverterReeval(edge, feedEdge, nodeResults, nodeById, edgeStreams) {
   const current = edgeStreams.get(edge);
-  if (!current) return scaleStream({ kind: 'electricity', kWh: 0 }, 0);
+  if (!current) return { kind: 'electricity', kWh: 0 };
   if (edge === feedEdge) return cloneStream(current);
   const up = nodeById.get(edge.from.node);
   const upResult = up ? nodeResults[up.id] : null;
@@ -959,8 +881,10 @@ function inletOfferForConverterReeval(edge, feedEdge, nodeResults, nodeById, edg
   return cloneStream(current);
 }
 
+// After a buffer outlet grows, re-craft the downstream converter from current
+// edgeStreams inlets and bank any unconsumed feed back into the tank.
 function reevaluateConverterAfterBufferFeed(
-  converter, feedEdge, bufferResult, edges, edgeStreams, nodeResults, nodeById, edgeLimits, setpoints
+  converter, feedEdge, bufferResult, edges, edgeStreams, nodeResults, nodeById, setpoints
 ) {
   const unit = UNITS[converter.unit];
   if (!unit?.evaluate) return;
@@ -974,7 +898,7 @@ function reevaluateConverterAfterBufferFeed(
   );
   const result = unit.evaluate({
     inlets,
-    requestedActivity: setpoints ? setpoints[converter.id] : undefined,
+    requestedActivity: setpoints?.[converter.id],
     capacity: converter.capacity,
     params: converter.params,
   });
@@ -995,52 +919,41 @@ function reevaluateConverterAfterBufferFeed(
     edgeStreams.set(edge, cloneStream(outlet));
     const down = nodeById.get(edge.to.node);
     const downResult = nodeResults[edge.to.node];
-    if (down && UNITS[down.unit]?.kind === 'sink' && downResult) {
-      refreshSinkFromOffer(down, downResult, outlet);
-    }
+    if (down && UNITS[down.unit]?.kind === 'sink') refreshSinkFromOffer(downResult, outlet);
   }
   const taken = edgeStreams.get(feedEdge);
   if (taken) {
-    bankBufferOutletReject(bufferResult, taken);
+    bankBufferOutletReject(bufferResult, taken, 'export');
     edgeStreams.set(feedEdge, cloneStream(bufferResult.outlets.out));
   }
 }
 
+// Re-charge an absorbing buffer with a splitter offer, push its new outlet
+// through the outlet edge's capacity, and refresh the sink or converter it feeds.
+// Returns the amount the buffer accepted.
 function applyBufferOverflowIntake(
-  down, downResult, offer, setpoint, edges, edgeStreams, nodeResults, nodeById, edgeLimits = null, setpoints = null
+  down, offer, setpoint, edges, edgeStreams, nodeResults, nodeById, edgeLimits, setpoints
 ) {
   const result = evaluateBuffer(down, { in: offer }, setpoint);
   nodeResults[down.id] = result;
   const inEdge = edges.find(edge => edge.to.node === down.id && !edge.recycle);
   if (inEdge) edgeStreams.set(inEdge, cloneStream(result.consumed.in));
   const outEdge = edges.find(edge => edge.from.node === down.id && !edge.recycle);
-  if (outEdge && result.outlets?.out) {
+  if (outEdge) {
     let outStream = cloneStream(result.outlets.out);
-    const capacity = finiteEdgeCapacity(outEdge);
-    const requested = safeStreamAmount(outStream);
-    if (Number.isFinite(capacity) && requested > capacity + Math.max(1, capacity) * 1e-9) {
-      outStream = scaleStream(outStream, requested === 0 ? 0 : capacity / requested);
-      if (edgeLimits) {
-        edgeLimits.push({
-          from: { node: outEdge.from.node, port: outEdge.from.port },
-          to: { node: outEdge.to.node, port: outEdge.to.port },
-          port: outEdge.to.port,
-          capacity,
-          requested,
-          delivered: safeStreamAmount(outStream),
-        });
-      }
-      bankBufferOutletReject(result, outStream, 'logistics');
+    const clamped = applyEdgeCapacity(outEdge, outStream, edgeLimits);
+    if (clamped !== outStream) {
+      bankBufferOutletReject(result, clamped, 'logistics');
       outStream = cloneStream(result.outlets.out);
     }
     edgeStreams.set(outEdge, outStream);
     const target = nodeById.get(outEdge.to.node);
     const targetKind = target ? UNITS[target.unit]?.kind : null;
     if (targetKind === 'sink') {
-      refreshSinkFromOffer(target, nodeResults[outEdge.to.node], result.outlets.out);
+      refreshSinkFromOffer(nodeResults[outEdge.to.node], result.outlets.out);
     } else if (targetKind === 'converter') {
       reevaluateConverterAfterBufferFeed(
-        target, outEdge, result, edges, edgeStreams, nodeResults, nodeById, edgeLimits, setpoints
+        target, outEdge, result, edges, edgeStreams, nodeResults, nodeById, setpoints
       );
     }
   }
@@ -1127,13 +1040,16 @@ function syncLiftElectricityTag(result, availableKWh) {
 
 // After sinks/buffers rewrite inlets, scale upstream producers so mass/energy close
 // and converters actually throttle (Factorio full-belt / closed offtake).
-function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits = null, setpoints = null) {
+function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimits, setpoints) {
   const nodeById = new Map(nodes.map(node => [node.id, node]));
-  const order = topologicalOrder(nodes, edges).slice().reverse();
-  for (const node of order) {
+  const outletLimited = edge => edgeLimits?.some(item => (
+    item.from.node === edge.from.node && item.from.port === edge.from.port
+    && item.to.node === edge.to.node
+  ));
+  for (const node of topologicalOrder(nodes, edges).reverse()) {
     const unit = UNITS[node.unit];
     const result = nodeResults[node.id];
-    if (!result || !unit) continue;
+    if (!result) continue;
     const incoming = edges.filter(edge => edge.to.node === node.id && !edge.recycle);
     const outgoing = edges.filter(edge => edge.from.node === node.id && !edge.recycle);
 
@@ -1162,10 +1078,7 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
           downLimits.includes('export') || downLimits.includes('logistics')
         )) {
           binding = downLimits.includes('export') ? 'export' : 'logistics';
-        } else if (edgeLimits?.some(item => (
-          item.from?.node === edge.from.node && item.from?.port === edge.from.port
-          && item.to?.node === edge.to.node
-        ))) binding = 'logistics';
+        } else if (outletLimited(edge)) binding = 'logistics';
         // Downstream converter under-drawing: backpressure when the consumer is
         // blocked by something other than THIS feed port (H2-short Sabatier must
         // push back on DAC CO2; intake pumps / blowers always match pull).
@@ -1173,17 +1086,13 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
           const wantDown = safeStreamAmount(produced);
           const gotDown = safeStreamAmount(delivered);
           if (wantDown > 1e-15 && gotDown + Math.max(1, gotDown) * 1e-9 < wantDown) {
-            const feedPorts = new Set([
-              'in', 'feed', 'air', 'brine', 'co2', 'hydrogen', 'water', 'salt',
-              'nitrogen', 'chlorine', 'bromide', 'consumables', 'electricity', 'heat',
-            ]);
             const limitedByThisFeed = downLimits.includes(edge.to.port);
             const isLift = node.unit === 'intake-pump' || node.unit === 'gas-blower';
             const blockedOtherwise = downLimits.some(limit => (
               limit === 'export' || limit === 'logistics' || limit === 'capacity'
-              || (!feedPorts.has(limit) && limit !== edge.to.port)
+              || (!FEED_PORTS.has(limit) && limit !== edge.to.port)
             ));
-            if (isLift || (!limitedByThisFeed && (blockedOtherwise || downLimits.includes('hydrogen') || downLimits.includes('electricity') || downLimits.includes('export')))) {
+            if (isLift || (!limitedByThisFeed && (blockedOtherwise || downLimits.includes('hydrogen') || downLimits.includes('electricity')))) {
               binding = downLimits.includes('logistics') ? 'logistics' : 'export';
             }
           }
@@ -1217,42 +1126,13 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
     if (unit.kind === 'buffer') {
       const outEdge = outgoing[0];
       if (!outEdge || !result.outlets?.out) continue;
-      let produced = scrubTinyNegativeMols(result.outlets.out);
-      let delivered = scrubTinyNegativeMols(edgeStreams.get(outEdge));
+      const delivered = scrubTinyNegativeMols(edgeStreams.get(outEdge));
       if (!delivered) continue;
-      result.outlets.out = produced;
+      result.outlets.out = scrubTinyNegativeMols(result.outlets.out);
       edgeStreams.set(outEdge, delivered);
-      const want = safeStreamAmount(produced);
-      const got = safeStreamAmount(delivered);
-      if (want > 1e-15 && got + Math.max(1, got) * 1e-9 < want) {
-        const rejected = want - got;
-        result.outlets.out = cloneStream(delivered);
-        result.activity = got;
-        result.inventoryKg = (result.inventoryKg || 0) + rejected;
-        if (result.capacityKg != null && Number.isFinite(result.capacityKg)) {
-          result.inventoryKg = Math.min(result.inventoryKg, result.capacityKg);
-          result.fill = result.capacityKg > 0 ? result.inventoryKg / result.capacityKg : null;
-        }
-        if (result.storedStream && result.inventoryKg > 1e-12) {
-          try {
-            result.storedStream = scaleMaterialToMass(
-              streamMassKg(result.storedStream) > 1e-15 ? result.storedStream : produced,
-              result.inventoryKg
-            );
-          } catch {
-            result.storedStream = cloneStream(delivered.kind === 'material' ? produced : result.storedStream);
-          }
-        }
-        // MECH15: outlet edge.capacity → logistics; dest-full / export BP → export.
-        const outletLogistics = edgeLimits?.some(item => (
-          item.from?.node === node.id
-          && item.from?.port === outEdge.from.port
-          && item.to?.node === outEdge.to.node
-        ));
-        result.limitedBy = [...new Set([
-          ...(result.limitedBy || []),
-          outletLogistics ? 'logistics' : 'export',
-        ])];
+      // Outlet edge capacity → logistics; full destination / export backpressure → export.
+      const reason = outletLimited(outEdge) ? 'logistics' : 'export';
+      if (bankBufferOutletReject(result, delivered, reason)) {
         edgeStreams.set(outEdge, cloneStream(delivered));
       }
       continue;
@@ -1285,9 +1165,9 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
       continue;
     }
 
-    // Material splitter (MECH12–16): priority tiers fill first, then Factorio
-    // overflow rebalances onto free sink / buffer(→sink|converter) legs by weight;
-    // inlet backpressures only when leftover remains after useful legs saturate.
+    // Material splitter: priority tiers fill first, then overflow rebalances onto
+    // free sink / buffer(→sink|converter) legs by weight; the inlet backpressures
+    // only when leftover remains after useful legs saturate.
     if (unit.kind === 'splitter') {
       if (!result.available || !outgoing.length) continue;
       result.available = scrubTinyNegativeMols(result.available);
@@ -1319,10 +1199,7 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
         } else if ((downKind === 'mixer' || downKind === 'junction' || downKind === 'splitter')
           && (downLimits.includes('export') || downLimits.includes('logistics'))) {
           reason = reason || (downLimits.includes('export') ? 'export' : 'logistics');
-        } else if (edgeLimits?.some(item => (
-          item.from?.node === edge.from.node && item.from?.port === edge.from.port
-          && item.to?.node === edge.to.node
-        ))) reason = reason || 'logistics';
+        } else if (outletLimited(edge)) reason = reason || 'logistics';
       }
       if (!(want > 1e-15)) continue;
       const alloc = allocateSplitterOverflow(want, weights, capacities, priorities);
@@ -1330,43 +1207,20 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
       for (let i = 0; i < outgoing.length; i += 1) {
         const edge = outgoing[i];
         const target = Math.max(0, alloc[i]);
-        const next = scrubTinyNegativeMols(scaleStream(result.available, want === 0 ? 0 : target / want));
+        const next = scrubTinyNegativeMols(scaleStream(result.available, target / want));
         edgeStreams.set(edge, next);
         const down = nodeById.get(edge.to.node);
         const downResult = nodeResults[edge.to.node];
         const downKind = down ? UNITS[down.unit]?.kind : null;
         if (downKind === 'buffer' && downResult && bufferOutletCanAbsorbOverflow(down, edges, nodeById)) {
-          // MECH14/16: re-charge tank; if outlet → converter, re-craft (two-pass).
-          const setpoint = setpoints ? setpoints[down.id] : undefined;
           got += applyBufferOverflowIntake(
-            down, downResult, next, setpoint, edges, edgeStreams, nodeResults, nodeById,
+            down, next, setpoints?.[down.id], edges, edgeStreams, nodeResults, nodeById,
             edgeLimits, setpoints
           );
           continue;
         }
         got += target;
-        if (downKind === 'sink' && downResult) {
-          downResult.received = cloneStream(next);
-          if (downResult.consumed) downResult.consumed.in = cloneStream(next);
-          if (downResult.requestedInputs) {
-            // Keep requested at the pre-overflow offer when larger; else match.
-            const prevReq = downResult.requestedInputs.in;
-            const prevAmt = prevReq ? safeStreamAmount(prevReq) : 0;
-            if (target + Math.max(1, target) * 1e-9 >= prevAmt) {
-              downResult.requestedInputs.in = cloneStream(next);
-            }
-          }
-          const accept = downResult.acceptKg != null && Number.isFinite(downResult.acceptKg)
-            ? downResult.acceptKg
-            : (downResult.acceptKWh != null && Number.isFinite(downResult.acceptKWh)
-              ? downResult.acceptKWh
-              : Infinity);
-          if (Number.isFinite(accept) && target + Math.max(1, target) * 1e-9 >= accept && accept >= 0) {
-            downResult.limitedBy = [...new Set([...(downResult.limitedBy || []), 'export'])];
-          } else if (Number.isFinite(accept) && target + Math.max(1, accept) * 1e-9 < accept) {
-            downResult.limitedBy = (downResult.limitedBy || []).filter(item => item !== 'export');
-          }
-        }
+        if (downKind === 'sink') refreshSinkFromOffer(downResult, next, target);
       }
       if (got + Math.max(1, got) * 1e-9 < want) {
         const scale = got / want;
@@ -1383,7 +1237,7 @@ function reconcileBackpressure(nodes, edges, edgeStreams, nodeResults, edgeLimit
   }
 
   // After upstream converters shrink waste-heat/product edges, refresh sink
-  // receipts so heat/electricity balances stay closed (MECH11 lift backpressure).
+  // receipts so heat/electricity balances stay closed.
   for (const node of nodes) {
     const unit = UNITS[node.unit];
     if (unit?.kind !== 'sink') continue;
@@ -1483,22 +1337,15 @@ function evaluateGraph(caseDefinition, allocations, recycleStreams = new Map(), 
         const result = evaluateSink(node, incomingStreams[0], setpoint, periodDays);
         nodeResults[node.id] = result;
         for (const edge of incoming) edgeStreams.set(edge, result.consumed[edge.to.port] || result.consumed.in);
-      } else if (inletKind === 'electricity' || inletKind === 'heat') {
-        // Heat sinks allow fan-in; mix first, then clamp, then scale each leg.
+      } else {
+        // Electricity or heat. Heat sinks allow fan-in: mix, clamp, then scale each leg.
         const inlet = incomingStreams.length > 1 ? mixHeat(incomingStreams) : incomingStreams[0];
         const result = evaluateSink(node, inlet, setpoint, periodDays);
         nodeResults[node.id] = result;
         const want = streamAmount(inlet);
         const got = streamAmount(result.received);
         const scale = want === 0 ? 0 : got / want;
-        for (const edge of incoming) {
-          const prior = edgeStreams.get(edge);
-          edgeStreams.set(edge, scaleStream(prior, scale));
-        }
-      } else {
-        nodeResults[node.id] = {
-          received: incomingStreams.length > 1 ? mixHeat(incomingStreams) : incomingStreams[0],
-        };
+        for (const edge of incoming) edgeStreams.set(edge, scaleStream(edgeStreams.get(edge), scale));
       }
       continue;
     }
@@ -1542,8 +1389,7 @@ function allocateElectricity(caseDefinition, plan, edgeLimits = null) {
     let remaining = plan.nodeResults[bus.id].available.kWh;
     for (const { edge } of ordered) {
       const result = plan.nodeResults[edge.to.node];
-      // MECH9: electricity-sink reports requestedInputs/consumed via evaluateSink.
-      // Missing fields → allocate nothing (legacy crash guard).
+      // Consumers without requestedInputs/consumed for this port get nothing.
       const wanted = result?.requestedInputs?.[edge.to.port]?.kWh ?? 0;
       const usable = result?.consumed?.[edge.to.port]?.kWh ?? 0;
       const capacity = finiteEdgeCapacity(edge);
@@ -1685,8 +1531,8 @@ function calculateBalances(nodes, edges, edgeStreams, nodeResults) {
   }
 
   for (const result of Object.values(nodeResults)) {
-    // MECH9 evaluateSink stashes consumed+requestedInputs for bus allocation, but
-    // received is the sink tally — do not double-count energy on sinks.
+    // evaluateSink also sets consumed (for bus allocation), but received is the
+    // sink tally — do not double-count energy on sinks.
     const sinkEnergy = result.received
       && (result.received.kind === 'electricity' || result.received.kind === 'heat');
     for (const stream of Object.values(result.consumed || {})) {
@@ -1750,8 +1596,8 @@ function allowsFanIn(node) {
 function collectHeatIntegration(caseDefinition, nodeResults) {
   const sources = [];
   const sinks = [];
-  for (const node of caseDefinition.graph?.nodes || []) {
-    const result = nodeResults?.[node.id];
+  for (const node of caseDefinition.graph.nodes) {
+    const result = nodeResults[node.id];
     if (!result) continue;
     const waste = result.outlets?.wasteHeat;
     if (waste?.kind === 'heat' && waste.kWh > 0) {
@@ -1822,24 +1668,20 @@ function addStreams(left, right) {
 
 function accumulateSolved(totals, solved) {
   totals.balances.maxAbsResidual = Math.max(totals.balances.maxAbsResidual, solved.balances.maxAbsResidual);
-  for (const warning of solved.warnings || []) {
+  for (const warning of solved.warnings) {
     if (!totals.warnings.includes(warning)) totals.warnings.push(warning);
   }
-  if (solved.edgeLimits?.length) {
-    totals.edgeLimits = totals.edgeLimits || [];
-    for (const limit of solved.edgeLimits) {
-      const key = `${limit.from.node}:${limit.from.port}->${limit.to.node}:${limit.to.port}:${limit.capacity}`;
-      const existing = totals.edgeLimits.find(item => (
-        item.from.node === limit.from.node && item.from.port === limit.from.port
-        && item.to.node === limit.to.node && item.to.port === limit.to.port
-        && item.capacity === limit.capacity
-      ));
-      if (existing) {
-        existing.requested += limit.requested;
-        existing.delivered += limit.delivered;
-      } else {
-        totals.edgeLimits.push({ ...limit, from: { ...limit.from }, to: { ...limit.to } });
-      }
+  for (const limit of solved.edgeLimits) {
+    const existing = totals.edgeLimits.find(item => (
+      item.from.node === limit.from.node && item.from.port === limit.from.port
+      && item.to.node === limit.to.node && item.to.port === limit.to.port
+      && item.capacity === limit.capacity
+    ));
+    if (existing) {
+      existing.requested += limit.requested;
+      existing.delivered += limit.delivered;
+    } else {
+      totals.edgeLimits.push({ ...limit, from: { ...limit.from }, to: { ...limit.to } });
     }
   }
   for (const [id, result] of Object.entries(solved.nodes)) {
@@ -1876,10 +1718,8 @@ function accumulateSolved(totals, solved) {
   });
 }
 
-// One representative day as 24 hourly operating solves. Daily setpoints are leftover
-// demand; nameplate is capacity/24. Site electricity is the hourly PV yield plus
-// optional battery discharge. Other site budgets are remaining daily quantities.
-
+// Size intake pumps and blowers to the hour's downstream duty (desalination
+// feed, brine or DAC air) instead of banking an independent daily setpoint.
 function syncHourlyLiftSetpoints(hourCase) {
   const setpoints = hourCase.operation.setpoints || (hourCase.operation.setpoints = {});
   for (const node of hourCase.graph.nodes) {
@@ -1920,7 +1760,7 @@ function syncHourlyLiftSetpoints(hourCase) {
       const totalMol = Object.values(air.mol).reduce((sum, amount) => sum + amount, 0);
       if (mass > 0 && totalMol > 0) nm3PerKg = (totalMol * 22.414 / 1000) / mass;
       const co2Mol = air.mol.CO2 || 0;
-      const co2Kg = co2Mol * (SUBSTANCES.CO2?.molarMassG || 44.0095) / 1000;
+      const co2Kg = co2Mol * SUBSTANCES.CO2.molarMassG / 1000;
       co2MassFraction = mass > 0 ? co2Kg / mass : 0;
     }
     const airKg = capture > 0 && co2MassFraction > 0 ? dacKg / capture / co2MassFraction : 0;
@@ -1930,6 +1770,9 @@ function syncHourlyLiftSetpoints(hourCase) {
   }
 }
 
+// One representative day as 24 hourly operating solves. Daily setpoints are leftover
+// demand; nameplate is capacity/24. Site electricity is the hourly PV yield plus
+// optional battery discharge. Other site budgets are remaining daily quantities.
 function solveHorizon(caseDefinition) {
   const hours = hourlyProfile(caseDefinition.site);
   if (!hours) return solveOperation(caseDefinition);
@@ -1947,7 +1790,7 @@ function solveHorizon(caseDefinition) {
   }
   const remainingDemand = {};
   for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'converter')) {
-    // MECH11 lifts track downstream hourly duty — do not bank independent remaining.
+    // Lifts track downstream hourly duty (syncHourlyLiftSetpoints).
     if (node.unit === 'intake-pump' || node.unit === 'gas-blower') continue;
     remainingDemand[node.id] = caseDefinition.operation?.setpoints?.[node.id] ?? 0;
   }
@@ -1963,7 +1806,7 @@ function solveHorizon(caseDefinition) {
   for (const node of caseDefinition.graph.nodes.filter(item => UNITS[item.unit].kind === 'buffer')) {
     const params = node.params || {};
     let stored = params.storedStream ? cloneStream(params.storedStream) : null;
-    let inventoryKg = nonnegative(Number(params.inventoryKg ?? params.initialKg ?? 0) || 0, 'inventoryKg');
+    let inventoryKg = bufferStartInventoryKg(params);
     const capacityKg = finiteBufferCapacityKg(params);
     if (Number.isFinite(capacityKg)) inventoryKg = Math.min(inventoryKg, capacityKg);
     if (stored && inventoryKg > 0 && streamMassKg(stored) > 0) {
@@ -2124,7 +1967,7 @@ function solveHorizon(caseDefinition) {
         storedStream: result.storedStream ? cloneStream(result.storedStream) : null,
       });
     }
-    for (const [id] of Object.entries(caseDefinition.site.resources || {})) {
+    for (const id of Object.keys(caseDefinition.site.resources || {})) {
       if (id === 'electricity' || id === 'grid') continue;
       const used = hourCase.graph.nodes
         .filter(node => node.siteResource === id)
@@ -2172,14 +2015,14 @@ function solveHorizon(caseDefinition) {
     totals.warnings.push('Capacity reduced: limited by available electricity');
   }
   totals.warnings = totals.warnings.concat(
-    totals.horizon.hours.filter(entry => entry.pv === 0 && entry.methane === 0 && (entry.h2 || 0) === 0).length === 24
+    totals.horizon.hours.filter(entry => entry.pv === 0 && entry.methane === 0 && entry.h2 === 0).length === 24
       ? []
       : [`${totals.horizon.hours.filter(entry => entry.pv > 0).length} daylight hours on the selected typical day`]
   );
   totals.heatIntegration = collectHeatIntegration(caseDefinition, totals.nodes);
-  attachCauseChains(caseDefinition, totals.nodes, totals.edgeLimits || []);
+  attachCauseChains(caseDefinition, totals.nodes, totals.edgeLimits);
   return totals;
 }
 
-return { solveOperation, solveHorizon, hourlyProfile, validateGraph, unverifiedRightsWarnings, attachCauseChains };
+return { solveOperation, solveHorizon, hourlyProfile, unverifiedRightsWarnings, attachCauseChains };
 });

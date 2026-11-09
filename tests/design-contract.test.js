@@ -30,9 +30,8 @@ for (const file of FILES) {
       const usd = rows.reduce((s, x) => s + x.usd, 0);
       const materials = rows.reduce((s, x) => s + x.usdMaterials, 0);
       if (d.basis === 'per kW') {
-        // The electrolyzer's floor also counts the bought separator's polymer, which has no BOM row.
         close(usd, d.installedUsdPerKW);
-        assert.ok(materials < d.materialsUsdPerKW);
+        close(materials, d.materialsUsdPerKW);
       } else {
         close(usd, d.installedUsdPerKgDay);
         close(materials, d.materialsUsdPerKgDay);

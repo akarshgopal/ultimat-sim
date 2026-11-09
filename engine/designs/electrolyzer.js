@@ -179,7 +179,8 @@
     const separatorMaterialsUsdPerKW = plateM2PerKW * 2 * commodity('polymer');
     const floorUsdPerKW = materialsUsdPerKW + separatorMaterialsUsdPerKW;
     const kWPerKgDay = 1 / kgH2PerDayPerKW;
-    bought('Separator (purchased)', separatorUsdPerKW, sep.label);
+    bom.push({ part: 'Separator (purchased)', material: 'polymer', kg: plateM2PerKW * 2, usdMaterials: separatorMaterialsUsdPerKW,
+      manufacturing: separatorUsdPerKW / separatorMaterialsUsdPerKW, usd: separatorUsdPerKW, note: sep.label });
     bought('Power electronics', electronicsUsdPerKW, coupling.label);
     bought('Assembly labour', labourUsdPerKW, `${Math.round(stackKW)} kW stacks`);
     bought('Install (× factor)', installedUsdPerKW - manufacturedUsdPerKW, `× ${p.installFactor}`);

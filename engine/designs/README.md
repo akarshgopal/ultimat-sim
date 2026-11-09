@@ -23,6 +23,13 @@ config.designs.units = {
   default in `engine/utilization.js` (`flexibleUnits`).
 - `thermal` (optional) — `true`: a firmed unit whose energy is really heat, so a heat store (cheaper
   than batteries) can carry it through the night.
+- `minTurndown` (optional, 0–1) — for a firmed unit: the lowest fraction of full load it can hold
+  through the night (default `utilization.baseloadMinTurndown`, 0.7). The baseload block's turndown is
+  the energy-weighted mean of its units', so a smelter that can ride 30–100% power needs far less
+  storage.
+- `heatFactor` (optional) — scales the pathway's purchased heat (`heatKWhPerKg`, DAC regeneration).
+- `consumablesFactor` (optional) — scales the pathway's `consumables` feed (sorbent makeup).
+- `variableOmFactor` (optional) — scales the unit's own variable O&M (`node.variableOmUsdPerKg`).
 
 ## Module contract (`engine/designs/<id>.js`)
 

@@ -320,6 +320,21 @@
     return out;
   }
 
+  // Designed units can scale the recipe's consumables feed (e.g. DAC sorbent makeup) and their own
+  // share of variable O&M (flowsheet node.variableOmUsdPerKg).
+  function designedOpex(pathway, cfg) {
+    const designUnits = cfg.designs?.units || {};
+    let consumablesFactor = 1;
+    let variableOmDelta = 0;
+    for (const node of pathway.flowsheet?.nodes || []) {
+      const d = designUnits[node.unit];
+      if (!d || node.kind !== 'converter') continue;
+      if (Number(d.consumablesFactor) >= 0 && consumablesFactor === 1) consumablesFactor = Number(d.consumablesFactor);
+      if (Number(d.variableOmFactor) >= 0) variableOmDelta += (Number(node.variableOmUsdPerKg) || 0) * (Number(d.variableOmFactor) - 1);
+    }
+    return { consumablesFactor, variableOmDelta };
+  }
+
   // Utilization config with designed units' energy factors folded into unitEnergyScale (memoized).
   const utilCache = new WeakMap();
   function utilFor(cfg) {
@@ -480,6 +495,7 @@
 
     let feedUsdPerKg = 0;
     const feedsKgPerYear = [];
+    const { consumablesFactor, variableOmDelta } = designedOpex(pathway, cfg);
     const purchasedIntermediates = [];
     for (const feed of pathway.feeds || []) {
       const kg = (Number(feed.kgPerKg) || 0) * annualKg;
@@ -487,7 +503,8 @@
       feedsKgPerYear.push({ id: feed.id, origin: feed.origin || 'unknown', kg });
       if (!feed.purchased) continue;
       if (feed.origin === 'intermediate') purchasedIntermediates.push(feed.id);
-      feedUsdPerKg += (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0));
+      feedUsdPerKg += (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0))
+        * (feed.id === 'consumables' ? consumablesFactor : 1);
     }
     // Recipe fixed O&M applies to process equipment; stores carry their own O&M (below).
     const storageUsd = design ? design.storageUsd : 0;
@@ -496,7 +513,7 @@
     let storageOm = design ? design.storageFixedOmUsdPerYear : 0;
     let equipmentOm = (processCapex - storageUsd) * (Number(pathway.fixedOmFracPerYear) || 0);
     let feedCost = annualKg * feedUsdPerKg;
-    let otherVariable = annualKg * (Number(pathway.variableOmUsdPerKg) || 0);
+    let otherVariable = annualKg * Math.max(0, (Number(pathway.variableOmUsdPerKg) || 0) + variableOmDelta);
     let storageCapex = storageUsd;
 
     const price = ctx.priceFor(pathway.product, null, annualKg);
@@ -1400,9 +1417,11 @@
       }
       const purchased = [];
       const integrated = new Set((ev.integration || []).map(item => item.feedId));
+      const { consumablesFactor } = designedOpex(pathway || {}, cfg);
       for (const feed of pathway?.feeds || []) {
         if (!feed.purchased || integrated.has(feed.id)) continue;
-        const usd = (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0));
+        const usd = (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0))
+          * (feed.id === 'consumables' ? consumablesFactor : 1);
         if (usd > 0) purchased.push({ kind: 'feed', id: feed.id, label: feed.label || feed.id, usdPerKg: usd });
       }
       const own = b.equipment + b.energy + b.other;

@@ -236,7 +236,7 @@ function topSubstances(stream) {
   return masses;
 }
 
-function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg) {
+function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg, nodeVarOm = new Map()) {
   const nodes = definition.graph.nodes;
   const edgesByKey = new Map();
   for (const item of solved.streams || []) {
@@ -277,6 +277,8 @@ function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg
       if (kWh / kg > FLOW_MIN_PER_KG) out.kWhPerKg = roundFlow(kWh / kg);
       const capex = nodeCapex.get(node.id) || 0;
       if (capex > 0) out.capexUsdPerKgDay = roundFlow(capex / kg);
+      const varOm = nodeVarOm.get(node.id) || 0;
+      if (varOm / kg > FLOW_MIN_PER_KG) out.variableOmUsdPerKg = roundFlow(varOm / kg);
     }
     outNodes.push(out);
   }
@@ -334,6 +336,7 @@ function analyseCase(file, factoryName, factory) {
   // Non-PV converters (per-node fold through evaluateEconomics so capex/O&M are the engine's).
   const converters = [];
   const nodeCapex = new Map();
+  const nodeVarOm = new Map(); // $/day of variable O&M per converter
   let pvCapex = 0;
   for (const node of nodes) {
     const one = evaluateEconomics({ ...definition, graph: { nodes: [node], edges: [] } }, solved);
@@ -342,6 +345,7 @@ function analyseCase(file, factoryName, factory) {
     if (!(one.installedCapex > 0 || fixedOM > 0 || variableOM > 0)) continue;
     if (isPvNode(node)) { pvCapex += one.installedCapex; continue; }
     nodeCapex.set(node.id, one.installedCapex);
+    if (variableOM > 0) nodeVarOm.set(node.id, variableOM / econ.periodDays);
     const ec = nodeEconomics(node, config);
     const life = Number(ec.assetLifeYears) > 0 ? Number(ec.assetLifeYears) : econ.projectLifeYears;
     converters.push({ id: node.id, cls: techClass(node.unit), capex: one.installedCapex, fixedOM, variableOM, life });
@@ -435,7 +439,7 @@ function analyseCase(file, factoryName, factory) {
       infiniteSourceShare: feedMass > 0 ? infiniteMass / feedMass : 1,
       quality: 'screening',
       notes: `${NAMES[file] || stem} at ${siteId || 'no map site'}; ${caveats.join('; ')}.`,
-      flowsheet: flowsheetFor(definition, solved, nodeCapex, new Set(primary.sinkIds), saleSinks, kg),
+      flowsheet: flowsheetFor(definition, solved, nodeCapex, new Set(primary.sinkIds), saleSinks, kg, nodeVarOm),
     };
   });
 }

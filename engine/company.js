@@ -635,7 +635,7 @@
       coproductCreditUsdPerKg: coproductCredit,
       marginUsdPerKg: price - lcop,
       sales,
-      materialKgPerYear: sales.reduce((sum, sale) => sum + sale.kgPerYear, 0),
+      materialKgPerYear: sales.reduce((sum, sale) => sum + (!ctx.isMaterial || ctx.isMaterial(sale.product) ? sale.kgPerYear : 0), 0),
       feedsKgPerYear,
       purchasedIntermediates,
       integration: integration.map(({ unit, ...item }) => item),
@@ -763,7 +763,9 @@
       }
       return caps.get(group);
     };
-    return { cfg, yearIndex, year, costFactors, rawFactors, pvUsdPerKWp, storagePrices, floors, commodityFactors, priceFor, shareOf, capKg, designCache: new Map(), ...extras };
+    // Material counts toward abundance only if it serves a world market (by-product water does not).
+    const isMaterial = product => Boolean(product && markets[marketGroupOf(cfg, product)]);
+    return { cfg, yearIndex, year, costFactors, rawFactors, pvUsdPerKWp, storagePrices, floors, commodityFactors, priceFor, shareOf, capKg, isMaterial, designCache: new Map(), ...extras };
   }
 
   function marketGroupOf(cfg, product) {
@@ -1147,7 +1149,8 @@
         const p0 = Number(markets[product]?.priceUsdPerKg);
         if (p0 > 0) priceReliefByMarket[marketGroupOf(cfg, product)] = Math.max(0, 1 - price / p0);
       }
-      const materialTPerYear = Object.values(outputTByProduct).reduce((sum, t) => sum + t, 0);
+      const materialTPerYear = Object.entries(outputTByProduct)
+        .reduce((sum, [product, t]) => sum + (markets[marketGroupOf(cfg, product)] ? t : 0), 0);
       cumulativeMaterialT += materialTPerYear;
       // The Terraform loop: this year's relief re-prices next year's materials floors.
       state.lastReliefByMarket = priceReliefByMarket;

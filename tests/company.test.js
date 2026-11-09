@@ -305,13 +305,14 @@ test('abundance objective trades a little NPV for much more material, but not a 
   const sites = [{ id: 'inland', name: 'Inland', coastal: false, pvKWhPerKWpDay: 6, landUsdPerHa: 1000 }];
   const bulk = {
     ...good, id: 'bulk', product: 'widget', capexByTechUsdPerKgDay: { process: 20 },
-    coproducts: [{ id: 'aggregate', product: null, kgPerKg: 9, usdPerKg: 0 }],
+    coproducts: [{ id: 'aggregate', product: 'aggregate', kgPerKg: 9, usdPerKg: 0 }],
   };
   const specialty = { ...good, id: 'specialty', product: 'gadget', electricityKWhPerKg: 0.1, capexByTechUsdPerKgDay: { process: 200 } };
   const firstBuild = (objective, gadgetPrice) => {
     const markets = {
       widget: { ...MARKETS.widget, priceUsdPerKg: 0.2, worldDemandTPerYear: 1e9 },
       gadget: { ...MARKETS.gadget, priceUsdPerKg: gadgetPrice, worldDemandTPerYear: 1e9 },
+      aggregate: { priceUsdPerKg: 0, worldDemandTPerYear: 1e12 }, // only material with a market counts
     };
     const r = C.simulateCompany({
       pathways: [bulk, specialty], sites, markets,

@@ -315,7 +315,7 @@ test('abundance objective trades a little NPV for much more material, but not a 
     };
     const r = C.simulateCompany({
       pathways: [bulk, specialty], sites, markets,
-      config: { objective, years: 1, build: { maxPlantsPerYear: 1, sizeMultiples: [1000] }, finance: { initialEquityUsd: 1e10 } },
+      config: { objective, abundanceScore: 'absolute', years: 1, build: { maxPlantsPerYear: 1, sizeMultiples: [1000] }, finance: { initialEquityUsd: 1e10 } },
     });
     assert.equal(r.summary.objective, objective);
     assert.ok(r.plants.every(p => p.npvAtBuildUsd >= 0), 'every plant pays back its capital');
@@ -440,4 +440,19 @@ test('Terraform loop: the company\'s own supply lowers commodity prices and so t
   const half = C.liveFloors(cfg, { widget: 0.5 });
   close(half.commodityFactors.steel, 0.5);
   close(half.floors.pv.materialsUsdPerUnit, 15); // steel halves, silver (no market link) does not
+});
+
+test('resource-weighted abundance favours solar-efficient plants when site solar is the scarce resource', () => {
+  // Heavy: energy-hungry, valuable. Light: little energy per kg, thin margin. Site solar is tight.
+  const heavy = { ...good, id: 'heavy', product: 'gadget', electricityKWhPerKg: 20, capexByTechUsdPerKgDay: { process: 50 } };
+  const light = { ...good, id: 'light', product: 'widget', electricityKWhPerKg: 0.5, capexByTechUsdPerKgDay: { process: 50 } };
+  const markets = {
+    widget: { ...MARKETS.widget, priceUsdPerKg: 0.3, worldDemandTPerYear: 1e9 },
+    gadget: { ...MARKETS.gadget, priceUsdPerKg: 6, worldDemandTPerYear: 1e9 },
+  };
+  const runWith = abundanceScore => C.simulateCompany({
+    pathways: [heavy, light], sites: SITES, markets,
+    config: { abundanceScore, years: 10, build: { maxPvGWpPerSite: 0.05, initialBuildUsdPerYear: Infinity }, finance: { initialEquityUsd: 1e10 } },
+  }).summary.cumulativeMaterialT;
+  assert.ok(runWith('resource-weighted') > runWith('absolute'));
 });

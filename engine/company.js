@@ -41,6 +41,10 @@
     //                ends with less material than chasing profit.
     //  'profit'    — the highest-NPV plant (for comparison).
     objective: 'abundance',
+    // How the abundance objective ranks feasible plants: 'resource-weighted' divides lifetime material
+    // value by the share of this year's equity, construction capacity and remaining site solar used;
+    // 'absolute' ranks by lifetime material value alone.
+    abundanceScore: 'resource-weighted',
     startYear: 2027,
     years: 25,
     finance: Object.freeze({
@@ -866,7 +870,30 @@
     } else {
       let lambda = 0;
       for (const ev of feasible) lambda = Math.max(lambda, lifetimeKgPerUsd(ev));
-      score = ev => ev.materialKgPerYear * ev.lifeYears + lambda * ev.npv;
+      const value = ev => ev.materialKgPerYear * ev.lifeYears + lambda * ev.npv;
+      if (cfg.abundanceScore === 'absolute') {
+        score = value;
+      } else {
+        // Resource-weighted (multi-knapsack greedy): lifetime material value per share of this
+        // year's scarce resources it uses — equity budget, construction capacity, and the solar
+        // room left across all sites. Whichever is tightest dominates: capital early, solar later.
+        let pvRoom = 0;
+        const seen = new Set();
+        for (const c of candidates) {
+          for (const site of c.sites) {
+            if (seen.has(site.id)) continue;
+            seen.add(site.id);
+            pvRoom += Math.max(0, sitePvCapKWp - (sitePvKWp[site.id] || 0));
+          }
+        }
+        const debtFree = 1 - cfg.finance.debtFraction;
+        score = ev => {
+          const use = (budgetUsd > 0 ? ev.capex.total * debtFree / budgetUsd : 0)
+            + (Number.isFinite(capexRoomUsd) && capexRoomUsd > 0 ? ev.capex.total / capexRoomUsd : 0)
+            + (Number.isFinite(pvRoom) && pvRoom > 0 ? ev.pvKWp / pvRoom : 0);
+          return use > 0 ? value(ev) / use : value(ev);
+        };
+      }
     }
     // Best-scoring option that also fits every market it sells into. Linear argmax with
     // rejection (salesFit rarely fails), instead of sorting every option on every pick.

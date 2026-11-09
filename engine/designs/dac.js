@@ -32,16 +32,12 @@
 //
 // Screening estimates with explicit, overridable assumptions (DEFAULTS). Not a vendor quote.
 (function exposeDacDesign(root, factory) {
-  const node = typeof require === 'function';
   const api = factory(
-    node ? require('../../data/bom.js') : root.FoundryBom,
-    node ? require('../utilization.js') : root.FoundryUtilization,
+    typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom,
+    typeof require === 'function' ? require('../utilization.js') : root.FoundryUtilization,
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
-  else {
-    root.FoundryDesigns = root.FoundryDesigns || {};
-    root.FoundryDesigns[api.id] = api;
-  }
+  else (root.FoundryDesigns = root.FoundryDesigns || {})[api.id] = api;
 })(globalThis, (Bom, Utilization) => {
   const R = 8.314462618; // J/mol·K
   const M_CO2 = 0.04401; // kg/mol
@@ -62,14 +58,12 @@
   });
   const RECIPE_BLOWER_NM3_PER_KG = 1 / (0.9 * 422.45e-6 * (44.01 / 28.965)) / 1.2929; // 90 % capture at 422 ppm
   const RECIPE = Object.freeze({
-    'dac-solid': Object.freeze({ ...RECIPE_DAC, pathwayId: 'methanol', product: 'CO₂' }),
-    dac: Object.freeze({ ...RECIPE_DAC, pathwayId: 'sabatier', product: 'CO₂' }),
+    'dac-solid': Object.freeze({ ...RECIPE_DAC, pathwayId: 'methanol' }),
+    dac: Object.freeze({ ...RECIPE_DAC, pathwayId: 'sabatier' }),
     'gas-blower': Object.freeze({
       usdPerKgDay: 1.5 * RECIPE_BLOWER_NM3_PER_KG, // packs['gas-blower'] $1.5/(Nm³/day)
       kWhPerKg: 0.001 * RECIPE_BLOWER_NM3_PER_KG, // case blowerKWhPerNm3 0.001
       pathwayId: 'methanol',
-      product: 'CO₂',
-      airNm3PerKg: RECIPE_BLOWER_NM3_PER_KG,
     }),
   });
 
@@ -483,8 +477,7 @@
         regenKWhPerKg,
       },
       kWhPerKg,
-      parts: parts.sort((a, b) => b.usd - a.usd),
-      bom: parts,
+      bom: parts.sort((a, b) => b.usd - a.usd),
       materialsUsdPerKgDay,
       installedUsdPerKgDay,
       fanUsdPerKgDay,
@@ -521,13 +514,11 @@
     };
   }
 
-  // What the company simulator needs. capexFactor / energyFactor / materialsFactor / flexible follow
-  // the contract and are what engine/company.js applies. The other keys are ignored by the engine as
-  // it stands and are what it would need to price this design fully (docs/designs/dac.md, "Engine
-  // changes"):
+  // Beyond the core factors, the DAC units carry:
   //   heatFactor         regeneration PV kWh ÷ the recipe's 1.5 kWh/kg CO₂ pathway heat
   //   consumablesFactor  sorbent replacement $/kg CO₂ ÷ the recipe's 0.02 kg × $2
   //   variableOmFactor   0: the pack's $0.05/kg CO₂ variable O&M is covered by sorbent + fixed O&M
+  // The fans are the recipe's separate `gas-blower` unit.
   function simulatorOverride(params) {
     const d = design(params);
     const dac = {
@@ -556,20 +547,12 @@
     name: 'Solar-matched direct air capture (TVSA sorbent contactor)',
     summary: 'Amine-fibre laminate contactors cycled by a heat pump and vacuum pump on PV, run only while the sun shines.',
     units: ['dac', 'dac-solid', 'gas-blower'],
-    product: 'CO₂',
+    product: 'co2',
     RECIPE,
     DEFAULTS,
     PRESETS,
     CONTROLS,
     ALTERNATIVES,
-    airSide: params => {
-      const p = merge(params);
-      return airSide({ ...p, sorbent: p.sorbents[p.sorbent] || DEFAULTS.sorbents['amine-fiber'] });
-    },
-    sorbentFloorUsdPerKg: (sorbentId, params) => {
-      const p = merge(params);
-      return sorbentFloorUsdPerKg(p.sorbents[sorbentId], p);
-    },
     design,
     lcoc,
     simulatorOverride,

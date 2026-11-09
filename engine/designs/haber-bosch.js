@@ -43,10 +43,6 @@
     ammonia: Object.freeze({ usdPerKgDay: 1900, kWhPerKg: 0.6, pathwayId: 'green-ammonia', refKgPerDay: 1000 }),
     asu: Object.freeze({ usdPerKgDay: 313, kWhPerKg: 0.206, pathwayId: 'green-ammonia', refKgPerDay: 1000 }),
   });
-  // The company simulator's own scale law (engine/company.js DEFAULTS.scale): capex per kg/day ∝
-  // (size/ref)^(0.85−1), never below 0.4 × reference. Used only when an override is asked for at a
-  // size other than the reference, so the factor compares like with like.
-  const ENGINE_SCALE = Object.freeze({ exponent: 0.85, floorFactor: 0.4 });
 
   const DEFAULTS = Object.freeze({
     plantKgPerDay: 1000, // NH₃ nameplate the design is costed at (recipe reference size)
@@ -83,7 +79,7 @@
         note: 'active at lower T and P; Ru recovered at end of life; support must not methanate (no carbon)',
       }),
     }),
-    loopInertFrac: 0.08, // Ar (+CH₄-free) in the loop; sets the purge
+    loopInertFrac: 0.08, // Ar in the loop (electrolytic H₂ brings no CH₄); sets the purge
     separation: 'condensation', // 'condensation' (air cooler + chiller) | 'sorbent' (screening)
     separatorC: -20, // cold-separator temperature (condensation)
     coolingC: 40, // air-cooler outlet at a hot desert site (no cooling water)
@@ -177,7 +173,6 @@
       piping: 4,
       skid: 2.5,
       civil: 1.5,
-      sieve: 2,
     }),
     installFactor: 1.15, // site install, commissioning, contingency on top of equipment
     // Non-bom.js raw materials (bom.js has no entry). Screening prices.
@@ -187,8 +182,6 @@
       'alumina-support': Object.freeze({ usdPerKg: 0.6, note: 'calcined alumina / MgO order' }),
       'activated-carbon': Object.freeze({ usdPerKg: 1.5, note: 'coconut-shell char precursor of CMS' }),
     }),
-    lifeYears: 25,
-    discountRate: 0.08,
   });
 
   const PRESETS = Object.freeze({
@@ -220,7 +213,7 @@
         pipingFracOfEquipmentSteel: 0.6,
         skidSteelKgAt1tpd: 4000,
         concreteKgAt1tpd: 30000,
-        manufacturing: { vessels: 25, exchangers: 20, airCoolers: 6, chiller: 30, compressors: 40, motors: 5, piping: 12, skid: 4, civil: 2.5, sieve: 4 },
+        manufacturing: { vessels: 25, exchangers: 20, airCoolers: 6, chiller: 30, compressors: 40, motors: 5, piping: 12, skid: 4, civil: 2.5 },
         installFactor: 1.6,
         minTurndown: 0.5,
         rampPerMin: 0.01,
@@ -396,7 +389,7 @@
       return {
         params: p, feasible: false, basis: 'per kg NH₃/day', plantKgPerDay: S, flexible: p.flexible,
         loop: { pressureBar: L.P, catalyst: p.catalyst, yEquilibrium: L.yEq, yIn: L.yIn, yOut: L.yOut, recycleMolPerMolNH3: Infinity },
-        energyKWhPerKg: {}, byUnit: { ammonia: { ...none }, asu: { ...none } }, parts: [],
+        energyKWhPerKg: {}, byUnit: { ammonia: { ...none }, asu: { ...none } }, bom: [],
         installedUsdPerKgDay: Infinity, materialsUsdPerKgDay: Infinity, idiotIndex: Infinity, kWhPerKg: Infinity,
         kpis: [{ label: 'Infeasible', value: 'no conversion', sub: `equilibrium NH₃ ${(L.yEq * 100).toFixed(1)}% ≤ separator outlet ${(L.yIn * 100).toFixed(1)}% at ${L.P} bar — raise pressure, chill the separator or use a more active catalyst` }],
         vsRecipe: { ammonia: { capexFactor: Infinity, energyFactor: Infinity }, asu: { capexFactor: Infinity, energyFactor: Infinity } },
@@ -527,16 +520,19 @@
 
     // -- roll up per unit, per kg NH₃/day
     const byUnit = {};
+    const installRows = [];
     for (const unit of ['ammonia', 'asu']) {
-      const ps2 = parts.filter(x => x.unit === unit);
-      const materials = ps2.reduce((s, x) => s + x.usdMaterialsPlant, 0);
-      const manufactured = ps2.reduce((s, x) => s + x.usdPlant, 0);
+      const unitParts = parts.filter(x => x.unit === unit);
+      const materials = unitParts.reduce((s, x) => s + x.usdMaterialsPlant, 0);
+      const manufactured = unitParts.reduce((s, x) => s + x.usdPlant, 0);
       byUnit[unit] = {
         materialsUsdPerKgDay: materials / S,
         manufacturedUsdPerKgDay: manufactured / S,
         installedUsdPerKgDay: (manufactured * p.installFactor) / S,
       };
+      installRows.push([unit, manufactured * p.installFactor - manufactured]);
     }
+    for (const [unit, usd] of installRows) buy(unit, `Install (× ${p.installFactor})`, usd, 'site install, commissioning, contingency');
     const loopKWhPerKg = Object.values(L.energy).reduce((s, x) => s + x, 0) + standbyKWhPerKg;
     byUnit.ammonia.kWhPerKg = loopKWhPerKg;
     byUnit.asu.kWhPerKg = asuKWhPerKg;
@@ -545,7 +541,7 @@
     const installedUsdPerKgDay = byUnit.ammonia.installedUsdPerKgDay + byUnit.asu.installedUsdPerKgDay;
     const materialsUsdPerKgDay = byUnit.ammonia.materialsUsdPerKgDay + byUnit.asu.materialsUsdPerKgDay;
     const kWhPerKg = loopKWhPerKg + asuKWhPerKg;
-    const outParts = parts
+    const bom = parts
       .map(x => ({
         part: x.part, unit: x.unit, material: x.material,
         kg: x.kgPlant / S, usdMaterials: x.usdMaterialsPlant / S, manufacturing: x.manufacturing,
@@ -567,7 +563,7 @@
       },
       energyKWhPerKg: { ...L.energy, standby: standbyKWhPerKg, psa: asuKWhPerKg },
       byUnit,
-      parts: outParts,
+      bom,
       installedUsdPerKgDay,
       materialsUsdPerKgDay,
       idiotIndex: installedUsdPerKgDay / materialsUsdPerKgDay,
@@ -586,46 +582,20 @@
     };
   }
 
-  function engineScaleFactor(sizeKgPerDay) {
-    const f = (sizeKgPerDay / RECIPE.ammonia.refKgPerDay) ** (ENGINE_SCALE.exponent - 1);
-    return Math.max(ENGINE_SCALE.floorFactor, Math.min(1, f));
-  }
-
-  // What the company simulator needs: { ammonia, asu } factors vs the recipe, per kg NH₃/day.
-  // opts.sizeKgPerDay: cost the design at that size and compare with the recipe scaled the way the
-  // engine scales it (default: the recipe's reference size, where the engine's scale factor is 1).
-  function simulatorOverride(params = {}, opts = {}) {
-    const size = Number(opts.sizeKgPerDay) > 0 ? Number(opts.sizeKgPerDay) : RECIPE.ammonia.refKgPerDay;
-    const d = design({ ...params, plantKgPerDay: size });
-    const sf = engineScaleFactor(size);
+  // { ammonia, asu } factors vs the recipe, per kg NH₃/day. Costed at the recipe's reference size,
+  // where the engine's own scale factor is 1, so the factors compare like with like.
+  function simulatorOverride(params = {}) {
+    const d = design({ ...params, plantKgPerDay: RECIPE.ammonia.refKgPerDay });
     const out = {};
     for (const unit of ['ammonia', 'asu']) {
       out[unit] = {
-        capexFactor: d.byUnit[unit].installedUsdPerKgDay / (RECIPE[unit].usdPerKgDay * sf),
+        capexFactor: d.byUnit[unit].installedUsdPerKgDay / RECIPE[unit].usdPerKgDay,
         energyFactor: d.byUnit[unit].kWhPerKg / RECIPE[unit].kWhPerKg,
-        materialsFactor: d.byUnit[unit].materialsUsdPerKgDay / (RECIPE[unit].usdPerKgDay * sf),
+        materialsFactor: d.byUnit[unit].materialsUsdPerKgDay / RECIPE[unit].usdPerKgDay,
         flexible: d.flexible,
       };
     }
     return out;
-  }
-
-  // Loop-only levelized $/kg NH₃ (24 h basis: annualized loop + N₂ capex + their electricity) over a
-  // pressure grid — the screening optimum. Storage and oversizing are the company simulator's job.
-  function optimizePressure(params = {}, { usdPerKWh = 0.04, pressures = null } = {}) {
-    const grid = pressures || Array.from({ length: 23 }, (_, i) => 30 + 10 * i);
-    const curve = [];
-    let best = null;
-    for (const P of grid) {
-      const d = design({ ...params, loopPressureBar: P });
-      const p = d.params;
-      const crf = p.discountRate / (1 - (1 + p.discountRate) ** -p.lifeYears);
-      const usdPerKg = (d.installedUsdPerKgDay * crf) / 365 + d.kWhPerKg * usdPerKWh;
-      const row = { pressureBar: P, usdPerKg, installedUsdPerKgDay: d.installedUsdPerKgDay, kWhPerKg: d.kWhPerKg, recycle: d.loop.recycleMolPerMolNH3 };
-      curve.push(row);
-      if (Number.isFinite(usdPerKg) && (!best || usdPerKg < best.usdPerKg)) best = row;
-    }
-    return { best, curve };
   }
 
   return {
@@ -635,7 +605,6 @@
     units: ['ammonia', 'asu'],
     product: 'ammonia',
     RECIPE,
-    ENGINE_SCALE,
     DEFAULTS,
     PRESETS,
     CONTROLS,
@@ -643,10 +612,7 @@
     equilibriumNH3,
     nh3VapourBar,
     vessel: (V, P, params = {}, lOverD) => vessel(V, P, merge(params), lOverD),
-    bufferMinutes: params => bufferMinutes(merge(params)),
     design,
-    engineScaleFactor,
     simulatorOverride,
-    optimizePressure,
   };
 });

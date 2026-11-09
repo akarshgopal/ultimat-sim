@@ -25,7 +25,7 @@ test('module contract: id, units, presets, controls, browser registration', () =
   assert.equal(d.flexible, true);
   assert.ok(d.kpis.length >= 3 && d.kpis.length <= 6);
   // Parts add up to the installed cost (install is a part), and the floor to the materials.
-  const sum = d.parts.reduce((t, p) => t + p.usd, 0);
+  const sum = d.bom.reduce((t, p) => t + p.usd, 0);
   assert.ok(Math.abs(sum - d.installedUsdPerKgDay) < 1e-9 * sum);
   // Browser: no require/module, registers on globalThis.FoundryDesigns.
   const ctx = { FoundryBom: Bom, FoundryUtilization: Utilization, Math };

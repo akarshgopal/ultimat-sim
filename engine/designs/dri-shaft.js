@@ -16,13 +16,10 @@
 // Basis: everything is per kg of Fe in DRI (the recipe's product unit: pathways h2-dri and
 // green-h2-dri sell "steel" = DRI/HBI, 1 kg per kg Fe). Screening-grade, every assumption in DEFAULTS.
 (function exposeDriShaftDesign(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom,
-    typeof require === 'function' ? require('../utilization.js') : root.FoundryUtilization,
-  );
+  const api = factory(typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else (root.FoundryDesigns = root.FoundryDesigns || {})[api.id] = api;
-})(globalThis, (Bom, Utilization) => {
+})(globalThis, Bom => {
   // ------------------------------------------------------------------ constants
   const R = 8.314462618; // J/(mol·K)
   const M_FE = 55.845e-3; // kg/mol
@@ -44,7 +41,7 @@
   // (size / ref)^(0.85 − 1), floored at 0.4 × (engine/company.js DEFAULTS.scale), so the recipe price
   // at the plant size a design is drawn for is RECIPE × that factor; capexFactor compares like with like.
   const RECIPE = Object.freeze({
-    steel: Object.freeze({ usdPerKgDay: 840, kWhPerKg: 0.7, pathwayId: 'green-h2-dri', alsoPathways: Object.freeze(['h2-dri']), refKgPerDay: 1000 }),
+    'hydrogen-dri': Object.freeze({ usdPerKgDay: 840, kWhPerKg: 0.7, pathwayId: 'green-h2-dri', alsoPathways: Object.freeze(['h2-dri']), refKgPerDay: 1000 }),
   });
   const ENGINE_SCALE = Object.freeze({ exponent: 0.85, floorFactor: 0.4 });
 
@@ -143,8 +140,6 @@
       recuperator: 3.0, cooler: 2.5, compressor: 5.0, ducts: 2.5, handling: 2.5, press: 4.0, electrical: 1.5, store: 2.0,
     }),
     installFactor: 1.35, // skid/module erection, piping tie-ins, commissioning on top of delivered equipment
-    fixedOmFracPerYear: 0.03,
-    lifeYears: 25,
   });
 
   // 'today' is a first-of-a-kind ~100 t/day H₂ shaft built the way DRI plants are built now
@@ -266,7 +261,7 @@
     const solids = (p.metallization * CP_FE + feoKg * CP_FEO + gangueKg * CP_GANGUE) * (p.dischargeC - 25);
     const nH2Out = nH2 - nReact;
     const nWOut = nW + nReact;
-    // Top-gas sensible heat is linear in T_top only through cp(T); one fixed-point pass is plenty.
+    // Top-gas sensible heat depends on T_top only weakly, through cp(T): a few fixed-point passes converge.
     let Ttop = 300;
     for (let i = 0; i < 6; i += 1) {
       const c = (nH2Out * cpH2(Ttop) + nWOut * cpH2O(Ttop)) / 1000;
@@ -315,7 +310,7 @@
     return 150 * mu * (1 - eps) ** 2 * u / (eps ** 3 * d * d) + 1.75 * rho * (1 - eps) * u * u / (eps ** 3 * d);
   }
 
-  function recipeAtSize(kgPerDay, recipe = RECIPE.steel) {
+  function recipeAtSize(kgPerDay, recipe = RECIPE['hydrogen-dri']) {
     const f = (kgPerDay / recipe.refKgPerDay) ** (ENGINE_SCALE.exponent - 1);
     return recipe.usdPerKgDay * Math.max(ENGINE_SCALE.floorFactor, Math.min(1, f));
   }
@@ -504,7 +499,7 @@
     const installedUsd = installedEquipmentUsd + engineeringUsd;
     const materialsUsd = parts.reduce((s, x) => s + x.usdMaterialsPlant, 0);
     const perKgDay = usd => usd / p.plantKgFePerDay;
-    const outParts = parts.map(x => ({
+    const bom = parts.map(x => ({
       part: x.part,
       material: x.material,
       kg: perKgDay(x.kgPlant),
@@ -513,9 +508,9 @@
       usd: perKgDay(x.usdPlant),
       note: x.note,
     }));
-    outParts.push({ part: `Installation (× ${p.installFactor})`, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(installedEquipmentUsd - equipmentUsd), note: 'erection, piping tie-ins, commissioning' });
-    outParts.push({ part: 'Engineering, permits, owner', material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(engineeringUsd), note: 'per plant' });
-    outParts.sort((a, b) => b.usd - a.usd);
+    bom.push({ part: `Installation (× ${p.installFactor})`, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(installedEquipmentUsd - equipmentUsd), note: 'erection, piping tie-ins, commissioning' });
+    bom.push({ part: 'Engineering, permits, owner', material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(engineeringUsd), note: 'per plant' });
+    bom.sort((a, b) => b.usd - a.usd);
 
     const installedUsdPerKgDay = perKgDay(installedUsd);
     const materialsUsdPerKgDay = perKgDay(materialsUsd);
@@ -556,7 +551,7 @@
       kWhPerKg,
       thermoMinKWhPerKg: THERMO_MIN_KWH_PER_KG,
       heaterKW: heaterKWPlant,
-      parts: outParts,
+      bom,
       equipmentUsd,
       installedUsd,
       installedUsdPerKgDay,
@@ -568,7 +563,7 @@
       recipeUsdPerKgDay,
       vsRecipe: {
         capexFactor: installedUsdPerKgDay / recipeUsdPerKgDay,
-        energyFactor: kWhPerKg / RECIPE.steel.kWhPerKg,
+        energyFactor: kWhPerKg / RECIPE['hydrogen-dri'].kWhPerKg,
       },
       kpis: [
         { label: 'Installed', value: `$${installedUsdPerKgDay.toFixed(0)} per kg/day`, sub: `$${(installedUsd / tPerYear).toFixed(0)} per t/yr · recipe at this size $${recipeUsdPerKgDay.toFixed(0)}` },
@@ -589,8 +584,6 @@
     });
   }
 
-  // Contract: what the company simulator needs to build on this design.
-  const UNITS = Object.freeze(['hydrogen-dri']);
   function simulatorOverride(params) {
     const d = design(params);
     return { 'hydrogen-dri': {
@@ -602,23 +595,19 @@
     } };
   }
 
-
   return {
     id: 'dri-shaft',
     name: 'Solar-matched H₂ DRI/HBI shaft furnace',
     summary: 'Modular hydrogen shaft furnace with a recuperated recycle loop and PV-charged electric gas heating, priced from its heat and mass balance and bill of materials.',
-    units: UNITS,
+    units: ['hydrogen-dri'],
     product: 'steel',
-    productLabel: 'DRI/HBI (kg Fe)',
     RECIPE,
     DEFAULTS,
     PRESETS,
     CONTROLS,
     THERMO_MIN_KWH_PER_KG,
     H2_STOICH_KG_PER_KG_FE: H2_STOICH_MOL_PER_KG_FE * M_H2,
-    equilibriumSteamFraction,
     shaftBalance,
-    gasRequirement,
     recipeAtSize,
     design,
     scaleCurve,

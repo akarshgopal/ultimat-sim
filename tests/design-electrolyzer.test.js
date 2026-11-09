@@ -50,7 +50,7 @@ test('the optimal current density rises as PV gets cheaper, and cheaper PV lower
 test('a design overrides electrolyzer capex and kWh/kg in the company simulator', () => {
   const units = E.simulatorOverride(E.PRESETS.lean.params);
   const o = units.electrolyzer;
-  close(o.capexFactor, E.design(E.PRESETS.lean.params).installedUsdPerKgDay / E.RECIPE_USD_PER_KG_DAY, 1e-12);
+  close(o.capexFactor, E.design(E.PRESETS.lean.params).installedUsdPerKgDay / E.RECIPE.electrolyzer.usdPerKgDay, 1e-12);
   const input = config => ({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
   const h2 = config => C.rankOpportunities(input(config), { sizeMultiple: 100 }).find(r => r.pathwayId === 'green-hydrogen');
   const recipe = h2({});

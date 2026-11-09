@@ -7,28 +7,27 @@
 //     index is explicit and attackable part by part);
 //   • kWh per kg — from the cell polarization curve at the chosen current density.
 // Higher current density shrinks the stack per kW (cheaper) but raises cell voltage (more PV per
-// kg). With cheap PV and low utilization the optimum moves to high current density; optimize()
-// finds it per site using the same solar-utilization model the company simulator uses.
+// kg). With cheap PV and low utilization the optimum moves to high current density;
+// optimizeCurrentDensity() finds it per site with the solar-utilization model the company simulator
+// uses.
 //
-// Everything is a screening estimate with explicit, overridable assumptions (DEFAULTS). Commodity
-// prices come from data/bom.js.
+// Screening estimate; every assumption is in DEFAULTS. Commodity prices come from data/bom.js.
 (function exposeElectrolyzerDesign(root, factory) {
   const api = factory(
     typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom,
     typeof require === 'function' ? require('../utilization.js') : root.FoundryUtilization,
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
-  else {
-    root.ElectrolyzerDesign = api;
-    root.FoundryDesigns = root.FoundryDesigns || {};
-    root.FoundryDesigns[api.id] = api;
-  }
+  else (root.FoundryDesigns = root.FoundryDesigns || {})[api.id] = api;
 })(globalThis, (Bom, Utilization) => {
   const F = 96485.33212; // C/mol
   const M_H2 = 2.01588; // g/mol
   const HHV_KWH_PER_KG = 39.41;
-  const RECIPE_KWH_PER_KG = 52; // what the plant models assume today
-  const RECIPE_USD_PER_KG_DAY = 3250; // TEA electrolyzer pack ($1,500/kW installed PEM-family)
+  // Recipe basis per kg H₂/day and kWh per kg H₂: the TEA electrolyzer pack ($1,500/kW installed,
+  // PEM-family) and the plant models' 52 kWh/kg.
+  const RECIPE = Object.freeze({
+    electrolyzer: Object.freeze({ usdPerKgDay: 3250, kWhPerKg: 52, pathwayId: 'green-hydrogen' }),
+  });
 
   const DEFAULTS = Object.freeze({
     currentDensityAPerCm2: 0.4,
@@ -148,11 +147,13 @@
     const steelDensity = 7850;
     const niDensity = 8900;
 
-    const parts = [];
-    const add = (part, material, kgPerKW, manufacturing, note) => {
-      const usdMaterials = kgPerKW * commodity(material);
-      parts.push({ part, material, kgPerKW, usdMaterialsPerKW: usdMaterials, manufacturing, usdPerKW: usdMaterials * manufacturing, note });
+    // Bill of materials per kW; bought-in lines are appended below so the rows sum to installed $/kW.
+    const bom = [];
+    const add = (part, material, kg, manufacturing, note) => {
+      const usdMaterials = kg * commodity(material);
+      bom.push({ part, material, kg, usdMaterials, manufacturing, usd: usdMaterials * manufacturing, note });
     };
+    const bought = (part, usd, note) => bom.push({ part, material: null, kg: null, usdMaterials: null, manufacturing: null, usd, note });
     add('Bipolar plates', 'steel', plateM2PerKW * (p.plateThicknessMm / 1000) * steelDensity, p.manufacturing.plates, `${p.plateThicknessMm} mm carbon steel, ${p.frameFactor}× active area`);
     add('Plate Ni plating', 'nickel', plateM2PerKW * 2 * (p.nickelPlatingUm / 1e6) * niDensity, p.manufacturing.plates, `${p.nickelPlatingUm} µm both faces`);
     add('Electrodes (Ni mesh)', 'nickel', activeM2PerKW * 2 * p.electrodeNiKgPerM2, p.manufacturing.electrodes, `${p.electrodeNiKgPerM2} kg/m² × anode + cathode`);
@@ -163,7 +164,7 @@
     add('BoP vessels, piping, skid', 'steel', bop.steelKgPerKW, p.manufacturing.bop, `${p.pressure} lye loop, gas–lye separators`);
     add('BoP stainless (lye/gas)', 'stainless-steel', bop.stainlessKgPerKW, p.manufacturing.bop, 'wetted KOH/H₂ service');
     add('BoP pumps, instruments (Cu)', 'copper', bop.copperKgPerKW, p.manufacturing.bop, 'motors, sensors');
-    add('BoP polymer', 'polymer', bop.polymerKgPerKW, p.manufacturing.bop, 'tanks liners, hoses');
+    add('BoP polymer', 'polymer', bop.polymerKgPerKW, p.manufacturing.bop, 'tank liners, hoses');
     add('DC bus / coupling copper', 'copper', coupling.copperKgPerKW, 1.5, coupling.label);
     add('Foundations', 'concrete', p.concreteKgPerKW, p.manufacturing.civil, 'skid pads');
 
@@ -171,22 +172,17 @@
     const electronicsUsdPerKW = coupling.usdPerKW;
     const cellsPerKW = 1 / (p.cellAreaM2 * V * j * 10);
     const labourUsdPerKW = p.labourUsdPerHour * (p.assemblyHoursPerStack / stackKW + p.assemblyHoursPerCell * cellsPerKW);
-    const materialsUsdPerKW = parts.reduce((s, x) => s + x.usdMaterialsPerKW, 0);
-    const manufacturedUsdPerKW = parts.reduce((s, x) => s + x.usdPerKW, 0) + separatorUsdPerKW + electronicsUsdPerKW + labourUsdPerKW;
+    const materialsUsdPerKW = bom.reduce((s, x) => s + x.usdMaterials, 0);
+    const manufacturedUsdPerKW = bom.reduce((s, x) => s + x.usd, 0) + separatorUsdPerKW + electronicsUsdPerKW + labourUsdPerKW;
     const installedUsdPerKW = manufacturedUsdPerKW * p.installFactor;
-    // Floor for the idiot index: raw materials + the separator's own materials (~polymer at 2 kg/m²).
+    // Idiot-index floor: raw materials + the separator's own materials (~2 kg/m² polymer).
     const separatorMaterialsUsdPerKW = plateM2PerKW * 2 * commodity('polymer');
     const floorUsdPerKW = materialsUsdPerKW + separatorMaterialsUsdPerKW;
     const kWPerKgDay = 1 / kgH2PerDayPerKW;
-    // Contract view of the BOM (engine/designs/README.md): every line, summing to installed $/kW.
-    const bought = (part, usd, note) => ({ part, material: null, kg: null, usdMaterials: null, manufacturing: null, usd, note });
-    const bom = [
-      ...parts.map(x => ({ part: x.part, material: x.material, kg: x.kgPerKW, usdMaterials: x.usdMaterialsPerKW, manufacturing: x.manufacturing, usd: x.usdPerKW, note: x.note })),
-      bought('Separator (purchased)', separatorUsdPerKW, sep.label),
-      bought('Power electronics', electronicsUsdPerKW, coupling.label),
-      bought('Assembly labour', labourUsdPerKW, `${Math.round(stackKW)} kW stacks`),
-      bought('Install (× factor)', installedUsdPerKW - manufacturedUsdPerKW, `× ${p.installFactor}`),
-    ];
+    bought('Separator (purchased)', separatorUsdPerKW, sep.label);
+    bought('Power electronics', electronicsUsdPerKW, coupling.label);
+    bought('Assembly labour', labourUsdPerKW, `${Math.round(stackKW)} kW stacks`);
+    bought('Install (× factor)', installedUsdPerKW - manufacturedUsdPerKW, `× ${p.installFactor}`);
     return {
       params: p,
       basis: 'per kW',
@@ -206,19 +202,14 @@
       stackKW,
       cellsPerKW,
       kgH2PerDayPerKW,
-      parts,
-      separatorUsdPerKW,
-      electronicsUsdPerKW,
-      labourUsdPerKW,
       materialsUsdPerKW: floorUsdPerKW,
-      manufacturedUsdPerKW,
       installedUsdPerKW,
       idiotIndex: installedUsdPerKW / floorUsdPerKW,
-      // Per kg H₂/day of nameplate (24 h basis) — the unit the plant models use.
+      // Per kg H₂/day of 24 h nameplate, the basis the plant models use.
       installedUsdPerKgDay: installedUsdPerKW * kWPerKgDay,
       vsRecipe: {
-        capexFactor: (installedUsdPerKW * kWPerKgDay) / RECIPE_USD_PER_KG_DAY,
-        energyFactor: kWhPerKg / RECIPE_KWH_PER_KG,
+        capexFactor: (installedUsdPerKW * kWPerKgDay) / RECIPE.electrolyzer.usdPerKgDay,
+        energyFactor: kWhPerKg / RECIPE.electrolyzer.kWhPerKg,
       },
     };
   }
@@ -261,18 +252,18 @@
   function optimizeCurrentDensity(params, site, opts = {}) {
     let best = null;
     const curve = [];
-    for (let j = 0.1; j <= 3.0001; j += 0.05) {
-      const r = lcoh({ ...params, currentDensityAPerCm2: Number(j.toFixed(2)) }, site, opts);
-      curve.push({ j: Number(j.toFixed(2)), usdPerKg: r.usdPerKg, kWhPerKg: r.design.kWhPerKg, usdPerKW: r.design.installedUsdPerKW });
-      if (!best || r.usdPerKg < best.usdPerKg) best = { j: Number(j.toFixed(2)), ...r };
+    for (let step = 0.1; step <= 3.0001; step += 0.05) {
+      const j = Number(step.toFixed(2));
+      const r = lcoh({ ...params, currentDensityAPerCm2: j }, site, opts);
+      curve.push({ j, usdPerKg: r.usdPerKg, kWhPerKg: r.design.kWhPerKg, usdPerKW: r.design.installedUsdPerKW });
+      if (!best || r.usdPerKg < best.usdPerKg) best = { j, ...r };
     }
     return { best, curve };
   }
 
-  // What the company simulator needs to build on this design: config.designs.units entries.
   function simulatorOverride(params) {
     const d = design(params);
-    return { electrolyzer: { capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor, materialsFactor: d.materialsUsdPerKgDay / RECIPE_USD_PER_KG_DAY, flexible: true } };
+    return { electrolyzer: { capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor, materialsFactor: d.materialsUsdPerKgDay / RECIPE.electrolyzer.usdPerKgDay, flexible: true } };
   }
 
   const CONTROLS = Object.freeze([
@@ -292,8 +283,14 @@
     summary: 'Alkaline stack and balance of plant built for 0 → 100% → 0 every sunny day, wired straight to PV.',
     units: ['electrolyzer'],
     product: 'hydrogen',
-    RECIPE: { electrolyzer: { usdPerKgDay: RECIPE_USD_PER_KG_DAY, kWhPerKg: RECIPE_KWH_PER_KG, pathwayId: 'green-hydrogen' } },
+    RECIPE,
+    DEFAULTS,
+    PRESETS,
     CONTROLS,
-    DEFAULTS, PRESETS, RECIPE_KWH_PER_KG, RECIPE_USD_PER_KG_DAY, cellVoltage, design, lcoh, optimizeCurrentDensity, simulatorOverride,
+    cellVoltage,
+    design,
+    lcoh,
+    optimizeCurrentDensity,
+    simulatorOverride,
   };
 });

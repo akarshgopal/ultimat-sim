@@ -46,11 +46,11 @@ api = {
   name: 'Sun-tolerant ammonia loop',
   summary: 'one sentence',
   units: ['ammonia'],                   // flowsheet units (data/pathways.js node.unit) it replaces
-  product: 'ammonia',                   // the units' product; "per kg/day" means of this product
-  // Recipe basis the factors are relative to, per kg/day (and kWh per kg) of `product`, derived from
-  // data/pathways.js flowsheets. Node capexUsdPerKgDay / kWhPerKg are per kg of the *pathway's*
-  // primary product: convert with the flowsheet's material edges where the two differ.
-  RECIPE: { ammonia: { usdPerKgDay, kWhPerKg, pathwayId: 'green-ammonia' } },
+  product: 'ammonia',                   // the units' product (data/markets.js id); "per kg/day" means of this product
+  // Recipe basis the factors are relative to, keyed by unit: per kg/day (and kWh per kg) of `product`,
+  // derived from data/pathways.js flowsheets. Node capexUsdPerKgDay / kWhPerKg are per kg of the
+  // *pathway's* primary product: convert with the flowsheet's material edges where the two differ.
+  RECIPE: { <unit>: { usdPerKgDay, kWhPerKg, pathwayId: 'green-ammonia' } },
   DEFAULTS,                             // every assumption, overridable, with sources/notes
   PRESETS: {                            // at least these two
     today: { label, params },           // what is built today (should land near RECIPE)
@@ -63,11 +63,12 @@ api = {
   design(params) => ({
     params,                             // merged with DEFAULTS
     installedUsdPerKgDay, materialsUsdPerKgDay, idiotIndex, kWhPerKg, flexible,
-    basis: 'per kg NH₃/day',            // what the parts' kg and $ are per
+    basis: 'per kg NH₃/day',            // what the bom rows' kg and $ are per
     bom: [{ part, material, kg, usdMaterials, manufacturing, usd, note }], // sums to installed; material null for bought-in items (`parts` in this shape also accepted)
     kpis: [{ label, value, sub }],      // 3–6 headline numbers specific to this design (strings)
   }),
-  simulatorOverride(params) => ({ <unit>: { capexFactor, energyFactor, materialsFactor, flexible?, thermal? } }),
+  // One entry per unit; the optional keys are those listed above.
+  simulatorOverride(params) => ({ <unit>: { capexFactor, energyFactor, materialsFactor, flexible?, thermal?, ... } }),
 };
 ```
 

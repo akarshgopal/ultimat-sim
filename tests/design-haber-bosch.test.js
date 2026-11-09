@@ -31,7 +31,7 @@ test('physical monotonicity: pressure → compressor kWh and wall thickness; col
   close(v50.kg, v200.kg, 0.1);
   // Parts roll up to the headline; a design too low in pressure for its separator is flagged, not NaN.
   const d = H.design();
-  close(d.parts.reduce((s, x) => s + x.usd, 0) * d.params.installFactor, d.installedUsdPerKgDay, 1e-9);
+  close(d.bom.reduce((s, x) => s + x.usd, 0), d.installedUsdPerKgDay, 1e-9);
   assert.equal(H.design({ catalyst: 'fe', loopPressureBar: 30, separatorC: -5 }).feasible, false);
 });
 

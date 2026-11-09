@@ -15,17 +15,17 @@ test('module follows the design contract and its recipe basis is the pathways no
   for (const id of ['h2-dri', 'green-h2-dri']) {
     const node = PATHWAYS.find(p => p.id === id).flowsheet.nodes.find(n => n.unit === 'pellet-plant');
     assert.ok(node, `${id} has a pellet plant`);
-    assert.equal(node.capexUsdPerKgDay, D.RECIPE.steel.usdPerKgDay);
-    assert.equal(node.kWhPerKg, D.RECIPE.steel.kWhPerKg);
-    close(node.variableOmUsdPerKg, D.RECIPE.steel.variableOmUsdPerKgPellet / D.DEFAULTS.pelletFeFraction, 1e-2);
+    assert.equal(node.capexUsdPerKgDay, D.RECIPE['pellet-plant'].usdPerKgDay);
+    assert.equal(node.kWhPerKg, D.RECIPE['pellet-plant'].kWhPerKg);
+    close(node.variableOmUsdPerKg, D.RECIPE['pellet-plant'].variableOmUsdPerKgPellet / D.DEFAULTS.pelletFeFraction, 1e-2);
   }
   for (const c of D.CONTROLS) assert.ok(c.key in D.DEFAULTS, c.key);
   const d = D.design();
   for (const k of ['installedUsdPerKgDay', 'materialsUsdPerKgDay', 'idiotIndex', 'kWhPerKg']) assert.ok(Number.isFinite(d[k]) && d[k] > 0, k);
   assert.equal(d.flexible, false);
   assert.ok(d.kpis.length >= 3 && d.kpis.length <= 6);
-  close(d.parts.reduce((s, x) => s + x.usd, 0), d.installedUsdPerKgDay, 1e-9);
-  close(d.parts.reduce((s, x) => s + x.usdMaterials, 0), d.materialsUsdPerKgDay, 1e-9);
+  close(d.bom.reduce((s, x) => s + x.usd, 0), d.installedUsdPerKgDay, 1e-9);
+  close(d.bom.reduce((s, x) => s + x.usdMaterials, 0), d.materialsUsdPerKgDay, 1e-9);
 });
 
 test('heat balance: magnetite oxidation, recuperation and drying move induration heat the right way', () => {
@@ -68,7 +68,7 @@ test('the override lowers DRI cost in the company simulator and leaves other pat
   const o = D.simulatorOverride(D.PRESETS.lean.params);
   const d = D.design(D.PRESETS.lean.params);
   close(o['pellet-plant'].capexFactor, d.installedUsdPerKgDay / d.recipeUsdPerKgDay, 1e-12);
-  close(o['pellet-plant'].energyFactor, d.kWhPerKg / D.RECIPE.steel.kWhPerKg, 1e-12);
+  close(o['pellet-plant'].energyFactor, d.kWhPerKg / D.RECIPE['pellet-plant'].kWhPerKg, 1e-12);
   assert.equal(o['pellet-plant'].thermal, true);
   assert.equal(o['pellet-plant'].flexible, false);
   const recipe = rank({});

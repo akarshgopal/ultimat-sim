@@ -18,12 +18,10 @@
 // "steel" = DRI/HBI, 1 kg per kg Fe); a kg Fe needs 1/0.675 = 1.48 kg of fired pellets. Screening-grade,
 // every assumption in DEFAULTS.
 (function exposePelletPlantDesign(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom,
-  );
+  const api = factory(typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else (root.FoundryDesigns = root.FoundryDesigns || {})[api.id] = api;
-})(globalThis, (Bom) => {
+})(globalThis, Bom => {
   // ------------------------------------------------------------------ constants
   const M_FE = 55.845e-3; // kg/mol
   const M_FE2O3 = 159.688e-3;
@@ -33,14 +31,14 @@
   const WATER_LATENT_MJ_PER_KG = 2.257; // at 100 °C
   const WATER_CP_MJ_PER_KG_K = 4.18e-3;
 
-  // Recipe basis (data/pathways.js, h2-dri and green-h2-dri, node 'pellet-plant'): capexUsdPerKgDay 66.9
+  // Recipe basis (data/pathways.js, h2-dri and green-h2-dri, unit 'pellet-plant'): capexUsdPerKgDay 66.9
   // per kg Fe/day (TeaScreening 'pellet-plant' 43 $/(kg pellets/day) × Chile 1.05 × 1.48 kg pellets/kg Fe),
   // kWhPerKg 0.207 per kg Fe (0.14 kWh/kg pellets: ~0.35 GJ/t induration as a total-energy proxy + ~35 kWh/t),
   // at the reference size of 1,000 kg Fe/day. The company engine scales process capex by
   // (size / ref)^(0.85 − 1), floored at 0.4 (engine/company.js DEFAULTS.scale), so the recipe price at the
   // plant size a design is drawn for is RECIPE × that factor; capexFactor compares like with like.
   const RECIPE = Object.freeze({
-    steel: Object.freeze({
+    'pellet-plant': Object.freeze({
       usdPerKgDay: 66.9, kWhPerKg: 0.207, variableOmUsdPerKgPellet: 0.006,
       pathwayId: 'green-h2-dri', alsoPathways: Object.freeze(['h2-dri']), refKgPerDay: 1000,
     }),
@@ -198,7 +196,7 @@
     return Bom.COMMODITIES[name].usdPerKg;
   }
 
-  function recipeAtSize(kgPerDay, recipe = RECIPE.steel) {
+  function recipeAtSize(kgPerDay, recipe = RECIPE['pellet-plant']) {
     const f = (kgPerDay / recipe.refKgPerDay) ** (ENGINE_SCALE.exponent - 1);
     return recipe.usdPerKgDay * Math.max(ENGINE_SCALE.floorFactor, Math.min(1, f));
   }
@@ -290,7 +288,7 @@
     const installedUsd = installedEquipmentUsd + epcmUsd + contingencyUsd + p.engineeringUsdPerPlant;
     const materialsUsd = parts.reduce((s, x) => s + x.usdMaterialsPlant, 0);
     const perKgDay = usd => usd / p.plantKgFePerDay;
-    const outParts = parts.map(x => ({
+    const bom = parts.map(x => ({
       part: x.part,
       material: x.material,
       kg: perKgDay(x.kgPlant),
@@ -299,17 +297,19 @@
       usd: perKgDay(x.usdPlant),
       note: x.note,
     }));
-    outParts.push({ part: `Installation (× ${p.installFactor})`, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(installedEquipmentUsd - equipmentUsd), note: 'erection, tie-ins, commissioning' });
-    outParts.push({ part: 'Engineering, permits, owner', material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(p.engineeringUsdPerPlant), note: 'per plant' });
-    if (epcmUsd > 0) outParts.push({ part: `EPCM / owner's costs (${(p.epcmFrac * 100).toFixed(0)}%)`, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(epcmUsd), note: 'scales with installed equipment' });
-    if (contingencyUsd > 0) outParts.push({ part: `Contingency (${(p.contingencyFrac * 100).toFixed(0)}%)`, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(contingencyUsd), note: '' });
-    outParts.sort((a, b) => b.usd - a.usd);
+    const overhead = (part, usd, note) => bom.push({ part, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(usd), note });
+    overhead(`Installation (× ${p.installFactor})`, installedEquipmentUsd - equipmentUsd, 'erection, tie-ins, commissioning');
+    overhead('Engineering, permits, owner', p.engineeringUsdPerPlant, 'per plant');
+    if (epcmUsd > 0) overhead(`EPCM / owner's costs (${(p.epcmFrac * 100).toFixed(0)}%)`, epcmUsd, 'scales with installed equipment');
+    if (contingencyUsd > 0) overhead(`Contingency (${(p.contingencyFrac * 100).toFixed(0)}%)`, contingencyUsd, '');
+    bom.sort((a, b) => b.usd - a.usd);
 
     const installedUsdPerKgDay = perKgDay(installedUsd);
     const materialsUsdPerKgDay = perKgDay(materialsUsd);
     const recipeUsdPerKgDay = recipeAtSize(p.plantKgFePerDay);
     const variableOmUsdPerKgPellet = (binder.kgPerT * binder.usdPerKg + p.consumablesUsdPerT) / 1000;
     const pelletTPerYear = pelletKgPerDay * 365 / 1000;
+    // An electric heat source is a PV-charged heat store; gas burners leave the engine's battery firming.
     const heatStore = electric;
     return {
       params: p,
@@ -328,7 +328,7 @@
       energy,
       kWhPerKg,
       kWhPerKgPellet,
-      parts: outParts,
+      bom,
       equipmentUsd,
       installedUsd,
       installedUsdPerKgDay,
@@ -341,13 +341,13 @@
       recipeUsdPerKgDay,
       vsRecipe: {
         capexFactor: installedUsdPerKgDay / recipeUsdPerKgDay,
-        energyFactor: kWhPerKg / RECIPE.steel.kWhPerKg,
-        variableOmFactor: variableOmUsdPerKgPellet / RECIPE.steel.variableOmUsdPerKgPellet,
+        energyFactor: kWhPerKg / RECIPE['pellet-plant'].kWhPerKg,
+        variableOmFactor: variableOmUsdPerKgPellet / RECIPE['pellet-plant'].variableOmUsdPerKgPellet,
       },
       kpis: [
         { label: 'Installed', value: `$${installedUsdPerKgDay.toFixed(1)} per kg Fe/day`, sub: `$${(installedUsd / pelletTPerYear).toFixed(0)} per t pellets/yr · recipe at this size $${recipeUsdPerKgDay.toFixed(1)}` },
         { label: 'Grate', value: `${grateM2.toFixed(1)} m² straight grate`, sub: `${(pelletKgPerDay / 1000).toFixed(0)} t pellets/day · ${nDiscs} balling disc${nDiscs > 1 ? 's' : ''}` },
-        { label: 'Induration heat', value: `${(hb.netMJ).toFixed(2)} GJ/t pellets`, sub: `drying ${hb.dryingPurchasedMJ.toFixed(2)}, cooler ${hb.coolerLossMJ.toFixed(2)}, stack ${hb.stackMJ.toFixed(2)}, oxidation −${hb.oxidationMJ.toFixed(2)}` },
+        { label: 'Induration heat', value: `${hb.netMJ.toFixed(2)} GJ/t pellets`, sub: `drying ${hb.dryingPurchasedMJ.toFixed(2)}, cooler ${hb.coolerLossMJ.toFixed(2)}, stack ${hb.stackMJ.toFixed(2)}, oxidation −${hb.oxidationMJ.toFixed(2)}` },
         { label: 'Energy', value: `${kWhPerKg.toFixed(3)} kWh/kg Fe`, sub: `${(kWhPerKgPellet * 1000).toFixed(0)} kWh/t pellets · ${source.label}` },
         { label: 'Idiot index', value: `${(installedUsdPerKgDay / materialsUsdPerKgDay).toFixed(1)}×`, sub: `materials $${materialsUsdPerKgDay.toFixed(2)} per kg Fe/day` },
         { label: 'Operation', value: heatStore ? 'Baseload on a heat store' : 'Baseload (battery)', sub: `turndown to ${(p.minTurndown * 100).toFixed(0)}% · ${binder.label}` },
@@ -363,8 +363,6 @@
     });
   }
 
-  // Contract: what the company simulator needs to build on this design.
-  const UNITS = Object.freeze(['pellet-plant']);
   function simulatorOverride(params) {
     const d = design(params);
     return { 'pellet-plant': {
@@ -382,15 +380,13 @@
     id: 'pellet-plant',
     name: 'Solar-fired iron-ore pellet plant',
     summary: 'Mini straight-grate pellet plant fired by electric air heaters on a PV-charged heat store, drying on the DRI shaft\'s waste heat, priced from its heat balance and bill of materials.',
-    units: UNITS,
+    units: ['pellet-plant'],
     product: 'steel',
-    productLabel: 'DRI/HBI (kg Fe)',
     RECIPE,
     DEFAULTS,
     PRESETS,
     CONTROLS,
     OXIDATION_MJ_PER_KG_FE2O3,
-    heatBalance,
     recipeAtSize,
     design,
     scaleCurve,

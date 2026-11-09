@@ -21,7 +21,7 @@ const EDGE_KINDS = ['material', 'electricity', 'heat'];
 const FEED_KEYS = ['id', 'kgPerKg', 'usdPerKg', 'freightUsdPerKg', 'origin', 'purchased'];
 const COPRODUCT_KEYS = ['id', 'product', 'kgPerKg', 'usdPerKg'];
 const TECH_CLASSES = ['process', 'electrolyzer', 'dac', 'desal', 'storage'];
-const ORIGINS = ['ocean', 'brine', 'air', 'crust', 'intermediate', 'water'];
+const ORIGINS = ['ocean', 'brine', 'air', 'crust', 'intermediate', 'consumable', 'water'];
 const INFINITE = new Set(['ocean', 'brine', 'air', 'crust', 'water']);
 
 function finiteNonNegative(value, label) {

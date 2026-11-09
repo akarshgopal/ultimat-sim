@@ -614,7 +614,7 @@
           "kgPerKg": 0.05486627,
           "usdPerKg": 2,
           "freightUsdPerKg": 0,
-          "origin": "intermediate",
+          "origin": "consumable",
           "purchased": true
         }
       ],
@@ -638,7 +638,7 @@
       "assetLifeYears": 15.40545,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
-      "notes": "Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria at almeria-pvgis-2026-09-05; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria at almeria-pvgis-2026-09-05; size-to-target product; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -762,14 +762,6 @@
           "usdPerKg": 0,
           "freightUsdPerKg": 0,
           "origin": "air",
-          "purchased": false
-        },
-        {
-          "id": "sorbent",
-          "kgPerKg": 0,
-          "usdPerKg": 0,
-          "freightUsdPerKg": 0,
-          "origin": "intermediate",
           "purchased": false
         }
       ],
@@ -1643,7 +1635,7 @@
           "kgPerKg": 0.02747,
           "usdPerKg": 2,
           "freightUsdPerKg": 0,
-          "origin": "intermediate",
+          "origin": "consumable",
           "purchased": true
         }
       ],
@@ -1667,7 +1659,7 @@
       "assetLifeYears": 15.71595,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
-      "notes": "Coastal e-methanol (DAC + SWRO + PEM), Mejillones at mejillones-pvgis-2026-09-14; size-to-target product; purchased consumables; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Coastal e-methanol (DAC + SWRO + PEM), Mejillones at mejillones-pvgis-2026-09-14; size-to-target product; DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -1952,7 +1944,7 @@
           "kgPerKg": 0.05486627,
           "usdPerKg": 2,
           "freightUsdPerKg": 0,
-          "origin": "intermediate",
+          "origin": "consumable",
           "purchased": true
         }
       ],
@@ -1976,7 +1968,7 @@
       "assetLifeYears": 15.4548,
       "infiniteSourceShare": 0.9999883,
       "quality": "screening",
-      "notes": "Reference e-methane (DAC + SWRO + PEM + Sabatier) on grid power at no map site; size-to-target product; purchased consumables; case buys grid power (no PV CAPEX in case); DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Reference e-methane (DAC + SWRO + PEM + Sabatier) on grid power at no map site; size-to-target product; case buys grid power (no PV CAPEX in case); DAC heat bought at screening $/kWh; consumable makeup counted as kg feed; on-site intake keeps the case screening $/kg as usdPerKg.",
       "flowsheet": {
         "nodes": [
           {"id":"air","unit":"material-source","kind":"source","label":"Air"},
@@ -2298,7 +2290,7 @@
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "04c76f2",
+    "gitSha": "65574a3",
     "caseCount": 25,
     "skipped": [
       {

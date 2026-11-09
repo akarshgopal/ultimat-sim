@@ -68,6 +68,7 @@
     { id: 'air', label: 'Air' },
     { id: 'crust', label: 'Crustal rock' },
     { id: 'water', label: 'Fresh water' },
+    { id: 'consumable', label: 'Consumables (sorbent, catalyst)' },
     { id: 'intermediate', label: 'Bought intermediates' },
   ]);
   const productName = key => MARKETS()[key]?.name || key || '—';

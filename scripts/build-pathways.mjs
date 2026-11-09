@@ -373,7 +373,8 @@ function analyseCase(file, factoryName, factory) {
     if (node.unit !== 'material-source' && node.unit !== 'consumable-source') continue;
     const amount = streamAmount(r.supplied);
     const id = node.economics?.__teaKind === 'cost' ? node.economics.__teaKey : (node.sourcePreset || node.id);
-    const origin = ORIGIN[id] || ORIGIN[node.sourcePreset] || ORIGIN[node.id] || 'intermediate';
+    // Sorbent / catalyst makeup is a consumable (costed, but not a bought chemical intermediate).
+    const origin = node.unit === 'consumable-source' ? 'consumable' : ORIGIN[id] || ORIGIN[node.sourcePreset] || ORIGIN[node.id] || 'intermediate';
     const purchased = !ON_SITE_ORIGINS.has(origin) && ec.unitCost != null;
     feeds.push({
       id,
@@ -428,7 +429,7 @@ function analyseCase(file, factoryName, factory) {
       refOutputKgPerDay: kg,
       electricityKWhPerKg: elecKWh / kg,
       heatKWhPerKg: heatKWh / kg,
-      feeds: feeds.map(f => ({
+      feeds: feeds.filter(f => f.amount > 0).map(f => ({
         id: f.id, kgPerKg: f.amount / kg, usdPerKg: f.usdPerKg, freightUsdPerKg: f.freightUsdPerKg,
         origin: f.origin, purchased: f.purchased,
       })),

@@ -43,6 +43,7 @@ const SKIP = {
 
 const NAMES = {
   'abundance.js': 'Dead Sea brine minerals hub (DLE Li, salt, Br2, Mg, potash, chlor-alkali, NH3)',
+  'aluminium.js': 'Primary aluminium from bauxite (Bayer + Hall–Héroult)',
   'bioforge.js': 'Gluconic acid + H2O2 from purchased dextrose (Bioforge)',
   'cement.js': 'Clinker from purchased limestone + clay',
   'coastal.js': 'Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria',

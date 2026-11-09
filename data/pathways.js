@@ -1128,13 +1128,13 @@
       "refSiteId": "chile-mejillones",
       "refRegion": "Atacama/Chile",
       "refOutputKgPerDay": 1000,
-      "electricityKWhPerKg": 3.517404,
+      "electricityKWhPerKg": 3.724812,
       "heatKWhPerKg": 0,
       "feeds": [
         {
           "id": "iron-ore",
-          "kgPerKg": 1.429734,
-          "usdPerKg": 0.1,
+          "kgPerKg": 1.481481,
+          "usdPerKg": 0.13,
           "freightUsdPerKg": 0.01,
           "origin": "crust",
           "purchased": true
@@ -1157,18 +1157,18 @@
         }
       ],
       "capexByTechUsdPerKgDay": {
-        "process": 840,
+        "process": 906.8889,
         "electrolyzer": 184.7755,
         "dac": 0,
         "desal": 0.8002355,
         "storage": 0
       },
-      "fixedOmFracPerYear": 0.03819052,
-      "variableOmUsdPerKg": 0.0316244,
-      "assetLifeYears": 18.19832,
+      "fixedOmFracPerYear": 0.03830131,
+      "variableOmUsdPerKg": 0.04051329,
+      "assetLifeYears": 18.61477,
       "infiniteSourceShare": 1,
       "quality": "screening",
-      "notes": "Green H2-DRI iron (SWRO + PEM H2, purchased ore) at chile-mejillones-green-h2-dri; size-to-target product; on-site intake keeps the case screening $/kg as usdPerKg.",
+      "notes": "Green H2-DRI iron (SWRO + PEM H2, purchased ore) at chile-mejillones-green-h2-dri; size-to-target product; electricity-as-total-energy proxy; on-site intake keeps the case screening $/kg as usdPerKg.",
       "flowsheet": {
         "nodes": [
           {"id":"iron-ore","unit":"material-source","kind":"source","label":"Iron ore"},
@@ -1177,6 +1177,8 @@
           {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
           {"id":"swro","unit":"swro","kind":"converter","label":"SWRO","kWhPerKg":0.00178,"capexUsdPerKgDay":0.8},
           {"id":"electrolyzer","unit":"electrolyzer","kind":"converter","label":"Electrolyzer","kWhPerKg":2.82,"capexUsdPerKgDay":185,"variableOmUsdPerKg":0.00162},
+          {"id":"pellet-plant","unit":"pellet-plant","kind":"converter","label":"Pellet plant","kWhPerKg":0.207,"capexUsdPerKgDay":66.9,"variableOmUsdPerKg":0.00889},
+          {"id":"pellet-gangue","unit":"material-sink","kind":"sink","label":"Pellet gangue","disposition":"waste"},
           {"id":"dri","unit":"hydrogen-dri","kind":"converter","label":"DRI","kWhPerKg":0.7,"capexUsdPerKgDay":840,"variableOmUsdPerKg":0.03},
           {"id":"steel","unit":"material-sink","kind":"sink","label":"Steel","disposition":"product"},
           {"id":"electrolyzer-oxygen","unit":"material-sink","kind":"sink","label":"Electrolyzer oxygen","disposition":"coproduct"},
@@ -1185,7 +1187,10 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"iron-ore","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]]},
+          {"from":"iron-ore","to":"pellet-plant","kind":"material","kgPerKg":1.48,"substances":[["Fe2O3",1.43],["SiO2",0.0517]]},
+          {"from":"pellet-plant","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]]},
+          {"from":"pellet-plant","to":"pellet-gangue","kind":"material","kgPerKg":0.0517,"substances":[["SiO2",0.0517]]},
+          {"from":"power-bus","to":"pellet-plant","kind":"electricity","kWhPerKg":0.207},
           {"from":"seawater","to":"swro","kind":"material","kgPerKg":1.16,"substances":[["H2O",1.12],["Cl-",0.0223],["Na+",0.0124]]},
           {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":0.508,"substances":[["H2O",0.508]]},
           {"from":"swro","to":"brine","kind":"material","kgPerKg":0.649,"substances":[["H2O",0.609],["Cl-",0.0222],["Na+",0.0124]]},
@@ -1194,7 +1199,7 @@
           {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.0242,"substances":[["H2O",0.024],["Cl-",0.000101],["Na+",0.000056]]},
           {"from":"dri","to":"steel","kind":"material","kgPerKg":1,"substances":[["Fe",1]]},
           {"from":"dri","to":"process-water","kind":"material","kgPerKg":0.484,"substances":[["H2O",0.484]]},
-          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":3.52},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":3.72},
           {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":2.82},
           {"from":"power-bus","to":"dri","kind":"electricity","kWhPerKg":0.7},
           {"from":"power-bus","to":"swro","kind":"electricity","kWhPerKg":0.00178}
@@ -1476,13 +1481,13 @@
       "refSiteId": "chile-mejillones",
       "refRegion": "Atacama/Chile",
       "refOutputKgPerDay": 1000,
-      "electricityKWhPerKg": 0.7,
+      "electricityKWhPerKg": 0.9074074,
       "heatKWhPerKg": 0,
       "feeds": [
         {
           "id": "iron-ore",
-          "kgPerKg": 1.429734,
-          "usdPerKg": 0.1,
+          "kgPerKg": 1.481481,
+          "usdPerKg": 0.13,
           "freightUsdPerKg": 0.01,
           "origin": "crust",
           "purchased": true
@@ -1498,32 +1503,37 @@
       ],
       "coproducts": [],
       "capexByTechUsdPerKgDay": {
-        "process": 840,
+        "process": 906.8889,
         "electrolyzer": 0,
         "dac": 0,
         "desal": 0,
         "storage": 0
       },
       "fixedOmFracPerYear": 0.04,
-      "variableOmUsdPerKg": 0.03,
-      "assetLifeYears": 20,
-      "infiniteSourceShare": 0.9635101,
+      "variableOmUsdPerKg": 0.03888889,
+      "assetLifeYears": 20.36878,
+      "infiniteSourceShare": 0.9647397,
       "quality": "screening",
-      "notes": "H2-DRI iron from purchased H2 + iron ore at chile-mejillones-h2-dri; size-to-target product; purchased hydrogen-feed.",
+      "notes": "H2-DRI iron from purchased H2 + iron ore at chile-mejillones-h2-dri; size-to-target product; electricity-as-total-energy proxy; purchased hydrogen-feed.",
       "flowsheet": {
         "nodes": [
           {"id":"iron-ore","unit":"material-source","kind":"source","label":"Iron ore"},
           {"id":"hydrogen-feed","unit":"material-source","kind":"source","label":"Hydrogen feed"},
           {"id":"power","unit":"electricity-source","kind":"electricity","label":"Power"},
           {"id":"power-bus","unit":"electrical-bus","kind":"bus","label":"Power bus"},
+          {"id":"pellet-plant","unit":"pellet-plant","kind":"converter","label":"Pellet plant","kWhPerKg":0.207,"capexUsdPerKgDay":66.9,"variableOmUsdPerKg":0.00889},
+          {"id":"pellet-gangue","unit":"material-sink","kind":"sink","label":"Pellet gangue","disposition":"waste"},
           {"id":"dri","unit":"hydrogen-dri","kind":"converter","label":"DRI","kWhPerKg":0.7,"capexUsdPerKgDay":840,"variableOmUsdPerKg":0.03},
           {"id":"steel","unit":"material-sink","kind":"sink","label":"Steel","disposition":"product"},
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"iron-ore","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]]},
+          {"from":"iron-ore","to":"pellet-plant","kind":"material","kgPerKg":1.48,"substances":[["Fe2O3",1.43],["SiO2",0.0517]]},
+          {"from":"pellet-plant","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]]},
+          {"from":"pellet-plant","to":"pellet-gangue","kind":"material","kgPerKg":0.0517,"substances":[["SiO2",0.0517]]},
+          {"from":"power-bus","to":"pellet-plant","kind":"electricity","kWhPerKg":0.207},
           {"from":"hydrogen-feed","to":"dri","kind":"material","kgPerKg":0.0541,"substances":[["H2",0.0541]]},
-          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.7},
+          {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.907},
           {"from":"power-bus","to":"dri","kind":"electricity","kWhPerKg":0.7},
           {"from":"dri","to":"steel","kind":"material","kgPerKg":1,"substances":[["Fe",1]]},
           {"from":"dri","to":"process-water","kind":"material","kgPerKg":0.484,"substances":[["H2O",0.484]]}
@@ -2425,7 +2435,7 @@
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "6bc11fb",
+    "gitSha": "c95b4fb",
     "caseCount": 27,
     "skipped": [
       {

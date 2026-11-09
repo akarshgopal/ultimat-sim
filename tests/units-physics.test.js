@@ -54,6 +54,11 @@ const CASES = [
     },
   },
   { unit: 'hydrogen-dri', product: 'steel', sec: 0.7, inlets: { ironOre: material('Fe2O3', 2e3), hydrogen: material('H2', 5e3, 'gas') } },
+  {
+    // Gangue passes through to its own outlet, so mixed concentrate is accepted.
+    unit: 'pellet-plant', product: 'pellets', sec: 0.14, reject: false,
+    inlets: { concentrate: { kind: 'material', mol: { Fe2O3: 2e3, SiO2: 1e3 }, phase: 'solid', T_C: 25, P_bar: 1 } },
+  },
   { unit: 'titanium-kroll', product: 'titanium', sec: 8, inlets: { titaniumTetrachloride: material('TiCl4', 2e3, 'liquid'), magnesium: material('Mg', 5e3) } },
   {
     unit: 'float-glass', product: 'glass', sec: 2.5,

@@ -75,6 +75,7 @@ const PROCESS_LABELS = Object.freeze({
   'copper-ew': 'Copper SX-EW',
   'aluminium-smelter': 'Aluminium smelter',
   'hydrogen-dri': 'Hydrogen DRI',
+  'pellet-plant': 'Iron-ore pellet plant',
   'titanium-kroll': 'Titanium Kroll',
   'iac-leach': 'Ionic-clay REE',
   'ree-chromatography': 'ARC-1 chromatography',
@@ -521,6 +522,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  'pellet-plant': Object.freeze({
+    id: 'pellet-plant',
+    label: PROCESS_LABELS['pellet-plant'],
+    basis: 'kgPerHour',
+    intensity: 0.7,
+    unitLabel: 'm²/(kg pellets/h)',
+    range: Object.freeze([0.3, 3]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening pellet plant pad 0.7 m²/(kg pellets/h) (range 0.3–3): ~30 ha incl. stockyards for a 4 Mt/y straight-grate plant (≈ 457 t/h); not a plot survey. USGS MCS iron ore is commodity context, not a measured layout.',
+        url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf',
+      }),
+    ]),
+  }),
   'titanium-kroll': Object.freeze({
     id: 'titanium-kroll',
     label: PROCESS_LABELS['titanium-kroll'],
@@ -954,6 +971,13 @@ function padHydrogenDri(node, solved) {
   return padAreaFromIntensity(spec, activity / 24);
 }
 
+function padPelletPlant(node, solved) {
+  const spec = intensitySpec('pellet-plant');
+  const activity = activityOf(solved, node.id);
+  if (!(activity > 0)) return 0;
+  return padAreaFromIntensity(spec, activity / 24);
+}
+
 function padTitaniumKroll(node, solved) {
   const spec = intensitySpec('titanium-kroll');
   const activity = activityOf(solved, node.id);
@@ -1043,6 +1067,7 @@ const PROCESS_PADS = Object.freeze({
   cement: padCement,
   'copper-ew': padCopperEw,
   'hydrogen-dri': padHydrogenDri,
+  'pellet-plant': padPelletPlant,
   'titanium-kroll': padTitaniumKroll,
   'bayer-alumina': padBayerAlumina,
   'aluminium-smelter': padAluminiumSmelter,

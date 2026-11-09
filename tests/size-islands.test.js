@@ -37,8 +37,8 @@ const ISLANDS = [
   {
     product: 'steel', aliases: ['steel', 'fe', 'dri', 'iron'], unit: 'hydrogen-dri',
     cases: [
-      [createH2DriCase, 'steel', ['hydrogen-dri']],
-      [createGreenH2DriCase, 'steel', ['hydrogen-dri', 'electrolyzer', 'swro']],
+      [createH2DriCase, 'steel', ['hydrogen-dri', 'pellet-plant']],
+      [createGreenH2DriCase, 'steel', ['hydrogen-dri', 'pellet-plant', 'electrolyzer', 'swro']],
     ],
   },
   {

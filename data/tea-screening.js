@@ -78,7 +78,10 @@ const FRAUNHOFER_POLYSI = 'https://www.ise.fraunhofer.de/content/dam/ise/en/docu
 const FRAUNHOFER_PV_REPORT = 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf';
 const USGS_AG = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-silver.pdf';
 const USGS_IRON_ORE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf';
-const USGS_STEEL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf';
+const SR_SAGUENAY_PFS_RELEASE = 'https://www.stockwatch.com/News/Item/Z-C!SR-3523298/C/SR?fmt=orig';
+const SR_SAGUENAY_PFS_NEWS = 'https://thedeepdive.ca/strategic-resources-reports-npv8-of-us957-million-for-iron-pellet-project/';
+const ISIJ_PELLET_ENERGY = 'https://www.jstage.jst.go.jp/article/isijinternational/54/3/54_596/_html/-char/en';
+const USGS_STEEL ='https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf';
 const USGS_TI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-titanium.pdf';
 const USGS_TI_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-titanium.pdf';
 const USGS_MG_METAL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-metal.pdf';
@@ -508,9 +511,13 @@ const costs = {
     [{ label: 'Solar EVA encapsulant film screening mid $2.00/kg of ~$1.8–2.5/kg; not a STR/Mitsui contract', url: FRAUNHOFER_PV_REPORT }]
   ),
   'iron-ore': row(
-    0.10, '$/kg', 'screening', 'USGS MCS iron ore band',
-    'Hematite / Fe₂O₃ feed screening. USGS MCS iron ore ~$80–120/t mid → $0.10/kg (US mine unit values recently ~$89–115/t; 62% fines global spot ~$99–112/t sit in that band). Not a mine contract.',
-    [{ label: 'USGS MCS 2025 iron ore (US mine unit value / global fines family; screening mid $0.10/kg of ~$80–120/t, not a mine contract)', url: USGS_IRON_ORE }]
+    0.13, '$/kg', 'screening', 'DR-grade pellet-feed concentrate: 62% Fe index + DR-grade premium',
+    'Purchased DR-grade pellet-feed concentrate (~67.5% Fe, SiO₂+Al₂O₃ ≲ 3.5%; e.g. magnetite concentrate) — the feed of an own pellet plant (pack pellet-plant), not lump/fines charged straight to a shaft and not finished pellets. Screening $130/dmt plant-gate: the Strategic Resources Port Saguenay DR pellet PFS (Mar 2024) buys concentrate at the 62% Fe CFR China index ($100/dmt) + DR-grade premium (65–62%) $35/dmt + Fe differential; its cash cost is $156/dmt pellets incl. $16/dmt conversion → ~$140/dmt delivered concentrate. Here $0.13 + screening inland-truck-short $0.01/kg = $140/t. 62% Fe index ~$99–112/t over 2024–25 (World Bank pink sheet; USGS MCS). Finished DR pellets trade at index + ~$70/dmt DR premium ≈ $150–180/t, which this concentrate + pellet-plant reproduces. Was $0.10/kg pure-Fe₂O₃ hematite with no pelletizing step. Not a mine contract.',
+    [
+      { label: 'Strategic Resources Port Saguenay pellet plant PFS release (12 Mar 2024): 62% CFR $100/dmt, DR-grade premium (65–62%) $35/dmt, DR pellet premium $70/dmt, cash cost $156/dmt incl. concentrate, conversion $16.31/dmt', url: SR_SAGUENAY_PFS_RELEASE },
+      { label: 'World Bank commodity markets / pink sheet (iron ore 62% Fe CFR China, 2024 avg ~$109/dmt)', url: WB_PINK },
+      { label: 'USGS MCS 2025 iron ore (commodity context; not a mine contract)', url: USGS_IRON_ORE },
+    ]
   ),
   'hydrogen-feed': row(
     2.00, '$/kg', 'screening', 'industrial/grey–blue H2 purchase',
@@ -783,6 +790,18 @@ const packs = {
       { label: 'USGS MCS 2025 iron and steel (commodity-family context; screening DRI-island CAPEX intensity, not a Midrex quote)', url: USGS_STEEL },
       { label: 'IEA Global Hydrogen Review 2024 (H₂-DRI family context; CAPEX intensity is screening OOM, not a plant quote)', url: IEA_H2 },
       { label: 'DOE hydrogen for industry / electrolysis family (contrast only; this pack is a shaft island with purchased H₂, not an electrolyzer)', url: DOE_H2 },
+    ],
+  }),
+  'pellet-plant': pack({
+    capexIntensity: 43, intensityUnit: '$/(kg pellets/day)',
+    capexIntensityBand: { low: 20, mid: 43, high: 55 },
+    fixedOmPercent: 4, variableOm: 0.006, assetLifeYears: 25,
+    quality: 'screening', source: 'merchant DR pellet plant PFS (straight grate) TIC / capacity',
+    note: 'installedCapex = 43 × capacity (kg fired pellets/day). Strategic Resources Port Saguenay 4 Mdmt/y DR-grade straight-grate (Metso) pellet plant PFS (BBA, AACE Class 5, Q1 2024): US$470M initial incl. $42M contingency → $117.5/(t/yr) × 0.365 ≈ 43 $/(kg/day). Band: Indian-built straight-grate plants ~$50–60/(t/yr) → ~20; integrated pellet + port complexes ~$150/(t/yr) → 55. Scope: balling (discs/drums), straight-grate induration at ~1,250–1,320 °C, screening, stockyard — not a concentrator or regrind mill. Variable O&M $0.006/kg: bentonite binder (~6 kg/t × ~$100/t) + grate bars, refractory and maintenance consumables. The PFS conversion cost $16.31/dmt = gas $2.56 + electricity $2.09 + labour/maintenance/binder ≈ this pack\'s fixed + variable O&M (~$11/t) plus energy. Heat + electricity is the unit param electricityKWhPerKg 0.14 (total-energy-as-electricity: ~0.35 GJ/t magnetite induration + ~35 kWh/t), not this pack. Linear small-plant intensity; 1.5 t/day is not a 4 Mtpa line. Not a Metso/Primetals quote.',
+    evidence: [
+      { label: 'Strategic Resources Port Saguenay DR pellet PFS release (12 Mar 2024): 4.0 Mdmt/y, US$470M capex (Class 5, incl. $42M contingency), conversion $16.31/dmt (gas $2.56/t, electricity $1.78 + $0.31/t)', url: SR_SAGUENAY_PFS_RELEASE },
+      { label: 'The Deep Dive summary of the Port Saguenay PFS (US$470M, 4 Mtpa, DR pellet premium $70/t)', url: SR_SAGUENAY_PFS_NEWS },
+      { label: 'ISIJ International 54(3):596 — mining-system energy ~650 MJ/t for magnetite pellets vs ~1,050 MJ/t for hematite pellets (pelletizing heat family)', url: ISIJ_PELLET_ENERGY },
     ],
   }),
   'titanium-kroll': pack({

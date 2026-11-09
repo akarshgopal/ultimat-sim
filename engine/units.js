@@ -1069,6 +1069,46 @@ const hydrogenDri = reaction({
   inputs: { ironOre: { substance: 'Fe2O3', molPerProductMol: 0.5 }, hydrogen: { substance: 'H2', molPerProductMol: 1.5 } },
   outputs: { steel: { substance: 'Fe', molPerProductMol: 1, phase: 'solid' }, water: { substance: 'H2O', molPerProductMol: 1.5, phase: 'liquid' } },
 });
+// Iron-ore pellet plant (balling + induration) screening. Activity = kg fired pellets / day.
+// Feed: purchased pellet-feed concentrate, Fe₂O₃ plus gangue (SiO₂ proxy for SiO₂ + Al₂O₃ + CaO
+// + MgO). Magnetite concentrate is mass-proxied as Fe₂O₃: the induration oxidizes it with air
+// (exothermic, which is why magnetite needs ~half the fuel of hematite) and that air O₂ is not
+// ledgered. Fired pellets are the concentrate mass (screening: bentonite binder ~0.6% and
+// moisture are not ledgered; undersize green balls and fired fines are recycled in-plant).
+// Outlets: `pellets` carries the Fe₂O₃ the shaft reduces; `gangue` carries the rest of the pellet
+// mass. Physically gangue stays inside the pellet and reports to EAF slag; it is split out here only
+// because hydrogen-dri takes pure Fe₂O₃. electricityKWhPerKg (default 0.14 kWh/kg fired pellet) is
+// induration heat as a total-energy proxy (~0.4 GJ/t magnetite straight grate ≈ 0.11 kWh/kg) plus
+// ~30 kWh/t for balling, fans and conveying. Screening, not a Metso/Primetals heat balance.
+function pelletPlant({ inlets, requestedActivity, capacity, params = {} }) {
+  const requested = nonnegative(requestedActivity, 'requestedActivity');
+  const installed = nonnegative(capacity, 'capacity');
+  const sec = nonnegative(Number(params.electricityKWhPerKg ?? 0.14), 'electricityKWhPerKg');
+  const electricity = validateStream(inlets.electricity, 'electricity');
+  const feed = validateStream(inlets.concentrate, 'material');
+  if (!(feed.mol.Fe2O3 > 0)) throw new Error('concentrate must contain Fe2O3');
+  const feedKg = streamMassKg(feed);
+  const planned = Math.min(requested, installed);
+  const limits = { capacity: installed, concentrate: feedKg, electricity: sec === 0 ? Infinity : electricity.kWh / sec };
+  const activity = Math.min(planned, ...Object.values(limits));
+  const atActivity = kg => scaleStream(feed, feedKg > 0 ? kg / feedKg : 0);
+  const consumed = atActivity(activity);
+  const { Fe2O3, ...rest } = consumed.mol;
+  const gangueMol = Object.keys(rest).length ? rest : { SiO2: 0 };
+  const limitingValue = Math.min(...Object.values(limits));
+  return {
+    activity,
+    requestedInputs: { concentrate: atActivity(planned), electricity: { kind: 'electricity', kWh: planned * sec } },
+    consumed: { concentrate: consumed, electricity: { kind: 'electricity', kWh: activity * sec } },
+    outlets: {
+      pellets: { kind: 'material', mol: { Fe2O3 }, phase: 'solid', T_C: feed.T_C, P_bar: feed.P_bar },
+      gangue: { kind: 'material', mol: gangueMol, phase: 'solid', T_C: feed.T_C, P_bar: feed.P_bar },
+    },
+    limitedBy: reached(activity, requested) ? [] : Object.entries(limits)
+      .filter(([, value]) => Math.abs(value - limitingValue) <= Math.max(1, limitingValue) * 1e-12)
+      .map(([name]) => name),
+  };
+}
 const titaniumKroll = reaction({
   product: 'Ti', electricityKWhPerKg: 8,
   inputs: { titaniumTetrachloride: { substance: 'TiCl4', molPerProductMol: 1 }, magnesium: { substance: 'Mg', molPerProductMol: 2 } },
@@ -2012,6 +2052,14 @@ const UNITS = Object.freeze({
       steel: { direction: 'out', kind: 'material', required: true }, water: { direction: 'out', kind: 'material', required: true },
     },
     evaluate: hydrogenDri,
+  },
+  'pellet-plant': {
+    kind: 'converter',
+    ports: {
+      concentrate: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
+      pellets: { direction: 'out', kind: 'material', required: true }, gangue: { direction: 'out', kind: 'material', required: true },
+    },
+    evaluate: pelletPlant,
   },
   'titanium-kroll': {
     kind: 'converter',

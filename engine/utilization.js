@@ -39,7 +39,7 @@
     ]),
     // Baseload units whose "electricity" is a total-energy proxy for process heat: their night
     // energy can come from a thermal store instead of a battery.
-    thermalUnits: Object.freeze(['cement', 'float-glass', 'bayer-alumina', 'urea']),
+    thermalUnits: Object.freeze(['cement', 'float-glass', 'bayer-alumina', 'urea', 'pellet-plant']),
     // Effective PV generating day as a fraction of the astronomical day length.
     solarDayFraction: 0.9,
     // Baseload units cannot stop nightly; they can only turn down. In every month, direct PV plus

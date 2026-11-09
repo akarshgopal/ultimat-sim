@@ -1734,11 +1734,15 @@ function steelChain(definition) {
   if (!sink) throw new Error('sizeToProduct needs a steel sink');
   const electrolyzer = converter(definition, 'electrolyzer');
   const swro = converter(definition, 'swro');
+  // An on-site pellet plant feeding the shaft scales with it, with its purchased concentrate.
+  const pelletFeed = sourceFeeding(definition, primary.id, 'ironOre');
+  const pellets = pelletFeed?.unit === 'pellet-plant' ? pelletFeed : null;
   const seen = new Set();
   const sources = collectMaterialSourcesFeeding(definition, primary.id, seen);
+  if (pellets) sources.push(...collectMaterialSourcesFeeding(definition, pellets.id, seen));
   const seawater = swro && collectMaterialSourceOnPort(definition, swro.id, 'feed', seen);
   if (seawater) sources.push(seawater);
-  return { primary, sink, converters: [primary, electrolyzer, swro].filter(Boolean), sources };
+  return { primary, sink, converters: [primary, pellets, electrolyzer, swro].filter(Boolean), sources };
 }
 
 function ethyleneChain(definition) {
@@ -1827,7 +1831,7 @@ const RATIO_ISLANDS = Object.freeze({
   steel: {
     unitLabel: 'hydrogen-dri',
     chain: steelChain,
-    sec: { 'hydrogen-dri': perKg(0.7), electrolyzer: ELECTROLYZER_SEC, swro: SWRO_SEC },
+    sec: { 'hydrogen-dri': perKg(0.7), 'pellet-plant': perKg(0.14), electrolyzer: ELECTROLYZER_SEC, swro: SWRO_SEC },
   },
   ethylene: {
     unitLabel: 'mto',

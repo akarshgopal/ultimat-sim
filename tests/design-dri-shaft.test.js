@@ -106,9 +106,13 @@ test('the override lowers H₂-DRI cost in the company simulator and leaves othe
     // Firming the shaft's heat with a PV-charged heat store instead of batteries is cheaper still.
     assert.ok(lcop(heatStore, id) < lcop(designed, id), `${id} heat store`);
   }
-  // Energy per kg of h2-dri (the shaft is all of its electricity) follows the design's kWh/kg.
+  // Energy per kg of h2-dri (shaft + pellet plant) follows the design's kWh/kg on the shaft's share.
   const e = id => designed.find(r => r.pathwayId === id).energyKWhPerKg / recipe.find(r => r.pathwayId === id).energyKWhPerKg;
-  assert.ok(Math.abs(e('h2-dri') - o['hydrogen-dri'].energyFactor) < 0.02, `energy ratio ${e('h2-dri')}`);
+  const nodes = PATHWAYS.find(p => p.id === 'h2-dri').flowsheet.nodes.filter(n => n.kind === 'converter');
+  const totalKWh = nodes.reduce((s, n) => s + n.kWhPerKg, 0);
+  const shaftKWh = nodes.find(n => n.unit === 'hydrogen-dri').kWhPerKg;
+  const expected = (totalKWh - shaftKWh + shaftKWh * o['hydrogen-dri'].energyFactor) / totalKWh;
+  assert.ok(Math.abs(e('h2-dri') - expected) < 0.02, `energy ratio ${e('h2-dri')} vs ${expected}`);
   // A pathway without the unit is untouched.
   close(lcop(designed, 'green-hydrogen'), lcop(recipe, 'green-hydrogen'), 1e-9);
   close(lcop(designed, 'green-ammonia'), lcop(recipe, 'green-ammonia'), 1e-9);

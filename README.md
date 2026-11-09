@@ -10,13 +10,14 @@ Live: https://akarshgopal.github.io/ultimat-sim/
 
 ## The app
 
-One page (`index.html`), six views. The scenario lives in the URL, so a link reproduces both the screen and the assumptions.
+One page (`index.html`), seven views. The scenario lives in the URL, so a link reproduces both the screen and the assumptions.
 
 | View | Question |
 |---|---|
+| **Abundance** | The scoreboard (landing view). Of the world's bulk material tonnage, how much can be made from sunlight, air, water and rock below today's price — today, in the current scenario, and at the frontier (10× cheaper solar, every cost at 1.5× its raw materials, every design at its lean preset)? For each blocked material, the single largest cost item per kg: a unit to design, a feed to make cheaper, or energy. |
 | **Company** | What does the company make, how much of the world's supply is that, and is it feasible and self-funding? Scenario panel, abundance first, economics as the constraint. |
 | **Energy** | Think in kWh and $/kWh: the electricity price below which each recipe becomes feasible, at several equipment costs; how much world material demand each price unlocks; where each kg's cost goes (energy, equipment, feedstock). Presets for today, 3× and 10× cheaper solar. |
-| **Designs** | Engineer the equipment that gates abundance. First: a solar-matched alkaline electrolyzer (`engine/designs/electrolyzer.js`): knobs → geometry, bill of materials, $/kW, kWh/kg, idiot index → $/kg H₂ on sunlight alone; push the design into the company simulation; ranks what to design next. Design doc and build plan: [`docs/designs/solar-electrolyzer.md`](docs/designs/solar-electrolyzer.md). |
+| **Designs** | Engineer the equipment that gates abundance. Every module in `engine/designs/` (contract: [`engine/designs/README.md`](engine/designs/README.md)) gets presets and knobs → bill of materials → installed $ per kg/day, kWh/kg, idiot index → its capex/energy factors and operating mode in the company simulation, applied per flowsheet unit in every recipe that contains it. Design docs and build plans: [`docs/designs/`](docs/designs/). |
 | **Pathways** | Each recipe: cost vs price over the years at its best site, when it becomes feasible, make-vs-buy, best sites, and the solved plant flowsheet per kg of product. |
 | **Sites** | The 34 sites: solar, land price, seawater/brine, which recipes they can host, what the run builds there. |
 | **Markets** | The 31 world markets: demand, price, sources, the company's share and the price relief it delivers. |

@@ -1,11 +1,10 @@
-// Solar-modulating Hall–Héroult aluminium smelter — first-principles parametric design.
+// Solar-modulating Hall–Héroult aluminium smelter.
 //
-// Goal: the cheapest kg of primary aluminium on sunlight. A potline is a ~1,500 V string of
-// electrolysis cells in series at 300–600 kA. It is the textbook baseload load: the pots keep their
-// ~960 °C bath molten with their own ohmic heat, and a frozen ledge of cryolite on the side walls
-// protects the lining. Cut the current and the heat balance collapses: the ledge grows into the
-// cavity, then the bath freezes. On PV that means batteries keep the line near full load all night,
-// and those batteries are the largest cost item of solar aluminium. Three things decide cost here:
+// A potline is a ~1,500 V string of electrolysis cells in series at 300–600 kA, the textbook baseload
+// load: the pots keep their ~960 °C bath molten with their own ohmic heat, and a frozen cryolite ledge
+// on the side walls protects the lining. Cut the current and the ledge grows into the cavity, then the
+// bath freezes. On PV, batteries keep the line near full load all night, and they are the largest cost
+// item of solar aluminium. Three things decide cost here:
 //   • the cell — voltage from its electrochemistry (reversible voltage, overvoltages, bath ohmic
 //     drop across the anode–cathode distance ACD, conductors), current efficiency, so kWh/kg;
 //   • the heat balance — pot heat generation I·(V − CE·V_tn) against its losses (top/off-gas,
@@ -17,16 +16,14 @@
 //     sized from amperage and pot count and priced as a bill of materials at commodity prices
 //     (data/bom.js) × manufacturing factors × installation, so the idiot index is explicit.
 //
-// Basis: per kg of aluminium/day at the line's PEAK (rated) current — that is what the company
-// engine's "full load" means. A line that boosts to 1.3× nominal by day makes 1.3× more metal per
-// pot at peak, so its $/(kg/day) is lower; the engine then derates output on nights that run below
-// peak. Screening-grade, every assumption in DEFAULTS.
+// Basis: per kg of aluminium/day at the line's peak (rated) current, which is what the engine's "full
+// load" means. A line that boosts to 1.3× nominal by day makes 1.3× more metal per pot at peak, so its
+// $ per kg/day is lower; the engine derates output on nights that run below peak. Screening grade.
 (function exposeSmelterDesign(root, factory) {
   const api = factory(typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else (root.FoundryDesigns = root.FoundryDesigns || {})[api.id] = api;
 })(globalThis, Bom => {
-  // ------------------------------------------------------------------ constants
   const F = 96485.33212; // C/mol
   const M_AL = 26.9815e-3; // kg/mol
   // kWh per kg Al per volt of cell voltage at 100% current efficiency: 3F / M_Al / 3.6e6.
@@ -46,14 +43,13 @@
   // Thermoneutral voltage: the voltage at which the cell makes exactly the reaction enthalpy.
   const V_TN = { carbon: THERMO_MIN_KWH_PER_KG.carbon / KWH_PER_KG_PER_V, inert: THERMO_MIN_KWH_PER_KG.inert / KWH_PER_KG_PER_V };
 
-  // Recipe basis (data/pathways.js, pathway 'aluminium', node 'aluminium-smelter'):
-  // capexUsdPerKgDay 1890 (TeaScreening 'aluminium-smelter' 1,800 $/(kg Al/day) × Chile 1.05),
-  // kWhPerKg 14, reference size 10,000 kg Al/day. The 'silicon' pathway carries the same unit per kg
-  // of PV module (0.127 kg Al/kg): 241 / 0.127 ≈ 1,898 $/(kg Al/day) and 1.78 / 0.127 ≈ 14.0 kWh/kg.
-  // The company engine scales process capex by (size/ref)^(0.85 − 1), floored at 0.4×
-  // (engine/company.js DEFAULTS.scale). The abundance scoreboard prices 100 × ref = 1,000 t Al/day
-  // (≈ 365 kt/yr, a mid-size smelter; below build.maxPlantKgPerDay 5,000 t/day), where the recipe is
-  // 1890 × 100^−0.15 = $947 per kg/day (≈ $2,600 per t/yr). capexFactor compares like with like there.
+  // Recipe basis (data/pathways.js, pathway 'aluminium', node 'aluminium-smelter'): $1,890 per kg
+  // Al/day (TeaScreening 'aluminium-smelter' 1,800 × Chile 1.05), 14 kWh/kg, reference 10,000 kg Al/day.
+  // The 'silicon' pathway carries the same unit per kg of PV module (0.127 kg Al/kg): 241 / 0.127 ≈
+  // $1,898 per kg Al/day and 1.78 / 0.127 ≈ 14.0 kWh/kg. The engine scales process capex by
+  // (size/ref)^(0.85 − 1), floored at 0.4× (engine/company.js DEFAULTS.scale). The abundance scoreboard
+  // prices 100 × ref = 1,000 t Al/day (≈ 365 kt/yr, below build.maxPlantKgPerDay 5,000 t/day), where
+  // the recipe is 1890 × 100^−0.15 = $947 per kg/day (≈ $2,600 per t/yr).
   const RECIPE = Object.freeze({
     aluminium: Object.freeze({ usdPerKgDay: 1890, kWhPerKg: 14, pathwayId: 'aluminium', alsoPathways: Object.freeze(['silicon']), refKgPerDay: 10000 }),
   });
@@ -105,9 +101,9 @@
     draftMin: 1.0, // duct draft ÷ nominal, night (lower: fugitive HF)
     draftMax: 1.0, // duct draft ÷ nominal, day (higher: more top heat loss, bigger fume treatment)
     draftExponent: 0.3, // top heat loss ∝ draft^0.3 (hood air cools the crust)
-    // Shell heat exchanger (side wall): external heat-transfer coefficient range, W/m²K.
-    // 'natural': fixed at what the design ledge needs. 'enpot': insulated jacket with fans
-    // (≈ ±30% power, demonstrated on industrial pots). 'deep': thicker jacket insulation + bigger fans.
+    // Side-wall shell heat exchanger: external heat-transfer coefficient range hMin–hMax, W/m²K.
+    // 'natural': fixed at what the design ledge needs. 'enpot': insulated jacket with fans (≈ ±30%
+    // power, demonstrated on industrial pots). 'deep': thicker jacket insulation + bigger fans.
     shellHx: 'enpot',
     shellHxs: Object.freeze({
       natural: Object.freeze({ label: 'No shell heat exchanger (fixed shell cooling)', hMin: null, hMax: null, jacketKgPerM2: 0, fanFrac: 0, usdPerPot: 0 }),
@@ -168,7 +164,7 @@
     auxUsdPerPlant: 15e6, // offices, IT, lab equipment, mobile fleet
     instrumentsUsdPerPlant: 8e6, // potline DCS, substation protection, emissions monitoring
     engineeringUsdPerPlant: 30e6, // repeat standard potline design
-    // ---- money
+    // ---- cost factors
     manufacturing: Object.freeze({ // finished part cost ÷ raw-material cost
       vessel: 2.5, cathode: 1.3, refractory: 2.0, sic: 5.0, mechanical: 3.0, busbar: 1.2, structural: 2.0,
       civil: 1.5, ducts: 2.5, fans: 5.0, electrical: 1.5, handling: 2.5, casthouse: 3.0, anode: 3.0, coating: 3.0,
@@ -178,10 +174,10 @@
     lifeYears: 20,
   });
 
-  // 'today' is a conventional greenfield 400 kA prebake potline, no heat-balance hardware, field-built
-  // in enclosed potrooms with AC rectiformers; it lands near the recipe at 1,000 t/day. 'lean' is
-  // DEFAULTS: 500 kA pots at 0.7 A/cm² (low voltage, insulation-limited), shell heat exchangers for ±30%-class modulation with a 1.3× day boost,
-  // DC/DC from PV, open desert potrooms, repeat engineering.
+  // 'today': a conventional greenfield 400 kA prebake potline, no heat-balance hardware, field-built in
+  // enclosed potrooms with AC rectiformers; lands near the recipe at 1,000 t/day. 'lean' (DEFAULTS):
+  // 500 kA pots at 0.7 A/cm² (low voltage, insulation-limited), shell heat exchangers for ±30%
+  // modulation with a 1.3× day boost, DC/DC from PV, open desert potrooms, repeat engineering.
   const PRESETS = Object.freeze({
     today: Object.freeze({
       label: 'Today: conventional 400 kA prebake potline, constant amperage, AC rectiformers',
@@ -262,7 +258,6 @@
     // Pot length is capped (MHD stability, crane span, shell stiffness): at low current density the
     // pot carries less current, not a longer cavity.
     const maxKA = p.anodeCurrentDensity * 1e4 * (p.maxCavityLengthM - p.endAllowanceM) * (p.cavityWidthM - 0.7) / 1000;
-    p.requestedAmperageKA = p.amperageKA;
     p.amperageKA = Math.min(p.amperageKA, maxKA);
     return p;
   }
@@ -271,7 +266,8 @@
     return Bom.COMMODITIES[name].usdPerKg;
   }
 
-  function recipeAtSize(kgPerDay, recipe = RECIPE.aluminium) {
+  function recipeAtSize(kgPerDay) {
+    const recipe = RECIPE.aluminium;
     const f = (kgPerDay / recipe.refKgPerDay) ** (ENGINE_SCALE.exponent - 1);
     return recipe.usdPerKgDay * Math.max(ENGINE_SCALE.floorFactor, Math.min(1, f));
   }
@@ -301,9 +297,11 @@
     const busM2 = iPeakRated / (p.busbarCurrentDensityAPerMm2 * 1e6);
     const busL = p.busbarLengthPerPotM * (p.amperageKA / 400) ** p.busbarLengthExponent;
     const busOhm = p.aluminiumResistivityOhmM * busL / busM2;
-    Object.assign(geo, { busM2, busL, busKg: busM2 * busL * 2700, busOhm });
+    Object.assign(geo, { busM2, busL, busKg: busM2 * busL * 2700, busOhm }); // Al 2,700 kg/m³
 
     const j = x => x * j0;
+    // Cell voltage: reversible + Tafel anode overvoltage (referenced to 0.85 A/cm²) + cathode
+    // overvoltage + bath ohmic drop + bubble layer + anode/cathode conductor drops.
     const vPot = (x, acd) => {
       const jj = Math.max(j(x), 1e-3);
       const etaA = Math.max(0.05, an.eta0 + an.tafel * Math.log10(jj / 0.85));
@@ -384,8 +382,8 @@
       }
       return hi;
     };
-    // Steady operating point at x (bufferW: average heat the ledge may supply (night, > 0) or absorb
-    // (day, < 0) over the cycle). Operating policy:
+    // Steady operating point at x. bufferW: average heat the ledge may supply (night, > 0) or absorb
+    // (day, < 0) over the cycle. Operating policy:
     //   x ≤ 1 — keep ACD at its nominal (stability margin) and cut losses (low superheat, insulated
     //           shell, low draft); only when even the minimum loss is too much, raise the anodes;
     //   x > 1 — at nominal losses first lower ACD toward its MHD minimum (saves energy), then open
@@ -421,9 +419,10 @@
       return { feasible: true, x, j: j(x), acd, superheat, ce: eff, vPot: vPot(x, acd), vBus: vBus(x), heatW: L, kgPerDay: KG_PER_A_DAY * x * I0 * eff };
     }
 
-    // Lowest and highest current the heat balance allows (bisection; feasible set is an interval).
+    // Lowest and highest current the heat balance allows, by bisection between a feasible lo and an
+    // infeasible hi (the feasible set is an interval).
     function edge(lo, hi, bufferW) {
-      for (let i = 0; i < 50; i += 1) { // lo feasible, hi infeasible
+      for (let i = 0; i < 50; i += 1) {
         const mid = (lo + hi) / 2;
         if (operate(mid, bufferW).feasible) lo = mid; else hi = mid;
       }
@@ -438,7 +437,7 @@
     const dayBufferW = -ledgeBufferJ / (H * 3600);
     return {
       an, ca, vtn, I0, j0, geo, heat, window, acdNom, thermallyLimited, gen, vPot, vBus, ce, operate, acdMin, acdMax, nightBufferW, dayBufferW,
-      // steady state (days on end) and daily cycle (ledge used as a heat store)
+      // Steady state (days on end), and the daily cycle with the ledge as a heat store.
       xMinSteady: ok1 ? lowest(0) : 1,
       xMaxSteady: ok1 ? highest(0) : 1,
       xMin: ok1 ? lowest(nightBufferW) : 1,
@@ -513,7 +512,7 @@
       let pv = 1;
       for (let t = cell.an.lifeYears; t < p.lifeYears; t += cell.an.lifeYears) pv += (1 + p.discountRate) ** -t;
       add('Inert anodes (Cu–Ni–Fe alloy, initial + PV of replacements)', 'nickel', kg * 0.4 * pv, 'anode', `${(kg / nPots / 1000).toFixed(1)} t per pot, ${cell.an.lifeYears}-yr life`);
-      add('Inert anodes, copper/iron share', 'copper', kg * 0.4 * pv, 'anode', '');
+      add('Inert anodes, copper share', 'copper', kg * 0.4 * pv, 'anode', '');
       add('Inert anodes, iron share', 'steel', kg * 0.2 * pv, 'anode', '');
       add('Anode rods (aluminium)', 'aluminium', nPots * p.rodAlKgPerKA * p.amperageKA * 0.6, 'mechanical', 'no rodding cycle: fewer spares');
     } else {
@@ -639,16 +638,6 @@
     return deficitW > 0 ? cell.window.ledgeBufferKWh * 1000 / deficitW : Infinity;
   }
 
-  // Installed $/kg-day and kWh/kg vs a parameter.
-  function sweep(params, key, values) {
-    return values.map(v => {
-      const d = design({ ...params, [key]: v });
-      return { [key]: v, usdPerKgDay: d.installedUsdPerKgDay, kWhPerKg: d.kWhPerKg, nPots: d.nPots, minTurndown: d.minTurndown, nightFloor: d.envelope.nightFloor, xPeak: d.envelope.xPeak, idiotIndex: d.idiotIndex };
-    });
-  }
-
-  // Contract: what the company simulator needs to build on this design.
-  const UNITS = Object.freeze(['aluminium-smelter']);
   function simulatorOverride(params) {
     const d = design(params);
     return { 'aluminium-smelter': {
@@ -657,7 +646,7 @@
       materialsFactor: d.vsRecipe.materialsFactor,
       minTurndown: d.minTurndown,
       flexible: false,
-      // Inert anodes evolve O₂: no carbon anodes to buy (their CO₂ vent disappears too).
+      // Inert anodes evolve O₂: no carbon anodes to buy.
       ...(d.params.anode === 'inert' ? { feedFactors: { 'carbon-anode': 0 } } : {}),
     } };
   }
@@ -666,22 +655,19 @@
     id: 'smelter',
     name: 'Solar-modulating Hall–Héroult smelter',
     summary: 'Hall–Héroult potline whose pots ride PV with shell heat exchangers and a day boost, priced from its cell voltage, heat balance and bill of materials.',
-    units: UNITS,
+    units: ['aluminium-smelter'],
     product: 'aluminium',
-    productLabel: 'Primary aluminium (kg Al)',
     RECIPE,
     DEFAULTS,
     PRESETS,
     CONTROLS,
     ENGINE_BASELOAD_TURNDOWN,
     THERMO_MIN_KWH_PER_KG,
-    V_TN,
     KWH_PER_KG_PER_V,
     recipeAtSize,
     cellModel: params => cellModel(merge(params)),
     design,
     holdHours,
-    sweep,
     simulatorOverride,
   };
 });

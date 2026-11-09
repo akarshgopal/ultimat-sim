@@ -1,10 +1,8 @@
-// Solar-matched urea synthesis unit (Bosch–Meiser: 2 NH₃ + CO₂ ⇌ NH₂COONH₄ ⇌ CO(NH₂)₂ + H₂O) —
-// first-principles parametric design.
+// Solar-matched urea synthesis unit (Bosch–Meiser: 2 NH₃ + CO₂ ⇌ NH₂COONH₄ ⇌ CO(NH₂)₂ + H₂O).
 //
-// Goal: the cheapest kg of solid urea from liquid NH₃ (a solar Haber-Bosch loop, or bought) and
-// low-pressure CO₂ (DAC or bought), with every joule coming from PV. Urea is not an electrochemical
-// product: the unit is a high-pressure liquid reactor plus a heat-driven recycle of the carbamate that
-// did not convert, then evaporation and finishing. What sets the cost:
+// The cheapest kg of solid urea from liquid NH₃ and low-pressure CO₂ (DAC or bought), every joule
+// from PV. The unit is a high-pressure liquid reactor, a heat-driven recycle of the unconverted
+// carbamate, then evaporation and finishing. What sets the cost:
 //   • the synthesis equilibrium — CO₂ conversion per pass from a carbamate-dehydration equilibrium in
 //     the liquid (K(T) calibrated to industrial conversions; excess NH₃ dilutes and helps, water hurts),
 //     the reactor's approach to it (residence time, Arrhenius), and the bubble pressure the loop must
@@ -22,18 +20,16 @@
 //     from the carbamate condenser into the stripper (a heat pump: COP ~3.5);
 //   • how it runs on sunlight — firmed baseload (urea capex is ~5× its energy cost), or sun-following
 //     with the high-pressure loop blocked in hot every night.
-// Everything is priced as a bill of materials at data/bom.js commodity prices × explicit manufacturing
-// factors × installation → installed $ per kg urea/day, kWh per kg urea and the idiot index.
+// Bill of materials at data/bom.js commodity prices × manufacturing factors × installation →
+// installed $ per kg urea/day, kWh per kg urea and the idiot index.
 //
-// Basis: per kg urea/day at `plantKgPerDay` (default 100,000 kg/day = the abundance scoreboard's plant:
-// 100 × the urea / green-urea pathways' 1,000 kg/day reference). Screening grade; every assumption is
-// in DEFAULTS and overridable.
+// Basis: per kg urea/day at `plantKgPerDay` (default 100,000 kg/day, the abundance scoreboard's plant:
+// 100 × the urea / green-urea pathways' 1,000 kg/day reference). Screening grade.
 (function exposeUreaDesign(root, factory) {
   const api = factory(typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else (root.FoundryDesigns = root.FoundryDesigns || {})[api.id] = api;
 })(globalThis, Bom => {
-  // ------------------------------------------------------------------ constants
   const R = 8.314462618; // J/(mol·K)
   const M_UREA = 60.056; // g/mol
   const M_NH3 = 17.031;
@@ -42,10 +38,10 @@
   const M_CARB = 78.071; // ammonium carbamate
   const MOL_PER_KG = 1000 / M_UREA; // 16.65 mol urea per kg
   const BAR = 1e5;
-  const T185 = 458.15;
+  const T185 = 458.15; // K
   // 2 NH₃(l) + CO₂(g) → urea(aq) + H₂O(l): ΔHf NH₃(l) ≈ −67, CO₂(g) −393.5, urea(s) −333.1, H₂O(l)
-  // −285.8 kJ/mol, urea dissolution +15 ⇒ ≈ −76 kJ per mol urea released (net exothermic). The
-  // thermodynamic minimum work is ~0: urea needs no energy in principle, only heat moved uphill.
+  // −285.8 kJ/mol, urea dissolution +15 ⇒ ≈ −76 kJ per mol urea released. The minimum work is ~0:
+  // urea needs no energy in principle, only heat moved uphill.
   const OVERALL_EXOTHERM_KJ_PER_MOL = 76;
   const STOICH = Object.freeze({
     nh3KgPerKg: (2 * M_NH3) / M_UREA, // 0.567
@@ -94,7 +90,7 @@
     nh3VapKJPerMol: 23, // free NH₃ evaporated with it
     liquidCpKJPerKgK: 2.5,
     ureaSolutionWtFrac: 0.72, // urea in the solution leaving LP recirculation
-    hydrolyserKJPerKgUrea: 250, // process-condensate desorber/hydrolyser steam (cleans 0.3 kg H₂O/kg urea to boiler-feed quality)
+    hydrolyserKJPerKgUrea: 250, // desorber/hydrolyser steam: cleans 0.3 kg process condensate per kg urea to boiler-feed quality
     evaporatorEconomy: 1.0, // kg water evaporated per kg steam (1 = single effect; 1.8 = double effect)
     // ---- materials of construction
     vesselConstruction: 'lined-316L', // 'lined-316L' (carbon-steel heavy wall + 316L-UG liner) | 'lined-25-22-2' | 'duplex' (solid urea-grade super duplex)
@@ -179,7 +175,6 @@
       lpEquipment: 4,
       compressors: 8,
       pumps: 10,
-      motors: 3,
       airCoolers: 3,
       piping: 4,
       finishing: 3,
@@ -201,7 +196,6 @@
     nh3VentKgPerKgPerMolO2: 0.3, // NH₃ lost with passivation-air inerts (kg NH₃/kg urea per mol O₂/mol CO₂)
     nh3UsdPerKg: 0.45,
     otherVariableUsdPerKg: 0.004, // water treatment chemicals, lubricants, spares consumed
-    lifeYears: 25,
   });
 
   // 'today' = a ~100 t/day CO₂-stripping plant built the way urea plants are built now (vertical
@@ -239,7 +233,7 @@
         licenceUsdPerTpd: 20000,
         boughtInSizeExponent: 0.4,
         assemblyHoursAt100tpd: 90000, labourUsdPerHour: 60,
-        manufacturing: { hpVessels: 14, linedExtra: 1.6, hpExchangers: 16, lpEquipment: 8, compressors: 25, pumps: 25, motors: 4, airCoolers: 5, piping: 10, finishing: 6, storage: 3, structure: 3.5, civil: 2.5, electrical: 3 },
+        manufacturing: { hpVessels: 14, linedExtra: 1.6, hpExchangers: 16, lpEquipment: 8, compressors: 25, pumps: 25, airCoolers: 5, piping: 10, finishing: 6, storage: 3, structure: 3.5, civil: 2.5, electrical: 3 },
         installFactor: 2.0,
         trainMinTurndown: 0.6,
         otherVariableUsdPerKg: 0.022,
@@ -306,7 +300,7 @@
   // ------------------------------------------------------------------ synthesis thermodynamics
   // Dehydration equilibrium constant K = x_U·x_W/x_C (liquid mole fractions incl. free NH₃).
   function equilibriumK(Tc, p = DEFAULTS) {
-    const eq = p.equilibrium || DEFAULTS.equilibrium;
+    const eq = p.equilibrium;
     return eq.kAt185 * Math.exp((-eq.dehydrationKJPerMol * 1000 / R) * (1 / (Tc + 273.15) - 1 / T185));
   }
 
@@ -326,7 +320,7 @@
 
   // Bubble pressure (bar) of the synthesis liquid at T and N/C.
   function bubblePressureBar(Tc, a, p = DEFAULTS) {
-    const bb = p.bubble || DEFAULTS.bubble;
+    const bb = p.bubble;
     return bb.barAt185 * (a / 3) ** bb.nhExponent * Math.exp((-bb.effectiveKJPerMol * 1000 / R) * (1 / (Tc + 273.15) - 1 / T185));
   }
 
@@ -388,10 +382,9 @@
       mvrKWhPerKg = upgradedKWhPerKg / cop / p.motorEff;
       heatKWhPerKg = toKWh(hpImport - up + lpImport) / p.steamSystemEff;
     }
-    // Electricity.
+    // Electricity. CO₂: isothermal work at 40 °C ÷ efficiency. NH₃: liquid (600 kg/m³) pumped to loop + 10 bar.
     const co2InBar = p.co2InletBar;
-    const Tc = 313.15;
-    const co2J = (R * Tc * Math.log(Math.max(p.pressureBar, co2InBar) / co2InBar)) / p.co2IsothermalEff / p.motorEff;
+    const co2J = (R * 313.15 * Math.log(Math.max(p.pressureBar, co2InBar) / co2InBar)) / p.co2IsothermalEff / p.motorEff;
     const co2KWhPerKg = toKWh(co2J / 1000);
     const nh3M3PerKg = STOICH.nh3KgPerKg / 600;
     const nh3PumpKWhPerKg = (nh3M3PerKg * Math.max(0, p.pressureBar + 10 - p.nh3FeedBar) * BAR) / p.pumpEff / p.motorEff / 3.6e6;
@@ -421,8 +414,8 @@
   }
 
   // ------------------------------------------------------------------ hardware helpers
-  const DENS = 7900;
-  // Pressure vessel (cylinder + hemispherical heads) of volume V at P: wall by ASME VIII-1 thin wall.
+  const DENS = 7900; // kg/m³, steels
+  // Pressure vessel (cylinder + hemispherical heads) of volume V at P (bar); wall by ASME VIII-1 UG-27.
   function hpVessel(V, P, p, lOverD = 4) {
     const D = Math.cbrt(Math.max(V, 1e-4) / (Math.PI / 4 * (lOverD - 1) + Math.PI / 6));
     const c = p.constructions[p.vesselConstruction] || p.constructions.duplex;
@@ -470,11 +463,10 @@
     if (p.reactorC > c.maxC) warnings.push(`reactor ${p.reactorC} °C above the ${c.maxC} °C limit of ${c.label}`);
     if (B.st.alpha > 0 && B.st.stripperC > alloy.maxC) warnings.push(`stripper ${B.st.stripperC} °C above the ${alloy.maxC} °C limit of ${alloy.label} tubes`);
     if (B.s.liquidFrac < 1) warnings.push(`loop ${p.pressureBar} bar below the ${B.s.pBubble.toFixed(0)} bar bubble pressure: CO₂ bypasses the liquid`);
-    // Sun-following trains are oversized for sun hours; costs below are for the 24 h-average plant, and
-    // the engine multiplies the unit by its own nameplate factor, so nothing is oversized here.
+    // Costed for the 24 h-average plant: the engine applies a sun-following unit's nameplate factor itself.
     const kgPerSTrain = sTrain / 86400; // kg urea/s per train
     const molPerSTrain = kgPerSTrain * MOL_PER_KG;
-    const kW = kJPerMol => kJPerMol * molPerSTrain; // per train, at nameplate
+    const kW = kJPerMol => kJPerMol * molPerSTrain; // per train
     const m = p.manufacturing;
     const parts = [];
     const add = (part, material, kgPlant, mfg, note, group) => {
@@ -492,14 +484,14 @@
     const lpAdd = (part, material, kgTrain, mfg, note) => { lpKgPlant += kgTrain * nTrains; add(part, material, kgTrain * nTrains, mfg, note, 'lp'); };
     const vesselMfg = c.liner ? m.hpVessels * m.linedExtra : m.hpVessels;
 
-    // -- reactor (pool: reactor + condenser in one horizontal vessel)
+    // -- reactor (pool: reactor + condenser in one horizontal vessel); liquid ~1,100 kg/m³
     const liquidM3s = (B.liquidKgPerMol * molPerSTrain) / 1100;
     const reactorM3 = (liquidM3s * p.residenceMin * 60) / p.reactorFill;
     const pool = p.condenser === 'pool';
     const rv = hpVessel(reactorM3 * (pool ? p.poolVolumeFactor : 1), p.pressureBar, p, pool ? 4 : 6);
     hpSurfaceM2 += rv.areaM2;
     const rvLabel = pool ? 'Pool reactor shell (condenser + reactor)' : 'Urea reactor shell';
-    hpAdd(rvLabel, rv.wallMaterial, rv.wallKg, vesselMfg, `${(reactorM3).toFixed(1)} m³ liquid, Ø${(rv.D * 1000).toFixed(0)} mm × ${rv.L.toFixed(1)} m, ${rv.wallMm.toFixed(0)} mm ${rv.liner ? 'CS' : 'duplex'} at ${p.pressureBar} bar`);
+    hpAdd(rvLabel, rv.wallMaterial, rv.wallKg, vesselMfg, `${reactorM3.toFixed(1)} m³ liquid, Ø${(rv.D * 1000).toFixed(0)} mm × ${rv.L.toFixed(1)} m, ${rv.wallMm.toFixed(0)} mm ${rv.liner ? 'CS' : 'duplex'} at ${p.pressureBar} bar`);
     if (rv.liner) hpAdd(`${rvLabel} liner`, rv.liner, rv.linerKg, vesselMfg, `${c.linerMm} mm ${p.alloys[rv.liner].label}`);
     hpAdd('Reactor trays / internals', 'duplex', rv.areaM2 * 0.15 * 0.006 * DENS * 3, m.hpExchangers, 'sieve trays (vertical) or baffles (pool)');
 
@@ -550,7 +542,7 @@
     const evKW = kW(B.kJPerMol.evaporation);
     if (evKW > 0) {
       const evM2 = evKW / p.lpFluxKWPerM2;
-      lpAdd('Vacuum evaporators (304L)', 'stainless-steel', evM2 * 22, m.lpEquipment, `${(B.waterEvapKgPerKg).toFixed(3)} kg water/kg urea to ${(B.fin.meltWtFrac * 100).toFixed(1)}%, ${evM2.toFixed(0)} m²`);
+      lpAdd('Vacuum evaporators (304L)', 'stainless-steel', evM2 * 22, m.lpEquipment, `${B.waterEvapKgPerKg.toFixed(3)} kg water/kg urea to ${(B.fin.meltWtFrac * 100).toFixed(1)}%, ${evM2.toFixed(0)} m²`);
       lpAdd('Evaporator condensers + vacuum package', 'steel', evM2 * 20, m.lpEquipment, 'surface condensers, liquid-ring pumps');
     }
     // -- process condensate treatment
@@ -565,7 +557,7 @@
     hpAdd('HP pump frames', 'steel', sizedKg(p.pumpKgPerKWAt100kW, pumpKW, p.pumpSizeExponent) * 0.7, m.pumps, '');
     motorKW += (co2KW + pumpKW) * nTrains;
     // -- heat supply
-    const heatKW = (B.energy.heat * S / 24);
+    const heatKW = B.energy.heat * S / 24;
     add('Electric steam generator / heat-store discharge exchanger', 'steel', p.steamGenSteelKgPerKW * heatKW, m.lpEquipment, `${heatKW.toFixed(0)} kW_th at nameplate (store priced by the engine)`, 'utilities');
     buy('Steam generator controls / elements', p.steamGenUsdPerKW * heatKW, 'PV-direct resistive elements', 'utilities', heatKW * 0.05 * price('nickel', p));
     if (p.heatSupply === 'mvr' && B.energy.mvr > 0) {
@@ -634,11 +626,11 @@
     }
 
     // -- roll up
-    const equipmentUsd = parts.reduce((s2, x) => s2 + x.usdPlant, 0);
+    const equipmentUsd = parts.reduce((sum, x) => sum + x.usdPlant, 0);
     const installedEquipmentUsd = equipmentUsd * p.installFactor;
     const engineeringUsd = p.engineeringUsdAt100tpd * sb ** p.boughtInSizeExponent + p.licenceUsdPerTpd * S / 1000;
     const installedUsd = installedEquipmentUsd + engineeringUsd;
-    const materialsUsd = parts.reduce((s2, x) => s2 + x.usdMaterialsPlant, 0);
+    const materialsUsd = parts.reduce((sum, x) => sum + x.usdMaterialsPlant, 0);
     const per = usd => usd / S;
     const outParts = parts.map(x => ({
       part: x.part, group: x.group, material: x.material, kg: per(x.kgPlant), usdMaterials: per(x.usdMaterialsPlant),
@@ -651,13 +643,14 @@
     for (const x of outParts) groups[x.group] = (groups[x.group] || 0) + x.usd;
 
     const energy = { ...B.energy, standby: standbyKWhPerKg };
-    const kWhPerKg = Object.values(energy).reduce((s2, x) => s2 + x, 0);
+    const kWhPerKg = Object.values(energy).reduce((sum, x) => sum + x, 0);
     const heatShare = (energy.heat + energy.standby) / kWhPerKg;
     const installedUsdPerKgDay = per(installedUsd);
     const materialsUsdPerKgDay = per(materialsUsd);
     const recipeUsdPerKgDay = recipeAtSize(S);
-    const minTurndown = sunFollowing ? p.trainMinTurndown : nTrains > 1 ? p.trainMinTurndown / nTrains : p.trainMinTurndown;
-    const flexible = sunFollowing;
+    // Firmed: trains can be shut down one by one, so the plant turns down to trainMinTurndown / nTrains.
+    const minTurndown = sunFollowing ? p.trainMinTurndown : p.trainMinTurndown / nTrains;
+    // Firmed and mostly heat: a heat store (cheaper than batteries) carries it through the night.
     const thermal = !sunFollowing && heatShare >= 0.5;
     // Variable O&M: conditioning agent, NH₃ vented with passivation inerts, other consumables.
     const variableOm = {
@@ -665,7 +658,7 @@
       passivationNH3: c.passivationO2MolPerMolCO2 * p.nh3VentKgPerKgPerMolO2 * p.nh3UsdPerKg,
       other: p.otherVariableUsdPerKg,
     };
-    const variableOmUsdPerKg = Object.values(variableOm).reduce((s2, x) => s2 + x, 0);
+    const variableOmUsdPerKg = Object.values(variableOm).reduce((sum, x) => sum + x, 0);
     const tPerYear = S * 365 / 1000;
     const fmt = (v, d = 0) => Number(v).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
     return {
@@ -692,7 +685,7 @@
       installedUsdPerTonneYear: installedUsd / tPerYear,
       materialsUsdPerKgDay,
       idiotIndex: installedUsdPerKgDay / materialsUsdPerKgDay,
-      flexible,
+      flexible: sunFollowing,
       thermal,
       minTurndown,
       variableOm,
@@ -710,13 +703,13 @@
         { label: 'Energy', value: `${fmt(kWhPerKg, 2)} kWh/kg`, sub: `heat ${fmt(energy.heat + energy.standby, 2)}, CO₂ compression ${fmt(energy.co2Compression, 3)}, finishing ${fmt(energy.finishing, 3)}` },
         { label: 'Idiot index', value: `${fmt(installedUsdPerKgDay / materialsUsdPerKgDay, 1)}×`, sub: `raw materials $${fmt(materialsUsdPerKgDay, 1)} per kg/day` },
         { label: 'Synthesis', value: `${p.pressureBar} bar, ${p.reactorC} °C, N/C ${B.s.a}`, sub: `CO₂ conversion ${fmt(B.X * 100, 1)}% (eq. ${fmt(B.s.xEq * 100, 1)}%), ${B.st.label.split(' (')[0]}` },
-        { label: 'Build', value: `${c.label.split(',')[0]}`, sub: `${fin.label.split(' (')[0]} · ${nTrains} train${nTrains > 1 ? 's' : ''}` },
+        { label: 'Build', value: c.label.split(',')[0], sub: `${fin.label.split(' (')[0]} · ${nTrains} train${nTrains > 1 ? 's' : ''}` },
         { label: 'Operation', value: sunFollowing ? 'Sun-following' : thermal ? 'Baseload on a heat store' : 'Baseload, firmed', sub: `turndown to ${fmt(minTurndown * 100)}%${sunFollowing ? `, HP loop blocked in ${p.blockInHours} h/night` : thermal ? '' : ' · heat via steam recompression, so firmed as electricity'}` },
       ],
     };
   }
 
-  // Installed $/kg-day vs plant size: small modular vs world scale.
+  // Installed $ per kg/day vs plant size.
   function scaleCurve(params = {}, sizesKgPerDay = [10000, 100000, 1000000, 3500000]) {
     return sizesKgPerDay.map(size => {
       const d = design({ ...params, plantKgPerDay: size });
@@ -724,7 +717,7 @@
     });
   }
 
-  // One knob swept: conversion, kWh/kg and installed $/kg-day (and a 24 h levelized $/kg).
+  // One knob swept: conversion, kWh/kg, installed $ per kg/day and a levelized $/kg (capex × crf + energy).
   function sweep(params = {}, key, values, { usdPerKWh = 0.045, crf = 0.0937 } = {}) {
     return values.map(v => {
       const d = design({ ...params, [key]: v });
@@ -736,9 +729,8 @@
     });
   }
 
-  // Contract: what the company simulator needs. Costed at the scoreboard plant (100 × the pathways'
-  // 1,000 kg/day reference) unless params.plantKgPerDay says otherwise, against the recipe scaled the
-  // way the engine scales it to the same size.
+  // Costed at params.plantKgPerDay (default: the scoreboard plant) against the recipe scaled the way the
+  // engine scales it to the same size.
   function simulatorOverride(params = {}) {
     const d = design(params);
     return {
@@ -761,19 +753,15 @@
     units: ['urea'],
     product: 'urea',
     RECIPE,
-    ENGINE_SCALE,
     SCOREBOARD_SIZE_MULTIPLE,
     STOICH,
-    OVERALL_EXOTHERM_KJ_PER_MOL,
     DEFAULTS,
     PRESETS,
     CONTROLS,
-    equilibriumK,
     equilibriumConversion,
     bubblePressureBar,
     balance: params => balance(merge(params)),
     recipeAtSize,
-    engineScaleFactor,
     design,
     scaleCurve,
     sweep,

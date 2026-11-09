@@ -1,21 +1,19 @@
 // Sun-following catalytic synthesis reactors: methanol (CO₂ + 3H₂ ⇌ CH₃OH + H₂O), Sabatier
 // methanation (CO₂ + 4H₂ → CH₄ + 2H₂O) and methanol-to-olefins (2CH₃OH → C₂H₄ + 2H₂O).
 //
-// Question: the recipes treat these loops as baseload. On solar alone that means firming their
-// power with batteries through the night and buffering H₂ (the electrolyzer follows the sun) at
-// ~$600/kg of compressed-gas storage. A reactor designed for wide turndown and a daily hot-standby
-// cycle can follow the sun instead (`flexible: true`): no batteries, no H₂ buffer, but ~3× nameplate,
-// so its installed $ per kg/day must be low. This module builds each reactor up from screening
-// physics and a bill of materials:
-//   equilibrium (Graaf constants for methanol, van't Hoff for Sabatier) × approach-to-equilibrium
-//   (space velocity) → single-pass conversion → recycle ratio → recycle compressor kWh, heat
-//   exchangers, catalyst volume → tubes (Barlow wall thickness at pressure, tube count also set by
-//   heat-removal area) → shells, tubesheets → compressors (multistage, intercooled) → distillation
-//   (methanol) / cold section (MTO) → hot-standby insulation and heat accumulator → catalyst charge and
-//   replacements → installed $ per kg/day (24 h nameplate), kWh per kg, idiot index.
-// Every assumption is in DEFAULTS with a short source or note. Commodity prices come from
-// data/bom.js; the few catalyst raw materials it does not list are in DEFAULTS.extraCommodities.
-// Screening grade, not bankable.
+// The recipes run these loops baseload: on solar alone their power is firmed by batteries overnight
+// and the H₂ (the electrolyzer follows the sun) is buffered at ~$600/kg of compressed-gas storage. A
+// reactor built for wide turndown and a daily hot-standby cycle can follow the sun instead
+// (`flexible: true`): no batteries, no H₂ buffer, but ~3× nameplate, so its installed $ per kg/day
+// must be low. Each reactor is built up from screening physics and a bill of materials:
+//   equilibrium (Graaf constants for methanol, van't Hoff for Sabatier) × approach to equilibrium
+//   (space velocity) → single-pass conversion → recycle → compressor kWh, heat exchangers, catalyst
+//   volume → tubes (wall thickness at pressure; count also set by heat-removal area) → shells,
+//   tubesheets → multistage intercooled compressors → distillation (methanol) / cold section (MTO) →
+//   hot-standby insulation and heat accumulator → catalyst charge and replacements → installed $ per
+//   kg/day (24 h nameplate), kWh per kg, idiot index.
+// Commodity prices come from data/bom.js; catalyst raw materials it lacks are in
+// DEFAULTS.extraCommodities. Screening grade.
 (function exposeSynthesisDesign(root, factory) {
   const api = factory(typeof require === 'function' ? require('../../data/bom.js') : root.FoundryBom);
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -26,39 +24,37 @@
 })(globalThis, Bom => {
   const R = 8.314462618; // J/(mol·K)
   const NM3_PER_MOL = 0.022414;
-  const M = Object.freeze({ CO2: 44.01, H2: 2.016, CH3OH: 32.042, H2O: 18.015, CH4: 16.043, C2H4: 28.054, CO: 28.01 }); // g/mol
-  const STEEL_DENSITY = 7850;
-  const SCALE_EXPONENT = 0.85; // engine/company.js DEFAULTS.scale (to compare like for like)
+  const M = Object.freeze({ H2: 2.016, CH3OH: 32.042, CH4: 16.043, C2H4: 28.054 }); // g/mol
+  const STEEL_DENSITY = 7850; // kg/m³
+  const SCALE_EXPONENT = 0.85; // engine/company.js DEFAULTS.scale, so the recipe is scaled like the simulator does
   const SCALE_FLOOR = 0.4;
 
   // Recipe basis per kg/day of each unit's own product, from data/pathways.js flowsheets.
-  //   methanol: green-mto node 480 $/(kg C₂H₄/day) ÷ 2.284 kg CH₃OH per kg C₂H₄; 1.14 kWh/kg C₂H₄ ÷ 2.284.
-  //     (The 'methanol' pathway's node is $4,000 per kg/day at its 5 kg/day demo reference — the same
-  //     unit at a scale 450× smaller; the factor computed here is applied to both.)
-  //   sabatier: 'sabatier' / 'coastal' pathways, $6,000 per kg CH₄/day at 5 kg/day, 1 kWh/kg.
-  //   mto: 'mto' / 'green-mto' pathways, $192 per kg C₂H₄/day at 1,000 kg/day, 4 kWh/kg (total-energy proxy).
+  //   methanol: green-mto node $480 per kg C₂H₄/day and 1.14 kWh/kg C₂H₄, ÷ 2.284 kg CH₃OH per kg C₂H₄.
+  //     The 'methanol' pathway's node is the same unit; the factor applies to both.
+  //   sabatier: 'sabatier' / 'coastal' pathways, $300 per kg CH₄/day at 1 t/day, 1 kWh/kg.
+  //   mto: 'mto' / 'green-mto' pathways, $192 per kg C₂H₄/day at 1 t/day, 4 kWh/kg (total-energy proxy).
   const RECIPE = Object.freeze({
-    methanol: Object.freeze({ usdPerKgDay: 480 / 2.284364, kWhPerKg: 1.14 / 2.284364, refKgPerDay: 1000 * 2.284364, pathwayId: 'green-mto', alsoIn: ['methanol'] }),
-    sabatier: Object.freeze({ usdPerKgDay: 300, kWhPerKg: 1, refKgPerDay: 1000, pathwayId: 'sabatier', alsoIn: ['coastal'] }), // pack $300/(kg CH₄/day) once the demo case is sized to 1 t/day
-    mto: Object.freeze({ usdPerKgDay: 192.15, kWhPerKg: 4, refKgPerDay: 1000, pathwayId: 'mto', alsoIn: ['green-mto'] }),
+    methanol: Object.freeze({ usdPerKgDay: 480 / 2.284364, kWhPerKg: 1.14 / 2.284364, refKgPerDay: 1000 * 2.284364, pathwayId: 'green-mto', alsoPathways: Object.freeze(['methanol']) }),
+    sabatier: Object.freeze({ usdPerKgDay: 300, kWhPerKg: 1, refKgPerDay: 1000, pathwayId: 'sabatier', alsoPathways: Object.freeze(['coastal']) }),
+    mto: Object.freeze({ usdPerKgDay: 192.15, kWhPerKg: 4, refKgPerDay: 1000, pathwayId: 'mto', alsoPathways: Object.freeze(['green-mto']) }),
   });
   const PRODUCT = Object.freeze({ methanol: 'methanol', sabatier: 'methane', mto: 'ethylene' });
-  const PRODUCT_M = Object.freeze({ methanol: M.CH3OH, sabatier: M.CH4, mto: M.C2H4 });
 
   const DEFAULTS = Object.freeze({
     reactor: 'methanol', // which unit design() describes: 'methanol' | 'sabatier' | 'mto'
     operation: 'sun-following', // 'sun-following' (flexible: true) | 'baseload' (flexible: false, firmed by the simulator)
-    // Plant scale (kg product/day nameplate). null → 100 × the recipe reference, i.e. the plant size the
-    // abundance scoreboard evaluates (sizeMultiple 100), so capexFactor compares like with like.
+    // Nameplate kg product/day. null → 100 × the recipe reference, the plant size the abundance
+    // scoreboard evaluates (sizeMultiple 100), so capexFactor compares like with like.
     scaleKgPerDay: null,
-    // Top-level knobs for the selected reactor (null → that reactor's block below).
+    // Knobs for the selected reactor only (null → that reactor's block below).
     pressureBar: null,
     temperatureC: null,
     ghsvPerH: null,
     h2SupplyBar: 1.05, // lean electrolyzer is atmospheric (engine/designs/electrolyzer.js); a pressurized stack gives ~30 bar
     co2SupplyBar: 1.05, // DAC desorbs at ~1 bar; purchased CO₂ arrives as ~20 bar liquid
     offHoursPerDay: 16, // sun-following: hours/day the loop is not producing (≈ 24 − full-load hours; ~7–8 FLH in the sunbelt)
-    discountRate: 0.08, // engine/company.js finance.discountRate — for capitalizing catalyst replacements
+    discountRate: 0.08, // engine/company.js finance.discountRate; capitalizes catalyst replacements
     lifeYears: 25,
     steelAllowableMPa: 118, // carbon steel (SA-516-70 / SA-106B) ≤ 300 °C, ASME VIII-1 order of magnitude
     stainlessAllowableMPa: 100, // 304/316 at 400–600 °C, ASME II-D order
@@ -86,15 +82,15 @@
     insulation: Object.freeze({ conductivityWPerMK: 0.05, kgPerM3: 100, pipingAreaFactor: 2.5 }), // mineral wool; piping/valves add ~2.5× the shell area
     ambientC: 20,
     labourUsdPerHour: 40,
-    // Plant fabrication & integration knobs (overridden per preset).
+    // Finished $/kg ÷ raw material $/kg.
     manufacturing: Object.freeze({
-      reactor: 3, // tube bundles, shells, tubesheets — finished $/kg ÷ steel $/kg
+      reactor: 3, // tube bundles, shells, tubesheets
       vessels: 3,
       hx: 3,
       column: 3,
       compressor: 15, // machined, low-volume; today's packages are ~80× their steel (DOE H2A compressor curve)
       motor: 3,
-      catalyst: 3, // finished catalyst $/kg ÷ raw metals/oxides $/kg (commercial Cu/ZnO ≈ $15–30/kg)
+      catalyst: 3, // commercial Cu/ZnO ≈ $15–30/kg
       insulation: 2,
       civil: 1.5,
     }),
@@ -105,11 +101,11 @@
     trainHoursPerTrain: 400, // assembly & commissioning hours per train of fixedRefKgPerDay
     fixedRefKgPerDay: 100000,
     fixedScaleExponent: 0.3, // per-train fixed costs ∝ train size^0.3 (instruments and safety barely scale)
-    cyclingCatalystLifeFactor: 0.75, // daily start/stop shortens catalyst life (sintering, redox): Phase-1 measurement
+    cyclingCatalystLifeFactor: 0.75, // daily start/stop shortens catalyst life (sintering, redox); assumed, measured in build-plan step 0
     standbyHoldC: 200, // hot-standby temperature at night (above water/methanol dew point; Ni-carbonyl safe)
     nightDropAllowedK: 40, // how far the loop may cool overnight before it needs stored heat
     turndownModules: 4, // parallel modules switched in/out with the sun
-    h2BufferUsdPerKg: 600, // engine/utilization.js bufferUsdPerKg.H2 — for the small morning/evening turndown buffer
+    h2BufferUsdPerKg: 600, // engine/utilization.js bufferUsdPerKg.H2; sizes the small morning/evening turndown buffer
 
     // ---------------------------------------------------------------- per-reactor blocks
     methanol: Object.freeze({
@@ -131,8 +127,7 @@
       coolant: 'boiling-water', // shell side at saturation pressure of (T − 10 K)
       heatTransferU: 200, // W/m²K bed-to-wall
       coolantDeltaK: 10,
-      catalystBulkKgPerM3: 1200,
-      catalyst: 'cu-zno', // CuO/ZnO/Al₂O₃ 60/30/10
+      catalystBulkKgPerM3: 1200, // CuO/ZnO/Al₂O₃ 60/30/10
       catalystLifeYears: 4,
       gasCpJPerMolK: 30,
       // Distillation: crude MeOH/H₂O (~1:1 molar) → AA-grade
@@ -160,7 +155,6 @@
       design: 'cooled', // 'cooled' (isothermal tubular, no recycle) | 'adiabatic' (TREMP-style beds + hot recycle)
       stageOutletC: Object.freeze([320, 260]), // cooled: two isothermal stages with water knock-out between
       adiabaticStageOutletC: Object.freeze([600, 450, 300]),
-      adiabaticInletC: 280,
       recycleMaxDeltaK: 320, // adiabatic: first-bed temperature rise limit set by recycle dilution
       loopPressureDropBar: 1.5,
       tubeIdMm: 20,
@@ -209,10 +203,10 @@
     }),
   });
 
-  // Named starting points. 'today' is what gets built now: a large stick-built baseload train, pressurized
-  // H₂ from a pressurized electrolyzer, high Lang factor, catalyst and compressors at today's markups —
-  // calibrated to land near the recipe. 'lean' is the sun-following target: small shop-built modules,
-  // thin-walled small-bore tubes, hot standby on stored reaction heat, VFD compressors, Ru for Sabatier.
+  // 'today': a large stick-built baseload train fed by a pressurized electrolyzer, high Lang factor,
+  // catalyst and compressors at today's markups; lands near the recipe. 'lean': small shop-built
+  // modules, thin-walled small-bore tubes, hot standby on stored reaction heat, VFD compressors, Ru
+  // for Sabatier.
   const PRESETS = Object.freeze({
     today: Object.freeze({
       label: 'Today: stick-built baseload loop (firmed by the simulator)',
@@ -262,7 +256,7 @@
     return p;
   }
 
-  // Reactor-specific block with the top-level knobs applied (only to the selected reactor).
+  // A reactor's block, with the top-level knobs applied if it is the selected reactor.
   function block(p, unit) {
     const b = { ...p[unit] };
     if (p.reactor === unit) {
@@ -291,14 +285,15 @@
     return (10 ** (8.14019 - 1810.94 / (244.485 + tC))) * 133.322 / 1e5;
   }
 
-  // Barlow thin-wall thickness (m) for internal pressure (bar) and inner diameter (m).
+  // Cylinder wall thickness (m) for internal pressure (bar) and inner diameter (m): ASME VIII-1 UG-27
+  // hoop stress, t = P·D / (2·S·E − 1.2·P), joint efficiency E = 1.
   function wallM(pBar, dM, allowableMPa, corrosionMm, minMm) {
     const P = pBar / 10; // MPa
-    const t = (P * dM) / (2 * allowableMPa * 1.0 - 1.2 * P);
+    const t = (P * dM) / (2 * allowableMPa - 1.2 * P);
     return Math.max(minMm / 1000, t + corrosionMm / 1000);
   }
 
-  // Multistage intercooled compression: J/mol and stages.
+  // Multistage intercooled compression, equal ratio per stage: J/mol and stage count.
   function compressionJPerMol(pIn, pOut, gamma, p) {
     if (!(pOut > pIn * 1.0001)) return { jPerMol: 0, stages: 0 };
     const ratio = pOut / pIn;
@@ -308,7 +303,7 @@
     return { jPerMol, stages };
   }
 
-  // Compressor package materials per kW shaft at a machine size (kW).
+  // Compressor package steel per kW shaft at a machine size (kW).
   function compressorKgPerKW(kW, p) {
     const c = p.compressor;
     return c.steelKgPerKWAt1MW * Math.max(kW / 1000, 0.01) ** c.sizeExponent;
@@ -319,7 +314,7 @@
   //   K1: CO + 2H₂ ⇌ CH₃OH          log10 K1 = 5139/T − 12.621   [bar⁻²]
   //   K2: CO₂ + H₂ ⇌ CO + H₂O        log10 K2 = −2073/T + 2.029
   //   K3 = K1·K2: CO₂ + 3H₂ ⇌ CH₃OH + H₂O
-  // Feed per mol CO₂: h mol H₂. Extents ξ1 (methanol), ξ2 (RWGS). Nested bisection.
+  // Feed per mol CO₂: h mol H₂. Extents x1 (methanol) and x2 (reverse water-gas shift), by nested bisection.
   function methanolEquilibrium(tC, pBar, h2ToCo2 = 3) {
     const T = tC + 273.15;
     const K1 = 10 ** (5139 / T - 12.621);
@@ -368,7 +363,7 @@
     const T = tC + 273.15;
     return Math.exp(-(SAB_DH - T * SAB_DS) / (R * T)); // bar⁻²
   }
-  // Equilibrium extent from an inlet {co2, h2, ch4, h2o, inert} (mol) at T, P.
+  // Equilibrium extent from an inlet { co2, h2, ch4, h2o, inert } (mol) at T, P.
   function sabatierEquilibrium(inlet, tC, pBar) {
     const K = sabatierK(tC);
     const { co2, h2, ch4 = 0, h2o = 0, inert = 0 } = inlet;
@@ -395,8 +390,8 @@
   }
 
   // ---------------------------------------------------------------- shared reactor hardware
-  // Cooled multi-tubular reactor: catalyst in tubes, coolant in shell. Tube length/count set by the
-  // larger of catalyst volume and heat-removal area. Returns kg per plant and geometry.
+  // Cooled multi-tubular reactor: catalyst in tubes, coolant in the shell. Tube count is set by the
+  // larger of catalyst volume and heat-removal area. Returns geometry and kg per plant.
   function tubularReactor({ vCatM3, heatW, pBar, b, p, shellBar }) {
     const d = b.tubeIdMm / 1000;
     const t = wallM(pBar, d, p.steelAllowableMPa, b.corrosionMm, b.minWallMm);
@@ -405,7 +400,7 @@
     const vTubes = Math.max(vCatM3, vFromArea);
     const nTubes = Math.max(1, Math.ceil(vTubes / (Math.PI / 4 * d * d * b.tubeLengthM)));
     const tubeKg = nTubes * b.tubeLengthM * Math.PI * (d + t) * t * STEEL_DENSITY;
-    const pitch = 1.3 * (d + 2 * t);
+    const pitch = 1.3 * (d + 2 * t); // triangular pitch (0.866·pitch² per tube), 10% bundle clearance
     const tubesPerShellMax = Math.max(1, Math.floor((Math.PI / 4 * b.shellMaxDiameterM ** 2) / (0.866 * pitch ** 2 * 1.1)));
     const shells = Math.ceil(nTubes / tubesPerShellMax);
     const tubesPerShell = nTubes / shells;
@@ -434,8 +429,8 @@
     return { D, L, t, kg, externalM2: Math.PI * D * L + Math.PI / 2 * D * D };
   }
 
-  // Fraction of a sun-following day's energy lost below the minimum load, with N modules each able to
-  // turn down to minTurndown. Load = min(1, PV/clip) on a half-sine day clipped at 75% of peak.
+  // Share of a sun-following day's energy that arrives below the minimum load of `modules` modules,
+  // each able to turn down to minTurndown. Load = min(1, PV / 0.75 peak) on a half-sine day.
   function turndownLoss(minTurndown, modules) {
     const floor = minTurndown / Math.max(1, modules);
     let total = 0;
@@ -449,8 +444,8 @@
   }
 
   // ---------------------------------------------------------------- reactor models
-  // Each returns per-plant quantities at scale S (kg product/day): flows, energy (kWh/kg), and
-  // equipment lists the BOM turns into $.
+  // Each returns per-plant quantities at scale S (kg product/day): flows, energy (kWh/kg) and the
+  // equipment the BOM prices.
   function methanolModel(p, S) {
     const b = block(p, 'methanol');
     const P = b.pressureBar;
@@ -458,13 +453,13 @@
     const eq = methanolEquilibrium(T, P, b.h2ToCo2);
     const app = approach(b, b.ghsvPerH, T);
     const passYield = eq.methanolYield * app; // mol MeOH per mol CO₂ entering the reactor
-    const molPerS = (S * 1000) / M.CH3OH / 86400 / (1 - b.purgeCarbonLoss); // carbon in = product / (1 − purge)
+    const molPerS = (S * 1000) / M.CH3OH / 86400 / (1 - b.purgeCarbonLoss); // CO₂ in = product / (1 − purge)
     const freshMol = molPerS * (1 + b.h2ToCo2);
-    const inletMol = freshMol / passYield; // all fresh carbon passes 1/Y times
+    const inletMol = freshMol / passYield; // fresh carbon passes the reactor 1/Y times
     const recycleRatio = inletMol / freshMol - 1;
     const inletNm3h = inletMol * 3600 * NM3_PER_MOL;
     const vCat = inletNm3h / b.ghsvPerH;
-    const heatW = molPerS * (1 - b.purgeCarbonLoss) * 49500; // −ΔH, kJ/mol → W
+    const heatW = molPerS * (1 - b.purgeCarbonLoss) * 49500; // −ΔH = 49.5 kJ/mol
     const coolantT = T - b.coolantDeltaK;
     const shellBar = waterPsatBar(coolantT);
     const reactor = tubularReactor({ vCatM3: vCat, heatW, pBar: P, b, p, shellBar });
@@ -475,14 +470,14 @@
     const h2KW = molPerS * b.h2ToCo2 * h2.jPerMol / 1000;
     const co2KW = molPerS * co2.jPerMol / 1000;
     const recKW = inletMol * (recycleRatio / (1 + recycleRatio)) * rec.jPerMol / 1000;
-    // Heat exchangers: feed/effluent interchanger and condenser.
+    // Feed/effluent interchanger, and condenser (latent heat of MeOH 35.3 + H₂O 40.7 kJ/mol).
     const cp = b.gasCpJPerMolK;
     const interchangerW = inletMol * cp * (T - 40 - p.hx.approachK);
     const condenserW = inletMol * cp * (p.hx.approachK + 20) + molPerS * (35300 + 40700);
     const hxM2 = interchangerW / (p.hx.gasGasU * p.hx.approachK) + condenserW / (p.hx.condenserU * p.hx.condenserLmtdK);
-    // Distillation: vapour = (R+1)·D; reboiler at λ_MeOH.
+    // Distillation: vapour = (R + 1)·D, reboiler at λ_MeOH; MeOH vapour at 1 atm, 65 °C.
     const prodMol = molPerS * (1 - b.purgeCarbonLoss);
-    const reboilerW = (b.refluxRatio + 1) * prodMol * 35300 * 1.1; // +10% sensible/losses
+    const reboilerW = (b.refluxRatio + 1) * prodMol * 35300 * 1.1; // +10% sensible heat and losses
     const vaporMol = (b.refluxRatio + 1) * prodMol;
     const rhoV = 101325 * 0.032 / (R * 338);
     const vel = b.columnFFactor / Math.sqrt(rhoV);
@@ -491,12 +486,12 @@
     const colT = Math.max(b.columnMinWallMm / 1000, 0.002 + colD * 0.002);
     const columnKg = Math.PI * colD * b.columnHeightM * colT * STEEL_DENSITY * 1.2;
     const packingKg = colArea * b.columnHeightM * 0.7 * b.packingKgPerM3;
-    const distHxM2 = 2 * reboilerW / (800 * 15);
+    const distHxM2 = 2 * reboilerW / (800 * 15); // reboiler + condenser, U 800 W/m²K, 15 K
     const netHeatW = Math.max(0, reboilerW - b.reactorHeatRecovery * heatW);
-    // Separator drums (HP flash, crude tank ~2 h): small vessels.
+    // HP flash drum: 60 s of loop gas at 40 °C.
     const flash = vessel(Math.max(0.05, inletMol * R * 313 / (P * 1e5) * 60), P, p.steelAllowableMPa);
     const kgPerS = S / 86400;
-    const kWh = (W => W / 1000 / (kgPerS * 3600));
+    const kWh = W => W / 1000 / (kgPerS * 3600);
     const energy = {
       h2Compression: kWh(h2KW * 1000),
       co2Compression: kWh(co2KW * 1000),
@@ -543,13 +538,12 @@
     for (const [i, tC] of stageTemps.entries()) {
       const inletTotal = gas.co2 + gas.h2 + gas.ch4 + gas.h2o + gas.inert;
       const flowMol = inletTotal * (i === 0 ? 1 + recycleRatio : 1);
-      const ghsv = b.ghsvPerH;
-      const vStage = (flowMol * 3600 * NM3_PER_MOL) / ghsv;
+      const vStage = (flowMol * 3600 * NM3_PER_MOL) / b.ghsvPerH;
       vCat += vStage;
       const eq = sabatierEquilibrium(gas, tC, P);
-      const a = approach({ ...b, ...(b.kinetics[b.catalyst] || b.kinetics.ni) }, ghsv, tC);
+      const a = approach({ ...b, ...(b.kinetics[b.catalyst] || b.kinetics.ni) }, b.ghsvPerH, tC);
       const x = eq.extent * a;
-      gas = { co2: gas.co2 - x, h2: gas.h2 - 4 * x, ch4: gas.ch4 + x, h2o: 0, inert: gas.inert }; // knock out water
+      gas = { co2: gas.co2 - x, h2: gas.h2 - 4 * x, ch4: gas.ch4 + x, h2o: 0, inert: gas.inert }; // water knocked out
       stages.push({ tC, conversion: (molPerS - gas.co2) / molPerS, vCatM3: vStage, eqConversion: eq.conversion });
     }
     const conversion = (molPerS - gas.co2) / molPerS;
@@ -574,7 +568,7 @@
     const h2KW = 4 * molPerS * h2.jPerMol / 1000;
     const co2KW = molPerS * co2.jPerMol / 1000;
     const recKW = recycleRatio * 5 * molPerS * rec.jPerMol / 1000;
-    // Interstage coolers/condensers (water knock-out) and waste-heat recovery.
+    // Interstage condensers (water knock-out) and gas coolers / waste-heat boilers.
     const condW = molPerS * 2 * 40700 + 5 * molPerS * cp * 200;
     const hxW = (b.design === 'adiabatic' ? heatW : 0) + 5 * molPerS * (1 + recycleRatio) * cp * 150;
     const hxM2 = condW / (p.hx.condenserU * p.hx.condenserLmtdK) + hxW / (p.hx.gasGasU * 40);
@@ -617,7 +611,7 @@
     const refrigKWhPerKg = b.refrigerationMJPerKg / 3.6 / b.refrigerationCop;
     const refrigKW = refrigKWhPerKg * kgPerS * 3600;
     const netHeat = Math.max(0, b.feedHeatKWhPerKg - b.heatRecovery * (b.feedHeatKWhPerKg + b.exothermKWhPerKg));
-    const heatW = netHeat * kgPerS * 3600 * 1000;
+    const netHeatW = netHeat * kgPerS * 3600 * 1000;
     const hxM2 = (b.feedHeatKWhPerKg * kgPerS * 3600 * 1000) / (p.hx.gasGasU * 40) + (b.exothermKWhPerKg + b.feedHeatKWhPerKg) * kgPerS * 3600 * 1000 / (p.hx.condenserU * 20);
     return {
       unit: 'mto', b, S, pressureBar: b.pressureBar, temperatureC: b.temperatureC, catalystKg, vCatM3: catalystKg / b.catalystBulkKgPerM3,
@@ -643,7 +637,7 @@
       exothermKWhPerKg: b.exothermKWhPerKg,
       minTurndown: b.minTurndown,
       moduleKgPerDay: b.moduleKgPerDay,
-      netHeatW: heatW,
+      netHeatW,
     };
   }
 
@@ -678,10 +672,9 @@
     const b = m.b;
     const flexible = p.operation !== 'baseload';
     const mf = p.manufacturing;
-    // Trains: as many modules as the module size needs, and at least turndownModules when sun-following.
+    // As many trains as the module size needs, and at least turndownModules when sun-following.
     const trainsEffective = Math.max(Math.ceil(S / m.moduleKgPerDay), flexible ? Math.max(1, p.turndownModules) : 1);
     const trainKgPerDay = S / trainsEffective;
-    // Per-train controls/engineering and assembly scale weakly with train size (∝ size^0.3).
     const trainScale = (trainKgPerDay / p.fixedRefKgPerDay) ** p.fixedScaleExponent;
 
     const parts = [];
@@ -692,7 +685,6 @@
     };
     const bought = (part, usdPlant, note) => parts.push({ part, material: null, kg: null, usdMaterials: 0, manufacturing: null, usd: usdPlant / S, note });
 
-    // Reactor
     const r = m.reactor;
     if (r.kind === 'cooled-tubular') {
       add('Reactor tubes', 'steel', r.tubeKg, mf.reactor, `${r.nTubes.toLocaleString('en-US')} × ${b.tubeIdMm} mm × ${b.tubeLengthM} m, ${r.wallMm.toFixed(1)} mm wall @ ${m.pressureBar} bar${r.heatLimited ? ' (sized by heat removal)' : ''}`);
@@ -702,14 +694,13 @@
       add('Hot bed vessel (stainless)', 'stainless-steel', r.stainlessKg, mf.vessels, '≈600 °C first bed');
       add('Downstream bed vessels', 'steel', r.steelKg, mf.vessels, 'beds 2–3');
     } else {
-      add(`${b.design === 'fluidized' ? 'Reactor + regenerator' : 'Swing fixed-bed reactors'}`, b.vesselMaterial || 'steel', r.steelKg, mf.vessels, `${b.vesselSteelKgPerKgCatalyst} kg steel per kg catalyst inventory`);
+      add(b.design === 'fluidized' ? 'Reactor + regenerator' : 'Swing fixed-bed reactors', b.vesselMaterial, r.steelKg, mf.vessels, `${b.vesselSteelKgPerKgCatalyst} kg steel per kg catalyst inventory`);
     }
-    // Catalyst (first charge)
+    // First catalyst charge.
     const catUsdPerKg = catalystMaterialsUsdPerKg(unit, b, p);
     const catLabel = unit === 'methanol' ? 'Cu/ZnO/Al₂O₃' : unit === 'sabatier' ? (b.catalyst === 'ru' ? '0.5% Ru/Al₂O₃' : '20% Ni/Al₂O₃') : 'SAPO-34';
     const catKgPerKgDay = m.catalystKg / S;
     parts.push({ part: `Catalyst charge (${catLabel})`, material: 'catalyst', kg: catKgPerKgDay, usdMaterials: catKgPerKgDay * catUsdPerKg, manufacturing: mf.catalyst, usd: catKgPerKgDay * catUsdPerKg * mf.catalyst, note: `${m.vCatM3.toFixed(2)} m³ at ${b.ghsvPerH || b.whsvPerH} ${b.ghsvPerH ? 'h⁻¹ GHSV' : 'h⁻¹ WHSV'}` });
-    // Compressors
     for (const c of m.compressors) {
       if (!(c.kW > 0)) continue;
       const perTrainKW = c.kW / trainsEffective;
@@ -720,35 +711,33 @@
     }
     const compKW = m.compressors.reduce((s, c) => s + c.kW, 0);
     if (flexible) bought('Variable-speed drives', compKW * p.vfdUsdPerKW, `$${p.vfdUsdPerKW}/kW: 20–100% turndown`);
-    // Heat exchangers
-    add('Heat exchangers', unit === 'methanol' || unit === 'sabatier' ? 'steel' : 'steel', m.hxM2 * 30, mf.hx, `${(m.hxM2 / S * 1000).toFixed(1)} m² per t/day, ~30 kg/m² shell-and-tube`);
-    // Vessels & columns
+    add('Heat exchangers', 'steel', m.hxM2 * 30, mf.hx, `${(m.hxM2 / S * 1000).toFixed(1)} m² per t/day, ~30 kg/m² shell-and-tube`);
     for (const v of m.vessels) add(v.name, v.material, v.kg, mf.vessels, '');
     if (m.column) {
       add('Distillation column', 'steel', m.column.kg, mf.column, `Ø${m.column.diameterM.toFixed(2)} m × ${b.columnHeightM} m`);
       add('Structured packing', 'stainless-steel', m.column.packingKg, mf.column, `${b.packingKgPerM3} kg/m³`);
     }
-    // Piping, structural steel
     const equipSteel = parts.filter(x => x.material === 'steel' || x.material === 'stainless-steel').reduce((s, x) => s + x.kg * S, 0);
     add('Loop piping, valves, structure', 'steel', equipSteel * p.pipingSteelFraction, mf.vessels, `${p.pipingSteelFraction}× equipment steel`);
 
-    // Hot standby (sun-following): insulation; overnight loss vs thermal mass; heat accumulator
-    // charged with the day's exotherm when the drop would exceed the allowance; small H₂ buffer for
-    // the minutes below minimum load.
+    // Hot standby (sun-following): insulation; overnight loss against the loop's thermal mass; a heat
+    // accumulator, charged from the day's exotherm, for whatever exceeds the allowed overnight drop;
+    // a small H₂ buffer for the minutes below minimum load.
     const holdK = p.standbyHoldC - p.ambientC;
     const extM2 = (r.externalM2 || 0) * p.insulation.pipingAreaFactor + m.vessels.reduce((s, v) => s + (v.externalM2 || 0), 0);
     const insThk = flexible ? 0.15 : 0.08;
     const lossW = extM2 * p.insulation.conductivityWPerMK * holdK / insThk;
     const offH = flexible ? p.offHoursPerDay : 0;
     const standbyKWhPerDay = lossW * offH / 1000;
-    const thermalMassKJPerK = ((r.steelKg || 0) + (r.tubeKg ? 0 : 0) + (r.stainlessKg || 0)) * 0.5 + m.catalystKg * 0.9 + (r.coolantKg || 0) * 4.5;
+    // Heat capacity kJ/kg·K: steel 0.5, catalyst 0.9, coolant 4.5.
+    const thermalMassKJPerK = ((r.steelKg || 0) + (r.stainlessKg || 0)) * 0.5 + m.catalystKg * 0.9 + (r.coolantKg || 0) * 4.5;
     const coastDropK = thermalMassKJPerK > 0 ? standbyKWhPerDay * 3600 / thermalMassKJPerK : Infinity;
     const storedKWh = Math.max(0, standbyKWhPerDay - p.nightDropAllowedK * thermalMassKJPerK / 3600);
     const dailyExothermKWh = m.exothermKWhPerKg * S;
     add('Insulation', 'refractory', extM2 * insThk * p.insulation.kgPerM3, mf.insulation, `${(insThk * 1000).toFixed(0)} mm mineral wool (refractory price proxy)`);
     let accumulator = null;
     if (flexible && storedKWh > 0) {
-      // Pressurized-water accumulator (Ruths): 30 K swing below the hold temperature.
+      // Pressurized-water (Ruths) accumulator, 30 K swing; cp 4.5 kJ/kg·K, 850 kg/m³.
       const m3 = storedKWh * 3600 / (4.5 * 30 * 850);
       accumulator = vessel(m3, waterPsatBar(p.standbyHoldC + 30), p.steelAllowableMPa);
       add('Heat accumulator (stores reaction heat for the night)', 'steel', accumulator.kg, mf.vessels, `${m3.toFixed(1)} m³ hot water`);
@@ -760,7 +749,6 @@
       h2BufferKg = h2KgPerDay * lostFrac;
       bought('Turndown H₂ buffer', h2BufferKg * p.h2BufferUsdPerKg, `${lostFrac > 0 ? (lostFrac * 100).toFixed(2) : '0'}% of daily H₂ arrives below min load (${m.minTurndown} per module)`);
     }
-    // Fixed per-train costs and assembly labour.
     bought('Controls, analyzers, safety, engineering', trainsEffective * p.fixedUsdPerTrain * trainScale, `${trainsEffective} train(s) × $${(p.fixedUsdPerTrain * trainScale / 1e3).toFixed(0)}k`);
     bought('Assembly & commissioning labour', trainsEffective * p.trainHoursPerTrain * trainScale * p.labourUsdPerHour, `${(p.trainHoursPerTrain * trainScale).toFixed(0)} h per train`);
     const steelTotal = parts.filter(x => x.material === 'steel' || x.material === 'stainless-steel').reduce((s, x) => s + x.kg, 0);
@@ -770,7 +758,7 @@
     const installUsd = equipmentUsd * (p.installFactor - 1);
     parts.push({ part: `Install (×${p.installFactor})`, material: null, kg: null, usdMaterials: 0, manufacturing: null, usd: installUsd, note: 'piping erection, E&I, civil works, commissioning' });
     const installedUsdPerKgDay = equipmentUsd + installUsd;
-    // Catalyst replacements, capitalized (PV over the plant life): the simulator has no catalyst opex line.
+    // The simulator has no catalyst opex line, so replacements are capitalized (PV over the plant life).
     const life = (b.catalystLifeYears || 1) * (flexible ? p.cyclingCatalystLifeFactor : 1);
     const charge = catKgPerKgDay * catUsdPerKg * mf.catalyst;
     const reclaim = unit === 'sabatier' && b.catalyst === 'ru' ? b.ruReclaim * 0.005 * price('ruthenium', p) * catKgPerKgDay : 0;
@@ -781,9 +769,10 @@
     }
     const materialsUsdPerKgDay = parts.reduce((s, x) => s + x.usdMaterials, 0);
     const kWhParts = m.energy;
-    const standbyElecKWhPerKg = flexible && storedKWh > dailyExothermKWh * 0.5 ? (storedKWh - 0.5 * dailyExothermKWh) / S : 0; // exotherm covers it unless tiny
+    // Electric standby heat only for what half the day's exotherm cannot store.
+    const standbyElecKWhPerKg = flexible && storedKWh > dailyExothermKWh * 0.5 ? (storedKWh - 0.5 * dailyExothermKWh) / S : 0;
     const kWhPerKg = Object.values(kWhParts).reduce((s, x) => s + x, 0) + standbyElecKWhPerKg;
-    const capexUsdPerKgDay = installedUsdPerKgDay + replacementPv; // what the simulator should carry
+    const capexUsdPerKgDay = installedUsdPerKgDay + replacementPv;
     const rec = recipeAt(unit, S);
     const capexFactor = capexUsdPerKgDay / rec.usdPerKgDay;
     const energyFactor = kWhPerKg / RECIPE[unit].kWhPerKg;
@@ -824,9 +813,8 @@
     };
   }
 
-  // Factors for every unit this design covers (the same params; per-reactor blocks pick each one's
-  // geometry, the top-level knobs apply to params.reactor only). scaleKgPerDay applies only to the
-  // selected reactor; the others are compared at their scoreboard scale.
+  // Factors for all three units from the same params. The top-level knobs and scaleKgPerDay apply to
+  // params.reactor only; the others use their own blocks at their scoreboard scale.
   function simulatorOverride(params = {}) {
     const out = {};
     for (const unit of ['methanol', 'sabatier', 'mto']) {
@@ -836,14 +824,14 @@
       out[unit] = {
         capexFactor: d.vsRecipe.capexFactor,
         energyFactor: d.vsRecipe.energyFactor,
-        materialsFactor: d.vsRecipe.materialsFactor, // the idiot-index squeeze caps the unit at its own materials × target
+        materialsFactor: d.vsRecipe.materialsFactor,
         flexible: d.flexible,
       };
     }
     return out;
   }
 
-  // Sweep a numeric knob of the selected reactor (e.g. pressureBar) for trade curves.
+  // Trade curve over a numeric knob of the selected reactor (e.g. pressureBar).
   function sweep(params, key, values) {
     return values.map(v => {
       const d = design({ ...params, [key]: v });
@@ -860,7 +848,6 @@
     summary: 'Methanol, Sabatier and MTO reactors built as small isothermal modules with wide turndown and hot standby, so they follow the sun with the electrolyzer instead of being firmed by batteries and an H₂ buffer.',
     units: ['methanol', 'sabatier', 'mto'],
     product: 'methanol',
-    products: PRODUCT,
     RECIPE,
     DEFAULTS,
     PRESETS,
@@ -868,11 +855,8 @@
     design,
     simulatorOverride,
     sweep,
-    recipeAt,
     methanolEquilibrium,
     sabatierEquilibrium,
     sabatierK,
-    turndownLoss,
-    waterPsatBar,
   };
 });

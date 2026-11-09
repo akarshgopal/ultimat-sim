@@ -98,7 +98,9 @@
 
   // Per kg of primary product, from the pathway's solved flowsheet. null → no flowsheet (legacy
   // recipes and test fixtures): the caller keeps the 24 h-average costing.
-  // designUnits: { <unit>: { capexFactor } } — designed units re-weight the flexible/baseload capex split.
+  // designUnits: { <unit>: { capexFactor, flexible } } — designed units re-weight the flexible/baseload
+  // capex split; flexible: true/false overrides whether the unit follows the sun (e.g. a wide-turndown
+  // synthesis loop designed to ramp with PV) or must be firmed.
   function operatingProfile(pathway, cfgIn, designUnits = null) {
     if (!pathway?.flowsheet?.nodes?.length) return null;
     const cfg = mergeCfg(cfgIn);
@@ -115,7 +117,8 @@
     const capex = { flex: {}, base: {} };
     for (const node of pathway.flowsheet.nodes) {
       if (node.kind !== 'converter') continue;
-      const mode = flexible.has(node.unit) ? 'flex' : 'base';
+      const forced = designUnits?.[node.unit]?.flexible;
+      const mode = forced === true ? 'flex' : forced === false ? 'base' : flexible.has(node.unit) ? 'flex' : 'base';
       modeById.set(node.id, mode);
       const kWh = (Number(node.kWhPerKg) || 0) * (cfg.unitEnergyScale[node.unit] ?? 1);
       energyDelta += (Number(node.kWhPerKg) || 0) * ((cfg.unitEnergyScale[node.unit] ?? 1) - 1);

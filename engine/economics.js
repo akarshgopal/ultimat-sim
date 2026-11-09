@@ -17,7 +17,7 @@ function evaluateEconomics(caseDefinition = {}, solved = {}) {
     config.projectLifeYears ?? config.lifetimeYears ?? maxAssetLife(nodes),
     20
   );
-  const discountRate = number(config.discountRate ?? config.discountRatePercent / 100, 0.08);
+  const discountRate = number(config.discountRate ?? (config.discountRatePercent != null ? config.discountRatePercent / 100 : undefined), 0.08);
   const nodeConfigs = config.nodes || {};
   const streams = solved.streams || [];
   const converters = [];

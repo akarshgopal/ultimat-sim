@@ -75,15 +75,19 @@
     if (mergedCache.has(cfg)) return mergedCache.get(cfg);
     const merged = {
       [MERGED]: true,
-      profileKey: [...(cfg.flexibleUnits || DEFAULTS.flexibleUnits)].join(',') + '|' + [...(cfg.thermalUnits || DEFAULTS.thermalUnits)].join(',')
-        + '|' + JSON.stringify(cfg.unitEnergyScale || {}) + '|' + (cfg.baseloadMinTurndown ?? DEFAULTS.baseloadMinTurndown),
       ...DEFAULTS,
       ...cfg,
+      flexibleUnits: cfg.flexibleUnits || DEFAULTS.flexibleUnits,
+      thermalUnits: cfg.thermalUnits || DEFAULTS.thermalUnits,
+      baseloadMinTurndown: cfg.baseloadMinTurndown ?? DEFAULTS.baseloadMinTurndown,
       battery: { ...DEFAULTS.battery, ...(cfg.battery || {}) },
       thermal: { ...DEFAULTS.thermal, ...(cfg.thermal || {}) },
       bufferUsdPerKg: { ...DEFAULTS.bufferUsdPerKg, ...(cfg.bufferUsdPerKg || {}) },
       unitEnergyScale: { ...(cfg.unitEnergyScale || {}) },
     };
+    // operatingProfile() depends only on these; key its cache on them.
+    merged.profileKey = [merged.flexibleUnits.join(','), merged.thermalUnits.join(','),
+      JSON.stringify(merged.unitEnergyScale), merged.baseloadMinTurndown].join('|');
     mergedCache.set(cfg, merged);
     return merged;
   }

@@ -63,6 +63,9 @@
       // actual capex (never below the start): a company can only scale construction it is doing.
       initialBuildUsdPerYear: 250e6,
       buildGrowthPerYear: 0.5,
+      // Construction capacity left idle (markets or site solar bind, not the crews) is not lost at once:
+      // next year keeps at least this share of this year's capacity.
+      buildCapacityRetention: 0.8,
       maxPlantsPerYear: null, // optional hard cap on plant count per year (null = none)
       maxMarketShare: 0.1, // company share of world demand per product
       minProfitabilityIndex: 0, // NPV / capex hurdle
@@ -1122,7 +1125,11 @@
 
       // Next year's construction capacity grows from what was actually built this year.
       if (Number.isFinite(cfg.build.initialBuildUsdPerYear)) {
-        state.buildCapacityUsd = Math.max(cfg.build.initialBuildUsdPerYear, capexSpent * (1 + (cfg.build.buildGrowthPerYear || 0)));
+        state.buildCapacityUsd = Math.max(
+          cfg.build.initialBuildUsdPerYear,
+          capexSpent * (1 + (cfg.build.buildGrowthPerYear || 0)),
+          Number.isFinite(buildCapacityUsd) ? buildCapacityUsd * (cfg.build.buildCapacityRetention || 0) : 0,
+        );
       }
       const debtOutstanding = state.loans.reduce((sum, loan) => sum + loan.principal, 0);
       const bookValue = state.plants.reduce((sum, plant) => {

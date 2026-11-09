@@ -40,6 +40,7 @@ const USGS_STEEL_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-iron-
 const USGS_TI_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-titanium.pdf';
 const USGS_REE_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf';
 const IEA_H2_2025 = 'https://www.iea.org/reports/global-hydrogen-review-2025/demand';
+const IEA_CO2_USE_2019 = 'https://www.iea.org/reports/putting-co2-to-use';
 const IEA_GAS_2025 = 'https://www.iea.org/reports/global-energy-review-2025/natural-gas';
 const IEA_GAS_2025_ES = 'https://www.iea.org/reports/gas-2025/executive-summary';
 const METHANEX_2024 = 'https://www.methanex.com/wp-content/uploads/2024-Annual-Report-MDA-Only.pdf';
@@ -199,6 +200,21 @@ const MARKETS = {
       { label: 'Thunder Said Energy — industrial gases / air separation units (~400 Mt/y O₂, 2023)', url: TSE_ASU },
     ],
     note: 'Midpoint of an undated RSC 240 Mt/y and Thunder Said Energy ~400 Mt/y estimate; mostly captive on-site ASU supply to steel/chemicals, so the pipeline/merchant market reachable from one site is far smaller. Screening.',
+  },
+  co2: {
+    name: 'Carbon dioxide (industrial use)',
+    basis: 'CO₂',
+    worldDemandTPerYear: 230e6,
+    demandYear: 2019,
+    growthPerYear: 0.015,
+    priceUsdPerKg: 0.05,
+    priceBandUsdPerKg: [0.02, 0.15],
+    priceElasticity: 0.5,
+    quality: 'cited',
+    sources: [
+      { label: 'IEA 2019 Putting CO₂ to Use — around 230 Mt CO₂ used each year (urea ~130 Mt, EOR ~70–80 Mt)', url: IEA_CO2_USE_2019 },
+    ],
+    note: 'World CO₂ use ~230 Mt/y (IEA 2019), mostly captive at ammonia/urea plants and EOR; merchant liquid CO₂ (food, beverage, greenhouses, welding) is a few tens of Mt at a screening ~$50–130/t delivered (band $20–150/t; not a quoted series). Reference price copies TeaScreening co2 ($0.05/kg = the co2-feed purchase price) so make-vs-buy compares like with like. Growth screening.',
   },
   methane: {
     name: 'Methane (synthetic natural gas)',

@@ -142,7 +142,7 @@
     // shares and headroom are computed on the group key's demand.
     // Make-vs-buy for purchased intermediates (see planIntegration). feedProducts maps a
     // recipe's purchased feed id to the product key a captive supplier pathway makes.
-    // CO₂ is not mapped: no CO₂ supplier recipe (DAC) undercuts $0.05–0.13/kg purchased CO₂.
+    // CO₂ is made by the DAC recipe (dac-co2) once it undercuts $0.05–0.13/kg purchased CO₂.
     integration: Object.freeze({
       enabled: true,
       mode: 'cheaper', // 'cheaper': make only when it beats buying; 'always': make whenever a supplier fits
@@ -151,6 +151,7 @@
         'ammonia-feed': 'ammonia',
         'methanol-feed': 'methanol',
         'float-glass': 'float-glass',
+        'co2-feed': 'co2',
       }),
     }),
     marketGroups: Object.freeze({

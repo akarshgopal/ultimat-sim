@@ -93,6 +93,7 @@ const USGS_N = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-nitrogen.pdf';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const IEA_H2 = 'https://www.iea.org/reports/global-hydrogen-review-2024';
 const IEA_DAC = 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary';
+const IEA_CO2_USE = 'https://www.iea.org/reports/putting-co2-to-use';
 const NASEM_DAC = 'https://doi.org/10.17226/25259';
 const EIA_HH = 'https://www.eia.gov/dnav/ng/hist/rngwhhdm.htm';
 const GHAFFOUR_2013 = 'https://doi.org/10.1016/j.desal.2013.08.011';
@@ -208,6 +209,11 @@ const prices = {
     0.05, '$/kg', 'screening', 'industrial O2',
     'Industrial O₂ screening ~$0.05/kg. Not a merchant-gas contract.',
     [{ label: 'Industrial oxygen screening $0.05/kg', url: null }]
+  ),
+  co2: row(
+    0.05, '$/kg', 'screening', 'industrial CO2 merchant price',
+    'Sale at the same screening industrial CO₂ price the cases pay for purchased co2-feed ($0.05/kg, ~$50/t), so make-vs-buy compares like with like. Merchant/industrial CO₂ trades ~$50–130/t delivered; bulk pipeline/EOR CO₂ is cheaper. Not a DAC-removal credit and not a merchant-gas contract.',
+    [{ label: 'IEA 2019 Putting CO₂ to Use — ~230 Mt/y CO₂ used; screening merchant price $0.05/kg, not a contract', url: IEA_CO2_USE }]
   ),
   methane: row(
     1, '$/kg', 'screening', 'green-premium screening',
@@ -979,6 +985,11 @@ const demand = {
     1e8, 'kg/year', 'screening', 'merchant O2 ceiling',
     `100 kt/y merchant-O₂ screening ceiling. No USGS industrial-gas series pinned — conservative screening, not a contract.`,
     [{ label: 'Industrial oxygen offtake screening 100 kt/y; not a merchant-gas contract', url: null }]
+  ),
+  co2: row(
+    1e8, 'kg/year', 'screening', 'merchant CO2 offtake',
+    `100 kt/y regional merchant-CO₂ ceiling (food/beverage, greenhouses, welding, chemicals). World CO₂ use is ~230 Mt/y (IEA 2019), mostly captive urea and EOR. Not a offtake contract.`,
+    [{ label: 'IEA 2019 Putting CO₂ to Use (world ~230 Mt/y used; merchant cap is screening)', url: IEA_CO2_USE }]
   ),
   methane: row(
     1e8, 'kg/year', 'screening', 'green CH4 offtake',

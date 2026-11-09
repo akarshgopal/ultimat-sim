@@ -48,6 +48,7 @@ const NAMES = {
   'cement.js': 'Clinker from purchased limestone + clay',
   'coastal.js': 'Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria',
   'cu-ew.js': 'Copper cathode by SX-EW from purchased PLS',
+  'dac-co2.js': 'CO2 from air by solid-sorbent DAC on PV, Mejillones',
   'float-glass.js': 'Float glass from purchased sand, soda ash + limestone',
   'ft-liquids.js': 'FT diesel from purchased H2 + CO2',
   'green-ammonia.js': 'Green ammonia (SWRO + PEM + ASU + Haber-Bosch)',

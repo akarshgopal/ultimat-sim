@@ -642,7 +642,7 @@ const polysilicon = reaction({
   product: 'Si',
   electricityKWhPerKg: 65,
   inputs: { silicon: { substance: 'Si', molPerProductMol: 1.05 } },
-  outputs: { polysilicon: { substance: 'Si', molPerProductMol: 1, phase: 'solid' } },
+  outputs: { polysilicon: { substance: 'Si', molPerProductMol: 1, phase: 'solid' }, bleed: { substance: 'Si', molPerProductMol: 0.05, phase: 'solid' } },
 });
 
 // PV module assembly screening. Fraunhofer ISE Photovoltaics Report 2021 mass shares
@@ -1956,6 +1956,7 @@ const UNITS = Object.freeze({
     ports: {
       silicon: { direction: 'in', kind: 'material', required: true }, electricity: { direction: 'in', kind: 'electricity', required: true },
       polysilicon: { direction: 'out', kind: 'material', required: true },
+      bleed: { direction: 'out', kind: 'material', required: false },
     },
     evaluate: polysilicon,
   },

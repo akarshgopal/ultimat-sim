@@ -38,7 +38,7 @@ const POWER = { kind: 'electricity', kWh: 1e6 };
 // plus that loss.
 const CASES = [
   { unit: 'mg-si', product: 'silicon', sec: 12, inlets: { quartz: material('SiO2', 1e4), carbon: material('C', 2e4) } },
-  { unit: 'polysilicon', product: 'polysilicon', sec: 65, massLoss: 0.05 / 1.05, inlets: { silicon: material('Si', 1e4) } },
+  { unit: 'polysilicon', product: 'polysilicon', sec: 65, inlets: { silicon: material('Si', 1e4) } },
   {
     unit: 'bayer-alumina', product: 'alumina', sec: 3.5, reject: 'bauxite',
     recipe: { bauxite: 2, caustic: 0.08, alumina: 1, redMud: 1 },

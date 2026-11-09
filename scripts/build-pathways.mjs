@@ -64,6 +64,8 @@ const NAMES = {
   'ree-sx.js': 'Separated NdPr oxide by solvent extraction (purchased REO concentrate)',
   'ree.js': 'Mixed REO + NdPr from ionic-clay heap leach (Minacu)',
   'sabatier.js': 'Reference e-methane (DAC + SWRO + PEM + Sabatier) on grid power',
+  'silicon-metal.js': 'Silicon metal (MG-Si) from quartz in a submerged-arc furnace',
+  'polysilicon.js': 'Solar-grade polysilicon from quartz (MG-Si + Siemens)',
   'silicon.js': 'PV modules from quartz + bauxite chain (MG-Si, polysilicon, Al)',
   'ti-kroll.js': 'Titanium sponge by Kroll from purchased TiCl4 + Mg',
   'urea.js': 'Urea from purchased NH3 + CO2',

@@ -1,12 +1,12 @@
 # Design: solar-matched alkaline electrolyzer
 
-Status: concept design + build plan. Model: `engine/designs/electrolyzer.js` (parametric, tested in `tests/design-electrolyzer.test.js`); interactive in the app under **Designs**. All costs are screening estimates from a bill of materials at 2024–25 commodity prices (`data/bom.js`) times explicit manufacturing factors — every number below regenerates from the model.
+Status: concept design + build plan. Model: `engine/designs/electrolyzer.js` (tested in `tests/design-electrolyzer.test.js`). It replaces the flowsheet unit `electrolyzer` in every pathway that makes H₂. Costs are screening estimates: a bill of materials at 2024–25 commodity prices (`data/bom.js`) times explicit manufacturing factors. Every number below regenerates from the model and the company simulator.
 
-## Why this first
+## Why this unit
 
-The company simulator says the electrolyzer gates the biggest material markets reachable from sunlight and water: H₂ itself, ammonia/urea, DRI steel, FT fuels, olefins. Today's electrolyzers cost ~31× their raw materials (the recipes' $1,500/kW), the highest idiot index of any equipment class except desalination. Make it cheap, and make it run well for 6–8 sun-hours a day, and those pathways move from "never" toward feasible.
+The electrolyzer feeds the largest material markets reachable from sunlight and water: H₂, ammonia/urea, DRI steel, FT fuels, methanol and olefins. At today's PV, green H₂ costs $5.68/kg against $2.00, and the recipe electrolyzer ($1,500/kW) is $2.47/kg of it. That price is ~31× the class's raw materials, the highest idiot index of any equipment class after desalination. The design target is a stack that is cheap and runs well for 6–8 sun-hours a day.
 
-## Requirements (from the model)
+## Requirements
 
 | Requirement | Target | Why |
 |---|---|---|
@@ -28,24 +28,40 @@ The company simulator says the electrolyzer gates the biggest material markets r
 | H₂, PV $250/kWp (3×) | $1.81/kg | $0.97/kg |
 | H₂, PV $76/kWp (10×) | $1.18/kg (stack $0.84) | **$0.39/kg** |
 | Best current density at 10× PV | 0.55 A/cm² | 0.55 A/cm² |
-| Full-load hours, stack oversizing | ~7 h/day, ~3.3× nameplate | ~7 h/day, ~3.4× nameplate |
-| PV per kg H₂/day | ~10 kWp | ~10 kWp |
+| Best current density at today's PV | 0.30 A/cm² | 0.15 A/cm² |
+| Full-load h/day, stack oversizing (PV $758 → $76) | 7.2 → 8.6 h, 3.35× → 2.79× | 6.6 → 7.2 h, 3.65× → 3.35× |
+| PV per kg H₂/day (PV $758 → $76) | 9.8 → 12.5 kWp | 10.0 → 10.2 kWp |
+| `simulatorOverride` capex / energy / materials factor | 0.284 / 0.980 / 0.0263 | **0.0307 / 1.016 / 0.0087** |
 
-Read this as two coupled programs:
+`lcoh()` sizes PV and stack together with the utilization model's sun-following block (8%, plant life). Read it as two coupled programs:
 
-- **With a lean stack, PV is ~94% of $/kg at today's PV prices.** The electrolyzer program only pays off together with cheap PV (racking, DC-direct strings, land).
+- **With a lean stack, PV is ~94% of $/kg at today's PV.** The electrolyzer program only pays off together with cheap PV (racking, DC-direct strings, land).
 - **With cheap PV, today's stacks become the cost** ($0.84 of $1.18). The lean design takes $/kg from $1.18 to $0.39 at 10× cheaper PV.
-- **Current density follows PV price.** Run low (0.15 A/cm²) when PV is dear — spend stack to save PV — and high (0.5+) when PV is cheap. Design the stack so the same hardware can be run at either.
+- **Current density follows PV price.** Run low (0.15 A/cm²) when PV is dear, spending stack to save PV, and high (0.5+) when PV is cheap. Design the stack so the same hardware runs at either.
+
+## Abundance scoreboard
+
+`abundanceScoreboard` (sizeMultiple 100, best site). Today = default config. Frontier = PV capex and floor ÷10, idiot-index target 1.5 with `Bom.floors()`, every other design at its lean preset. Cell: status, cost ÷ price ($/kg).
+
+| Scenario | Hydrogen (106 Mt, $2.00) | Ammonia (200 Mt, $0.45) | Ethylene (157 Mt, $0.80) | Diesel (1.36 Gt, $0.90) |
+|---|---|---|---|---|
+| Today, recipe | blocked 2.84× ($5.68: energy 3.56, electrolyzer 2.47) | blocked 3.15× ($1.42) | blocked 1.92× ($1.54) | blocked 1.63× ($1.47) |
+| Today, lean electrolyzer only | blocked 1.62× ($3.25: energy 3.52, electrolyzer 0.08) | blocked 2.37× ($1.07) | blocked 1.92× | blocked 1.63× |
+| Frontier, every lean design except this | abundant 0.30× ($0.590; electrolyzer 0.124) | abundant 0.36× ($0.160) | feasible 0.55× ($0.443) | abundant 0.40× ($0.360) |
+| Frontier, today's electrolyzer design | abundant 0.28× ($0.552) | abundant 0.34× ($0.153) | feasible 0.53× ($0.424) | abundant 0.38× ($0.341) |
+| Frontier, every lean design | abundant **0.25×** ($0.509) | abundant **0.33×** ($0.148) | feasible **0.51×** ($0.405) | abundant **0.35×** ($0.318) |
+
+At today's PV the lean stack removes the electrolyzer as a cost item, but every H₂ product stays blocked by energy: the PV price is the remaining problem. At the frontier H₂-based products are feasible or abundant whichever electrolyzer is used, because the idiot-index squeeze already caps the recipe stack; the lean design still takes 7–14% off their cost. The other equipment that blocked H₂ products after the electrolyzer (Haber-Bosch loop and ASU, DRI shaft, pellet plant, DAC, synthesis reactors, urea) has its own design under `docs/designs/`.
 
 ## Architecture
 
 1. **Stack** — bipolar filter-press, ~250 cells × 2.5 m² active (~4.6 MW at 0.4 A/cm²).
    - Bipolar plates: 1.0 mm stamped carbon steel, 15 µm Ni plating both faces.
-   - Electrodes: Ni expanded mesh / foam, ~0.35 kg/m² each, activated (Raney-type or NiFe/NiMo coatings later).
+   - Electrodes: Ni expanded mesh / foam, ~0.35 kg/m² each, activated (Raney-type, or NiFe/NiMo coatings later).
    - Separator: Zirfon-type (PPS mesh + ZrO₂) at ~$60/m² baseline; plain PPS felt (~$8/m², +0.15 Ω·cm²) as the cost-down option.
    - Frames/gaskets: EPDM or PP; end plates 50 mm steel with tie rods.
 2. **Lye loop** — 30 wt% KOH, ~80 °C at full load; atmospheric gas–lye separators, lye pump, simple plate cooler, demister and water wash on H₂. Atmospheric operation cuts BoP steel ~2× vs 30 bar and removes the pressure-rated vessels.
-3. **Power** — PV strings wired straight to stack groups (no inverter, no rectifier). Stack voltage ≈ cells × 1.8–2.1 V ≈ 450–525 V per 250-cell stack; series pairs match ~1,000 V DC strings. Expected mismatch loss ~5% (modelled); a DC-DC MPPT stage ($40/kW, 2% loss) is the fallback. A grid-style rectifier costs ~$120/kW plus copper and nearly doubles $/kg at cheap PV.
+3. **Power** — PV strings wired straight to stack groups (no inverter, no rectifier). Stack voltage ≈ cells × 1.8–2.1 V ≈ 450–525 V per 250-cell stack; series pairs match ~1,000 V DC strings. Mismatch loss ~5% (modelled); a DC-DC MPPT stage ($40/kW, 2% loss) is the fallback. A grid-style rectifier costs ~$120/kW plus copper.
 4. **Turndown and safety** — at low current, H₂ crosses the separator into O₂. Stacks are grouped and switched in/out with the sun so each running group stays above its minimum load (~10–20%); O₂ purity is monitored with a hard trip at 2% H₂ in O₂ (half the LEL).
 5. **Daily thermal cycle** — stacks start cold each morning and heat on their own losses; the model's polarization curve is at ~80 °C, so morning efficiency is lower (to be measured in Phase 1).
 6. **Shutdown** — on PV loss the stack self-discharges; a small polarization/shunt circuit protects electrodes from reverse currents (the main known degradation mechanism under daily cycling).
@@ -63,14 +79,14 @@ Read this as two coupled programs:
 | Foundations | concrete | 15 | 1.50 | 1.5 | 2.25 |
 | Bipolar plates | steel | 1.43 | 0.93 | 2 | 1.86 |
 | Plate Ni plating | nickel | 0.049 | 0.82 | 2 | 1.64 |
-| BoP pumps, instruments | copper | 0.05 | 0.46 | 3 | 1.37 |
+| BoP pumps, instruments (Cu) | copper | 0.05 | 0.46 | 3 | 1.37 |
 | BoP polymer | polymer | 0.30 | 0.33 | 3 | 0.99 |
 | End plates + tie rods | steel | 0.66 | 0.43 | 2 | 0.86 |
 | Assembly labour | — | — | — | — | 0.69 |
 | Gaskets / frames | polymer | 0.073 | 0.08 | 3 | 0.24 |
 | **Total installed** | | | **13.5 (materials incl. separator)** | | **47.8** |
 
-Where today's $453/kW goes instead: rectifier ($120), pressurized BoP fabricated at ~6× materials ($171), thick electrodes at 8× ($40), 2 mm plates at 5× ($13), assembly ~600 h/stack ($15), install 1.3×. The cost-down path is, in order of size: **drop the rectifier → atmospheric BoP built like water-treatment skids → thin stamped plates and mesh electrodes made in-line → cheap separator → minimal civil works.**
+Where today's $453/kW goes instead: rectifier ($120), pressurized BoP fabricated at 6× materials ($114), thick electrodes at 8× ($40), 2 mm plates at 5× ($13), assembly ~600 h/stack ($15), install 1.3×. The cost-down path is, in order of size: **drop the rectifier → atmospheric BoP built like water-treatment skids → thin stamped plates and mesh electrodes made in-line → cheap separator → minimal civil works.**
 
 ## Build plan
 
@@ -93,6 +109,6 @@ Test instrumentation throughout: cell-voltage monitoring per cell group, H₂-in
 - **Morning efficiency** below the 80 °C curve; possibly a small resistive pre-heat or insulation.
 - **The model is screening-grade**: polarization fitted to typical literature points, manufacturing factors assumed, BoP masses estimated. Phase 0–2 replace these with measured values, which feed straight back into `engine/designs/electrolyzer.js`.
 
-## What the model says to design next
+## Engine changes recommended (open)
 
-With the lean electrolyzer in the simulation, ammonia, urea, DRI steel and FT/olefins are still infeasible: their remaining capex is the **synthesis and process equipment** — Haber-Bosch loop + air separation (~80% of green ammonia's capex), the DRI shaft, FT reactors, DAC for e-fuels. The Designs view ranks these blocks live; the next design targets are a **sun-tolerant ammonia loop** (small H₂ buffer, wide turndown) and a **solar DRI shaft**.
+None: the engine reads every key this design returns.

@@ -603,6 +603,7 @@
       out[unit] = {
         capexFactor: d.byUnit[unit].installedUsdPerKgDay / (RECIPE[unit].usdPerKgDay * sf),
         energyFactor: d.byUnit[unit].kWhPerKg / RECIPE[unit].kWhPerKg,
+        materialsFactor: d.byUnit[unit].materialsUsdPerKgDay / (RECIPE[unit].usdPerKgDay * sf),
         flexible: d.flexible,
       };
     }

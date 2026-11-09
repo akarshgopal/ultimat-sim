@@ -30,7 +30,7 @@ DRI/HBI is a 141 Mt/yr market at $0.40/kg. With PV 10× cheaper and the lean ele
 | Shaft | 1.03 m bore × 32 m, 5 t Fe/h/m², 6 h residence | 0.87 m bore × 29 m, 7 t Fe/h/m², 4.5 h residence |
 | H₂ loop | λ 3.33 (30% H₂ used per pass), no recuperator, top gas 407 °C | λ 2.78 (36% per pass), recuperator ε 0.7 (99 m²), top gas 262 °C → recycle preheated to 195 °C |
 | Gas preheat | 2.9 MW AC heater + SCR, 950 °C | DC-direct elements, 900 °C. 6 MW of elements charge a firebrick heat store in sun hours |
-| Operation | Baseload, battery-firmed (engine default) | Baseload on a heat store (`utilizationPatch`). Sun-following variant: $38 per kg/day, 0.681 kWh/kg, flexible |
+| Operation | Baseload, battery-firmed (engine default) | Baseload on a heat store (`thermal: true` in the override). Sun-following variant: $38 per kg/day, 0.681 kWh/kg, flexible |
 
 **Heat and mass balance (lean, per kg Fe).** Pellets are 1.48 kg at 67.5% Fe. H₂ consumption is 0.052 kg (94% metallization), with 0.150 kg circulated; gas flow is 1,720 Nm³/t. Of the 0.57 kWh, the gas heater supplies 0.45. That heat goes to the reaction (0.234), hot HBI at discharge (0.141), shell loss (0.027) and top gas that the recuperator does not recover. The thermodynamic floor is ΔH°₂₉₈ = 0.246 kWh/kg Fe. The H₂ balance needs λ ≥ 1.74 for the Fe/FeO equilibrium at the bustle, which applies to the wüstite stage that removes ⅔ of the oxygen. It needs λ ≥ 2.73 to carry the reaction and discharge heat in as sensible heat. **An H₂ shaft is heat-limited, not equilibrium-limited**, which is why it circulates ~3× the stoichiometric H₂.
 
@@ -53,7 +53,7 @@ At 1,000 t/day, lean-built plants cost $21.4 per kg/day with 20 × 50 t/day shaf
 
 ## Abundance scoreboard: steel (DRI/HBI)
 
-`abundanceScoreboard` at year 0, best site (Walvis Bay), 100 t/day plants. The "lean, heat store" row also passes `config.utilization = utilizationPatch(PRESETS.lean.params)`, which adds `hydrogen-dri` to `thermalUnits`.
+`abundanceScoreboard` at year 0, best site (Walvis Bay), 100 t/day plants. The "lean, heat store" row is the lean override as shipped (`thermal: true`), which firms `hydrogen-dri` on the PV-charged heat store instead of batteries.
 
 | Scenario | Shaft | Status | Best pathway | Cost ÷ price | Top cost items ($/kg Fe) |
 |---|---|---|---|---|---|
@@ -80,7 +80,7 @@ The shaft is a ~5 h solids-residence, ~150 t refractory thermal mass. It can ram
 - **Sun-following** (`flexible: true`) is better: 0.95× today, 0.68× at the frontier. The engine oversizes the shaft ~2.5–3×, but the lean shaft is cheap enough that this costs less than batteries. Hot standby adds 0.11 kWh/kg.
 - **Baseload on a PV-charged heat store is best**: 0.87× today, 0.62× at the frontier. About 82% of the shaft's energy is gas preheat, so it can be stored as heat in firebrick ($40/kWh_th in `engine/utilization.js`) and blown through to the bustle at night. The shaft runs 24 h at constant conditions, which also removes the process risk of sun-following. The heater elements are sized ~3× to charge the store in sun hours (in the BOM).
 
-So the shaft should **not** be marked flexible. It should be marked as a thermal unit. `designs.units` cannot express that today: the module exports `utilizationPatch()` as a stopgap (see the engine changes below).
+So the shaft should **not** be marked flexible. It is marked as a thermal unit: the override carries `thermal: true`.
 
 ### Unit vs ore vs energy: what is the real lever
 
@@ -184,7 +184,7 @@ Instrumentation throughout: burden temperature probes at three heights, bustle a
 
 ## Engine changes recommended (not made here)
 
-1. **Thermal firming for designed units.** Let `designs.units.<unit>` carry `thermal: true`, meaning the unit's night energy is heat and can come from the thermal store. In `engine/utilization.js` `operatingProfile`, add `|| designUnits?.[node.unit]?.thermal === true` to the `thermal.has(node.unit)` test. Today the only route is replacing `config.utilization.thermalUnits`, which `utilizationPatch()` does.
+1. **Thermal firming for designed units** — done: `designs.units.<unit>.thermal: true`.
 2. **Do not squeeze a designed unit twice.** Under `idiotIndex.target`, `squashFactor` caps the whole process class at floorFraction × target (≈ 0.068). That cap multiplies a design's `capexFactor`, which already carries the design's own idiot index, so the lean shaft is priced at $2.6 per kg/day, below its own materials × 1.5 ($3.6). The fix: designs pass `materialsFactor` (design materials ÷ recipe capex at size). `capexByTech` prices those nodes outside the class squeeze, as `min(capexFactor × learned, materialsFactor × target)`.
 3. **Size-dependent design factors.** `capexFactor` here is computed at 100 t/day against the recipe at that size (`recipeAtSize`, the engine's `(size/ref)^-0.15` floored at 0.4). Plants of other sizes get the wrong factor, because the design's scale curve is much steeper than the engine's: fixed costs dominate, and the 0.4 floor stops the recipe at $336 per kg/day. Accept `capexFactor` as a function of `sizeKgPerDay` (or a table), or lower `scale.floorFactor` for process units.
 4. **Ore data** (data, not engine). `h2-dri` / `green-h2-dri` feed 1.43 kg of pure Fe₂O₃ at $0.10/kg. DR-grade pellets are ~1.48 kg/kg Fe at ~$150–180/t, so the scoreboard currently understates the real blocker by ~$0.08/kg.

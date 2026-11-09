@@ -272,7 +272,7 @@
   // What the company simulator needs to build on this design: config.designs.units entries.
   function simulatorOverride(params) {
     const d = design(params);
-    return { electrolyzer: { capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor, flexible: true } };
+    return { electrolyzer: { capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor, materialsFactor: d.materialsUsdPerKgDay / RECIPE_USD_PER_KG_DAY, flexible: true } };
   }
 
   const CONTROLS = Object.freeze([

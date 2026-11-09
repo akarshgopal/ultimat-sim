@@ -590,19 +590,18 @@
   }
 
   // Contract: what the company simulator needs to build on this design.
+  const UNITS = Object.freeze(['hydrogen-dri']);
   function simulatorOverride(params) {
     const d = design(params);
-    return { 'hydrogen-dri': { capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor, flexible: d.flexible } };
+    return { 'hydrogen-dri': {
+      capexFactor: d.vsRecipe.capexFactor,
+      energyFactor: d.vsRecipe.energyFactor,
+      materialsFactor: d.vsRecipe.capexFactor / d.idiotIndex,
+      flexible: d.flexible,
+      thermal: d.firming === 'heat-store',
+    } };
   }
 
-  // Heat-store firming is not expressible through designs.units (it changes how the unit's night energy is
-  // stored, not its capex or kWh): pass this as config.utilization so the engine firms hydrogen-dri with
-  // its thermal store instead of batteries. null when the design does not use a heat store.
-  const UNITS = Object.freeze(['hydrogen-dri']);
-  function utilizationPatch(params, base = Utilization ? Utilization.DEFAULTS : null) {
-    if (design(params).firming !== 'heat-store' || !base) return null;
-    return { ...base, thermalUnits: [...new Set([...(base.thermalUnits || []), ...UNITS])] };
-  }
 
   return {
     id: 'dri-shaft',
@@ -624,6 +623,5 @@
     design,
     scaleCurve,
     simulatorOverride,
-    utilizationPatch,
   };
 });

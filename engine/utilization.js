@@ -98,9 +98,10 @@
 
   // Per kg of primary product, from the pathway's solved flowsheet. null → no flowsheet (legacy
   // recipes and test fixtures): the caller keeps the 24 h-average costing.
-  // designUnits: { <unit>: { capexFactor, flexible } } — designed units re-weight the flexible/baseload
-  // capex split; flexible: true/false overrides whether the unit follows the sun (e.g. a wide-turndown
-  // synthesis loop designed to ramp with PV) or must be firmed.
+  // designUnits: { <unit>: { capexFactor, flexible, thermal } } — designed units re-weight the
+  // flexible/baseload capex split; flexible: true/false overrides whether the unit follows the sun (e.g.
+  // a wide-turndown synthesis loop designed to ramp with PV) or must be firmed; thermal: true lets a
+  // firmed unit whose energy is really heat (a DRI shaft's gas preheat) be firmed by a heat store.
   function operatingProfile(pathway, cfgIn, designUnits = null) {
     if (!pathway?.flowsheet?.nodes?.length) return null;
     const cfg = mergeCfg(cfgIn);
@@ -123,7 +124,7 @@
       const kWh = (Number(node.kWhPerKg) || 0) * (cfg.unitEnergyScale[node.unit] ?? 1);
       energyDelta += (Number(node.kWhPerKg) || 0) * ((cfg.unitEnergyScale[node.unit] ?? 1) - 1);
       if (mode === 'flex') flexKWh += kWh;
-      else if (thermal.has(node.unit)) baseThermalKWh += kWh;
+      else if (thermal.has(node.unit) || designUnits?.[node.unit]?.thermal === true) baseThermalKWh += kWh;
       else baseKWh += kWh;
       const cls = UNIT_TECH[node.unit] || 'process';
       const capexFactor = Number(designUnits?.[node.unit]?.capexFactor) > 0 ? designUnits[node.unit].capexFactor : 1;

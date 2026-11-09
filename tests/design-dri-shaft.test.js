@@ -97,8 +97,9 @@ test('the override lowers H₂-DRI cost in the company simulator and leaves othe
   close(o['hydrogen-dri'].capexFactor, d.installedUsdPerKgDay / d.recipeUsdPerKgDay, 1e-12);
   close(o['hydrogen-dri'].energyFactor, d.kWhPerKg / D.RECIPE.steel.kWhPerKg, 1e-12);
   const recipe = rank({});
-  const designed = rank({ designs: { units: o } });
-  const heatStore = rank({ designs: { units: o }, utilization: D.utilizationPatch(D.PRESETS.lean.params) });
+  assert.equal(o['hydrogen-dri'].thermal, true, 'the lean shaft is firmed on a heat store');
+  const designed = rank({ designs: { units: { 'hydrogen-dri': { ...o['hydrogen-dri'], thermal: false } } } });
+  const heatStore = rank({ designs: { units: o } });
   const lcop = (rows, id) => rows.find(r => r.pathwayId === id).lcopUsdPerKg;
   for (const id of ['h2-dri', 'green-h2-dri']) {
     assert.ok(lcop(designed, id) < lcop(recipe, id) - 0.05, `${id}: ${lcop(designed, id)} vs ${lcop(recipe, id)}`);

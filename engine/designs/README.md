@@ -15,9 +15,14 @@ config.designs.units = {
 
 - `capexFactor` — designed installed capex ÷ the recipe's, per kg/day of the same product.
 - `energyFactor` — designed kWh/kg ÷ the recipe's.
+- `materialsFactor` — the design's raw-materials cost ÷ the recipe's capex, per kg/day. The
+  idiot-index target squeezes a designed unit to its *own* materials × target (recipe units are
+  squeezed to their cost class's floor); without it, a designed unit is not squeezed at all.
 - `flexible` (optional) — `true`: the unit follows the sun (wide turndown, daily start/stop), so it is
   oversized for sun hours and needs no night-time firming; `false`: it must be firmed. Omitted: the
   default in `engine/utilization.js` (`flexibleUnits`).
+- `thermal` (optional) — `true`: a firmed unit whose energy is really heat, so a heat store (cheaper
+  than batteries) can carry it through the night.
 
 ## Module contract (`engine/designs/<id>.js`)
 
@@ -52,7 +57,7 @@ api = {
     bom: [{ part, material, kg, usdMaterials, manufacturing, usd, note }], // sums to installed; material null for bought-in items (`parts` in this shape also accepted)
     kpis: [{ label, value, sub }],      // 3–6 headline numbers specific to this design (strings)
   }),
-  simulatorOverride(params) => ({ <unit>: { capexFactor, energyFactor, flexible? } }),
+  simulatorOverride(params) => ({ <unit>: { capexFactor, energyFactor, materialsFactor, flexible?, thermal? } }),
 };
 ```
 

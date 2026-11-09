@@ -295,16 +295,26 @@
   // Plant economics
 
   // Recipe capex per kg/day by class, with designed units re-priced from their flowsheet share.
+  // out.designed[cls] = { usd, floorUsd }: the designed units' own capex in that class and their
+  // raw-materials floor (designs.units.<unit>.materialsFactor × recipe capex), so the class-wide
+  // idiot-index cap does not squeeze a design a second time (see evaluatePlant).
   function capexByTech(pathway, cfg) {
-    const out = {};
+    const out = { designed: null };
     for (const cls of TECH_CLASSES) out[cls] = Number(pathway.capexByTechUsdPerKgDay?.[cls]) || 0;
     const units = cfg?.designs?.units;
     if (units && pathway.flowsheet?.nodes) {
       for (const node of pathway.flowsheet.nodes) {
-        const factor = Number(units[node.unit]?.capexFactor);
-        if (node.kind !== 'converter' || !(factor > 0) || factor === 1) continue;
+        const d = units[node.unit];
+        const factor = Number(d?.capexFactor);
+        if (node.kind !== 'converter' || !(factor > 0)) continue;
         const cls = Utilization.UNIT_TECH[node.unit] || 'process';
-        out[cls] = Math.max(0, out[cls] + (Number(node.capexUsdPerKgDay) || 0) * (factor - 1));
+        const recipe = Number(node.capexUsdPerKgDay) || 0;
+        out[cls] = Math.max(0, out[cls] + recipe * (factor - 1));
+        out.designed = out.designed || {};
+        const slot = out.designed[cls] || (out.designed[cls] = { usd: 0, floorUsd: 0, unfloored: false });
+        slot.usd += recipe * factor;
+        if (Number(d.materialsFactor) > 0) slot.floorUsd += recipe * d.materialsFactor;
+        else slot.unfloored = true;
       }
     }
     return out;
@@ -401,8 +411,19 @@
     const processByTech = {};
     const refCapexByTech = {};
     let processCapex = 0;
+    const target = cfg.idiotIndex?.target > 0 ? cfg.idiotIndex.target : null;
     for (const cls of TECH_CLASSES) {
-      const value = perKgDay[cls] * sizeKgPerDay * sf * (ctx.costFactors[cls] ?? 1) * siteMult;
+      // Recipe units take the class factor (learning × equipment, squeezed to the class floor).
+      // Designed units take learning × equipment only, squeezed to their own materials floor.
+      const d = perKgDay.designed?.[cls];
+      let usdPerKgDay = perKgDay[cls] * (ctx.costFactors[cls] ?? 1);
+      if (d && cls !== 'storage') {
+        const raw = ctx.rawFactors?.[cls] ?? ctx.costFactors[cls] ?? 1;
+        let designed = d.usd * raw;
+        if (target && !d.unfloored) designed = Math.min(designed, d.floorUsd * target);
+        usdPerKgDay = Math.max(0, perKgDay[cls] - d.usd) * (ctx.costFactors[cls] ?? 1) + designed;
+      }
+      const value = usdPerKgDay * sizeKgPerDay * sf * siteMult;
       processByTech[cls] = value;
       refCapexByTech[cls] = perKgDay[cls] * sizeKgPerDay;
       processCapex += value;
@@ -683,10 +704,12 @@
 
   function yearContext(cfg, markets, state, yearIndex, year, committedKg, extras = {}) {
     const costFactors = {};
+    const rawFactors = {};
     const equipment = Number.isFinite(cfg.equipmentCostMultiplier) ? cfg.equipmentCostMultiplier : 1;
     const { floors, commodityFactors } = liveFloors(cfg, state.lastReliefByMarket);
     for (const cls of TECH_CLASSES) {
       const learned = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]);
+      rawFactors[cls] = cls === 'storage' ? learned : learned * equipment;
       costFactors[cls] = cls === 'storage' ? learned : squashFactor(cfg, cls, learned * equipment, floors);
     }
     const pvUsdPerKWp = squashUsd(cfg, 'pv', pvCapexUsdPerKWp(cfg.pv, yearIndex), floors);
@@ -723,7 +746,7 @@
       }
       return caps.get(group);
     };
-    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, storagePrices, floors, commodityFactors, priceFor, shareOf, capKg, designCache: new Map(), ...extras };
+    return { cfg, yearIndex, year, costFactors, rawFactors, pvUsdPerKWp, storagePrices, floors, commodityFactors, priceFor, shareOf, capKg, designCache: new Map(), ...extras };
   }
 
   function marketGroupOf(cfg, product) {

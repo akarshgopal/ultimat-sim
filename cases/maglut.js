@@ -1,16 +1,8 @@
-(function exposeMaglutCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('../data/ionic-clay-longnan.js') : root.IonicClayLongnan
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.MaglutCase = api;
-})(globalThis, (model, tea, clay) => {
+const tea = require('../data/tea-screening.js');
+const clay = require('../data/ionic-clay-longnan.js');
+const { projectEconomics, right, nodeFinder, clone, solarPowerNode } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=33.77&lon=-118.19&peakpower=1&loss=14&angle=20&aspect=180&outputformat=json';
-const pvgis = typeof require === 'function' ? require('../data/pvgis-long-beach.json') : null;
-const DAILY_PV_ED = pvgis ? pvgis.outputs.totals.fixed.E_d : 3.33;
-const DAILY_PV_EY = pvgis ? pvgis.outputs.totals.fixed.E_y : 1213.78;
+const { E_d: DAILY_PV_ED, E_y: DAILY_PV_EY } = require('../data/pvgis-long-beach.json').outputs.totals.fixed;
 const REO_KG_PER_DAY = 10;
 const RECOVERY = 0.914;
 const SEC = 5;
@@ -26,39 +18,19 @@ const USGS_REE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.
 const LONG_BEACH_URL = 'https://en.wikipedia.org/wiki/Long_Beach,_California';
 const METEORIC = 'https://wcsecure.weblink.com.au/pdf/MEI/02825639.pdf';
 
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function concentrateStream(kg) {
-  return {
-    kind: 'material',
-    mol: clay.concentrateMolForKg(kg),
-    phase: 'solid',
-    T_C: 25,
-    P_bar: 1,
-  };
-}
-
 function createMaglutCase() {
   const feedKg = REO_KG_PER_DAY / RECOVERY;
   const kWhPerDay = REO_KG_PER_DAY * SEC;
   const solarKWp = kWhPerDay / DAILY_PV_ED * 1.02;
   const electricityKWh = solarKWp * DAILY_PV_ED;
-  const concentrate = concentrateStream(feedKg);
+  const concentrate = { kind: 'material', mol: clay.concentrateMolForKg(feedKg), phase: 'solid', T_C: 25, P_bar: 1 };
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'concentrate', unit: 'material-source', sourcePreset: 'mixed-reo', params: { stream: concentrate }, economics: tea.bindCost('mixed-reo-concentrate') },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         {
           id: 'chrom',
           unit: 'ree-chromatography',
@@ -87,8 +59,7 @@ function createMaglutCase() {
       setpoints: { chrom: REO_KG_PER_DAY },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('concentrate').siteResource = 'concentrate';
   definition.site = {
@@ -148,5 +119,4 @@ function createMaglutCase() {
   return definition;
 }
 
-return { createMaglutCase };
-});
+module.exports = { createMaglutCase };

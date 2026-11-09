@@ -1,13 +1,5 @@
-(function exposeFloatGlassCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.FloatGlassCase = api;
-})(globalThis, (model, tea) => {
-const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const GLASS_KG_PER_DAY = 1000;
 const SEC_GLASS = 2.5;
@@ -22,27 +14,6 @@ const USGS_SAND_IND = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-sand-in
 const USGS_SODA_ASH = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-soda-ash.pdf';
 const USGS_STONE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-stone-crushed.pdf';
 const FRAUNHOFER_PV_REPORT = 'https://www.ise.fraunhofer.de/content/dam/ise/de/documents/publications/studies/Photovoltaics-Report.pdf';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase = 'solid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createFloatGlassCase() {
   const sandKg = GLASS_KG_PER_DAY * SAND_KG_PER_KG * FEED_MARGIN;
@@ -56,13 +27,13 @@ function createFloatGlassCase() {
   const limestone = material('CaCO3', limestoneKg);
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'sand-feed', unit: 'material-source', sourcePreset: 'silica-sand', params: { stream: sand }, economics: tea.bindCost('silica-sand', { freight: 'bulk-dry-shortsea' }) },
         { id: 'soda-feed', unit: 'material-source', sourcePreset: 'soda-ash', params: { stream: sodaAsh }, economics: tea.bindCost('soda-ash', { freight: 'chile-coast-container' }) },
         { id: 'limestone-feed', unit: 'material-source', sourcePreset: 'limestone', params: { stream: limestone }, economics: tea.bindCost('limestone', { freight: 'bulk-dry-shortsea' }) },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'float-glass',
@@ -78,7 +49,7 @@ function createFloatGlassCase() {
         { from: { node: 'sand-feed', port: 'out' }, to: { node: 'float-glass', port: 'sand' } },
         { from: { node: 'soda-feed', port: 'out' }, to: { node: 'float-glass', port: 'sodaAsh' } },
         { from: { node: 'limestone-feed', port: 'out' }, to: { node: 'float-glass', port: 'limestone' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'float-glass', port: 'electricity' } },
         { from: { node: 'float-glass', port: 'glass' }, to: { node: 'glass', port: 'in' } },
         { from: { node: 'float-glass', port: 'carbonDioxide' }, to: { node: 'process-co2', port: 'in' } },
@@ -89,8 +60,7 @@ function createFloatGlassCase() {
       priorities: { 'power-bus': ['float-glass'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('sand-feed').siteResource = 'silica-sand';
   node('soda-feed').siteResource = 'soda-ash';
@@ -165,5 +135,4 @@ function createFloatGlassCase() {
   return definition;
 }
 
-return { createFloatGlassCase };
-});
+module.exports = { createFloatGlassCase };

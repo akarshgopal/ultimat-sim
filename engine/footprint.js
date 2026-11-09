@@ -10,11 +10,8 @@ const GCR_MIN = 0.05;
 const GCR_MAX = 0.95;
 const SPACING_MIN = 0.82;
 const SPACING_MAX = 1.35;
-const REFERENCE_LATITUDE = 22.5;
-const WINTER_NOON_REFERENCE = {
-  latitude: 35.05,
-  winterNoonElevationDeg: 31.51,
-};
+// Winter-noon sun elevation at the 35.05° reference latitude where base GCRs apply.
+const REFERENCE_WINTER_NOON_ELEVATION_DEG = 31.51;
 const AXIAL_OBLIQUITY_DEG = 23.44;
 
 const MOUNTING = Object.freeze({
@@ -75,6 +72,7 @@ const PROCESS_LABELS = Object.freeze({
   'copper-ew': 'Copper SX-EW',
   'aluminium-smelter': 'Aluminium smelter',
   'hydrogen-dri': 'Hydrogen DRI',
+  'pellet-plant': 'Iron-ore pellet plant',
   'titanium-kroll': 'Titanium Kroll',
   'iac-leach': 'Ionic-clay REE',
   'ree-chromatography': 'ARC-1 chromatography',
@@ -521,6 +519,22 @@ const PROCESS_INTENSITIES = Object.freeze({
       }),
     ]),
   }),
+  'pellet-plant': Object.freeze({
+    id: 'pellet-plant',
+    label: PROCESS_LABELS['pellet-plant'],
+    basis: 'kgPerHour',
+    intensity: 0.7,
+    unitLabel: 'm²/(kg pellets/h)',
+    range: Object.freeze([0.3, 3]),
+    floorM2: 40,
+    quality: 'screening',
+    evidence: Object.freeze([
+      Object.freeze({
+        label: 'Screening pellet plant pad 0.7 m²/(kg pellets/h) (range 0.3–3): ~30 ha incl. stockyards for a 4 Mt/y straight-grate plant (≈ 457 t/h); not a plot survey. USGS MCS iron ore is commodity context, not a measured layout.',
+        url: 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-ore.pdf',
+      }),
+    ]),
+  }),
   'titanium-kroll': Object.freeze({
     id: 'titanium-kroll',
     label: PROCESS_LABELS['titanium-kroll'],
@@ -692,8 +706,7 @@ function mountingSpec(key) {
 }
 
 function resolveMounting(opts = {}) {
-  const key = opts.mounting || opts.mountingType || 'fixed';
-  return mountingSpec(key);
+  return mountingSpec(opts.mounting || opts.mountingType);
 }
 
 function winterNoonElevationDeg(latitude) {
@@ -709,7 +722,7 @@ function latitudeSpacingMultiplier(latitude, sensitivity) {
 
 function winterNoonSpacingMultiplier(latitude, sensitivity) {
   const elevation = winterNoonElevationDeg(latitude);
-  const sunAngleRatio = WINTER_NOON_REFERENCE.winterNoonElevationDeg / Math.max(elevation, 6);
+  const sunAngleRatio = REFERENCE_WINTER_NOON_ELEVATION_DEG / elevation;
   return clamp(sunAngleRatio ** sensitivity, SPACING_MIN, SPACING_MAX);
 }
 
@@ -775,10 +788,6 @@ function estimateSolarLandHa(solarKWp, opts = {}) {
   return estimateSolar(solarKWp, opts).ha;
 }
 
-function pvLandHa(solarKWp, opts = {}) {
-  return estimateSolarLandHa(solarKWp, opts);
-}
-
 function activityOf(solved, id) {
   return Math.max(0, finiteNumber(solved?.nodes?.[id]?.activity));
 }
@@ -808,215 +817,46 @@ function padAreaFromIntensity(spec, driver) {
 }
 
 function padElectrolyzer(node, solved) {
-  const spec = intensitySpec('electrolyzer');
   const activity = activityOf(solved, node.id);
   if (!(activity > 0)) return 0;
   const consumed = consumedElectricityKWh(solved, node.id);
   const sec = finiteNumber(node.params?.secKWhPerKgH2, 52);
   const dailyKWh = Number.isFinite(consumed) && consumed > 0 ? consumed : activity * sec;
-  const allocKW = dailyKWh / 24;
-  return padAreaFromIntensity(spec, allocKW);
+  return padAreaFromIntensity(intensitySpec('electrolyzer'), dailyKWh / 24);
 }
 
+// Annual tCO2 from daily kg activity.
 function padDac(node, solved, periodDays) {
-  const unitKey = PROCESS_INTENSITIES[node.unit] ? node.unit : 'dac';
-  const spec = intensitySpec(unitKey);
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  const co2AnnualTons = activity * periodDays / 1000;
-  return padAreaFromIntensity(spec, co2AnnualTons);
+  return padAreaFromIntensity(intensitySpec(node.unit), activityOf(solved, node.id) * periodDays / 1000);
 }
 
-function padSabatier(node, solved) {
-  const spec = intensitySpec('sabatier');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
+// Pad sized from solved daily activity; `divisor` converts it to the spec basis
+// (24: kg/d -> kg/h, 1000: kg/d -> t/d, 1: m³/d).
+function padFromActivity(unit, divisor) {
+  const spec = intensitySpec(unit);
+  return (node, solved) => padAreaFromIntensity(spec, activityOf(solved, node.id) / divisor);
 }
 
-function padMethanol(node, solved) {
-  const spec = intensitySpec('methanol');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padDesal(node, solved) {
-  const unitKey = PROCESS_INTENSITIES[node.unit] ? node.unit : 'swro';
-  const spec = intensitySpec(unitKey);
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity);
-}
-
-function padBrine(node, solved) {
-  const spec = intensitySpec('brine-minerals');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 1000);
-}
-
-function padAsu(node, solved) {
-  const spec = intensitySpec('asu');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 1000);
-}
-
-function padAmmonia(node, solved) {
-  const spec = intensitySpec('ammonia');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 1000);
-}
-
-function padUrea(node, solved) {
-  const spec = intensitySpec('urea');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padMto(node, solved) {
-  const spec = intensitySpec('mto');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padFtLiquids(node, solved) {
-  const spec = intensitySpec('ft-liquids');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padMgSi(node, solved) {
-  const spec = intensitySpec('mg-si');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padAluminiumSmelter(node, solved) {
-  const spec = intensitySpec('aluminium-smelter');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padBayerAlumina(node, solved) {
-  const spec = intensitySpec('bayer-alumina');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padPolysilicon(node, solved) {
-  const spec = intensitySpec('polysilicon');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padPvModule(node, solved) {
-  const spec = intensitySpec('pv-module');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padFloatGlass(node, solved) {
-  const spec = intensitySpec('float-glass');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padCement(node, solved) {
-  const spec = intensitySpec('cement');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padCopperEw(node, solved) {
-  const spec = intensitySpec('copper-ew');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padHydrogenDri(node, solved) {
-  const spec = intensitySpec('hydrogen-dri');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padTitaniumKroll(node, solved) {
-  const spec = intensitySpec('titanium-kroll');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padIacLeach(node, solved) {
-  const spec = intensitySpec('iac-leach');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padReeChromatography(node, solved) {
-  const spec = intensitySpec('ree-chromatography');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padReeSx(node, solved) {
-  const spec = intensitySpec('ree-sx');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
-}
-
-function padBioforge(node, solved) {
-  const spec = intensitySpec('bioforge');
-  const activity = activityOf(solved, node.id);
-  if (!(activity > 0)) return 0;
-  return padAreaFromIntensity(spec, activity / 24);
+// Pad sized from installed capacity (m³/d for pumps, Nm³/d for blowers).
+function padFromCapacity(unit) {
+  const spec = intensitySpec(unit);
+  return node => padAreaFromIntensity(spec, node.capacity);
 }
 
 function padBatteryKWh(batteryKWh) {
-  const spec = intensitySpec('battery');
-  const kWh = Math.max(0, finiteNumber(batteryKWh));
-  if (!(kWh > 0)) return 0;
-  return padAreaFromIntensity(spec, kWh / 1000);
-}
-
-
-function padIntakePump(node) {
-  const spec = intensitySpec('intake-pump');
-  const capacity = Math.max(0, finiteNumber(node.capacity));
-  if (!(capacity > 0)) return 0;
-  return padAreaFromIntensity(spec, capacity);
-}
-
-function padGasBlower(node) {
-  const spec = intensitySpec('gas-blower');
-  const capacity = Math.max(0, finiteNumber(node.capacity));
-  if (!(capacity > 0)) return 0;
-  return padAreaFromIntensity(spec, capacity);
+  return padAreaFromIntensity(intensitySpec('battery'), batteryKWh / 1000);
 }
 
 function padBuffer(node) {
-  const spec = intensitySpec('material-buffer');
-  const kg = Math.max(0, finiteNumber(node.params?.capacityKg ?? node.capacity));
-  if (!(kg > 0)) return 0;
-  return padAreaFromIntensity(spec, kg / 1000);
+  const kg = finiteNumber(node.params?.capacityKg ?? node.capacity);
+  return padAreaFromIntensity(intensitySpec('material-buffer'), kg / 1000);
 }
+
+const PER_HOUR_UNITS = [
+  'sabatier', 'methanol', 'urea', 'mto', 'ft-liquids', 'mg-si', 'polysilicon', 'pv-module',
+  'float-glass', 'cement', 'copper-ew', 'hydrogen-dri', 'pellet-plant', 'titanium-kroll',
+  'bayer-alumina', 'aluminium-smelter', 'iac-leach', 'ree-chromatography', 'ree-sx', 'bioforge',
+];
 
 const PROCESS_PADS = Object.freeze({
   electrolyzer: padElectrolyzer,
@@ -1024,56 +864,30 @@ const PROCESS_PADS = Object.freeze({
   'dac-solid': padDac,
   'dac-liquid': padDac,
   'dac-electroswing': padDac,
-  sabatier: padSabatier,
-  methanol: padMethanol,
-  swro: padDesal,
-  med: padDesal,
-  msf: padDesal,
-  desal: padDesal,
-  'brine-minerals': padBrine,
-  asu: padAsu,
-  ammonia: padAmmonia,
-  urea: padUrea,
-  mto: padMto,
-  'ft-liquids': padFtLiquids,
-  'mg-si': padMgSi,
-  polysilicon: padPolysilicon,
-  'pv-module': padPvModule,
-  'float-glass': padFloatGlass,
-  cement: padCement,
-  'copper-ew': padCopperEw,
-  'hydrogen-dri': padHydrogenDri,
-  'titanium-kroll': padTitaniumKroll,
-  'bayer-alumina': padBayerAlumina,
-  'aluminium-smelter': padAluminiumSmelter,
-  'iac-leach': padIacLeach,
-  'ree-chromatography': padReeChromatography,
-  'ree-sx': padReeSx,
-  bioforge: padBioforge,
+  ...Object.fromEntries(PER_HOUR_UNITS.map(unit => [unit, padFromActivity(unit, 24)])),
+  ...Object.fromEntries(['swro', 'med', 'msf', 'desal'].map(unit => [unit, padFromActivity(unit, 1)])),
+  ...Object.fromEntries(['brine-minerals', 'asu', 'ammonia'].map(unit => [unit, padFromActivity(unit, 1000)])),
   'material-buffer': padBuffer,
-  'intake-pump': padIntakePump,
-  'gas-blower': padGasBlower,
+  'intake-pump': padFromCapacity('intake-pump'),
+  'gas-blower': padFromCapacity('gas-blower'),
 });
 
+// Every unit with a pad (and 'battery') has an intensity spec.
 function processRecord(node, areaM2) {
-  const spec = intensitySpec(node.unit) || intensitySpec(
-    node.unit?.startsWith?.('dac') ? 'dac' : node.unit
-  );
+  const spec = intensitySpec(node.unit);
   return {
     id: node.id,
-    label: node.label || spec?.label || PROCESS_LABELS[node.unit] || node.unit,
+    label: node.label || spec.label,
     unit: node.unit,
     areaM2,
-    quality: spec?.quality || 'screening',
-    evidence: spec?.evidence || [],
-    intensity: spec
-      ? {
-          value: spec.intensity,
-          unitLabel: spec.unitLabel,
-          range: spec.range ? [...spec.range] : undefined,
-          basis: spec.basis,
-        }
-      : undefined,
+    quality: spec.quality,
+    evidence: spec.evidence,
+    intensity: {
+      value: spec.intensity,
+      unitLabel: spec.unitLabel,
+      range: [...spec.range],
+      basis: spec.basis,
+    },
   };
 }
 
@@ -1090,31 +904,13 @@ function processPads({ graph, solved, site, params = {} } = {}) {
 
   const siteBatteryKWh = finiteNumber(site?.storage?.batteryKWh);
   if (siteBatteryKWh > 0) {
-    const areaM2 = padBatteryKWh(siteBatteryKWh);
-    if (areaM2 > 0) {
-      const spec = intensitySpec('battery');
-      processes.push({
-        id: 'site-battery',
-        label: PROCESS_LABELS.battery,
-        unit: 'battery',
-        areaM2,
-        quality: spec.quality,
-        evidence: spec.evidence,
-        intensity: {
-          value: spec.intensity,
-          unitLabel: spec.unitLabel,
-          range: [...spec.range],
-          basis: spec.basis,
-        },
-      });
-    }
+    processes.push(processRecord({ id: 'site-battery', unit: 'battery' }, padBatteryKWh(siteBatteryKWh)));
   } else {
     for (const node of graph?.nodes || []) {
       if (node.unit !== 'battery') continue;
-      const activity = activityOf(solved, node.id);
-      const areaM2 = padBatteryKWh(activity);
+      const areaM2 = padBatteryKWh(activityOf(solved, node.id));
       if (!(areaM2 > 0)) continue;
-      processes.push(processRecord({ ...node, unit: 'battery' }, areaM2));
+      processes.push(processRecord(node, areaM2));
     }
   }
 
@@ -1133,7 +929,7 @@ function solarAssumptions(solar, opts) {
   if (model === 'winter-noon') {
     assumptions.push(
       'Location-aware GCR uses winter-noon elevation: elevation = max(6, 90 − |lat − winter declination ±23.44°|); '
-      + `spacing = clamp((${WINTER_NOON_REFERENCE.winterNoonElevationDeg} / elevation)^k, ${SPACING_MIN}, ${SPACING_MAX}); `
+      + `spacing = clamp((${REFERENCE_WINTER_NOON_ELEVATION_DEG} / elevation)^k, ${SPACING_MIN}, ${SPACING_MAX}); `
       + `GCR = clamp(baseGCR / spacing, ${GCR_MIN}, ${GCR_MAX}).`
     );
   } else {
@@ -1200,25 +996,11 @@ function estimateFootprint({ site, graph, solved, params = {} } = {}) {
 return {
   SQM_PER_ACRE,
   SQM_PER_HA,
-  DEFAULT_PANEL_EFFICIENCY,
-  GCR_MIN,
-  GCR_MAX,
-  SPACING_MIN,
-  SPACING_MAX,
-  REFERENCE_LATITUDE,
-  MOUNTING,
-  PROCESS_LABELS,
   PROCESS_INTENSITIES,
-  SOLAR_EVIDENCE,
-  clamp,
-  winterNoonElevationDeg,
   layoutSpacingMultiplier,
   groundCoverageRatio,
   estimateSolar,
   estimateSolarLandHa,
-  pvLandHa,
-  processPads,
   estimateFootprint,
-  intensitySpec,
 };
 });

@@ -1,13 +1,5 @@
-(function exposeCuEwCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.CuEwCase = api;
-})(globalThis, (model, tea) => {
-const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const CATHODE_KG_PER_DAY = 1000;
 const SEC_CU_EW = 2.2;
@@ -20,27 +12,6 @@ const MARIMACA_DFS_2025 = 'https://marimaca.com/wp-content/uploads/2026/07/25-10
 const EL_PILAR_FS_2022 = 'https://www.sec.gov/Archives/edgar/data/1001838/000155837022002995/scco-20211231ex9692df9bd.pdf';
 const GUNNISON_PEA_2024 = 'https://minedocs.com/27/Gunnison-PEA-11012024.pdf';
 const CU_EW_SEC_PRACTICE = 'https://pressbooks.bccampus.ca/hydrometallurgy/chapter/copper-electrowinning-practice/';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase = 'liquid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createCuEwCase() {
   const plsKg = CATHODE_KG_PER_DAY * PLS_KG_PER_KG * FEED_MARGIN;
@@ -50,11 +21,11 @@ function createCuEwCase() {
   const pls = material('Cu', plsKg, 'liquid');
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'pls-feed', unit: 'material-source', sourcePreset: 'pls-copper', params: { stream: pls }, economics: tea.bindCost('pls-copper', { freight: 'chile-coast-container' }) },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'copper-ew',
@@ -67,7 +38,7 @@ function createCuEwCase() {
       ],
       edges: [
         { from: { node: 'pls-feed', port: 'out' }, to: { node: 'copper-ew', port: 'pls' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'copper-ew', port: 'electricity' } },
         { from: { node: 'copper-ew', port: 'cathode' }, to: { node: 'cathode-product', port: 'in' } },
       ],
@@ -77,8 +48,7 @@ function createCuEwCase() {
       priorities: { 'power-bus': ['copper-ew'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('pls-feed').siteResource = 'pls-copper';
   definition.site = {
@@ -135,5 +105,4 @@ function createCuEwCase() {
   return definition;
 }
 
-return { createCuEwCase };
-});
+module.exports = { createCuEwCase };

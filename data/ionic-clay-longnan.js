@@ -84,26 +84,6 @@ const usgsSeparatedUsdPerKg = Object.freeze({
   Y2O3: 9,
 });
 
-function clayMolForKg(kg) {
-  const mass = Number(kg);
-  if (!Number.isFinite(mass) || mass < 0) throw new Error('clayMolForKg needs a finite nonnegative kg');
-  const reoKg = mass * GRADE_KG_REO_PER_KG_CLAY;
-  const mol = {};
-  for (const ox of listedOxides) {
-    mol[ox] = reoKg * renormalizedFractions[ox] * 1000 / MOLAR_MASS_G[ox];
-  }
-  mol.Al2Si2O5OH4 = (mass - reoKg) * 1000 / MOLAR_MASS_G.Al2Si2O5OH4;
-  return mol;
-}
-
-function clayMassFractions() {
-  const fractions = { Al2Si2O5OH4: 1 - GRADE_KG_REO_PER_KG_CLAY };
-  for (const ox of listedOxides) {
-    fractions[ox] = GRADE_KG_REO_PER_KG_CLAY * renormalizedFractions[ox];
-  }
-  return fractions;
-}
-
 function concentrateMolForKg(kg) {
   const mass = Number(kg);
   if (!Number.isFinite(mass) || mass < 0) throw new Error('concentrateMolForKg needs a finite nonnegative kg');
@@ -135,9 +115,7 @@ return {
   ammoniumSulfateKgPerKgReo: AMMONIUM_SULFATE_KG_PER_KG_REO,
   electricityKWhPerKgReo: ELECTRICITY_KWH_PER_KG_REO,
   molarMassG: MOLAR_MASS_G,
-  clayMolForKg,
   concentrateMolForKg,
-  clayMassFractions,
   note: 'Deng & Kendall 2019 Table 1 Longnan listed oxides sum to 97.27; the unpublished 2.73-point gap is dropped and listed masses are renormalized onto 1.0. Y-rich heavy basket, not an NdPr clay. Literature assay, not a concession.',
 };
 });

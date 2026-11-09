@@ -1,13 +1,6 @@
-(function exposeTiKrollCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.TiKrollCase = api;
-})(globalThis, (model, tea) => {
-const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const TI_KG_PER_DAY = 100;
 const SEC_KROLL = 8;
@@ -17,27 +10,6 @@ const USGS_TI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-titanium.pdf'
 const USGS_TI_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-titanium.pdf';
 const USGS_MG_METAL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-metal.pdf';
 const USGS_MG_METAL_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-magnesium-metal.pdf';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase = 'solid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createTiKrollCase() {
   const ticl4Kg = TI_KG_PER_DAY * SUBSTANCES.TiCl4.molarMassG / SUBSTANCES.Ti.molarMassG * FEED_MARGIN;
@@ -49,12 +21,12 @@ function createTiKrollCase() {
   const magnesium = material('Mg', magnesiumKg, 'solid');
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'ticl4-feed', unit: 'material-source', sourcePreset: 'titaniumTetrachloride', params: { stream: ticl4 }, economics: tea.bindCost('titanium-tetrachloride') },
         { id: 'magnesium-feed', unit: 'material-source', sourcePreset: 'magnesium', params: { stream: magnesium }, economics: tea.bindCost('magnesium-metal') },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'kroll',
@@ -69,7 +41,7 @@ function createTiKrollCase() {
       edges: [
         { from: { node: 'ticl4-feed', port: 'out' }, to: { node: 'kroll', port: 'titaniumTetrachloride' } },
         { from: { node: 'magnesium-feed', port: 'out' }, to: { node: 'kroll', port: 'magnesium' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'kroll', port: 'electricity' } },
         { from: { node: 'kroll', port: 'titanium' }, to: { node: 'titanium', port: 'in' } },
         { from: { node: 'kroll', port: 'magnesiumChloride' }, to: { node: 'magnesium-chloride', port: 'in' } },
@@ -80,8 +52,7 @@ function createTiKrollCase() {
       priorities: { 'power-bus': ['kroll'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('ticl4-feed').siteResource = 'titaniumTetrachloride';
   node('magnesium-feed').siteResource = 'magnesium';
@@ -145,5 +116,4 @@ function createTiKrollCase() {
   return definition;
 }
 
-return { createTiKrollCase };
-});
+module.exports = { createTiKrollCase };

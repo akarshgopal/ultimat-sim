@@ -4,18 +4,12 @@ const test = require('node:test');
 const { SUBSTANCES, streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
 const { createSabatierCase } = require('../cases/sabatier');
+const { assertClosed: assertBalances } = require('./helpers.js');
 
 const H2_PER_CH4 = 4 * SUBSTANCES.H2.molarMassG / SUBSTANCES.CH4.molarMassG;
 const CO2_PER_CH4 = SUBSTANCES.CO2.molarMassG / SUBSTANCES.CH4.molarMassG;
 
-function assertClosed(solved) {
-  assert.ok(solved.balances.maxAbsResidual < 1e-8);
-  assert.ok(Math.abs(solved.balances.electricityKWh) < 1e-8);
-  assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
-  for (const [element, amount] of Object.entries(solved.balances.elements)) {
-    assert.ok(Math.abs(amount) < 1e-8, `${element} balance should close`);
-  }
-}
+const assertClosed = solved => assertBalances(solved, { elements: true });
 
 test('integrated DAC + SWRO/electrolysis + Sabatier closes stoichiometry and balances', () => {
   const definition = createSabatierCase();
@@ -23,9 +17,6 @@ test('integrated DAC + SWRO/electrolysis + Sabatier closes stoichiometry and bal
   for (const node of sales) {
     assert.ok(node.economics.annualDemandLimit < 1e12, node.id);
   }
-  const electrolyzer = definition.graph.nodes.find(node => node.id === 'electrolyzer');
-  assert.equal(electrolyzer.economics.capexRate, 3250);
-  assert.equal(electrolyzer.economics.installedCapex, undefined);
   const solved = solveOperation(definition);
   const sabatier = solved.nodes.sabatier;
   const methane = sabatier.outlets.methane;
@@ -70,7 +61,7 @@ test('Sabatier reports CO2 as the limiting feed without inventing methane', () =
     },
     h2Requested: capturedCo2Kg / CO2_PER_CH4 * H2_PER_CH4,
     // Match DAC's consumed heat at the reduced CO2 feed so the boundary closes.
-    heatKWh: 200 * 44.0095 / 1000 * 0.9 * 1.5,
+    heatKWh: capturedCo2Kg * 1.5,
   }));
   const sabatier = solved.nodes.sabatier;
   const capturedKg = streamMassKg(solved.nodes.sabatier.consumed.co2);

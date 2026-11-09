@@ -1,0 +1,15 @@
+/* markets view — scoped by .v-markets. */
+.v-markets #marketsTable td:first-child { min-width: 170px; }
+.v-markets tr.is-unsupplied td { color: var(--text-2); }
+.v-markets tr.is-supplied td:first-child a { font-weight: 600; }
+.v-markets .path-links { display: inline-flex; flex-wrap: wrap; gap: 2px 8px; max-width: 260px; font-size: 12px; }
+.v-markets .path-links a.is-co { color: var(--text-2); }
+.v-markets .path-links a.is-co::after { content: " (co)"; color: var(--text-3); }
+
+.v-markets .market-note { margin-top: 12px; color: var(--text-2); font-size: 13px; max-width: 80ch; }
+.v-markets .sources-head { margin: 14px 0 6px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.v-markets .sources a { overflow-wrap: anywhere; }
+.v-markets .captive-note { margin-top: 10px; font-size: 12px; color: var(--text-2); }
+
+.v-markets .co-more { color: var(--text-3); cursor: help; }
+.v-markets #marketPathways td:first-child { min-width: 180px; }

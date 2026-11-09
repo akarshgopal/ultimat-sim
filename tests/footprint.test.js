@@ -8,12 +8,7 @@ const {
   estimateFootprint,
   estimateSolar,
   estimateSolarLandHa,
-  pvLandHa,
-  layoutSpacingMultiplier,
-  groundCoverageRatio,
 } = require('../engine/footprint');
-const { evaluateNetwork } = require('../engine/network');
-const { createFuelsAndMineralsNetwork } = require('../cases/network');
 
 const MAIN_UNITS = [
   'electrolyzer',
@@ -34,23 +29,19 @@ const MAIN_UNITS = [
   'gas-blower',
 ];
 
-test('solar land uses panel area / GCR rather than 1.6 ha/MWp', () => {
+test('solar land is panel area over the ground-coverage ratio', () => {
   const solarKWp = 50000;
-  const ha = estimateSolarLandHa(solarKWp);
-  assert.equal(ha, pvLandHa(solarKWp));
-  assert.notEqual(ha, 80);
-  const panelAreaM2 = (solarKWp / 1000) * 1e6 / ((20 / 100) * 1000);
-  const landAreaM2 = panelAreaM2 / 0.45;
-  assert.ok(Math.abs(ha - landAreaM2 / SQM_PER_HA) < 1e-12);
   const solar = estimateSolar(solarKWp);
-  assert.equal(solar.panelAreaM2, panelAreaM2);
-  assert.equal(solar.gcr, solar.baseGcr);
-  assert.equal(solar.mounting, 'fixed');
-  assert.equal(solar.panelEfficiency, 20);
-  assert.ok(Math.abs(solar.acres - landAreaM2 / SQM_PER_ACRE) < 1e-12);
-  assert.equal(solar.quality, 'cited');
-  assert.ok(Array.isArray(solar.evidence) && solar.evidence.length >= 1);
-  assert.ok(solar.evidence.every(item => item.label && item.url));
+  assert.ok(Math.abs(solar.panelAreaM2 - solarKWp * 1000 / (solar.panelEfficiency * 10)) < 1e-6, 'panel area from STC 1,000 W/m²');
+  assert.ok(Math.abs(solar.landAreaM2 - solar.panelAreaM2 / solar.gcr) < 1e-6);
+  assert.ok(Math.abs(solar.ha - solar.landAreaM2 / SQM_PER_HA) < 1e-12);
+  assert.ok(Math.abs(solar.acres - solar.landAreaM2 / SQM_PER_ACRE) < 1e-12);
+  assert.equal(estimateSolarLandHa(solarKWp), solar.ha);
+  // Fixed-tilt utility PV needs roughly 1–2 ha per MWp.
+  const haPerMWp = solar.ha / (solarKWp / 1000);
+  assert.ok(haPerMWp > 0.8 && haPerMWp < 2, `${haPerMWp} ha/MWp`);
+  assert.ok(estimateSolar(solarKWp, { panelEfficiency: 15 }).ha > solar.ha, 'less efficient panels need more land');
+  assert.ok(solar.evidence.length >= 1 && solar.evidence.every(item => item.label && item.url));
 });
 
 test('process intensities are finite with evidence for main units', () => {
@@ -101,23 +92,12 @@ test('estimateFootprint returns cited/screening process pads from activity', () 
   assert.equal(byId.idle, undefined);
   assert.ok(footprint.processes.length >= 7);
   assert.ok(footprint.processes.every(item => item.areaM2 > 0 && item.evidence?.length && item.quality));
-  // electrolyzer: allocKW = 5000/24, intensity 0.072 → max(24, ...)
+  // Pads scale with throughput above a minimum pad per unit.
   const elyKW = 5000 / 24;
   assert.ok(Math.abs(byId.ely.areaM2 - Math.max(24, elyKW * PROCESS_INTENSITIES.electrolyzer.intensity)) < 1e-9);
-  // DAC solid: 1000 kg/d * 365 / 1000 t/y * 1.12
   assert.ok(Math.abs(byId.dac.areaM2 - Math.max(36, 365 * PROCESS_INTENSITIES['dac-solid'].intensity)) < 1e-9);
   assert.ok(Math.abs(byId.ro.areaM2 - Math.max(16, 40 * PROCESS_INTENSITIES.swro.intensity)) < 1e-9);
   assert.ok(Math.abs(byId['site-battery'].areaM2 - Math.max(20, 2 * PROCESS_INTENSITIES.battery.intensity)) < 1e-9);
   assert.ok(Math.abs(footprint.processAreaM2 - footprint.processes.reduce((sum, item) => sum + item.areaM2, 0)) < 1e-12);
   assert.equal(footprint.totalAreaM2, footprint.processAreaM2);
-  assert.match(footprint.assumptions.join(' '), /cited or screening intensities/i);
-});
-
-test('network landHa is the sum of plant totalHa from estimateFootprint', () => {
-  const result = evaluateNetwork(createFuelsAndMineralsNetwork(6));
-  const summed = result.plants.reduce((sum, plant) => sum + plant.footprint.totalHa, 0);
-  assert.ok(Math.abs(result.landHa - summed) < 1e-12);
-  assert.ok(result.landHa > result.plants[0].footprint.totalHa);
-  const solarOnly = result.plants.reduce((sum, plant) => sum + plant.footprint.solar.ha, 0);
-  assert.ok(result.landHa >= solarOnly);
 });

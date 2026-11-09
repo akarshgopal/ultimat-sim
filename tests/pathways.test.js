@@ -1,0 +1,176 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const { pathToFileURL } = require('node:url');
+
+const { solveOperation } = require('../engine/solve');
+const { evaluateEconomics } = require('../engine/economics');
+const tea = require('../data/tea-screening.js');
+const { FILES } = require('../data/pvgis-sites.js');
+const { PATHWAYS, GENERATED_FROM } = require('../data/pathways.js');
+const { TECH_CLASSES } = require('../engine/company.js');
+
+const ROOT = path.resolve(__dirname, '..');
+const ROW_KEYS = [
+  'id', 'name', 'product', 'case', 'refSiteId', 'refRegion', 'refOutputKgPerDay', 'electricityKWhPerKg',
+  'heatKWhPerKg', 'feeds', 'coproducts', 'capexByTechUsdPerKgDay', 'fixedOmFracPerYear', 'variableOmUsdPerKg',
+  'assetLifeYears', 'infiniteSourceShare', 'quality', 'notes', 'flowsheet',
+];
+const NODE_KINDS = ['source', 'converter', 'sink', 'electricity', 'bus', 'heat'];
+const EDGE_KINDS = ['material', 'electricity', 'heat'];
+const FEED_KEYS = ['id', 'kgPerKg', 'usdPerKg', 'freightUsdPerKg', 'origin', 'purchased'];
+const COPRODUCT_KEYS = ['id', 'product', 'kgPerKg', 'usdPerKg'];
+const ORIGINS = ['ocean', 'brine', 'air', 'crust', 'intermediate', 'consumable', 'water'];
+const INFINITE = new Set(['ocean', 'brine', 'air', 'crust', 'water']);
+
+function finiteNonNegative(value, label) {
+  assert.ok(Number.isFinite(value) && value >= 0, `${label} = ${value}`);
+}
+
+function relClose(actual, expected, label, tol = 1e-6) {
+  const scale = Math.max(Math.abs(expected), 1e-12);
+  assert.ok(Math.abs(actual - expected) / scale <= tol, `${label}: ${actual} vs ${expected}`);
+}
+
+test('committed data/pathways.js equals a fresh regeneration (staleness guard)', async () => {
+  const builder = await import(pathToFileURL(path.join(ROOT, 'scripts/build-pathways.mjs')).href);
+  const fresh = builder.normalizeForCompare(builder.renderModule(builder.buildPathways()));
+  const committed = builder.normalizeForCompare(fs.readFileSync(path.join(ROOT, 'data/pathways.js'), 'utf8'));
+  assert.equal(committed, fresh, 'data/pathways.js is stale: run node scripts/build-pathways.mjs');
+});
+
+test('pathway rows: ids, products, feeds, capex classes', () => {
+  assert.ok(PATHWAYS.length >= 20, `pathways ${PATHWAYS.length}`);
+  for (const skip of GENERATED_FROM.skipped) {
+    assert.match(skip.file, /^cases\/[\w-]+\.js$/);
+    assert.ok(skip.reason.length > 0, `${skip.file} says why it is skipped`);
+  }
+  assert.deepEqual(PATHWAYS.map(p => p.id), PATHWAYS.map(p => p.id).slice().sort(), 'stable id ordering');
+  assert.equal(new Set(PATHWAYS.map(p => p.id)).size, PATHWAYS.length, 'unique ids');
+
+  for (const row of PATHWAYS) {
+    const at = `[${row.id}]`;
+    assert.deepEqual(Object.keys(row), ROW_KEYS, `${at} keys`);
+    assert.match(row.id, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${at} kebab id`);
+    const stem = path.basename(row.case.file, '.js');
+    assert.ok(row.id === stem || row.id === `${stem}-${row.product}`, `${at} id follows <stem>[-<product>]`);
+    assert.ok(Object.prototype.hasOwnProperty.call(tea.prices, row.product), `${at} product ${row.product} is a TeaScreening.prices key`);
+    assert.ok(fs.existsSync(path.join(ROOT, row.case.file)), `${at} case file`);
+    assert.equal(typeof require(path.join(ROOT, row.case.file))[row.case.factory], 'function', `${at} factory`);
+    assert.ok(row.refSiteId === null || Object.prototype.hasOwnProperty.call(FILES, row.refSiteId), `${at} refSiteId ${row.refSiteId}`);
+    assert.ok(row.refRegion === null || typeof row.refRegion === 'string', `${at} refRegion`);
+    assert.ok(row.refOutputKgPerDay > 0, `${at} refOutputKgPerDay`);
+    finiteNonNegative(row.electricityKWhPerKg, `${at} electricityKWhPerKg`);
+    finiteNonNegative(row.heatKWhPerKg, `${at} heatKWhPerKg`);
+    finiteNonNegative(row.variableOmUsdPerKg, `${at} variableOmUsdPerKg`);
+    assert.ok(row.fixedOmFracPerYear >= 0 && row.fixedOmFracPerYear < 0.5, `${at} fixedOmFracPerYear`);
+    assert.ok(row.assetLifeYears > 0 && row.assetLifeYears <= 60, `${at} assetLifeYears`);
+    assert.ok(row.infiniteSourceShare >= 0 && row.infiniteSourceShare <= 1, `${at} infiniteSourceShare`);
+    assert.ok(typeof row.notes === 'string' && row.notes.length > 0, `${at} notes`);
+    assert.deepEqual(Object.keys(row.capexByTechUsdPerKgDay), TECH_CLASSES, `${at} capex classes`);
+    for (const [cls, value] of Object.entries(row.capexByTechUsdPerKgDay)) finiteNonNegative(value, `${at} capex.${cls}`);
+    assert.ok(Object.values(row.capexByTechUsdPerKgDay).reduce((a, b) => a + b, 0) > 0, `${at} non-PV capex > 0`);
+    assert.ok(row.feeds.length > 0, `${at} feeds`);
+    let total = 0;
+    let infinite = 0;
+    for (const feed of row.feeds) {
+      assert.deepEqual(Object.keys(feed), FEED_KEYS, `${at} feed keys`);
+      assert.ok(ORIGINS.includes(feed.origin), `${at} origin ${feed.origin}`);
+      assert.equal(typeof feed.purchased, 'boolean');
+      finiteNonNegative(feed.kgPerKg, `${at} ${feed.id}.kgPerKg`);
+      finiteNonNegative(feed.usdPerKg, `${at} ${feed.id}.usdPerKg`);
+      finiteNonNegative(feed.freightUsdPerKg, `${at} ${feed.id}.freightUsdPerKg`);
+      total += feed.kgPerKg;
+      if (INFINITE.has(feed.origin)) infinite += feed.kgPerKg;
+    }
+    assert.ok(Math.abs(infinite / total - row.infiniteSourceShare) < 1e-4, `${at} infiniteSourceShare matches feeds`);
+    for (const co of row.coproducts) {
+      assert.deepEqual(Object.keys(co), COPRODUCT_KEYS, `${at} coproduct keys`);
+      assert.ok(co.product === null || Object.prototype.hasOwnProperty.call(tea.prices, co.product), `${at} coproduct ${co.product}`);
+      assert.notEqual(co.product, row.product, `${at} coproduct is not the primary`);
+      finiteNonNegative(co.kgPerKg, `${at} ${co.id}.kgPerKg`);
+      finiteNonNegative(co.usdPerKg, `${at} ${co.id}.usdPerKg`);
+    }
+  }
+});
+
+test('pathway rows: per-kg flowsheet graph (nodes, edges, flows)', () => {
+  for (const row of PATHWAYS) {
+    const at = `[${row.id}]`;
+    const { nodes, edges } = row.flowsheet;
+    assert.ok(nodes.length >= 3 && edges.length >= 2, `${at} flowsheet size ${nodes.length}/${edges.length}`);
+    const ids = new Set(nodes.map(n => n.id));
+    assert.equal(ids.size, nodes.length, `${at} unique node ids`);
+    for (const node of nodes) {
+      assert.ok(NODE_KINDS.includes(node.kind), `${at} node kind ${node.kind}`);
+      assert.ok(typeof node.unit === 'string' && typeof node.label === 'string' && node.label.length > 0, `${at} ${node.id} unit/label`);
+      if (node.kWhPerKg != null) assert.ok(node.kWhPerKg > 0, `${at} ${node.id}.kWhPerKg`);
+      if (node.capexUsdPerKgDay != null) assert.ok(node.capexUsdPerKgDay > 0, `${at} ${node.id}.capexUsdPerKgDay`);
+      if (node.kind === 'sink') assert.ok(['product', 'coproduct', 'waste'].includes(node.disposition), `${at} ${node.id}.disposition`);
+    }
+    assert.ok(nodes.some(n => n.kind === 'sink' && n.disposition === 'product'), `${at} has a product sink`);
+    for (const edge of edges) {
+      assert.ok(ids.has(edge.from) && ids.has(edge.to), `${at} edge ${edge.from}→${edge.to} endpoints`);
+      assert.ok(EDGE_KINDS.includes(edge.kind), `${at} edge kind ${edge.kind}`);
+      const amount = edge.kind === 'material' ? edge.kgPerKg : edge.kWhPerKg;
+      assert.ok(amount > 0 && Number.isFinite(amount), `${at} edge ${edge.from}→${edge.to} amount ${amount} (zero flows dropped)`);
+      if (edge.substances) {
+        assert.ok(edge.substances.length >= 1 && edge.substances.length <= 3, `${at} top-3 substances`);
+        for (const [sub, kg] of edge.substances) assert.ok(typeof sub === 'string' && kg > 0 && kg <= amount * 1.01, `${at} ${sub}`);
+      }
+    }
+    // Primary product sinks receive 1 kg per kg (within display rounding).
+    const productIn = edges.filter(e => nodes.find(n => n.id === e.to)?.disposition === 'product').reduce((s, e) => s + e.kgPerKg, 0);
+    assert.ok(Math.abs(productIn - 1) < 0.01, `${at} product sink inflow ${productIn} kg/kg`);
+    // Converter electricity reproduces the recipe's electricity within rounding.
+    const kWh = nodes.reduce((s, n) => s + (n.kind === 'converter' && !/battery/.test(n.unit) ? n.kWhPerKg || 0 : 0), 0);
+    assert.ok(Math.abs(kWh - row.electricityKWhPerKg) <= 0.01 * Math.max(1, row.electricityKWhPerKg), `${at} flowsheet kWh ${kWh} vs ${row.electricityKWhPerKg}`);
+  }
+  const nh3 = PATHWAYS.find(p => p.id === 'green-ammonia').flowsheet;
+  assert.ok(nh3.edges.some(e => e.from === 'electrolyzer' && e.to === 'ammonia' && e.substances?.[0]?.[0] === 'H2'));
+  assert.ok(nh3.edges.some(e => e.kind === 'electricity'));
+});
+
+function solvedTotals(definition, productSinkIds) {
+  const solved = solveOperation(definition);
+  assert.equal(solved.convergence.converged, true);
+  const econ = evaluateEconomics(definition, solved);
+  let electricity = 0;
+  for (const node of definition.graph.nodes) {
+    if (node.unit === 'electrical-bus') continue;
+    const consumed = solved.nodes[node.id]?.consumed?.electricity;
+    if (consumed?.kind === 'electricity') electricity += consumed.kWh;
+  }
+  const productKg = econ.sinks.filter(s => productSinkIds.includes(s.id)).reduce((sum, s) => sum + s.amountPerDay, 0);
+  const pvNodes = definition.graph.nodes.filter(node => node.unit === 'electricity-source');
+  const pvCapex = evaluateEconomics({ ...definition, graph: { nodes: pvNodes, edges: [] } }, solved).installedCapex;
+  return { electricity, productKg, nonPvCapex: econ.installedCapex - pvCapex };
+}
+
+for (const { id, factory, file, sinks } of [
+  { id: 'cement', file: '../cases/cement', factory: 'createCementCase', sinks: ['cement-product'] },
+  { id: 'green-ammonia', file: '../cases/green-ammonia', factory: 'createGreenAmmoniaCase', sinks: ['ammonia-product'] },
+  { id: 'silicon', file: '../cases/silicon', factory: 'createSiliconCase', sinks: ['module'] },
+]) {
+  test(`pathway ${id}: recipe × refOutputKgPerDay reproduces solved electricity, product and non-PV capex`, () => {
+    const row = PATHWAYS.find(p => p.id === id);
+    assert.ok(row, `row ${id}`);
+    const totals = solvedTotals(require(file)[factory](), sinks);
+    const ref = row.refOutputKgPerDay;
+    relClose(ref, totals.productKg, `${id} product kg/day`);
+    relClose(row.electricityKWhPerKg * ref, totals.electricity, `${id} electricity kWh/day`);
+    const capex = Object.values(row.capexByTechUsdPerKgDay).reduce((a, b) => a + b, 0) * ref;
+    relClose(capex, totals.nonPvCapex, `${id} non-PV installed capex`);
+  });
+}
+
+test('green-ammonia splits electrolyzer / desal / process capex; cement is all process', () => {
+  const nh3 = PATHWAYS.find(p => p.id === 'green-ammonia').capexByTechUsdPerKgDay;
+  assert.ok(nh3.electrolyzer > 0 && nh3.desal > 0 && nh3.process > 0);
+  const cement = PATHWAYS.find(p => p.id === 'cement');
+  assert.equal(cement.capexByTechUsdPerKgDay.electrolyzer, 0);
+  assert.ok(cement.capexByTechUsdPerKgDay.process > 0);
+  assert.equal(cement.infiniteSourceShare, 1);
+  assert.ok(cement.feeds.every(f => f.origin === 'crust' && f.purchased));
+});

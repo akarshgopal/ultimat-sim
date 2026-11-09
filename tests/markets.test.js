@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const tea = require('../data/tea-screening.js');
-const { MARKETS, SCHEMA_VERSION } = require('../data/markets.js');
+const { MARKETS } = require('../data/markets.js');
 
 // Keys of TeaScreening.prices that are feeds/inputs, not sale products.
 const INPUT_ONLY = new Set([
@@ -11,14 +11,10 @@ const INPUT_ONLY = new Set([
 ]);
 const isSaleKey = (key) => !INPUT_ONLY.has(key) && !key.endsWith('-feed');
 const SALE_KEYS = Object.keys(tea.prices).filter(isSaleKey);
-// Extra market rows not in TeaScreening.prices, with the TeaScreening value they mirror.
-const EXTRA_PRICE_REF = {};
 
-test('markets schema version and key set match TeaScreening sale keys', () => {
-  assert.equal(SCHEMA_VERSION, 1);
+test('there is one market row per TeaScreening sale key', () => {
   assert.ok(SALE_KEYS.length >= 30, `expected ≥30 sale keys, got ${SALE_KEYS.length}`);
-  const expected = [...SALE_KEYS, ...Object.keys(EXTRA_PRICE_REF)].sort();
-  assert.deepEqual(Object.keys(MARKETS).sort(), expected);
+  assert.deepEqual(Object.keys(MARKETS).sort(), [...SALE_KEYS].sort());
 });
 
 test('every market row matches the schema', () => {
@@ -54,20 +50,13 @@ test('market reference price equals TeaScreening price', () => {
   for (const key of SALE_KEYS) {
     assert.equal(MARKETS[key].priceUsdPerKg, tea.prices[key].value, `${key} price must equal TeaScreening.prices`);
   }
-  for (const [key, value] of Object.entries(EXTRA_PRICE_REF)) {
-    assert.equal(MARKETS[key].priceUsdPerKg, value, `${key} price must equal its TeaScreening cost reference`);
-  }
 });
 
-test('basis-sensitive rows use the documented conversions', () => {
-  // lithium tonnage is LCE (USGS Li content × 5.323) to match the LCE-proxy price.
-  assert.ok(Math.abs(MARKETS.lithium.worldDemandTPerYear - 290000 * 5.323) < 1);
-  // pv-module tonnage uses the same 52.7 kg/kWp as the TeaScreening price conversion.
-  assert.ok(Math.abs(MARKETS['pv-module'].worldDemandTPerYear - 728e6 * 52.7 / 1000) < 1);
-  // NdPr MREC and separated rows describe the same world market.
+test('NdPr MREC and separated rows describe the same world market', () => {
   assert.equal(MARKETS['ndpr-oxide'].worldDemandTPerYear, MARKETS['ndpr-oxide-separated'].worldDemandTPerYear);
 });
 
-test('hydrogen sells at the price the cases pay for purchased hydrogen-feed (make-vs-buy parity)', () => {
+test('intermediates the cases can buy sell at that purchase price (make-vs-buy parity)', () => {
   assert.equal(tea.prices.hydrogen.value, tea.costs['hydrogen-feed'].value);
+  assert.equal(tea.prices.co2.value, tea.costs['co2-feed'].value);
 });

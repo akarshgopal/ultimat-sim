@@ -33,9 +33,7 @@ const POWER = { kind: 'electricity', kWh: 1e6 };
 // Units whose feeds or products are lumped pseudo-substances (bauxite, BOM
 // glass/EVA, clinker) cannot close elements; for those `recipe` pins the
 // kg per kg of product on every listed port instead.
-// `massLoss` is the declared fraction of feed mass that leaves no outlet
-// (polysilicon's Siemens kerf/recycle loss); elements then close on outlets
-// plus that loss.
+// `reject: false` marks units that pass foreign substances (gangue) through to a residue outlet.
 const CASES = [
   { unit: 'mg-si', product: 'silicon', sec: 12, inlets: { quartz: material('SiO2', 1e4), carbon: material('C', 2e4) } },
   { unit: 'polysilicon', product: 'polysilicon', sec: 65, inlets: { silicon: material('Si', 1e4) } },
@@ -55,7 +53,6 @@ const CASES = [
   },
   { unit: 'hydrogen-dri', product: 'steel', sec: 0.7, inlets: { ironOre: material('Fe2O3', 2e3), hydrogen: material('H2', 5e3, 'gas') } },
   {
-    // Gangue passes through to its own outlet, so mixed concentrate is accepted.
     unit: 'pellet-plant', product: 'pellets', sec: 0.14, reject: false,
     inlets: { concentrate: { kind: 'material', mol: { Fe2O3: 2e3, SiO2: 1e3 }, phase: 'solid', T_C: 25, P_bar: 1 } },
   },
@@ -122,20 +119,19 @@ for (const spec of CASES) {
         assert.ok(Math.abs(streamMassKg(stream) - kgPerKg * ACTIVITY) < 1e-6, `${spec.unit} ${port} ${streamMassKg(stream)}`);
       }
     } else {
-      const keep = 1 - (spec.massLoss || 0);
       const inSum = sumMaterial(result.consumed);
       const outSum = sumMaterial(result.outlets);
       assert.ok(inSum.kg > 0);
-      assert.ok(Math.abs(inSum.kg * keep - outSum.kg) / inSum.kg < 1e-4, `mass in ${inSum.kg} out ${outSum.kg}`);
+      assert.ok(Math.abs(inSum.kg - outSum.kg) / inSum.kg < 1e-4, `mass in ${inSum.kg} out ${outSum.kg}`);
       const elements = new Set([...Object.keys(inSum.elements), ...Object.keys(outSum.elements)]);
       for (const el of elements) {
-        const incoming = (inSum.elements[el] || 0) * keep;
+        const incoming = inSum.elements[el] || 0;
         const outgoing = outSum.elements[el] || 0;
         assert.ok(Math.abs(incoming - outgoing) / Math.max(incoming, 1e-12) < 1e-6, `${spec.unit} ${el} in ${incoming} out ${outgoing}`);
       }
     }
 
-    if (spec.reject === false) return; // ore leach passes gangue through to residue
+    if (spec.reject === false) return;
     const port = spec.reject || Object.keys(spec.inlets)[0];
     const dirty = { ...spec.inlets[port], mol: { ...spec.inlets[port].mol, NaCl: 1 } };
     assert.throws(() => evaluate(spec, { ...spec.inlets, [port]: dirty }), /must be pure|extra substances/);

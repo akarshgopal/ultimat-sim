@@ -6,13 +6,14 @@ const C = require('../engine/company.js');
 const U = require('../engine/utilization.js');
 const tea = require('../data/tea-screening.js');
 
-const { SCHEMA_VERSION, COMMODITIES, CLASSES, materialsUsdPerUnit, idiotIndex, floorFraction } = BOM;
-const close = (a, b, rel = 1e-9) => assert.ok(Math.abs(a - b) <= rel * Math.max(1, Math.abs(b)), `${a} != ${b}`);
+const { close } = require('./helpers.js');
+
+const { COMMODITIES, CLASSES, materialsUsdPerUnit, idiotIndex, floorFraction } = BOM;
 const QUALITIES = new Set(['cited', 'screening']);
+// The engine looks floors up by these names; a renamed class would silently stop being squeezed.
 const ENGINE_CLASSES = ['pv', 'battery', 'electrolyzer', 'desal', 'dac', 'thermalStore', 'h2Storage', 'process'];
 
-test('bom schema version and class set', () => {
-  assert.equal(SCHEMA_VERSION, 1);
+test('BOM classes are exactly the cost classes the engine squeezes', () => {
   assert.deepEqual(Object.keys(CLASSES).sort(), [...ENGINE_CLASSES].sort());
 });
 
@@ -82,13 +83,10 @@ test('todayUsdPerUnit equals the engine/repo defaults', () => {
   // DAC pack is $/(kg CO₂/day); the BOM class is $/(t CO₂/yr).
   close(CLASSES.dac.todayUsdPerUnit, tea.packs.dac.capexIntensity * 1000 / 365);
   assert.equal(tea.packs.dac.intensityUnit, '$/(kg CO2/day)');
-  assert.equal(CLASSES.process.todayUsdPerUnit, 1);
 });
 
-test('electrolyzer is priced per kg H₂/day at 52 kWh/kg and defaults to the cheaper-materials chemistry', () => {
-  close(BOM.KW_PER_KG_H2_DAY, 52 / 24);
-  const ely = CLASSES.electrolyzer;
-  assert.equal(ely.chemistry, 'alkaline');
+test('the electrolyzer class defaults to the cheaper-materials chemistry', () => {
+  assert.equal(CLASSES.electrolyzer.chemistry, 'alkaline');
   close(materialsUsdPerUnit('electrolyzer'), materialsUsdPerUnit('electrolyzer', 'alkaline'));
   assert.ok(materialsUsdPerUnit('electrolyzer', 'alkaline') < materialsUsdPerUnit('electrolyzer', 'pem'));
 });

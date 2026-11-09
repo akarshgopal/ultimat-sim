@@ -1,11 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../engine/company.js');
-const { PATHWAYS } = require('../data/pathways.js');
-const { MARKETS } = require('../data/markets.js');
-const { SITES } = require('../data/sites.js');
+const { companyData, cheapPv } = require('./helpers.js');
 
-const board = config => C.abundanceScoreboard({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
+const board = config => C.abundanceScoreboard({ ...companyData(), config });
 
 test('abundance scoreboard: every world market once, tonnage adds up, blockers explain blocked tonnage', () => {
   const s = board({});
@@ -30,9 +28,8 @@ test('abundance scoreboard: every world market once, tonnage adds up, blockers e
 });
 
 test('cheaper electricity and a lean electrolyzer make more of the world\'s tonnage feasible', () => {
-  const D = C.DEFAULTS;
   const today = board({});
-  const pv = { capexUsdPerKWp: D.pv.capexUsdPerKWp / 10, floorUsdPerKWp: D.pv.floorUsdPerKWp / 10 };
+  const pv = cheapPv();
   const cheap = board({ pv });
   const lean = board({ pv, designs: { units: { electrolyzer: { capexFactor: 0.03, energyFactor: 1 } } } });
   assert.ok(cheap.totals.feasibleT >= today.totals.feasibleT);

@@ -1,17 +1,10 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { UNITS } = require('../engine/units');
 const { solveOperation, solveHorizon } = require('../engine/solve');
 const { createCoastalCase, DAILY_PV } = require('../cases/coastal');
-
 const pvgis = require('../data/pvgis-almeria.json');
-
-function assertClosed(solved) {
-  assert.ok(solved.balances.maxAbsResidual < 1e-8);
-  assert.ok(Math.abs(solved.balances.electricityKWh) < 1e-8);
-  assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
-}
+const { assertClosed } = require('./helpers.js');
 
 test('coastal methane uses solid-sorbent DAC on the frozen Almería series and closes balances', () => {
   const definition = createCoastalCase();
@@ -78,12 +71,4 @@ test('hourly typical-day dispatch idles at night and produces in daylight', () =
   const small = createCoastalCase(12);
   small.site.solarKWp = 10;
   assert.ok(solveHorizon(small).nodes.sabatier.activity < solved.nodes.sabatier.activity);
-});
-
-test('electro-swing DAC drops heat ports and requires quinone makeup', () => {
-  assert.ok(UNITS['dac-solid'].ports.heat);
-  assert.ok(UNITS['dac-solid'].ports.spentMedia);
-  assert.equal(UNITS['dac-electroswing'].ports.heat, undefined);
-  assert.equal(UNITS['dac-electroswing'].ports.wasteHeat, undefined);
-  assert.ok(UNITS['dac-electroswing'].ports.spentMedia);
 });

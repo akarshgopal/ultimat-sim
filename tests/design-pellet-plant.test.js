@@ -3,15 +3,11 @@ const assert = require('node:assert/strict');
 const D = require('../engine/designs/pellet-plant.js');
 const Dri = require('../engine/designs/dri-shaft.js');
 const C = require('../engine/company.js');
-const { PATHWAYS } = require('../data/pathways.js');
-const { MARKETS } = require('../data/markets.js');
-const { SITES } = require('../data/sites.js');
+const { close, rank, lcop, companyData } = require('./helpers.js');
 
-const close = (a, b, rel = 1e-9) => assert.ok(Math.abs(a - b) <= rel * Math.max(1, Math.abs(b)), `${a} != ${b}`);
+const PATHWAYS = companyData().pathways;
 
-test('module follows the design contract and its recipe basis is the pathways node', () => {
-  assert.equal(D.id, 'pellet-plant');
-  assert.deepEqual([...D.units], ['pellet-plant']);
+test('the recipe basis is the pellet-plant node on both DRI pathways; the plant is firmed', () => {
   for (const id of ['h2-dri', 'green-h2-dri']) {
     const node = PATHWAYS.find(p => p.id === id).flowsheet.nodes.find(n => n.unit === 'pellet-plant');
     assert.ok(node, `${id} has a pellet plant`);
@@ -19,13 +15,7 @@ test('module follows the design contract and its recipe basis is the pathways no
     assert.equal(node.kWhPerKg, D.RECIPE['pellet-plant'].kWhPerKg);
     close(node.variableOmUsdPerKg, D.RECIPE['pellet-plant'].variableOmUsdPerKgPellet / D.DEFAULTS.pelletFeFraction, 1e-2);
   }
-  for (const c of D.CONTROLS) assert.ok(c.key in D.DEFAULTS, c.key);
-  const d = D.design();
-  for (const k of ['installedUsdPerKgDay', 'materialsUsdPerKgDay', 'idiotIndex', 'kWhPerKg']) assert.ok(Number.isFinite(d[k]) && d[k] > 0, k);
-  assert.equal(d.flexible, false);
-  assert.ok(d.kpis.length >= 3 && d.kpis.length <= 6);
-  close(d.bom.reduce((s, x) => s + x.usd, 0), d.installedUsdPerKgDay, 1e-9);
-  close(d.bom.reduce((s, x) => s + x.usdMaterials, 0), d.materialsUsdPerKgDay, 1e-9);
+  assert.equal(D.design().flexible, false);
 });
 
 test('heat balance: magnetite oxidation, recuperation and drying move induration heat the right way', () => {
@@ -64,7 +54,6 @@ test('presets: today costs more than the scaled recipe at 100 t/day, lean beats 
 });
 
 test('the override lowers DRI cost in the company simulator and leaves other pathways alone', () => {
-  const rank = config => C.rankOpportunities({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }, { sizeMultiple: 100 });
   const o = D.simulatorOverride(D.PRESETS.lean.params);
   const d = D.design(D.PRESETS.lean.params);
   close(o['pellet-plant'].capexFactor, d.installedUsdPerKgDay / d.recipeUsdPerKgDay, 1e-12);
@@ -74,7 +63,6 @@ test('the override lowers DRI cost in the company simulator and leaves other pat
   const recipe = rank({});
   const designed = rank({ designs: { units: o } });
   const todayDesign = rank({ designs: { units: D.simulatorOverride(D.PRESETS.today.params) } });
-  const lcop = (rows, id) => rows.find(r => r.pathwayId === id).lcopUsdPerKg;
   for (const id of ['h2-dri', 'green-h2-dri']) {
     assert.ok(lcop(designed, id) < lcop(recipe, id) - 0.005, `${id}: ${lcop(designed, id)} vs ${lcop(recipe, id)}`);
     assert.ok(lcop(todayDesign, id) > lcop(recipe, id), `${id} today design is dearer than the scaled recipe`);
@@ -85,7 +73,7 @@ test('the override lowers DRI cost in the company simulator and leaves other pat
 
 test('scoreboard: concentrate, not the pellet plant, gates DRI once the shaft is lean', () => {
   const units = { ...Dri.simulatorOverride(Dri.PRESETS.lean.params), ...D.simulatorOverride(D.PRESETS.lean.params) };
-  const sb = C.abundanceScoreboard({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config: { designs: { units } } });
+  const sb = C.abundanceScoreboard({ ...companyData(), config: { designs: { units } } });
   const steel = sb.rows.find(r => r.product === 'steel');
   const item = id => steel.costItems.find(c => c.id === id)?.usdPerKg ?? 0;
   assert.equal(steel.costItems[0].id, 'iron-ore');

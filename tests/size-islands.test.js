@@ -25,6 +25,7 @@ const { createCementCase } = require('../cases/cement');
 const { createCuEwCase } = require('../cases/cu-ew');
 const { createMaglutCase } = require('../cases/maglut');
 const { createReeSxCase } = require('../cases/ree-sx');
+const { within } = require('./helpers.js');
 
 // product -> aliases (PRODUCT_ALIASES), converter named when the block is
 // missing, and the cases that carry the island: [builder, product sink id,
@@ -80,10 +81,6 @@ function sinkKg(solved, id) {
   return received?.kind === 'material' ? streamMassKg(received) : 0;
 }
 
-function near(actual, expected, tol, label) {
-  assert.ok(Math.abs(actual - expected) / Math.abs(expected) < tol, `${label}: ${actual} vs ${expected}`);
-}
-
 for (const island of ISLANDS) {
   test(`${island.product}: aliases resolve and a case without ${island.unit} throws`, () => {
     for (const alias of island.aliases) {
@@ -108,15 +105,15 @@ for (const island of ISLANDS) {
       const sized = sizeToProduct({ product: island.aliases.at(-1), rate: target, caseOrBuilder: build });
       assert.equal(sized.product, island.product);
       assert.equal(sized.converged, true);
-      near(sized.achieved, target, 0.01, 'achieved');
-      near(sinkKg(sized.solved, sinkId), target, 0.01, `${sinkId} sink`);
+      within(sized.achieved, target, 0.01, 'achieved');
+      within(sinkKg(sized.solved, sinkId), target, 0.01, `${sinkId} sink`);
 
       const byId = new Map(sized.definition.graph.nodes.map(node => [node.id, node]));
       for (const unit of units) {
         const base = baseline.graph.nodes.find(node => node.unit === unit);
         assert.ok(base, `${build.name} has ${unit}`);
-        near(Number(byId.get(base.id).capacity), 2 * Number(base.capacity), 0.05, `${unit} capacity`);
-        near(sized.solved.nodes[base.id].activity, 2 * baseSolved.nodes[base.id].activity, 0.05, `${unit} activity`);
+        within(Number(byId.get(base.id).capacity), 2 * Number(base.capacity), 0.05, `${unit} capacity`);
+        within(sized.solved.nodes[base.id].activity, 2 * baseSolved.nodes[base.id].activity, 0.05, `${unit} activity`);
       }
       const converterIds = new Set(baseline.graph.nodes.filter(node => units.includes(node.unit)).map(node => node.id));
       const feeds = baseline.graph.edges
@@ -124,9 +121,9 @@ for (const island of ISLANDS) {
         .map(edge => baseline.graph.nodes.find(node => node.id === edge.from.node))
         .filter(node => node.unit === 'material-source' && node.params?.stream?.kind === 'material');
       for (const feed of feeds) {
-        near(streamMassKg(byId.get(feed.id).params.stream), 2 * streamMassKg(feed.params.stream), 0.05, `${feed.id} feed`);
+        within(streamMassKg(byId.get(feed.id).params.stream), 2 * streamMassKg(feed.params.stream), 0.05, `${feed.id} feed`);
       }
-      near(sized.definition.site.solarKWp, 2 * baseline.site.solarKWp, 0.1, 'solarKWp');
+      within(sized.definition.site.solarKWp, 2 * baseline.site.solarKWp, 0.1, 'solarKWp');
 
       const cash = evaluateEconomics(sized.definition, sized.solved);
       assert.ok(Number.isFinite(cash.annualNetCash));

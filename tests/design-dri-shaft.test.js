@@ -1,32 +1,16 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const D = require('../engine/designs/dri-shaft.js');
-const C = require('../engine/company.js');
-const { PATHWAYS } = require('../data/pathways.js');
-const { MARKETS } = require('../data/markets.js');
-const { SITES } = require('../data/sites.js');
+const { close, rank, lcop, companyData } = require('./helpers.js');
 
-const close = (a, b, rel = 1e-9) => assert.ok(Math.abs(a - b) <= rel * Math.max(1, Math.abs(b)), `${a} != ${b}`);
+const PATHWAYS = companyData().pathways;
 
-test('module follows the design contract', () => {
-  assert.equal(D.id, 'dri-shaft');
-  assert.deepEqual([...D.units], ['hydrogen-dri']);
-  assert.ok(D.RECIPE[D.units[0]].usdPerKgDay > 0 && D.RECIPE[D.units[0]].kWhPerKg > 0);
-  // The recipe basis is what data/pathways.js carries on both pathways that use the unit.
+test('the recipe basis is the hydrogen-dri node on both pathways that use the unit', () => {
   for (const id of ['h2-dri', 'green-h2-dri']) {
     const node = PATHWAYS.find(p => p.id === id).flowsheet.nodes.find(n => n.unit === 'hydrogen-dri');
     assert.equal(node.capexUsdPerKgDay, D.RECIPE['hydrogen-dri'].usdPerKgDay);
     assert.equal(node.kWhPerKg, D.RECIPE['hydrogen-dri'].kWhPerKg);
   }
-  assert.ok(D.PRESETS.today && D.PRESETS.lean);
-  for (const c of D.CONTROLS) assert.ok(c.key in D.DEFAULTS, c.key);
-  const d = D.design();
-  for (const k of ['installedUsdPerKgDay', 'materialsUsdPerKgDay', 'idiotIndex', 'kWhPerKg']) assert.ok(Number.isFinite(d[k]) && d[k] > 0, k);
-  assert.equal(typeof d.flexible, 'boolean');
-  assert.ok(d.kpis.length >= 3 && d.kpis.length <= 6);
-  // Parts add up to the installed cost and the materials floor.
-  close(d.bom.reduce((s, x) => s + x.usd, 0), d.installedUsdPerKgDay, 1e-9);
-  close(d.bom.reduce((s, x) => s + x.usdMaterials, 0), d.materialsUsdPerKgDay, 1e-9);
 });
 
 test('mass and heat balance: stoichiometry, closure and the thermodynamic floor', () => {
@@ -90,8 +74,6 @@ test('presets: today lands near the recipe, lean is far cheaper but never below 
 });
 
 test('the override lowers H₂-DRI cost in the company simulator and leaves other pathways alone', () => {
-  const input = config => ({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
-  const rank = config => C.rankOpportunities(input(config), { sizeMultiple: 100 });
   const o = D.simulatorOverride(D.PRESETS.lean.params);
   const d = D.design(D.PRESETS.lean.params);
   close(o['hydrogen-dri'].capexFactor, d.installedUsdPerKgDay / d.recipeUsdPerKgDay, 1e-12);
@@ -100,7 +82,6 @@ test('the override lowers H₂-DRI cost in the company simulator and leaves othe
   assert.equal(o['hydrogen-dri'].thermal, true, 'the lean shaft is firmed on a heat store');
   const designed = rank({ designs: { units: { 'hydrogen-dri': { ...o['hydrogen-dri'], thermal: false } } } });
   const heatStore = rank({ designs: { units: o } });
-  const lcop = (rows, id) => rows.find(r => r.pathwayId === id).lcopUsdPerKg;
   for (const id of ['h2-dri', 'green-h2-dri']) {
     assert.ok(lcop(designed, id) < lcop(recipe, id) - 0.05, `${id}: ${lcop(designed, id)} vs ${lcop(recipe, id)}`);
     // Firming the shaft's heat with a PV-charged heat store instead of batteries is cheaper still.

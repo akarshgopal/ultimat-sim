@@ -2,9 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../engine/company.js');
 
-const close = (actual, expected, rel = 1e-9) => {
-  assert.ok(Math.abs(actual - expected) <= rel * Math.max(1, Math.abs(expected)), `${actual} != ${expected}`);
-};
+const { close } = require('./helpers.js');
 
 const SITES = [
   { id: 'coast', name: 'Coast', coastal: true, brineAssayId: 'b1', pvKWhPerKWpDay: 5, landUsdPerHa: 1000 },
@@ -23,6 +21,7 @@ const good = {
 const bad = { ...good, id: 'bad', product: 'gadget', capexByTechUsdPerKgDay: { process: 1e6 } };
 const ocean = { ...good, id: 'ocean', product: 'salt', feeds: [{ id: 'sw', kgPerKg: 30, origin: 'ocean', purchased: false }] };
 const brine = { ...good, id: 'brine', product: 'li', refSiteId: 'salar', feeds: [{ id: 'br', kgPerKg: 1000, origin: 'brine', purchased: false }] };
+const hungry = { ...good, id: 'hungry', electricityKWhPerKg: 20 }; // energy-heavy enough to have a break-even
 
 const MARKETS = {
   widget: { worldDemandTPerYear: 1e6, demandYear: 2027, growthPerYear: 0, priceUsdPerKg: 1, priceElasticity: 0.5 },
@@ -182,7 +181,6 @@ test('products in one market group share one demand ceiling', () => {
     const t = (year.outputTByProduct.widget || 0) + (year.outputTByProduct['widget-sep'] || 0);
     assert.ok(t <= 0.02 * 1e6 + 1e-6, `${year.year}: ${t} t`);
   }
-  assert.equal(C.marketGroupOf('ndpr-oxide-separated'), 'ndpr-oxide');
 });
 
 test('coproducts are held to the market-share ceiling too', () => {
@@ -241,7 +239,7 @@ test('make-vs-buy: a cheap same-site supplier replaces the purchased intermediat
   assert.equal(item.product, 'hydrogen');
   close(item.kgPerDay, 0.5 * made.sizeKgPerDay);
   assert.ok(item.makeUsdPerKg < item.buyUsdPerKg);
-  assert.ok(made.siteId === 'coast', 'ocean-fed supplier forces a coastal site');
+  assert.equal(made.siteId, 'coast', 'ocean-fed supplier forces a coastal site');
   // Supplier capex, PV and opex join the plant; its O2 is sold; the H2 itself is never sold.
   assert.ok(made.capex.byTech.electrolyzer > 0);
   assert.ok(made.sales.some(s => s.product === 'oxygen'));
@@ -322,7 +320,7 @@ test('abundance objective trades a little NPV for much more material, but not a 
     assert.ok(r.plants.every(p => p.npvAtBuildUsd >= 0), 'every plant pays back its capital');
     return r.plants[0].pathwayId;
   };
-  // Small NPV gap (598M vs 511M): profit takes specialty, abundance takes 10× the tonnes.
+  // Small NPV gap: profit takes specialty, abundance takes 10× the tonnes.
   assert.equal(firstBuild('profit', 0.2), 'specialty');
   assert.equal(firstBuild('abundance', 0.2), 'bulk');
   // Large NPV gap: the specialty surplus funds more material than bulk makes, so abundance agrees.
@@ -360,20 +358,16 @@ test('equipment multiplier scales non-storage equipment capex only', () => {
   assert.ok(tenth.lcopUsdPerKg < full.lcopUsdPerKg);
 });
 
-test('energy break-evens: cheaper equipment never raises the price a pathway needs; free-energy checks bound it', () => {
-  const pathways = [good, bad];
-  const at = equip => new Map(C.energyBreakevens({ pathways, sites: SITES, markets: MARKETS, config: { equipmentCostMultiplier: equip } }).map(r => [r.pathwayId, r]));
+test('energy break-evens: cheaper equipment raises the price a pathway can pay; NPV crosses zero there', () => {
+  const at = equip => new Map(C.energyBreakevens({ pathways: [hungry, bad], sites: SITES, markets: MARKETS, config: { equipmentCostMultiplier: equip } }).map(r => [r.pathwayId, r]));
   const one = at(1);
-  const tenth = at(0.1);
   assert.equal(one.get('bad').limitedBy, 'not-energy', 'a $1M/(kg/day) plant cannot be saved by free electricity');
-  const g = one.get('good');
-  assert.ok(['energy', 'feasible-at-any-price'].includes(g.limitedBy));
-  assert.ok((tenth.get('good').breakevenUsdPerKWh ?? -1) >= (g.breakevenUsdPerKWh ?? -1));
-  if (g.limitedBy === 'energy') {
-    // At the break-even price the best site's NPV is ~0: just above it is infeasible.
-    const above = C.energyBreakevens({ pathways: [good], sites: SITES, markets: MARKETS, config: { pv: { capexUsdPerKWp: C.pvCapexFromLcoe(g.breakevenUsdPerKWh * 1.05, C.DEFAULTS.pv, C.DEFAULTS.finance) } } })[0];
-    assert.ok(above.today.npv < 0);
-  }
+  const h = one.get('hungry');
+  assert.equal(h.limitedBy, 'energy');
+  assert.ok(at(0.1).get('hungry').breakevenUsdPerKWh > h.breakevenUsdPerKWh);
+  // Just above the break-even price the best site's NPV is negative.
+  const above = C.energyBreakevens({ pathways: [hungry], sites: SITES, markets: MARKETS, config: { pv: { capexUsdPerKWp: C.pvCapexFromLcoe(h.breakevenUsdPerKWh * 1.05, C.DEFAULTS.pv, C.DEFAULTS.finance) } } })[0];
+  assert.ok(above.today.npv < 0);
 });
 
 test('idiot-index squeeze caps each class at materials floor × target, never raises a price', () => {
@@ -404,7 +398,6 @@ test('idiot-index squeeze caps each class at materials floor × target, never ra
 
 test('energy break-evens scan electricity price even when PV margins are squeezed', () => {
   const floors = { pv: { materialsUsdPerUnit: 100 }, process: { floorFraction: 0.05 } };
-  const hungry = { ...good, id: 'hungry', electricityKWhPerKg: 20 }; // energy-heavy enough to have a break-even
   const rows = idiot => C.energyBreakevens({ pathways: [hungry], sites: SITES, markets: MARKETS, config: { idiotIndex: { target: idiot, floors } } })[0];
   const plain = rows(null);
   const squeezed = rows(1.5);
@@ -413,7 +406,6 @@ test('energy break-evens scan electricity price even when PV margins are squeeze
   assert.equal(plain.limitedBy, 'energy');
   assert.equal(squeezed.limitedBy, 'energy');
   assert.ok(squeezed.breakevenUsdPerKWh > plain.breakevenUsdPerKWh);
-  assert.notEqual(squeezed.limitedBy, 'feasible-at-any-price');
 });
 
 test('construction capacity: capex per year never exceeds it, and it grows from last year\'s build', () => {

@@ -1,15 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const U = require('../engine/utilization.js');
-const C = require('../engine/company.js');
-const { PATHWAYS } = require('../data/pathways.js');
-const { MARKETS } = require('../data/markets.js');
-const { SITES } = require('../data/sites.js');
+const { close, rank, companyData } = require('./helpers.js');
 
+const { pathways: PATHWAYS, sites: SITES } = companyData();
 const cfg = U.mergeCfg();
 const site = id => SITES.find(s => s.id === id);
 const pathway = id => PATHWAYS.find(p => p.id === id);
-const close = (a, b, rel = 1e-9) => assert.ok(Math.abs(a - b) <= rel * Math.max(1, Math.abs(b)), `${a} != ${b}`);
 
 test('day length: 12 h at the equator, long summer days at high latitude', () => {
   close(U.dayLengthHours(0, 172), 12, 1e-6);
@@ -80,10 +77,7 @@ test('plant designs: electrolysis follows the sun with an H₂ buffer; kilns are
   assert.equal(cement.batteryKWh, 0, 'kiln heat is stored as heat, not in batteries');
 });
 
-function bestYear0(id, config = {}) {
-  return C.rankOpportunities({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }, { sizeMultiple: 100 })
-    .find(r => r.pathwayId === id);
-}
+const bestYear0 = (id, config = {}) => rank(config).find(r => r.pathwayId === id);
 
 test('validation: solar-only green H₂ and NH₃ costs land in published bands at 2027 costs', () => {
   // IEA Global Hydrogen Review 2024: renewable (solar PV) electrolytic H₂ roughly $4–9/kg today.

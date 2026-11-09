@@ -8,10 +8,7 @@ const { evaluateEconomics } = require('../engine/economics');
 const { solveOperation } = require('../engine/solve');
 const tea = require('../data/tea-screening.js');
 const { createH2DriCase } = require('../cases/h2-dri');
-
-function kgStream(kg) {
-  return { kind: 'material', mol: { H2O: kg * 1000 / 18.01528 }, phase: 'liquid', T_C: 25, P_bar: 1 };
-}
+const { waterStream } = require('./helpers.js');
 
 const CONTAINER = 'chile-coast-container';
 
@@ -34,7 +31,7 @@ test('bindCost freight is added to source purchases and reported as freight', ()
   const cash = evaluateEconomics({
     economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
     graph: { nodes: [{ id: 'src', unit: 'material-source', economics: bound }] },
-  }, { nodes: { src: { supplied: kgStream(1) } } });
+  }, { nodes: { src: { supplied: waterStream(1) } } });
   assert.ok(Math.abs(cash.breakdown.sourcePurchases - (bound.unitCost + freight) * 365) < 1e-9);
   assert.ok(Math.abs(cash.breakdown.freight - freight * 365) < 1e-9);
   assert.equal(cash.annualOperatingCost, cash.breakdown.sourcePurchases);
@@ -50,7 +47,7 @@ test('bindSale freight nets from the gate price; plant-gate sale has no freight'
   const cash = evaluateEconomics({
     economics: { periodDays: 365 },
     graph: { nodes: [{ id: 'sale', unit: 'material-sink', economics: sale }] },
-  }, { nodes: { sale: { received: kgStream(1) } } });
+  }, { nodes: { sale: { received: waterStream(1) } } });
   assert.ok(Math.abs(cash.annualRevenue - sale.unitPrice * 365) < 1e-9);
   assert.ok(Math.abs(cash.sinks[0].annualFreight - freight * 365) < 1e-9);
   assert.ok(Math.abs(cash.breakdown.freight - freight * 365) < 1e-9);

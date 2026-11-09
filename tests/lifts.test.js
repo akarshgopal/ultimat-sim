@@ -4,7 +4,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
 const { UNITS, resolveLiquidPumpSec, resolveGasBlowerSec, pumpPartLoad, flowWithinShapedSec } = require('../engine/units');
 const { siteZabuyeAbundance, siteDeadSeaAbundance } = require('../cases/brine-hubs');
@@ -12,22 +11,7 @@ const { createCoastalCase } = require('../cases/coastal');
 const { createSabatierCase } = require('../cases/sabatier');
 const { createMethanolCase } = require('../cases/methanol');
 
-const kg = stream => (stream ? streamMassKg(stream) : 0);
-
-function near(actual, expected, tol = 1e-6, label = '') {
-  assert.ok(Math.abs(actual - expected) < tol, `${label} expected ${expected}, got ${actual}`);
-}
-
-function eachRow(rows, fn) {
-  for (const row of rows) {
-    try {
-      fn(row);
-    } catch (error) {
-      error.message = `[${row.name}] ${error.message}`;
-      throw error;
-    }
-  }
-}
+const { near, eachRow, kg } = require('./helpers.js');
 
 function seawaterStream(massKg) {
   const saltKg = massKg * 0.035;
@@ -117,7 +101,7 @@ test('gas blower rejects liquid feeds', () => {
       capacity: 1,
       params: {},
     }),
-    /intake pump|liquid|gas/i,
+    /is for gas feeds/,
   );
 });
 

@@ -1,29 +1,19 @@
 // DAC CO₂ supply pathway (cases/dac-co2.js) and its make-vs-buy wiring for co2-feed.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const C = require('../engine/company.js');
 const D = require('../engine/designs/dac.js');
 const tea = require('../data/tea-screening.js');
-const { PATHWAYS } = require('../data/pathways.js');
-const { MARKETS } = require('../data/markets.js');
-const { SITES } = require('../data/sites.js');
+const { within, rank: rankAll, cheapPv, companyData } = require('./helpers.js');
 
-const near = (a, b, rel) => assert.ok(Math.abs(a - b) <= rel * Math.abs(b), `${a} not within ${rel * 100}% of ${b}`);
+const PATHWAYS = companyData().pathways;
 const dacCo2 = PATHWAYS.find(p => p.id === 'dac-co2');
 const BUYERS = ['green-mto', 'green-ft'];
 const subset = ids => PATHWAYS.filter(p => ids.includes(p.id));
-const frontier = {
-  pv: { capexUsdPerKWp: C.DEFAULTS.pv.capexUsdPerKWp / 10, floorUsdPerKWp: C.DEFAULTS.pv.floorUsdPerKWp / 10 },
-  designs: { units: D.simulatorOverride(D.PRESETS.lean.params) },
-};
-const rank = (pathways, config) => new Map(C.rankOpportunities({ pathways, markets: MARKETS, sites: SITES, config }, { sizeMultiple: 100 })
-  .map(r => [r.pathwayId, r]));
+const frontier = { pv: cheapPv(), designs: { units: D.simulatorOverride(D.PRESETS.lean.params) } };
+const rank = (pathways, config) => new Map(rankAll(config, { pathways }).map(r => [r.pathwayId, r]));
 const co2Item = row => (row.integration || []).find(item => item.feedId === 'co2-feed');
 
-test('dac-co2 sells CO₂ from air alone at 1 t/day on the solid-sorbent recipe basis', () => {
-  assert.ok(dacCo2, 'dac-co2 pathway');
-  assert.equal(dacCo2.product, 'co2');
-  assert.equal(dacCo2.refOutputKgPerDay, 1000);
+test('dac-co2 makes CO₂ from air alone on the solid-sorbent recipe basis', () => {
   const fed = dacCo2.feeds.filter(f => f.kgPerKg > 0);
   assert.deepEqual(fed.map(f => f.origin), ['air']);
   assert.ok(dacCo2.feeds.every(f => !(f.origin === 'intermediate' && f.purchased)), 'no purchased intermediates');
@@ -31,19 +21,13 @@ test('dac-co2 sells CO₂ from air alone at 1 t/day on the solid-sorbent recipe 
   // Built at 1 t/day: node capex is the pack, energy is the recipe (engine/designs/dac.js RECIPE).
   const dac = dacCo2.flowsheet.nodes.find(n => n.unit === 'dac-solid');
   const blower = dacCo2.flowsheet.nodes.find(n => n.unit === 'gas-blower');
-  near(dac.capexUsdPerKgDay, D.RECIPE['dac-solid'].usdPerKgDay, 0.01);
-  near(dac.kWhPerKg, D.RECIPE['dac-solid'].kWhPerKg, 0.01);
-  near(dacCo2.heatKWhPerKg, D.RECIPE['dac-solid'].heatKWhPerKg, 0.01);
-  near(blower.capexUsdPerKgDay, D.RECIPE['gas-blower'].usdPerKgDay, 0.01);
-  near(blower.kWhPerKg, D.RECIPE['gas-blower'].kWhPerKg, 0.01);
+  within(dac.capexUsdPerKgDay, D.RECIPE['dac-solid'].usdPerKgDay, 0.01);
+  within(dac.kWhPerKg, D.RECIPE['dac-solid'].kWhPerKg, 0.01);
+  within(dacCo2.heatKWhPerKg, D.RECIPE['dac-solid'].heatKWhPerKg, 0.01);
+  within(blower.capexUsdPerKgDay, D.RECIPE['gas-blower'].usdPerKgDay, 0.01);
+  within(blower.kWhPerKg, D.RECIPE['gas-blower'].kWhPerKg, 0.01);
   // Sorbent makeup (0.02 kg × $2) rides on the DAC pack's $0.05/kg variable O&M.
-  near(dac.variableOmUsdPerKg, 0.05 + D.RECIPE['dac-solid'].consumablesKgPerKg * D.RECIPE['dac-solid'].consumablesUsdPerKg, 1e-6);
-});
-
-test('CO₂ sells at the co2-feed purchase price and has a world market row', () => {
-  assert.equal(tea.prices.co2.value, tea.costs['co2-feed'].value);
-  assert.equal(MARKETS.co2.priceUsdPerKg, tea.prices.co2.value);
-  assert.equal(C.DEFAULTS.integration.feedProducts['co2-feed'], 'co2');
+  within(dac.variableOmUsdPerKg, 0.05 + D.RECIPE['dac-solid'].consumablesKgPerKg * D.RECIPE['dac-solid'].consumablesUsdPerKg, 1e-6);
 });
 
 test('today the DAC costs more than bought CO₂; lean DAC on 10× cheaper PV integrates it', () => {

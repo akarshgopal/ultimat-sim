@@ -1,13 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const E = require('../engine/designs/electrolyzer.js');
-const C = require('../engine/company.js');
-const { PATHWAYS } = require('../data/pathways.js');
-const { MARKETS } = require('../data/markets.js');
-const { SITES } = require('../data/sites.js');
+const { close, rank, lcop, companyData } = require('./helpers.js');
 
-const close = (a, b, rel = 1e-9) => assert.ok(Math.abs(a - b) <= rel * Math.max(1, Math.abs(b)), `${a} != ${b}`);
-const site = SITES.find(s => s.id === 'chile-mejillones');
+const site = companyData().sites.find(s => s.id === 'chile-mejillones');
 
 test('polarization fit reproduces its calibration points', () => {
   const p = E.design().params;
@@ -51,8 +47,7 @@ test('a design overrides electrolyzer capex and kWh/kg in the company simulator'
   const units = E.simulatorOverride(E.PRESETS.lean.params);
   const o = units.electrolyzer;
   close(o.capexFactor, E.design(E.PRESETS.lean.params).installedUsdPerKgDay / E.RECIPE.electrolyzer.usdPerKgDay, 1e-12);
-  const input = config => ({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
-  const h2 = config => C.rankOpportunities(input(config), { sizeMultiple: 100 }).find(r => r.pathwayId === 'green-hydrogen');
+  const h2 = config => rank(config).find(r => r.pathwayId === 'green-hydrogen');
   const recipe = h2({});
   const designed = h2({ designs: { units } });
   assert.ok(designed.lcopUsdPerKg < recipe.lcopUsdPerKg);
@@ -60,6 +55,5 @@ test('a design overrides electrolyzer capex and kWh/kg in the company simulator'
   const ratio = designed.energyKWhPerKg / recipe.energyKWhPerKg;
   assert.ok(Math.abs(ratio - o.energyFactor) < 0.02, `energy ratio ${ratio} vs ${o.energyFactor}`);
   // The design is per unit: chlor-alkali cells share the cost class but are not re-priced.
-  const salt = config => C.rankOpportunities(input(config), { sizeMultiple: 100 }).find(r => r.pathwayId === 'abundance-salt');
-  close(salt({ designs: { units } }).lcopUsdPerKg, salt({}).lcopUsdPerKg, 1e-9);
+  close(lcop(rank({ designs: { units } }), 'abundance-salt'), lcop(rank({}), 'abundance-salt'), 1e-9);
 });

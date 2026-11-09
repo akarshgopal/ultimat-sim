@@ -2,20 +2,15 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { SUBSTANCES, streamMassKg } = require('../engine/model');
-const { solveOperation, solveHorizon } = require('../engine/solve');
+const { solveHorizon } = require('../engine/solve');
 const DAC_HEAT_PER_KG_CO2 = 1.5;
 const { sizeToTarget, sizeCoastalToMethane, sizeToProduct } = require('../engine/size');
 const { createCoastalCase } = require('../cases/coastal');
 const { createSabatierCase } = require('../cases/sabatier');
 const { createAbundanceCase } = require('../cases/abundance');
+const { assertClosed } = require('./helpers.js');
 
 const WATER_KG_PER_KG_H2 = SUBSTANCES.H2O.molarMassG / SUBSTANCES.H2.molarMassG;
-
-function assertClosed(solved) {
-  assert.ok(solved.balances.maxAbsResidual < 1e-8);
-  assert.ok(Math.abs(solved.balances.electricityKWh) < 1e-8);
-  assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
-}
 
 function moneyKeys(value, path = '') {
   const hits = [];
@@ -79,16 +74,29 @@ test('recycle water reduces sized desalination versus once-through', () => {
   assertClosed(recycled.solved);
 });
 
-test('sizeToProduct H2 parks Sabatier and DAC on a coastal methane plant', () => {
+test('sizeToProduct H2 parks Sabatier and DAC on a coastal methane plant and credits none of their heat', () => {
   const sized = sizeToProduct({ product: 'H2', rate: 10, caseOrBuilder: () => createCoastalCase(0) });
   assert.ok(Math.abs(sized.achieved - 10) < 1e-6);
+  assert.ok(sized.residual < 1e-6);
   assert.equal(sized.definition.graph.nodes.find(node => node.id === 'sabatier').capacity, 0);
   assert.equal(sized.definition.graph.nodes.find(node => node.id === 'dac').capacity, 0);
   assert.equal(sized.definition.operation.setpoints.sabatier, 0);
   assert.equal(sized.definition.operation.setpoints.dac, 0);
   assert.ok(sized.definition.graph.nodes.find(node => node.id === 'electrolyzer').capacity >= 10 - 1e-9);
   assert.ok(sized.definition.site.solarKWp > 0);
-  assert.ok(sized.residual < 1e-6);
+
+  const last = sized.history.at(-1).duties;
+  assert.equal(last.ch4, 0);
+  assert.ok((last.heatCoveredKWh || 0) < 1e-9);
+  assert.ok((sized.heatCoveredKWh || 0) < 1e-9);
+  // Electricity is the electrolyzer, SWRO and its intake pump only (55 kWh/kg H₂; 3.1 kWh/m³
+  // product; 0.4 kWh/m³ feed at 45% recovery): the parked units draw nothing.
+  const swro = 10 * WATER_KG_PER_KG_H2 / 1000;
+  const feedM3 = swro / 0.45;
+  const processKWh = 10 * 55 + swro * 3.1 + feedM3 * 0.4;
+  assert.ok(Math.abs(last.electricityKWh - processKWh) / processKWh < 1e-6);
+  const heat = sized.definition.graph.nodes.find(node => node.unit === 'heat-source');
+  assert.ok((heat.params.stream.kWh || 0) < 1e-9);
 });
 
 test('sizeToProduct lithium scales the abundance brine train', () => {
@@ -141,23 +149,6 @@ test('Sabatier waste colder than DAC minHeat gets no cascade credit', () => {
   assert.ok(Math.abs(last.heatResidualKWh - demand) / Math.max(1, demand) < 1e-6);
   assert.ok(Math.abs(sized.achieved - 8) < 1e-6);
   assertClosed(sized.solved);
-});
-
-test('H2 sizing does not credit parked Sabatier waste heat', () => {
-  const sized = sizeToProduct({ product: 'H2', rate: 10, caseOrBuilder: () => createCoastalCase(0) });
-  const last = sized.history.at(-1).duties;
-  assert.equal(last.ch4, 0);
-  assert.ok((last.heatCoveredKWh || 0) < 1e-9);
-  assert.ok((sized.heatCoveredKWh || 0) < 1e-9);
-  const swro = 10 * WATER_KG_PER_KG_H2 / 1000;
-  const feedM3 = swro / 0.45;
-  // MECH11: plant-only SWRO 3.1 + intake-pump 0.4 kWh/m³ on feed.
-  const processKWh = 10 * 55 + swro * 3.1 + feedM3 * 0.4;
-  assert.ok(Math.abs(last.electricityKWh - processKWh) / processKWh < 1e-6);
-  const heat = sized.definition.graph.nodes.find(node => node.unit === 'heat-source');
-  assert.ok(heat);
-  assert.ok((heat.params.stream.kWh || 0) < 1e-9);
-  assert.ok(Math.abs(sized.achieved - 10) < 1e-6);
 });
 
 test('coastal H2 size closes mass balance and horizon produces hydrogen', () => {

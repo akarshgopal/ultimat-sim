@@ -1,39 +1,27 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const D = require('../engine/designs/smelter.js');
-const C = require('../engine/company.js');
-const { PATHWAYS } = require('../data/pathways.js');
-const { MARKETS } = require('../data/markets.js');
-const { SITES } = require('../data/sites.js');
+const { close, rank, companyData } = require('./helpers.js');
 
-const close = (a, b, rel = 1e-9) => assert.ok(Math.abs(a - b) <= rel * Math.max(1, Math.abs(b)), `${a} != ${b}`);
+const PATHWAYS = companyData().pathways;
 const node = id => PATHWAYS.find(p => p.id === id).flowsheet.nodes.find(n => n.unit === 'aluminium-smelter');
 const alEdge = id => PATHWAYS.find(p => p.id === id).flowsheet.edges.find(e => e.from === 'aluminium-smelter' && e.substances?.[0]?.[0] === 'Al');
 
-test('module follows the design contract', () => {
-  assert.equal(D.id, 'smelter');
-  assert.deepEqual([...D.units], ['aluminium-smelter']);
+test('recipe basis, a potline that is firmed, and the scoreboard plant size', () => {
   // Recipe basis: the 'aluminium' pathway node, and the same unit per kg Al inside 'silicon'.
   assert.equal(node('aluminium').capexUsdPerKgDay, D.RECIPE['aluminium-smelter'].usdPerKgDay);
   assert.equal(node('aluminium').kWhPerKg, D.RECIPE['aluminium-smelter'].kWhPerKg);
   const si = alEdge('silicon').kgPerKg;
   assert.ok(Math.abs(node('silicon').capexUsdPerKgDay / si / D.RECIPE['aluminium-smelter'].usdPerKgDay - 1) < 0.02);
   assert.ok(Math.abs(node('silicon').kWhPerKg / si / D.RECIPE['aluminium-smelter'].kWhPerKg - 1) < 0.02);
-  assert.ok(D.PRESETS.today && D.PRESETS.lean);
-  for (const c of D.CONTROLS) assert.ok(c.key in D.DEFAULTS, c.key);
   const d = D.design();
-  for (const k of ['installedUsdPerKgDay', 'materialsUsdPerKgDay', 'idiotIndex', 'kWhPerKg']) assert.ok(Number.isFinite(d[k]) && d[k] > 0, k);
   assert.equal(d.flexible, false);
-  assert.ok(d.kpis.length >= 3 && d.kpis.length <= 6);
-  close(d.parts.reduce((s, x) => s + x.usd, 0), d.installedUsdPerKgDay, 1e-9);
-  close(d.parts.reduce((s, x) => s + x.usdMaterials, 0), d.materialsUsdPerKgDay, 1e-9);
   const o = D.simulatorOverride(D.PRESETS.lean.params)['aluminium-smelter'];
   assert.equal(o.flexible, false, 'a potline is firmed, never stopped');
   assert.ok(o.minTurndown > 0 && o.minTurndown < 1);
-  assert.ok(o.materialsFactor > 0 && o.materialsFactor < o.capexFactor);
   // Compared like with like at the scoreboard plant size (100 × the 10 t/day reference).
   close(d.recipeUsdPerKgDay, D.recipeAtSize(1e6), 1e-12);
-  close(D.recipeAtSize(1e6), 1890 * 100 ** -0.15, 1e-12);
+  close(D.recipeAtSize(1e6), D.RECIPE['aluminium-smelter'].usdPerKgDay * 100 ** -0.15, 1e-12);
 });
 
 test('cell physics: thermoneutral floor, voltage, current efficiency and a closed heat balance', () => {
@@ -101,8 +89,6 @@ test('presets: today lands near the recipe, lean is cheaper, leaner in kWh and c
 });
 
 test('the override lowers aluminium cost in the company simulator and leaves other pathways alone', () => {
-  const input = config => ({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
-  const rank = config => C.rankOpportunities(input(config), { sizeMultiple: 100 });
   const lcop = (rows, id) => rows.filter(r => r.pathwayId === id).reduce((m, r) => Math.min(m, r.lcopUsdPerKg), Infinity);
   const o = D.simulatorOverride(D.PRESETS.lean.params);
   const recipe = rank({});

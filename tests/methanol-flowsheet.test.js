@@ -6,14 +6,9 @@ const test = require('node:test');
 const { solveOperation } = require('../engine/solve');
 const { sizeToProduct } = require('../engine/size');
 const { createMethanolCase, DAILY_PV } = require('../cases/methanol');
+const { assertClosed } = require('./helpers.js');
 
 const pvgis = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'pvgis-mejillones.json'), 'utf8'));
-
-function assertClosed(solved) {
-  assert.ok(solved.balances.maxAbsResidual < 1e-8);
-  assert.ok(Math.abs(solved.balances.electricityKWh) < 1e-8);
-  assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
-}
 
 test('methanol plant runs DAC, SWRO, and electrolysis on the frozen Mejillones series and closes balances', () => {
   const definition = createMethanolCase();

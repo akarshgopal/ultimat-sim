@@ -12,11 +12,7 @@ const { siteZabuyeAbundance, siteDeadSeaAbundance } = require('../cases/brine-hu
 const { createCoastalCase } = require('../cases/coastal');
 const { createAbundanceCase } = require('../cases/abundance');
 
-const clone = value => JSON.parse(JSON.stringify(value));
-
-function near(actual, expected, tol = 1e-6, label = '') {
-  assert.ok(Math.abs(actual - expected) < tol, `${label} expected ${expected}, got ${actual}`);
-}
+const { near, clone } = require('./helpers.js');
 
 test('each stock lift adds capexRate × capacity to installed CAPEX and a footprint pad', () => {
   for (const [factory, ids] of [

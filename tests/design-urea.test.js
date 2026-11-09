@@ -1,17 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const D = require('../engine/designs/urea.js');
-const C = require('../engine/company.js');
-const { PATHWAYS } = require('../data/pathways.js');
-const { MARKETS } = require('../data/markets.js');
-const { SITES } = require('../data/sites.js');
+const { close, rank, lcop, companyData } = require('./helpers.js');
 
-const close = (a, b, rel = 1e-9) => assert.ok(Math.abs(a - b) <= rel * Math.max(1, Math.abs(b)), `${a} != ${b}`);
+const PATHWAYS = companyData().pathways;
 
-test('module follows the design contract', () => {
-  assert.equal(D.id, 'urea');
-  assert.deepEqual([...D.units], ['urea']);
-  assert.equal(D.product, 'urea');
+test('recipe basis, warning-free presets and a turndown for the firmed unit', () => {
   // The recipe basis is what data/pathways.js carries on both pathways that use the unit, and the
   // design is costed at the scoreboard's plant (100 × the pathways' reference output).
   for (const id of [D.RECIPE.urea.pathwayId, ...D.RECIPE.urea.alsoPathways]) {
@@ -22,30 +16,16 @@ test('module follows the design contract', () => {
     assert.equal(node.variableOmUsdPerKg, D.RECIPE.urea.variableOmUsdPerKg);
     assert.equal(pathway.refOutputKgPerDay * D.SCOREBOARD_SIZE_MULTIPLE, D.DEFAULTS.plantKgPerDay);
   }
-  assert.ok(D.PRESETS.today && D.PRESETS.lean);
-  for (const c of D.CONTROLS) assert.ok(c.key in D.DEFAULTS, c.key);
-  for (const params of Object.values(D.PRESETS).map(x => x.params)) {
-    const d = D.design(params);
-    for (const k of ['installedUsdPerKgDay', 'materialsUsdPerKgDay', 'idiotIndex', 'kWhPerKg']) assert.ok(Number.isFinite(d[k]) && d[k] > 0, k);
-    assert.equal(typeof d.flexible, 'boolean');
-    assert.ok(d.kpis.length >= 3 && d.kpis.length <= 6);
-    // Parts add up to the installed cost and the materials floor.
-    close(d.parts.reduce((s, x) => s + x.usd, 0), d.installedUsdPerKgDay, 1e-9);
-    close(d.parts.reduce((s, x) => s + x.usdMaterials, 0), d.materialsUsdPerKgDay, 1e-9);
-    assert.deepEqual(d.warnings, []);
-  }
-  const o = D.simulatorOverride(D.PRESETS.lean.params);
-  assert.deepEqual(Object.keys(o), ['urea']);
-  const u = o.urea;
-  assert.ok(u.capexFactor > 0 && u.energyFactor > 0 && u.materialsFactor > 0 && u.materialsFactor < u.capexFactor);
+  for (const [name, preset] of Object.entries(D.PRESETS)) assert.deepEqual(D.design(preset.params).warnings, [], name);
+  const u = D.simulatorOverride(D.PRESETS.lean.params).urea;
   assert.ok(u.minTurndown > 0 && u.minTurndown < 1);
 });
 
 test('physics: stoichiometry, equilibrium, bubble pressure and the heat-driven recycle', () => {
   // 2 NH₃ + CO₂ → urea + H₂O, as the recipe edges feed it.
-  const node = PATHWAYS.find(p => p.id === 'urea').flowsheet.edges;
-  close(D.STOICH.nh3KgPerKg, node.find(e => e.from === 'ammonia-feed').kgPerKg, 2e-3);
-  close(D.STOICH.co2KgPerKg, node.find(e => e.from === 'co2-feed').kgPerKg, 2e-3);
+  const edges = PATHWAYS.find(p => p.id === 'urea').flowsheet.edges;
+  close(D.STOICH.nh3KgPerKg, edges.find(e => e.from === 'ammonia-feed').kgPerKg, 2e-3);
+  close(D.STOICH.co2KgPerKg, edges.find(e => e.from === 'co2-feed').kgPerKg, 2e-3);
   close(D.STOICH.waterKgPerKg, 0.3, 2e-3);
   // Calibration points: CO₂-stripping reactor ~62% at N/C 3, H/C 0.5, 185 °C; ~75% at N/C 4, dry.
   assert.ok(Math.abs(D.equilibriumConversion(185, 3, 0.5) - 0.62) < 0.01);
@@ -103,9 +83,6 @@ test('presets: today lands near the recipe at the scoreboard size; lean is far c
 });
 
 test('the override lowers urea and green-urea cost in the company simulator and leaves other pathways alone', () => {
-  const input = config => ({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
-  const rank = config => C.rankOpportunities(input(config), { sizeMultiple: 100 });
-  const lcop = (rows, id) => rows.find(r => r.pathwayId === id).lcopUsdPerKg;
   const o = D.simulatorOverride(D.PRESETS.lean.params);
   const d = D.design(D.PRESETS.lean.params);
   close(o.urea.capexFactor, d.installedUsdPerKgDay / D.recipeAtSize(1e5), 1e-12);

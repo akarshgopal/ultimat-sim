@@ -49,12 +49,17 @@ api = {
     params,                             // merged with DEFAULTS
     installedUsdPerKgDay, materialsUsdPerKgDay, idiotIndex, kWhPerKg, flexible,
     basis: 'per kg NH₃/day',            // what the parts' kg and $ are per
-    parts: [{ part, material, kg, usdMaterials, manufacturing, usd, note }], // material null for bought-in items
+    bom: [{ part, material, kg, usdMaterials, manufacturing, usd, note }], // sums to installed; material null for bought-in items (`parts` in this shape also accepted)
     kpis: [{ label, value, sub }],      // 3–6 headline numbers specific to this design (strings)
   }),
   simulatorOverride(params) => ({ <unit>: { capexFactor, energyFactor, flexible? } }),
 };
 ```
+
+The app loads each module with a `<script>` tag in `index.html` (and ships it via `scripts/build.mjs`'s
+`engine/designs` entry). The Designs view renders any registered design from these fields; a scenario's
+active designs live in the URL as `ds={"<id>":{"preset":"lean","overrides":{}}}`, and the Abundance
+view's frontier puts every registered design at its lean preset.
 
 Every design ships with a doc (`docs/designs/<id>.md`: requirements, model results, architecture,
 BOM, build plan, risks) whose numbers regenerate from the module, and a behavioral test

@@ -40,7 +40,7 @@ test('designs view: electrolyzer KPIs, cost curve, BOM, next targets; push desig
 
     const kpis = await page.$$eval('#view .kpi-value', ns => ns.map(n => n.textContent.trim()));
     assert.ok(kpis.length >= 6, `KPIs: ${kpis.length}`);
-    assert.match(kpis[0], /\/kW$/);
+    assert.match(kpis[0], /^\$[0-9,.]+k?$/);
     const curves = await page.$$eval('#view svg.chart-svg path.chart-line', ps => ps.length);
     assert.ok(curves >= 3, `cost curves: ${curves}`);
     const bomRows = await page.$$eval('#view .card', cards => {
@@ -57,7 +57,7 @@ test('designs view: electrolyzer KPIs, cost curve, BOM, next targets; push desig
 
     await page.click('[data-preset="lean"]');
     await page.click('text=Use this design in the company simulation');
-    await page.waitForFunction(() => /el=/.test(location.hash));
+    await page.waitForFunction(() => /ds=/.test(location.hash) && /electrolyzer/.test(decodeURIComponent(location.hash)));
     assert.deepEqual(errors, []);
   } finally {
     await browser.close();

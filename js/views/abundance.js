@@ -101,7 +101,7 @@
           const atFrontier = Object.entries(Store.FRONTIER).every(([k, v]) => JSON.stringify(s[k]) === JSON.stringify(v));
           frontierBtn.disabled = atFrontier;
           scenarioNote.textContent = `Scenario: solar ${UI.num(s.kwh * 100, 2)}¢/kWh · equipment ×${s.equip}`
-            + (s.ii > 0 ? ` · costs ≤ ${s.ii}× materials` : '') + (s.el ? ` · ${s.el.preset} electrolyzer` : '');
+            + (s.ii > 0 ? ` · costs ≤ ${s.ii}× materials` : '') + Object.entries(s.ds || {}).map(([id, d]) => ` · ${d.preset} ${Store.DESIGNS[id]?.name || id}`).join('');
 
           kpis.replaceChildren(
             UI.kpi('Feasible below today’s price', UI.pct(now.totals.feasibleShare, 0), `${mt(now.totals.feasibleT)}/yr of ${mt(now.totals.worldDemandT)}/yr tracked`),

@@ -45,7 +45,7 @@ test('abundance view is the landing page: tonnage bars, blockers, materials; fro
     const share = () => page.$eval('#view .kpi-value', n => parseFloat(n.textContent));
     const before = await share();
     await page.click('text=Set the scenario to the frontier');
-    await page.waitForFunction(() => /ii=1\.5/.test(location.hash) && /el=/.test(location.hash));
+    await page.waitForFunction(() => /ii=1\.5/.test(location.hash) && /ds=/.test(location.hash));
     await page.waitForFunction(b => parseFloat(document.querySelector('#view .kpi-value')?.textContent) !== b, before, { timeout: 15000 });
     assert.ok(await share() > before, 'the frontier makes more of the world’s tonnage feasible');
     assert.ok(await page.$eval('text=Set the scenario to the frontier', b => b.disabled));

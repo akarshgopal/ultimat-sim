@@ -48,17 +48,18 @@ test('the optimal current density rises as PV gets cheaper, and cheaper PV lower
 });
 
 test('a design overrides electrolyzer capex and kWh/kg in the company simulator', () => {
-  const o = E.simulatorOverride(E.PRESETS.lean.params);
-  close(o.capexFactor, o.usdPerKgDay / E.RECIPE_USD_PER_KG_DAY, 1e-12);
+  const units = E.simulatorOverride(E.PRESETS.lean.params);
+  const o = units.electrolyzer;
+  close(o.capexFactor, E.design(E.PRESETS.lean.params).installedUsdPerKgDay / E.RECIPE_USD_PER_KG_DAY, 1e-12);
   const input = config => ({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
   const h2 = config => C.rankOpportunities(input(config), { sizeMultiple: 100 }).find(r => r.pathwayId === 'green-hydrogen');
   const recipe = h2({});
-  const designed = h2({ designs: { units: { electrolyzer: { capexFactor: o.capexFactor, energyFactor: o.energyFactor } } } });
+  const designed = h2({ designs: { units } });
   assert.ok(designed.lcopUsdPerKg < recipe.lcopUsdPerKg);
   // Energy per kg follows the design's kWh/kg (the electrolyzer dominates this recipe's energy).
   const ratio = designed.energyKWhPerKg / recipe.energyKWhPerKg;
   assert.ok(Math.abs(ratio - o.energyFactor) < 0.02, `energy ratio ${ratio} vs ${o.energyFactor}`);
   // The design is per unit: chlor-alkali cells share the cost class but are not re-priced.
   const salt = config => C.rankOpportunities(input(config), { sizeMultiple: 100 }).find(r => r.pathwayId === 'abundance-salt');
-  close(salt({ designs: { units: { electrolyzer: { capexFactor: o.capexFactor, energyFactor: o.energyFactor } } } }).lcopUsdPerKg, salt({}).lcopUsdPerKg, 1e-9);
+  close(salt({ designs: { units } }).lcopUsdPerKg, salt({}).lcopUsdPerKg, 1e-9);
 });

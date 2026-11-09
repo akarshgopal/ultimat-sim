@@ -22,12 +22,29 @@
     { id: '3x', label: '3× cheaper', kwh: round4(KWH_TODAY / 3), floor: round4(KWH_FLOOR / 3), hint: 'record sunbelt PPA territory' },
     { id: '10x', label: '10× cheaper', kwh: round4(KWH_TODAY / 10), floor: round4(KWH_FLOOR / 10), hint: 'the Terraform thesis' },
   ]);
-  const ElectrolyzerDesign = globalThis.ElectrolyzerDesign;
-  // Full parameter set of a scenario's electrolyzer design (preset + overrides).
-  function electrolyzerParams(el) {
-    if (!el || !ElectrolyzerDesign) return null;
-    const base = ElectrolyzerDesign.PRESETS[el.preset]?.params || {};
-    return { ...base, ...(el.overrides || {}) };
+  // Unit designs registered by engine/designs/*.js (engine/designs/README.md). A scenario's `ds` holds
+  // the active ones: { <design id>: { preset, overrides } }.
+  const DESIGNS = globalThis.FoundryDesigns || {};
+  function designParams(id, entry) {
+    const api = DESIGNS[id];
+    if (!entry || !api) return null;
+    return { ...(api.PRESETS[entry.preset]?.params || {}), ...(entry.overrides || {}) };
+  }
+  // config.designs.units for a scenario's active designs.
+  function designUnits(ds) {
+    const units = {};
+    for (const [id, entry] of Object.entries(ds || {})) {
+      const params = designParams(id, entry);
+      if (params) Object.assign(units, DESIGNS[id].simulatorOverride(params));
+    }
+    return units;
+  }
+  function cleanDesigns(raw) {
+    const ds = {};
+    for (const [id, entry] of Object.entries(raw || {})) {
+      if (entry && typeof entry === 'object' && DESIGNS[id]?.PRESETS?.[entry.preset]) ds[id] = { preset: entry.preset, overrides: entry.overrides || {} };
+    }
+    return ds;
   }
 
   // Idiot-index floors from the bill-of-materials dataset (data/bom.js).
@@ -92,7 +109,7 @@
   const ORIGIN_IDS = globalThis.UI.ORIGINS.map(o => o.id);
 
   function defaults() {
-    const s = { objective: D.objective, make: true, infinite: false, loop: true, origins: ORIGIN_IDS.slice(), off: [], el: null };
+    const s = { objective: D.objective, make: true, infinite: false, loop: true, origins: ORIGIN_IDS.slice(), off: [], ds: {} };
     for (const f of FIELDS) s[f.key] = f.def;
     return s;
   }
@@ -104,7 +121,7 @@
     if (s.objective !== d.objective) q.set('objective', s.objective);
     if (!s.make) q.set('buy', '1');
     if (!s.loop) q.set('noloop', '1');
-    if (s.el) q.set('el', JSON.stringify(s.el));
+    if (Object.keys(s.ds || {}).length) q.set('ds', JSON.stringify(s.ds));
     if (s.infinite) q.set('infinite', '1');
     if (s.origins.length !== d.origins.length) q.set('origins', s.origins.join(','));
     if (s.off.length) q.set('off', s.off.join(','));
@@ -122,12 +139,10 @@
     if (['abundance', 'profit'].includes(q.get('objective'))) s.objective = q.get('objective');
     s.make = q.get('buy') !== '1';
     s.loop = q.get('noloop') !== '1';
-    if (q.has('el')) {
-      try {
-        const el = JSON.parse(q.get('el'));
-        if (el && typeof el === 'object' && ElectrolyzerDesign?.PRESETS?.[el.preset]) s.el = { preset: el.preset, overrides: el.overrides || {} };
-      } catch { /* ignore a malformed design */ }
-    }
+    try {
+      if (q.has('ds')) s.ds = cleanDesigns(JSON.parse(q.get('ds')));
+      else if (q.has('el')) s.ds = cleanDesigns({ electrolyzer: JSON.parse(q.get('el')) }); // older links
+    } catch { /* ignore malformed designs */ }
     s.infinite = q.get('infinite') === '1';
     if (q.has('origins')) {
       const ids = new Set(q.get('origins').split(','));
@@ -168,12 +183,7 @@
       },
       equipmentCostMultiplier: s.equip,
       idiotIndex: { target: s.ii > 0 ? s.ii : null, floors: BOM_FLOORS, bom: s.loop ? BOM_LIVE : null },
-      ...(() => {
-        const params = electrolyzerParams(s.el);
-        if (!params) return {};
-        const o = ElectrolyzerDesign.simulatorOverride(params);
-        return { designs: { units: { electrolyzer: { capexFactor: o.capexFactor, energyFactor: o.energyFactor } } } };
-      })(),
+      designs: { units: designUnits(s.ds) },
       utilization: { battery: { usdPerKWh: s.battery } },
       tech: {
         electrolyzer: { learningRate: s.lrElec / 100 },
@@ -246,8 +256,11 @@
   }
 
   // The frontier: what the program aims at. 10× cheaper solar, every cost squeezed to 1.5× its raw
-  // materials, the lean solar-matched electrolyzer. Applied on top of the current scenario.
-  const FRONTIER = Object.freeze({ kwh: ENERGY_PRESETS[2].kwh, kwhFloor: ENERGY_PRESETS[2].floor, ii: 1.5, el: { preset: 'lean' } });
+  // materials, every registered design at its lean preset. Applied on top of the current scenario.
+  const FRONTIER = Object.freeze({
+    kwh: ENERGY_PRESETS[2].kwh, kwhFloor: ENERGY_PRESETS[2].floor, ii: 1.5,
+    ds: Object.fromEntries(Object.keys(DESIGNS).filter(id => DESIGNS[id].PRESETS.lean).map(id => [id, { preset: 'lean', overrides: {} }])),
+  });
 
   // Abundance scoreboard (year 0) for a scenario; by default the current one.
   function abundance(s = scenario) {
@@ -264,7 +277,7 @@
 
   globalThis.Store = Object.freeze({
     FIELDS, FIELD_BY_KEY, PATHWAYS, MARKETS, SITES, ENERGY_PRESETS, EQUIPMENT_PRESETS, MARGIN_PRESETS, BOM, BOM_FLOORS,
-    electrolyzerParams,
+    DESIGNS, designParams, designUnits,
     pathwayById: new Map(PATHWAYS.map(p => [p.id, p])),
     siteById: new Map(SITES.map(s => [s.id, s])),
     defaults, toQuery, fromQuery, toConfig, pathwayAllowed,

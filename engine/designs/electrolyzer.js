@@ -18,7 +18,11 @@
     typeof require === 'function' ? require('../utilization.js') : root.FoundryUtilization,
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.ElectrolyzerDesign = api;
+  else {
+    root.ElectrolyzerDesign = api;
+    root.FoundryDesigns = root.FoundryDesigns || {};
+    root.FoundryDesigns[api.id] = api;
+  }
 })(globalThis, (Bom, Utilization) => {
   const F = 96485.33212; // C/mol
   const M_H2 = 2.01588; // g/mol
@@ -174,8 +178,26 @@
     const separatorMaterialsUsdPerKW = plateM2PerKW * 2 * commodity('polymer');
     const floorUsdPerKW = materialsUsdPerKW + separatorMaterialsUsdPerKW;
     const kWPerKgDay = 1 / kgH2PerDayPerKW;
+    // Contract view of the BOM (engine/designs/README.md): every line, summing to installed $/kW.
+    const bought = (part, usd, note) => ({ part, material: null, kg: null, usdMaterials: null, manufacturing: null, usd, note });
+    const bom = [
+      ...parts.map(x => ({ part: x.part, material: x.material, kg: x.kgPerKW, usdMaterials: x.usdMaterialsPerKW, manufacturing: x.manufacturing, usd: x.usdPerKW, note: x.note })),
+      bought('Separator (purchased)', separatorUsdPerKW, sep.label),
+      bought('Power electronics', electronicsUsdPerKW, coupling.label),
+      bought('Assembly labour', labourUsdPerKW, `${Math.round(stackKW)} kW stacks`),
+      bought('Install (× factor)', installedUsdPerKW - manufacturedUsdPerKW, `× ${p.installFactor}`),
+    ];
     return {
       params: p,
+      basis: 'per kW',
+      bom,
+      flexible: true,
+      materialsUsdPerKgDay: floorUsdPerKW * kWPerKgDay,
+      kpis: [
+        { label: 'Installed per kW', value: `$${installedUsdPerKW.toFixed(0)}/kW`, sub: `materials $${floorUsdPerKW.toFixed(1)}/kW` },
+        { label: 'Cell voltage', value: `${V.toFixed(3)} V`, sub: `${j} A/cm² · ${Math.round((HHV_KWH_PER_KG / kWhPerKg) * 100)}% HHV` },
+        { label: 'Stack', value: `${Math.round(stackKW)} kW`, sub: `${p.cellsPerStack} cells × ${p.cellAreaM2} m²` },
+      ],
       cellVoltage: V,
       efficiencyHHV: HHV_KWH_PER_KG / kWhPerKg,
       stackKWhPerKg,
@@ -247,11 +269,31 @@
     return { best, curve };
   }
 
-  // What the company simulator needs to build on this design.
+  // What the company simulator needs to build on this design: config.designs.units entries.
   function simulatorOverride(params) {
     const d = design(params);
-    return { usdPerKgDay: d.installedUsdPerKgDay, kWhPerKgH2: d.kWhPerKg, capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor };
+    return { electrolyzer: { capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor, flexible: true } };
   }
 
-  return { DEFAULTS, PRESETS, RECIPE_KWH_PER_KG, RECIPE_USD_PER_KG_DAY, cellVoltage, design, lcoh, optimizeCurrentDensity, simulatorOverride };
+  const CONTROLS = Object.freeze([
+    { key: 'currentDensityAPerCm2', label: 'Current density', unit: 'A/cm²', min: 0.1, max: 3, step: 0.05, hint: 'higher = smaller stack, higher voltage' },
+    { key: 'plateThicknessMm', label: 'Bipolar plate thickness', unit: 'mm', min: 0.2, max: 3, step: 0.1 },
+    { key: 'electrodeNiKgPerM2', label: 'Ni per electrode', unit: 'kg/m²', min: 0.05, max: 1.5, step: 0.05 },
+    { key: 'cellAreaM2', label: 'Cell active area', unit: 'm²', min: 0.1, max: 4, step: 0.1 },
+    { key: 'installFactor', label: 'Install factor', unit: '×', min: 1, max: 2, step: 0.05, hint: 'site works, controls, commissioning' },
+    { key: 'separator', label: 'Separator', options: Object.entries(DEFAULTS.separators).map(([k, v]) => [k, `${v.label} — $${v.usdPerM2}/m²`]) },
+    { key: 'coupling', label: 'Power coupling', options: Object.entries(DEFAULTS.couplings).map(([k, v]) => [k, `${v.label} — $${v.usdPerKW}/kW, ${Math.round(v.loss * 100)}% loss`]) },
+    { key: 'pressure', label: 'Pressure', options: [['atmospheric', 'Atmospheric (lean BoP; compress later if needed)'], ['pressurized', '~30 bar (heavier BoP)']] },
+  ]);
+
+  return {
+    id: 'electrolyzer',
+    name: 'Solar-matched electrolyzer',
+    summary: 'Alkaline stack and balance of plant built for 0 → 100% → 0 every sunny day, wired straight to PV.',
+    units: ['electrolyzer'],
+    product: 'hydrogen',
+    RECIPE: { electrolyzer: { usdPerKgDay: RECIPE_USD_PER_KG_DAY, kWhPerKg: RECIPE_KWH_PER_KG, pathwayId: 'green-hydrogen' } },
+    CONTROLS,
+    DEFAULTS, PRESETS, RECIPE_KWH_PER_KG, RECIPE_USD_PER_KG_DAY, cellVoltage, design, lcoh, optimizeCurrentDensity, simulatorOverride,
+  };
 });

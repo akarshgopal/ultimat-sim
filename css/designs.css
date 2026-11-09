@@ -6,3 +6,8 @@
 .v-designs .ds-panel .segmented { flex-wrap: wrap; }
 .v-designs .stack-tight { display: flex; flex-direction: column; gap: 8px; }
 .v-designs .stack-tight .button { width: 100%; }
+.v-designs .ds-tabs { margin-bottom: var(--gap); flex-wrap: wrap; }
+.v-designs .ds-tabs a { padding: 5px 12px; font-size: 13px; color: var(--text-2); text-decoration: none; background: var(--surface); }
+.v-designs .ds-tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.v-designs .ds-tabs a.is-active::after { content: " ●"; color: var(--pos); font-size: 10px; }
+.v-designs .ds-panel > p.muted { font-size: 13px; margin: -4px 0 12px; }

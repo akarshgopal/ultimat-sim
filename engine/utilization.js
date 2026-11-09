@@ -91,7 +91,7 @@
   // ------------------------------------------------------------------ pathway operating profile
   const UNIT_TECH = Object.freeze({
     electrolyzer: 'electrolyzer', 'chlor-alkali': 'electrolyzer',
-    dac: 'dac', 'dac-solid': 'dac',
+    dac: 'dac', 'dac-solid': 'dac', 'gas-blower': 'dac',
     swro: 'desal', 'intake-pump': 'desal',
   });
   const profileCache = new WeakMap();

@@ -115,7 +115,9 @@
     let baseKWh = 0;
     let baseThermalKWh = 0;
     let energyDelta = 0;
-    let baseTurndownKWh = 0; // Σ kWh × min turndown over baseload units (designs may lower it)
+    // Σ kWh × min turndown over baseload units, per block (battery-firmed / heat-store-firmed).
+    let baseTurndownKWh = 0;
+    let thermalTurndownKWh = 0;
     let heatFactor = null; // a designed unit that owns the pathway's purchased heat (DAC regeneration)
     const capex = { flex: {}, base: {} };
     for (const node of pathway.flowsheet.nodes) {
@@ -125,12 +127,15 @@
       modeById.set(node.id, mode);
       const kWh = (Number(node.kWhPerKg) || 0) * (cfg.unitEnergyScale[node.unit] ?? 1);
       energyDelta += (Number(node.kWhPerKg) || 0) * ((cfg.unitEnergyScale[node.unit] ?? 1) - 1);
+      const t = Number(designUnits?.[node.unit]?.minTurndown);
+      const turndown = t >= 0 && t <= 1 ? t : cfg.baseloadMinTurndown;
       if (mode === 'flex') flexKWh += kWh;
-      else if (thermal.has(node.unit) || designUnits?.[node.unit]?.thermal === true) baseThermalKWh += kWh;
-      else baseKWh += kWh;
-      if (mode === 'base') {
-        const t = Number(designUnits?.[node.unit]?.minTurndown);
-        baseTurndownKWh += kWh * (t >= 0 && t <= 1 ? t : cfg.baseloadMinTurndown);
+      else if (thermal.has(node.unit) || designUnits?.[node.unit]?.thermal === true) {
+        baseThermalKWh += kWh;
+        thermalTurndownKWh += kWh * turndown;
+      } else {
+        baseKWh += kWh;
+        baseTurndownKWh += kWh * turndown;
       }
       if (Number(designUnits?.[node.unit]?.heatFactor) >= 0 && heatFactor == null) heatFactor = Number(designUnits[node.unit].heatFactor);
       const cls = UNIT_TECH[node.unit] || 'process';
@@ -171,7 +176,8 @@
     const profile = {
       flexKWh, baseKWh, baseThermalKWh, flexShareByClass, buffers, energyDeltaKWhPerKg: energyDelta,
       // Energy-weighted minimum turndown of the baseload block (null: the config default applies).
-      baseMinTurndown: baseKWh + baseThermalKWh > 0 && designUnits ? baseTurndownKWh / (baseKWh + baseThermalKWh) : null,
+      baseMinTurndown: baseKWh > 0 && designUnits ? baseTurndownKWh / baseKWh : null,
+      thermalMinTurndown: baseThermalKWh > 0 && designUnits ? thermalTurndownKWh / baseThermalKWh : null,
       hasFlex: [...modeById.values()].includes('flex'),
       hasBase: [...modeById.values()].includes('base'),
     };
@@ -347,7 +353,7 @@
     {
       const { flex, base } = split(cls => profile.flexShareByClass[cls] || 0);
       const baseElec = baseDesign(solar, (profile.baseKWh * sizeKgPerDay) / 24, sum(base) * (profile.baseKWh / Math.max(profile.baseKWh + profile.baseThermalKWh, 1e-12)), costs.pvUsdPerKWp, battery, profile.baseMinTurndown ?? cfg.baseloadMinTurndown);
-      const baseHeat = baseDesign(solar, (profile.baseThermalKWh * sizeKgPerDay) / 24, sum(base) * (profile.baseThermalKWh / Math.max(profile.baseKWh + profile.baseThermalKWh, 1e-12)), costs.pvUsdPerKWp, thermal, profile.baseMinTurndown ?? cfg.baseloadMinTurndown);
+      const baseHeat = baseDesign(solar, (profile.baseThermalKWh * sizeKgPerDay) / 24, sum(base) * (profile.baseThermalKWh / Math.max(profile.baseKWh + profile.baseThermalKWh, 1e-12)), costs.pvUsdPerKWp, thermal, profile.thermalMinTurndown ?? cfg.baseloadMinTurndown);
       const outputFactor = Math.min(baseElec.outputFactor, baseHeat.outputFactor);
       const flexD = flexDesign(solar, profile.flexKWh * sizeKgPerDay * 365 * outputFactor, sum(flex), costs.pvUsdPerKWp);
       const offHours = Math.max(0, 24 - flexD.fullLoadHoursPerDay);
@@ -383,7 +389,7 @@
       const elecShare = elecKWh / Math.max(elecKWh + profile.baseThermalKWh, 1e-12);
       const all = sum(k24);
       const baseElec = baseDesign(solar, (elecKWh * sizeKgPerDay) / 24, all * elecShare, costs.pvUsdPerKWp, battery, profile.baseMinTurndown ?? cfg.baseloadMinTurndown);
-      const baseHeat = baseDesign(solar, (profile.baseThermalKWh * sizeKgPerDay) / 24, all * (1 - elecShare), costs.pvUsdPerKWp, thermal, profile.baseMinTurndown ?? cfg.baseloadMinTurndown);
+      const baseHeat = baseDesign(solar, (profile.baseThermalKWh * sizeKgPerDay) / 24, all * (1 - elecShare), costs.pvUsdPerKWp, thermal, profile.thermalMinTurndown ?? cfg.baseloadMinTurndown);
       candidates.push({
         strategy: 'firmed',
         outputFactor: Math.min(baseElec.outputFactor, baseHeat.outputFactor),

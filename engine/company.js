@@ -330,13 +330,17 @@
     const designUnits = cfg.designs?.units || {};
     let consumablesFactor = 1;
     let variableOmDelta = 0;
+    const feedFactors = {};
     for (const node of pathway.flowsheet?.nodes || []) {
       const d = designUnits[node.unit];
       if (!d || node.kind !== 'converter') continue;
       if (Number(d.consumablesFactor) >= 0 && consumablesFactor === 1) consumablesFactor = Number(d.consumablesFactor);
+      for (const [id, f] of Object.entries(d.feedFactors || {})) if (Number(f) >= 0) feedFactors[id] = (feedFactors[id] ?? 1) * Number(f);
       if (Number(d.variableOmFactor) >= 0) variableOmDelta += (Number(node.variableOmUsdPerKg) || 0) * (Number(d.variableOmFactor) - 1);
     }
-    return { consumablesFactor, variableOmDelta };
+    // Multiplier on a feed's kg per kg (designs.units.<unit>.feedFactors, consumablesFactor).
+    const feedFactor = id => (feedFactors[id] ?? 1) * (id === 'consumables' ? consumablesFactor : 1);
+    return { consumablesFactor, variableOmDelta, feedFactor };
   }
 
   // Utilization config with designed units' energy factors folded into unitEnergyScale (memoized).
@@ -500,16 +504,15 @@
 
     let feedUsdPerKg = 0;
     const feedsKgPerYear = [];
-    const { consumablesFactor, variableOmDelta } = designedOpex(pathway, cfg);
+    const { variableOmDelta, feedFactor } = designedOpex(pathway, cfg);
     const purchasedIntermediates = [];
     for (const feed of pathway.feeds || []) {
-      const kg = (Number(feed.kgPerKg) || 0) * annualKg;
-      if (integrated.has(feed.id)) continue;
-      feedsKgPerYear.push({ id: feed.id, origin: feed.origin || 'unknown', kg });
+      const kgPerKg = (Number(feed.kgPerKg) || 0) * feedFactor(feed.id);
+      if (integrated.has(feed.id) || !(kgPerKg > 0)) continue; // a design can remove a feed (factor 0)
+      feedsKgPerYear.push({ id: feed.id, origin: feed.origin || 'unknown', kg: kgPerKg * annualKg });
       if (!feed.purchased) continue;
       if (feed.origin === 'intermediate') purchasedIntermediates.push(feed.id);
-      feedUsdPerKg += (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0))
-        * (feed.id === 'consumables' ? consumablesFactor : 1);
+      feedUsdPerKg += kgPerKg * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0));
     }
     // Recipe fixed O&M applies to process equipment; stores carry their own O&M (below).
     const storageUsd = design ? design.storageUsd : 0;
@@ -1429,11 +1432,11 @@
       }
       const purchased = [];
       const integrated = new Set((ev.integration || []).map(item => item.feedId));
-      const { consumablesFactor } = designedOpex(pathway || {}, cfg);
+      const { feedFactor } = designedOpex(pathway || {}, cfg);
       for (const feed of pathway?.feeds || []) {
         if (!feed.purchased || integrated.has(feed.id)) continue;
         const usd = (Number(feed.kgPerKg) || 0) * ((Number(feed.usdPerKg) || 0) + (Number(feed.freightUsdPerKg) || 0))
-          * (feed.id === 'consumables' ? consumablesFactor : 1);
+          * feedFactor(feed.id);
         if (usd > 0) purchased.push({ kind: 'feed', id: feed.id, label: feed.label || feed.id, usdPerKg: usd });
       }
       const own = b.equipment + b.energy + b.other;

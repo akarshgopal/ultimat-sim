@@ -657,6 +657,8 @@
       materialsFactor: d.vsRecipe.materialsFactor,
       minTurndown: d.minTurndown,
       flexible: false,
+      // Inert anodes evolve O₂: no carbon anodes to buy (their CO₂ vent disappears too).
+      ...(d.params.anode === 'inert' ? { feedFactors: { 'carbon-anode': 0 } } : {}),
     } };
   }
 

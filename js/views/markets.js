@@ -104,10 +104,7 @@
 
   function shareCell(UI, share, cap) {
     const frac = cap > 0 ? Math.min(1, share / cap) : 0;
-    return UI.el('span', { class: 'share-cell' }, [
-      UI.el('span', { text: UI.pct(share) }),
-      UI.el('span', { class: 'share-meter', title: `${UI.pct(frac, 0)} of the ${UI.pct(cap, 1)} ceiling` }, UI.el('span', { style: { width: (frac * 100).toFixed(1) + '%' } })),
-    ]);
+    return UI.meter(UI.pct(share), frac, `${UI.pct(frac, 0)} of the ${UI.pct(cap, 1)} ceiling`);
   }
 
   // Lower bound of the price axis: the band's low end (or the lowest realized price), floored to
@@ -116,10 +113,7 @@
     const lo = Math.max(0, Math.min(band ? band[0] : 0, ...price) * 0.95);
     const hi = Math.max(ref * 1.12, ...price);
     if (!(lo > 0) || !(hi > lo)) return 0;
-    const raw = (hi - lo) / 4;
-    const mag = 10 ** Math.floor(Math.log10(raw));
-    const norm = raw / mag;
-    const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+    const step = globalThis.Charts.niceStep(hi - lo, 4);
     return Math.floor(lo / step) * step;
   }
 

@@ -41,11 +41,7 @@
       const tableHost = el('div');
       root.append(UI.card('Materials', 'each world market’s best pathway; cost ÷ today’s price below 1 is feasible', tableHost));
 
-      const legend = el('div', { class: 'chart-legend' }, ORDER.map(k => {
-        const swatch = el('span', { class: 'legend-swatch' });
-        swatch.style.setProperty('--swatch', STATUS[k].color);
-        return el('span', { class: 'legend-item', title: STATUS[k].hint }, [swatch, STATUS[k].label]);
-      }));
+      const legend = UI.legend(ORDER.map(k => ({ label: STATUS[k].label, color: STATUS[k].color, title: STATUS[k].hint })));
 
       const mt = t => UI.num(t / 1e6) + ' Mt';
       const statusTag = st => el('span', { class: 'ab-status ab-' + st, title: STATUS[st].hint, text: STATUS[st].label });

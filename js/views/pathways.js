@@ -209,12 +209,17 @@
       titleNote.textContent = `Per-kg recipes reduced from plant models. Cost and price at each pathway’s cheapest site in ${Company.DEFAULTS.startYear}, ${RANK_SIZE_MULTIPLE}× reference size.`;
     }
 
+    // Remember the table's current sort across filter changes and visits.
+    function readSort() {
+      const th = tableHost.querySelector('th[aria-sort]');
+      if (!th) return false;
+      state.sortKey = th.dataset.sort;
+      state.sortDir = th.getAttribute('aria-sort') === 'ascending' ? 'asc' : 'desc';
+      return true;
+    }
+
     function drawTable() {
-      const prev = tableHost.querySelector('th[aria-sort]');
-      if (prev) {
-        state.sortKey = prev.dataset.sort;
-        state.sortDir = prev.getAttribute('aria-sort') === 'ascending' ? 'asc' : 'desc';
-      }
+      readSort();
       const q = state.q.trim().toLowerCase();
       const shown = rows.filter(r => {
         if (state.builtOnly && !r.plants) return false;
@@ -232,11 +237,7 @@
         rowHref: r => href('pathways', r.id),
         rowClass: r => (r.status === 'excluded' ? 'is-dim' : null),
       }));
-      // Remember sort clicks across filter changes.
-      tableHost.querySelector('thead').addEventListener('click', () => requestAnimationFrame(() => {
-        const th = tableHost.querySelector('th[aria-sort]');
-        if (th) { state.sortKey = th.dataset.sort; state.sortDir = th.getAttribute('aria-sort') === 'ascending' ? 'asc' : 'desc'; save(); }
-      }));
+      tableHost.querySelector('thead').addEventListener('click', () => requestAnimationFrame(() => { if (readSort()) save(); }));
     }
 
     search.addEventListener('input', () => { state.q = search.value; save(); drawTable(); });
@@ -348,8 +349,7 @@
       }
       if (!changed) break;
     }
-    // Sources hug their first consumer from the left only if nothing else is in column 0;
-    // keep the reading order: sources in column 0, sinks in the last column.
+    // Reading order: sources in column 0, sinks in the last column.
     let maxLayer = 0;
     for (const n of mainNodes) if (n.kind !== 'sink') maxLayer = Math.max(maxLayer, layer.get(n.id));
     for (const n of mainNodes) {

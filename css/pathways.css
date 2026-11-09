@@ -1,6 +1,5 @@
 /* pathways view — scoped by .v-pathways. */
-
-.v-pathways .pw-kpis { margin-bottom: var(--gap); grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.v-pathways .pw-kpis { margin-bottom: var(--gap); }
 
 /* ---------------------------------------------------------------- list */
 .v-pathways .pw-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 10px; }

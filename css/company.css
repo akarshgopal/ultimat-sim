@@ -21,13 +21,13 @@
 .v-company .field-grid .field { justify-content: flex-end; }
 .v-company .field-grid .field-label { align-items: flex-end; }
 .v-company .field-reset {
-  display: none; position: absolute; right: -6px; top: -6px;
-  width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%;
+  display: none; position: absolute; right: -3px; top: -3px;
+  width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%;
   background: var(--accent); color: transparent; font-size: 0; cursor: pointer;
   box-shadow: 0 0 0 2px var(--surface);
 }
 .v-company .field.is-prominent .field-reset { box-shadow: 0 0 0 2px var(--accent-soft); }
-.v-company .field.is-changed .field-reset { display: block; width: 8px; height: 8px; right: -3px; top: -3px; }
+.v-company .field.is-changed .field-reset { display: block; }
 .v-company .field.is-changed input[type="number"] { border-color: var(--accent); }
 .v-company .field.is-invalid input[type="number"] { border-color: var(--neg); }
 .v-company .origin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
@@ -43,7 +43,6 @@
 .v-company .pathway-check small .origin-dot { width: 6px; height: 6px; }
 .v-company .changed-count { font-size: 11px; }
 .v-company .scenario-expand { display: none; }
-.v-company .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .v-company .materials-table td:first-child { white-space: nowrap; }
 
 /* ---------------------------------------------------------------- abundance */

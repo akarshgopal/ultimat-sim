@@ -3,7 +3,7 @@
 // Exposes globalThis.Charts. Uses globalThis.UI (js/ui/kit.js).
 (() => {
   'use strict';
-  const { el, svg, clamp, num } = globalThis.UI;
+  const { el, svg, clamp, num, legend } = globalThis.UI;
 
   const SLOT_COUNT = 7; // slot 8 stays free; "Other" uses the muted token
   const productSlot = new Map();
@@ -19,9 +19,6 @@
     }
   }
   const slotColor = i => `var(--series-${i})`;
-
-  // ---------------------------------------------------------------------------
-  // Charts
 
   function tooltip() {
     let tip = document.getElementById('chartTooltip');
@@ -40,21 +37,20 @@
     return (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
   }
 
-  // spec: { x: number[], series: [{ key, label, color, values[] }], kind: 'line'|'stack'|'area',
-  //         log, yMin, yMax, yFormat, refLines: [{ y, label }], xMarks: [{ index, label }], ariaLabel, height }
+  // spec: { x: [], series: [{ key, label, color, values[], dash?, fmt? }], kind: 'line'|'stack'|'area',
+  //         log?, yMin?, yFormat?, refLines?: [{ y, label }], xMarks?: [{ index, label }], endLabels?, ariaLabel }
   function drawChart(container, spec) {
     chartRegistry.set(container, spec);
     container.replaceChildren();
     const width = Math.max(260, Math.floor(container.clientWidth || 600));
-    const height = spec.height || (width < 480 ? 200 : 240);
+    const height = width < 480 ? 200 : 240;
     const fmt = spec.yFormat || num;
     const n = spec.x.length;
     if (!n || !spec.series.length) {
-      container.append(el('p', { class: 'chart-empty', text: spec.emptyText || 'Nothing built in this scenario.' }));
+      container.append(el('p', { class: 'chart-empty', text: 'Nothing built in this scenario.' }));
       return;
     }
 
-    // Stack if needed.
     let layers = spec.series.map(s => ({ ...s, lo: s.values.map(() => 0), hi: s.values.slice() }));
     if (spec.kind === 'stack') {
       const acc = new Array(n).fill(0);
@@ -66,14 +62,14 @@
     }
 
     // Y domain.
-    let yMax = spec.yMax ?? -Infinity;
+    let yMax = -Infinity;
     let yMin = spec.yMin ?? (spec.log ? Infinity : 0);
     for (const l of layers) {
       for (let i = 0; i < n; i += 1) {
         const v = l.hi[i];
         if (!Number.isFinite(v)) continue;
         if (spec.log && !(v > 0)) continue;
-        if (spec.yMax == null) yMax = Math.max(yMax, v);
+        yMax = Math.max(yMax, v);
         if (spec.log && spec.yMin == null) yMin = Math.min(yMin, v);
       }
     }
@@ -96,7 +92,7 @@
       const every = Math.ceil((hi - lo) / 6);
       for (let e = lo; e <= hi; e += every) ticks.push(10 ** e);
     } else {
-      const step = niceStep(yMax - yMin, height < 200 ? 3 : 4);
+      const step = niceStep(yMax - yMin, 4);
       const top = Math.ceil(yMax / step) * step;
       ys = v => pad.top + ih - ((v - yMin) / (top - yMin)) * ih;
       for (let t = yMin; t <= top + step * 1e-6; t += step) ticks.push(t);
@@ -261,30 +257,20 @@
     container.append(root);
   }
 
-  function renderLegend(container, series, kind) {
-    if (!container) return;
-    container.replaceChildren();
-    if (series.length < 2) return;
-    for (const s of series) {
-      const sw = el('span', { class: 'legend-swatch' + (kind === 'line' ? ' is-line' : '') + (s.dash ? ' is-dashed' : '') });
-      sw.style.setProperty('--swatch', s.color);
-      container.append(el('span', { class: 'legend-item' }, [sw, el('span', { text: s.label })]));
-    }
-  }
-
-  function renderTable(details, x, series, fmt) {
-    const body = details.querySelector('.chart-table');
-    const build = () => {
-      const table = el('table', { class: 'data-table compact' });
-      const head = el('tr', {}, [el('th', { text: 'Year', scope: 'col' }), ...series.map(s => el('th', { text: s.label, scope: 'col' }))]);
-      table.append(el('thead', {}, head));
-      const tb = el('tbody');
-      x.forEach((year, i) => tb.append(el('tr', {}, [el('th', { text: String(year), scope: 'row' }), ...series.map(s => el('td', { text: (s.fmt || fmt)(s.values[i]) }))])));
-      table.append(tb);
+  // Year-by-series data table, built the first time it is opened.
+  function dataTable(spec) {
+    const fmt = spec.yFormat || num;
+    const body = el('div', { class: 'chart-table' });
+    const details = el('details', { class: 'chart-data' }, [el('summary', { text: 'Data table' }), body]);
+    details.addEventListener('toggle', () => {
+      if (!details.open) return;
+      const table = el('table', { class: 'data-table compact' }, [
+        el('thead', {}, el('tr', {}, [el('th', { text: 'Year', scope: 'col' }), ...spec.series.map(s => el('th', { text: s.label, scope: 'col' }))])),
+        el('tbody', {}, spec.x.map((year, i) => el('tr', {}, [el('th', { text: String(year), scope: 'row' }), ...spec.series.map(s => el('td', { text: (s.fmt || fmt)(s.values[i]) }))]))),
+      ]);
       body.replaceChildren(el('div', { class: 'table-scroll' }, table));
-    };
-    details.ontoggle = () => { if (details.open) build(); };
-    if (details.open) build(); else body.replaceChildren();
+    });
+    return details;
   }
 
   // Re-render every live chart on resize (debounced).
@@ -299,19 +285,15 @@
     }, 150);
   });
 
-  // Convenience: a full chart block (legend + body + data table) as one element.
-  function chartBlock(spec, opts = {}) {
-    const legend = el('div', { class: 'chart-legend' });
+  // A full chart: legend (two or more series), the chart sized to its container, and a data table.
+  function chartBlock(spec) {
+    const key = spec.series.length > 1
+      ? legend(spec.series.map(s => ({ label: s.label, color: s.color, line: spec.kind !== 'stack' })))
+      : el('div', { class: 'chart-legend' });
     const body = el('div', { class: 'chart-body' });
-    const details = el('details', { class: 'chart-data' }, [el('summary', { text: 'Data table' }), el('div', { class: 'chart-table' })]);
-    const block = el('div', { class: 'chart-block' }, [legend, body, opts.table === false ? null : details]);
-    requestAnimationFrame(() => {
-      renderLegend(legend, spec.series, spec.kind === 'stack' ? 'area' : 'line');
-      drawChart(body, spec);
-      if (opts.table !== false) renderTable(details, spec.x, spec.series, spec.yFormat || num);
-    });
-    return block;
+    requestAnimationFrame(() => drawChart(body, spec)); // after insertion, so the width is known
+    return el('div', { class: 'chart-block' }, [key, body, dataTable(spec)]);
   }
 
-  globalThis.Charts = Object.freeze({ drawChart, renderLegend, renderTable, chartBlock, assignSlots, slotColor, productSlot });
+  globalThis.Charts = Object.freeze({ chartBlock, niceStep, assignSlots, slotColor, productSlot });
 })();

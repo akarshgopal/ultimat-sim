@@ -8,7 +8,7 @@
   // ---------------------------------------------------------------- DOM
   function el(tag, attrs = {}, children = []) {
     const node = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs || {})) {
+    for (const [k, v] of Object.entries(attrs)) {
       if (v == null || v === false) continue;
       if (k === 'text') node.textContent = v;
       else if (k === 'class') node.className = v;
@@ -148,6 +148,23 @@
     ]);
   }
 
+  // items: [{ label, color, title?, line? }]; line draws a thin swatch for line series.
+  function legend(items) {
+    return el('div', { class: 'chart-legend' }, items.map(it => {
+      const swatch = el('span', { class: 'legend-swatch' + (it.line ? ' is-line' : '') });
+      swatch.style.setProperty('--swatch', it.color);
+      return el('span', { class: 'legend-item', title: it.title || null }, [swatch, el('span', { text: it.label })]);
+    }));
+  }
+
+  // A value with a small bar under it; frac in [0, 1].
+  function meter(text, frac, title) {
+    return el('span', { class: 'meter-cell' }, [
+      el('span', { text }),
+      el('span', { class: 'meter', title }, el('span', { style: { width: (frac * 100).toFixed(1) + '%' } })),
+    ]);
+  }
+
   function card(title, subtitle, body, extraHead) {
     return el('section', { class: 'card' }, [
       el('div', { class: 'card-head' }, [
@@ -162,6 +179,6 @@
     el, svg, clamp,
     num, usd, usdKg, pct, tonnes,
     ORIGINS, productName, shortName, originLabel, originDot, qualityTag, inHouseText,
-    sortableTable, kpi, card,
+    sortableTable, kpi, legend, meter, card,
   });
 })();

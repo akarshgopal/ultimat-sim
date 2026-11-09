@@ -2,7 +2,7 @@
 //
 //   Views.company = {
 //     title: 'Company',
-//     mount(root, ctx) { ...; return () => cleanup(); },   // ctx: { params, path, Store, UI, Charts, navigate }
+//     mount(root, ctx) { ...; return () => cleanup(); },   // ctx: { params, Store, UI, Charts, href }
 //   };
 //
 // URL: #/<view>[/<id>][?<scenario query>]. The query is the Store scenario and is kept across
@@ -34,14 +34,13 @@
     const q = Store.toQuery(Store.scenario);
     return '#/' + [view, id].filter(Boolean).map(encodeURIComponent).join('/') + (q ? '?' + q : '');
   }
-  function navigate(view, id) { location.hash = href(view, id); }
 
   let cleanup = null;
   let mounted = null;
   let lastQuery = null;
 
   function render() {
-    const { view, id, path, query } = parseHash();
+    const { view, id, query } = parseHash();
     if (query !== lastQuery && query !== Store.toQuery(Store.scenario)) Store.load(query);
     lastQuery = query;
     for (const a of document.querySelectorAll('.app-nav a')) {
@@ -63,7 +62,7 @@
       return;
     }
     document.title = `${def.title}${id ? ' · ' + id : ''} — Molecular Foundry`;
-    cleanup = def.mount(root, { params: { id }, path, Store, UI: globalThis.UI, Charts: globalThis.Charts, navigate, href }) || null;
+    cleanup = def.mount(root, { params: { id }, Store, UI: globalThis.UI, Charts: globalThis.Charts, href }) || null;
     window.scrollTo(0, 0);
   }
 
@@ -110,6 +109,5 @@
     render();
   }
 
-  globalThis.App = Object.freeze({ href, navigate, parseHash });
   init();
 })();

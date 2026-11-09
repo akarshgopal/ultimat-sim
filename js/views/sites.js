@@ -156,11 +156,7 @@
   // ---------------------------------------------------------------- shared bits
   function pvMeter(UI, kWp, ceilingKWp) {
     const frac = ceilingKWp > 0 ? Math.min(1, kWp / ceilingKWp) : 0;
-    const bar = UI.el('span', { class: 'pv-meter', title: `${UI.pct(frac)} of the per-site ceiling` }, UI.el('span', { style: { width: (frac * 100).toFixed(1) + '%' } }));
-    return UI.el('span', { class: 'pv-cell' }, [
-      UI.el('span', { text: `${kWp > 0 ? UI.num(kWp / 1e6, 3) : '0'} / ${UI.num(ceilingKWp / 1e6, 3)}` }),
-      bar,
-    ]);
+    return UI.meter(`${kWp > 0 ? UI.num(kWp / 1e6, 3) : '0'} / ${UI.num(ceilingKWp / 1e6, 3)}`, frac, `${UI.pct(frac)} of the per-site ceiling`);
   }
   function landText(UI, site) {
     return site.landUsdPerHa > 0 ? UI.usd(site.landUsdPerHa) + '/ha' : UI.el('span', { class: 'muted', text: UI.usd(Company.DEFAULTS.defaultLandUsdPerHa) + '/ha' });

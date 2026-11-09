@@ -153,11 +153,10 @@
         }
         kpis.replaceChildren(...base, ...extra);
 
-        // BOM table (contract: d.bom, or d.parts in the contract shape).
+        // Bill of materials: d.bom, or d.parts in the same shape.
         const rows = d.bom || d.parts || [];
         const total = rows.reduce((a, r) => a + (r.usd || 0), 0);
         const basis = d.basis || 'per kg/day';
-        bomCard.querySelector('.card-head p')?.remove();
         bomCard.querySelector('.card-head h2').textContent = `Bill of materials ${basis}`;
         bomHost.replaceChildren(UI.sortableTable([
           { key: 'part', label: 'Part', get: r => r.part, render: r => [r.part, el('span', { class: 'cell-sub', text: r.note || '' })] },

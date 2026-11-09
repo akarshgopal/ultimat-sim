@@ -1,26 +1,15 @@
 /* markets view — scoped by .v-markets. */
-.v-markets .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .v-markets #marketsTable td:first-child { min-width: 170px; }
 .v-markets tr.is-unsupplied td { color: var(--text-2); }
 .v-markets tr.is-supplied td:first-child a { font-weight: 600; }
-.v-markets .share-cell { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.v-markets .share-meter { display: block; width: 64px; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
-.v-markets .share-meter > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
 .v-markets .path-links { display: inline-flex; flex-wrap: wrap; gap: 2px 8px; max-width: 260px; font-size: 12px; }
 .v-markets .path-links a.is-co { color: var(--text-2); }
 .v-markets .path-links a.is-co::after { content: " (co)"; color: var(--text-3); }
 
-.v-markets .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13px; }
-.v-markets .facts dt { color: var(--text-3); }
-.v-markets .facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .v-markets .market-note { margin-top: 12px; color: var(--text-2); font-size: 13px; max-width: 80ch; }
 .v-markets .sources-head { margin: 14px 0 6px; font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .v-markets .sources a { overflow-wrap: anywhere; }
 .v-markets .captive-note { margin-top: 10px; font-size: 12px; color: var(--text-2); }
 
-@media (max-width: 680px) {
-  .v-markets .facts { grid-template-columns: 1fr; gap: 2px; }
-  .v-markets .facts dd { margin-bottom: 6px; }
-}
 .v-markets .co-more { color: var(--text-3); cursor: help; }
 .v-markets #marketPathways td:first-child { min-width: 180px; }

@@ -51,7 +51,6 @@
           landHa: s.finalLandHa,
           plants: s.plants,
           netAssets: s.finalNetAssetsUsd,
-          minCash: s.minCashUsd,
           year: last.year,
         };
       }

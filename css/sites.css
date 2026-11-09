@@ -4,7 +4,6 @@
 .v-sites .map-grid line { stroke: var(--border-strong); stroke-width: 0.6; opacity: 0.7; }
 .v-sites .map-grid line.is-equator { stroke-dasharray: 4 3; opacity: 1; }
 .v-sites .map-tick { fill: var(--text-3); font-size: 9px; }
-.v-sites .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .v-sites .map-site circle { fill: var(--surface); stroke: var(--text-3); stroke-width: 1.2; }
 .v-sites .map-site.is-built circle { fill: var(--accent); fill-opacity: 0.55; stroke: var(--accent); stroke-width: 1.5; }
 .v-sites .map-site.is-current circle { stroke: var(--neg); stroke-width: 2.5; }
@@ -17,17 +16,12 @@
 .v-sites .lf-site.is-current { stroke: var(--neg); stroke-width: 3; }
 
 .v-sites .tag-row { display: inline-flex; gap: 4px; flex-wrap: wrap; }
-.v-sites .pv-cell { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-.v-sites .pv-meter { display: block; width: 84px; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
-.v-sites .pv-meter > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.v-sites .meter { width: 84px; }
 .v-sites tr.is-unbuilt td { color: var(--text-2); }
 .v-sites .tag.is-off { margin-left: 6px; color: var(--text-3); }
 .v-sites #sitesTable td:first-child { min-width: 180px; }
 
 .v-sites .site-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
-.v-sites .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13px; }
-.v-sites .facts dt { color: var(--text-3); }
-.v-sites .facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .v-sites .facts .tag { margin-left: 2px; }
 .v-sites .site-notes { margin-top: 12px; color: var(--text-2); font-size: 13px; }
 .v-sites .host-note { margin-top: 8px; }
@@ -37,8 +31,6 @@
 }
 @media (max-width: 680px) {
   .v-sites .map-leaflet { height: 300px; }
-  .v-sites .facts { grid-template-columns: 1fr; gap: 2px; }
-  .v-sites .facts dd { margin-bottom: 6px; }
 }
 /* Name columns keep a readable width; the table scrolls sideways instead of wrapping to a word per line. */
 .v-sites #sitePathways td:first-child, .v-sites #sitePlants td:first-child { min-width: 200px; }

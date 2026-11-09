@@ -29,7 +29,7 @@
     return el('span', { class: ok ? 'en-yes' : 'en-no', text: '≤ ' + cents(row.breakevenUsdPerKWh), title: `Feasible below ${cents(row.breakevenUsdPerKWh)}/kWh` });
   }
 
-  // World demand (t/yr) of distinct markets whose pathway is feasible at price p.
+  // World demand (Mt/yr) of distinct markets whose pathway is feasible at price p.
   function unlockedSeries(Store, rows, groupOf) {
     return PRICE_GRID.map(p => {
       const groups = new Set();
@@ -43,6 +43,9 @@
     });
   }
 
+  // Sortable break-even: 1 if feasible at any price, the break-even $/kWh, or −1 if energy is not the barrier.
+  const breakevenKey = row => (row?.limitedBy === 'feasible-at-any-price' ? 1 : row?.limitedBy === 'energy' ? row.breakevenUsdPerKWh : -1);
+
   function nearestIndex(p) {
     let best = 0;
     PRICE_GRID.forEach((q, i) => { if (Math.abs(Math.log(q / p)) < Math.abs(Math.log(PRICE_GRID[best] / p))) best = i; });
@@ -55,6 +58,11 @@
       const { el } = UI;
       const Company = globalThis.FoundryCompany;
       const groupOf = p => Company.marketGroupOf(p, { marketGroups: Company.DEFAULTS.marketGroups });
+      // Start-year solar $/kWh after the idiot-index squeeze on PV capex.
+      const effectiveKWh = s => {
+        const cfg = Company.mergeConfig(Store.toConfig(s));
+        return Company.solarLcoe(cfg.pv, cfg.finance, Company.squashUsd(cfg, 'pv', cfg.pv.capexUsdPerKWp));
+      };
 
       root.append(el('div', { class: 'view-title' }, [
         el('h1', { text: 'Energy' }),
@@ -125,7 +133,7 @@
           const c = B.CLASSES[cls];
           const materials = B.materialsUsdPerUnit(cls);
           const capped = s.ii > 0 ? Math.min(c.todayUsdPerUnit, materials * s.ii) : c.todayUsdPerUnit;
-          const top = (B.materialBreakdown ? B.materialBreakdown(cls) : []).slice(0, 3).map(x => [x.material, x.usd]);
+          const top = B.materialBreakdown(cls).slice(0, 3).map(x => [x.material, x.usd]);
           return { cls, c, materials, ii: B.idiotIndex(cls), capped, top };
         });
         iiHost.replaceChildren(UI.sortableTable([
@@ -152,8 +160,7 @@
         drawIdiot(s);
         const result = Store.result;
         const tl = result?.timeline || [];
-        const cfg = Company.mergeConfig(Store.toConfig(s));
-        const kwhNow = Company.solarLcoe(cfg.pv, cfg.finance, Company.squashUsd(cfg, 'pv', cfg.pv.capexUsdPerKWp));
+        const kwhNow = effectiveKWh(s);
         leverNote.textContent = `Solar ${cents(kwhNow)}/kWh at start${s.ii > 0 && kwhNow < s.kwh - 1e-9 ? ` (squeezed from ${cents(s.kwh)})` : ''}, falling ${s.kwhDecline}%/yr to a ${cents(s.kwhFloor)} floor · equipment ×${s.equip} · batteries $${s.battery}/kWh${s.ii > 0 ? ` · every cost capped at ${s.ii}× raw materials` : ''}`
           + (tl.length ? ` · ${tl.at(-1).year}: ${cents(tl.at(-1).solarUsdPerKWh)}/kWh` : '');
       };
@@ -171,10 +178,8 @@
           const sets = Store.breakevens(multipliers);
           const current = sets.find(x => x.equip === s.equip) || sets[0];
           const byId = sets.map(x => new Map(x.rows.map(r => [r.pathwayId, r])));
-          // Effective start price: the $/kWh input, after the idiot-index squeeze on PV.
-          const eff = (() => { const c = Company.mergeConfig(Store.toConfig(s)); return Company.solarLcoe(c.pv, c.finance, Company.squashUsd(c, 'pv', c.pv.capexUsdPerKWp)); })();
+          const eff = effectiveKWh(s);
 
-          // KPIs at the current scenario.
           const feasibleNow = current.rows.filter(r => r.limitedBy === 'feasible-at-any-price' || (r.limitedBy === 'energy' && r.breakevenUsdPerKWh >= eff));
           const neverAtAll = current.rows.filter(r => r.limitedBy === 'not-energy');
           const unlockedNow = new Set(feasibleNow.map(r => groupOf(r.product)));
@@ -187,15 +192,12 @@
             UI.kpi('Energy actually paid', Number.isFinite(usedKWh) ? cents(usedKWh) + '/kWh' : '—', 'avg over feasible pathways: PV + storage + land per kWh used'),
           );
 
-          // Curve.
           const colors = ['var(--series-2)', 'var(--series-4)', 'var(--series-3)', 'var(--series-1)', 'var(--series-7)'];
           const series = sets.map((x, i) => ({
             key: 'e' + x.equip, label: `equipment ×${x.equip}`, color: colors[i % colors.length],
             values: unlockedSeries(Store, x.rows, groupOf),
           }));
-          const marks = [
-            ...Store.ENERGY_PRESETS.map(p => ({ index: nearestIndex(p.kwh), label: p.label })),
-          ];
+          const marks = Store.ENERGY_PRESETS.map(p => ({ index: nearestIndex(p.kwh), label: p.label }));
           curveHost.replaceChildren(Charts.chartBlock({
             x: PRICE_GRID.map(cents),
             series,
@@ -206,9 +208,8 @@
             ariaLabel: 'World material demand unlocked as electricity gets cheaper, per equipment-cost multiplier',
           }));
 
-          // Table.
           const rows = current.rows.map(r => ({ r, cells: byId.map(m => m.get(r.pathwayId)) }));
-          const best = row => Math.max(...row.cells.map(c => (c?.limitedBy === 'feasible-at-any-price' ? 1 : c?.limitedBy === 'energy' ? c.breakevenUsdPerKWh : -1)));
+          const best = row => Math.max(...row.cells.map(breakevenKey));
           const pathway = id => Store.pathwayById.get(id);
           tableHost.replaceChildren(UI.sortableTable([
             { key: 'name', label: 'Pathway', get: x => pathway(x.r.pathwayId)?.name || x.r.pathwayId,
@@ -218,7 +219,7 @@
             ...sets.map((set, i) => ({
               key: 'e' + set.equip, label: `equip ×${set.equip}`, num: true,
               title: `Break-even electricity price with equipment at ×${set.equip}`,
-              get: x => { const c = x.cells[i]; return c?.limitedBy === 'feasible-at-any-price' ? 1 : c?.limitedBy === 'energy' ? c.breakevenUsdPerKWh : -1; },
+              get: x => breakevenKey(x.cells[i]),
               render: x => cell(UI, x.cells[i], eff),
             })),
             { key: 'free', label: 'Cost at 0¢/kWh', num: true, title: 'Net cost per kg with free electricity, at the current equipment multiplier', get: x => x.r.atFreeEnergy.lcopUsdPerKg,
@@ -236,11 +237,7 @@
             .sort((a, b) => a.today.costBreakdownUsdPerKg.energy / a.today.priceUsdPerKg - b.today.costBreakdownUsdPerKg.energy / b.today.priceUsdPerKg).reverse();
           const maxRatio = Math.min(4, Math.max(1.2, ...withCost.map(r => Object.values(r.today.costBreakdownUsdPerKg).reduce((a, b) => a + b, 0) / r.today.priceUsdPerKg)));
           costHost.replaceChildren(
-            el('div', { class: 'chart-legend' }, parts.map(([, label, color]) => {
-              const swatch = el('span', { class: 'legend-swatch' });
-              swatch.style.setProperty('--swatch', color);
-              return el('span', { class: 'legend-item' }, [swatch, label]);
-            })),
+            UI.legend(parts.map(([, label, color]) => ({ label, color }))),
             el('div', { class: 'en-bars' }, withCost.map(r => {
               const b = r.today.costBreakdownUsdPerKg;
               const price = r.today.priceUsdPerKg;

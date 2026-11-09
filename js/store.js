@@ -22,6 +22,20 @@
     { id: '3x', label: '3× cheaper', kwh: round4(KWH_TODAY / 3), floor: round4(KWH_FLOOR / 3), hint: 'record sunbelt PPA territory' },
     { id: '10x', label: '10× cheaper', kwh: round4(KWH_TODAY / 10), floor: round4(KWH_FLOOR / 10), hint: 'the Terraform thesis' },
   ]);
+  // Idiot-index floors from the bill-of-materials dataset (data/bom.js).
+  const BOM = globalThis.FoundryBom;
+  const ABSOLUTE_FLOORS = ['pv', 'battery', 'thermalStore', 'h2Storage'];
+  const BOM_FLOORS = Object.freeze(BOM ? Object.fromEntries(Object.keys(BOM.CLASSES).map(cls => [cls,
+    ABSOLUTE_FLOORS.includes(cls)
+      ? { materialsUsdPerUnit: BOM.materialsUsdPerUnit(cls) }
+      : { floorFraction: BOM.floorFraction(cls) }])) : {});
+  const MARGIN_PRESETS = Object.freeze([
+    { id: 'today', label: 'Today', ii: 0, hint: 'today’s prices (no squeeze)' },
+    { id: '5', label: '5× materials', ii: 5 },
+    { id: '3', label: '3×', ii: 3 },
+    { id: '2', label: '2×', ii: 2 },
+    { id: '1.5', label: '1.5×', ii: 1.5, hint: 'margins squashed: materials plus a thin conversion cost' },
+  ]);
   const EQUIPMENT_PRESETS = Object.freeze([
     { id: '1', label: '×1', equip: 1, hint: 'recipe screening packs' },
     { id: '0.5', label: '×0.5', equip: 0.5 },
@@ -45,6 +59,8 @@
     { group: 'energy', key: 'kwhDecline', label: 'Solar price decline', unit: '%/yr', min: 0, max: 30, step: 0.5, def: pct(D.pv.exogenousDeclinePerYear) },
     { group: 'energy', key: 'kwhFloor', label: 'Solar price floor', unit: '$/kWh', min: 0, max: 0.3, step: 0.0005, def: KWH_FLOOR },
     { group: 'energy', key: 'battery', label: 'Battery', unit: '$/kWh', min: 1, max: 2000, step: 5, def: Company.DEFAULTS.utilization.battery.usdPerKWh },
+    { group: 'energy', key: 'ii', label: 'Target idiot index', unit: '×', min: 0, max: 50, step: 0.5, def: 0,
+      hint: 'Cap every cost (PV, batteries, electrolyzers, desal, DAC, process plant, stores) at its raw-materials cost × this. 0 = today’s prices.' },
     { group: 'energy', key: 'equip', label: 'Equipment cost', unit: '×', min: 0.01, max: 3, step: 0.05, def: D.equipmentCostMultiplier,
       hint: 'Multiplies electrolyzer, DAC, desal and process capex (not PV or storage).' },
     { group: 'cost', key: 'lrElec', label: 'Electrolyzer learning', unit: '%', min: 0, max: 50, step: 1, def: pct(D.tech.electrolyzer.learningRate) },
@@ -122,6 +138,7 @@
         exogenousDeclinePerYear: s.kwhDecline / 100,
       },
       equipmentCostMultiplier: s.equip,
+      idiotIndex: { target: s.ii > 0 ? s.ii : null, floors: BOM_FLOORS },
       utilization: { battery: { usdPerKWh: s.battery } },
       tech: {
         electrolyzer: { learningRate: s.lrElec / 100 },
@@ -200,7 +217,7 @@
   }
 
   globalThis.Store = Object.freeze({
-    FIELDS, FIELD_BY_KEY, PATHWAYS, MARKETS, SITES, ENERGY_PRESETS, EQUIPMENT_PRESETS,
+    FIELDS, FIELD_BY_KEY, PATHWAYS, MARKETS, SITES, ENERGY_PRESETS, EQUIPMENT_PRESETS, MARGIN_PRESETS, BOM, BOM_FLOORS,
     pathwayById: new Map(PATHWAYS.map(p => [p.id, p])),
     siteById: new Map(SITES.map(s => [s.id, s])),
     defaults, toQuery, fromQuery, toConfig, pathwayAllowed,

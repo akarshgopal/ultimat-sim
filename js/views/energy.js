@@ -64,6 +64,10 @@
       // ---------------------------------------------------------------- levers
       const energySeg = el('div', { class: 'segmented', role: 'group', 'aria-label': 'Solar electricity price' });
       const equipSeg = el('div', { class: 'segmented', role: 'group', 'aria-label': 'Equipment cost' });
+      const marginSeg = el('div', { class: 'segmented', role: 'group', 'aria-label': 'Target idiot index' });
+      for (const p of Store.MARGIN_PRESETS) {
+        marginSeg.append(el('button', { type: 'button', 'data-ii': p.ii, title: p.hint || `every cost capped at ${p.ii}× its raw materials`, text: p.label, onclick: () => Store.update({ ii: p.ii }, { immediate: true }) }));
+      }
       for (const p of Store.ENERGY_PRESETS) {
         energySeg.append(el('button', { type: 'button', 'data-kwh': p.kwh, title: p.hint, text: `${p.label} · ${cents(p.kwh)}`, onclick: () => Store.update({ kwh: p.kwh, kwhFloor: p.floor }, { immediate: true }) }));
       }
@@ -76,10 +80,17 @@
         el('div', { class: 'en-levers' }, [
           el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Solar electricity' }), energySeg]),
           el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Equipment cost (electrolyzers, DAC, desal, process)' }), equipSeg]),
+          el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Margins: cap every cost at raw materials × (idiot index)' }), marginSeg]),
         ]),
         leverNote,
         kpis,
       ]));
+
+      // ---------------------------------------------------------------- idiot index by class
+      const iiHost = el('div');
+      root.append(UI.card('Idiot index by cost class',
+        'installed cost today ÷ raw materials at commodity prices (data/bom.js); the target caps each class at materials × target',
+        iiHost));
 
       // ---------------------------------------------------------------- unlock curve
       const curveHost = el('div');
@@ -97,15 +108,48 @@
         'gross cost per kg as a share of the market price, by driver; bars past the price line are not feasible',
         costHost));
 
+      const CLASS_LABELS = {
+        pv: 'PV system', battery: 'Battery (LFP)', electrolyzer: 'Electrolyzer', desal: 'Desalination (SWRO)',
+        dac: 'Direct air capture', thermalStore: 'Thermal store', h2Storage: 'H₂ storage', process: 'Process plant',
+      };
+      let lastIi = null;
+      function drawIdiot(s) {
+        if (lastIi === s.ii || !Store.BOM) return;
+        lastIi = s.ii;
+        const B = Store.BOM;
+        const money = (v, unit) => (unit === 'USD installed' ? '$' + v.toFixed(3) : UI.usd(v));
+        const rows = Object.keys(B.CLASSES).map(cls => {
+          const c = B.CLASSES[cls];
+          const materials = B.materialsUsdPerUnit(cls);
+          const capped = s.ii > 0 ? Math.min(c.todayUsdPerUnit, materials * s.ii) : c.todayUsdPerUnit;
+          const top = (B.materialBreakdown ? B.materialBreakdown(cls) : []).slice(0, 3).map(x => [x.material, x.usd]);
+          return { cls, c, materials, ii: B.idiotIndex(cls), capped, top };
+        });
+        iiHost.replaceChildren(UI.sortableTable([
+          { key: 'cls', label: 'Cost class', get: r => CLASS_LABELS[r.cls] || r.cls, render: r => [CLASS_LABELS[r.cls] || r.cls, el('span', { class: 'cell-sub', text: 'per ' + r.c.unit })] },
+          { key: 'today', label: 'Today', num: true, get: r => r.c.todayUsdPerUnit, render: r => money(r.c.todayUsdPerUnit, r.c.unit) },
+          { key: 'materials', label: 'Raw materials', num: true, get: r => r.materials, render: r => money(r.materials, r.c.unit) },
+          { key: 'ii', label: 'Idiot index', num: true, get: r => r.ii, render: r => el('strong', { text: UI.num(r.ii, 2) + '×' }) },
+          { key: 'capped', label: s.ii > 0 ? `At ${s.ii}× materials` : 'Scenario price', num: true, get: r => r.capped,
+            render: r => el('span', { class: r.capped < r.c.todayUsdPerUnit ? 'is-pos' : '', text: money(r.capped, r.c.unit) + (r.capped < r.c.todayUsdPerUnit ? ` (−${UI.pct(1 - r.capped / r.c.todayUsdPerUnit, 0)})` : '') }) },
+          { key: 'top', label: 'Main materials', render: r => el('span', { class: 'muted', text: r.top.map(([m, v]) => `${m} ${money(v, r.c.unit)}`).join(' · ') }) },
+        ], rows, { sortKey: 'ii', sortDir: 'desc', compact: true }));
+        iiHost.append(el('p', { class: 'muted', text: 'Screening estimates: engineering material inventories at 2024–25 commodity prices; sources in data/bom.js.' }));
+      }
+
       let lastKey = null;
       let timer = 0;
       const syncLevers = () => {
         const s = Store.scenario;
         for (const b of energySeg.children) b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.kwh) - s.kwh) < 1e-9));
         for (const b of equipSeg.children) b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.equip) - s.equip) < 1e-9));
+        for (const b of marginSeg.children) b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.ii) - s.ii) < 1e-9));
+        drawIdiot(s);
         const result = Store.result;
         const tl = result?.timeline || [];
-        leverNote.textContent = `Now ${cents(s.kwh)}/kWh falling ${s.kwhDecline}%/yr to a ${cents(s.kwhFloor)} floor · equipment ×${s.equip} · batteries $${s.battery}/kWh`
+        const cfg = Company.mergeConfig(Store.toConfig(s));
+        const kwhNow = Company.solarLcoe(cfg.pv, cfg.finance, Company.squashUsd(cfg, 'pv', cfg.pv.capexUsdPerKWp));
+        leverNote.textContent = `Solar ${cents(kwhNow)}/kWh at start${s.ii > 0 && kwhNow < s.kwh - 1e-9 ? ` (squeezed from ${cents(s.kwh)})` : ''}, falling ${s.kwhDecline}%/yr to a ${cents(s.kwhFloor)} floor · equipment ×${s.equip} · batteries $${s.battery}/kWh${s.ii > 0 ? ` · every cost capped at ${s.ii}× raw materials` : ''}`
           + (tl.length ? ` · ${tl.at(-1).year}: ${cents(tl.at(-1).solarUsdPerKWh)}/kWh` : '');
       };
 
@@ -122,15 +166,17 @@
           const sets = Store.breakevens(multipliers);
           const current = sets.find(x => x.equip === s.equip) || sets[0];
           const byId = sets.map(x => new Map(x.rows.map(r => [r.pathwayId, r])));
+          // Effective start price: the $/kWh input, after the idiot-index squeeze on PV.
+          const eff = (() => { const c = Company.mergeConfig(Store.toConfig(s)); return Company.solarLcoe(c.pv, c.finance, Company.squashUsd(c, 'pv', c.pv.capexUsdPerKWp)); })();
 
           // KPIs at the current scenario.
-          const feasibleNow = current.rows.filter(r => r.limitedBy === 'feasible-at-any-price' || (r.limitedBy === 'energy' && r.breakevenUsdPerKWh >= s.kwh));
+          const feasibleNow = current.rows.filter(r => r.limitedBy === 'feasible-at-any-price' || (r.limitedBy === 'energy' && r.breakevenUsdPerKWh >= eff));
           const neverAtAll = current.rows.filter(r => r.limitedBy === 'not-energy');
           const unlockedNow = new Set(feasibleNow.map(r => groupOf(r.product)));
           const demandNow = [...unlockedNow].reduce((t, g) => t + (Store.MARKETS[g]?.worldDemandTPerYear || 0), 0);
           const usedKWh = feasibleNow.length ? feasibleNow.reduce((a, r) => a + (r.today?.effectiveEnergyUsdPerKWh || 0), 0) / feasibleNow.length : NaN;
           kpis.replaceChildren(
-            UI.kpi('Pathways feasible', `${feasibleNow.length} of ${current.rows.length}`, `at ${cents(s.kwh)}/kWh, equipment ×${s.equip}`),
+            UI.kpi('Pathways feasible', `${feasibleNow.length} of ${current.rows.length}`, `at ${cents(eff)}/kWh, equipment ×${s.equip}${s.ii > 0 ? `, costs ≤ ${s.ii}× materials` : ''}`),
             UI.kpi('World demand unlocked', UI.num(demandNow / 1e6) + ' Mt/yr', `${unlockedNow.size} markets`),
             UI.kpi('Blocked by more than energy', String(neverAtAll.length), 'infeasible even at 0¢/kWh'),
             UI.kpi('Energy actually paid', Number.isFinite(usedKWh) ? cents(usedKWh) + '/kWh' : '—', 'avg over feasible pathways: PV + storage + land per kWh used'),
@@ -168,7 +214,7 @@
               key: 'e' + set.equip, label: `equip ×${set.equip}`, num: true,
               title: `Break-even electricity price with equipment at ×${set.equip}`,
               get: x => { const c = x.cells[i]; return c?.limitedBy === 'feasible-at-any-price' ? 1 : c?.limitedBy === 'energy' ? c.breakevenUsdPerKWh : -1; },
-              render: x => cell(UI, x.cells[i], s.kwh),
+              render: x => cell(UI, x.cells[i], eff),
             })),
             { key: 'free', label: 'Cost at 0¢/kWh', num: true, title: 'Net cost per kg with free electricity, at the current equipment multiplier', get: x => x.r.atFreeEnergy.lcopUsdPerKg,
               render: x => `${UI.usdKg(x.r.atFreeEnergy.lcopUsdPerKg)} vs ${UI.usdKg(x.r.today?.priceUsdPerKg)}` },

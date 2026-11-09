@@ -400,3 +400,17 @@ test('idiot-index squeeze caps each class at materials floor × target, never ra
   close(squashed.capex.process, today.capex.process * 0.05 * 1.5, 1e-9);
   assert.ok(squashed.lcopUsdPerKg < today.lcopUsdPerKg);
 });
+
+test('energy break-evens scan electricity price even when PV margins are squeezed', () => {
+  const floors = { pv: { materialsUsdPerUnit: 100 }, process: { floorFraction: 0.05 } };
+  const hungry = { ...good, id: 'hungry', electricityKWhPerKg: 20 }; // energy-heavy enough to have a break-even
+  const rows = idiot => C.energyBreakevens({ pathways: [hungry], sites: SITES, markets: MARKETS, config: { idiotIndex: { target: idiot, floors } } })[0];
+  const plain = rows(null);
+  const squeezed = rows(1.5);
+  // Cheaper equipment (process squeezed) raises the price the pathway can afford; PV is not capped
+  // in the scan, so the result is a real price, not "any".
+  assert.equal(plain.limitedBy, 'energy');
+  assert.equal(squeezed.limitedBy, 'energy');
+  assert.ok(squeezed.breakevenUsdPerKWh > plain.breakevenUsdPerKWh);
+  assert.notEqual(squeezed.limitedBy, 'feasible-at-any-price');
+});

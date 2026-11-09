@@ -1098,7 +1098,12 @@
     const ids = opts.pathwayIds ? new Set(opts.pathwayIds) : null;
     const suppliers = captiveSuppliers(base, pathways);
     const ctxFor = usdPerKWh => {
-      const cfg = merge(base, { pv: { capexUsdPerKWp: pvCapexFromLcoe(usdPerKWh, base.pv, base.finance), floorUsdPerKWp: 0 } });
+      // The electricity price is the scanned variable, so the idiot-index squeeze must not cap PV here
+      // (it still applies to equipment and storage).
+      const cfg = merge(base, {
+        pv: { capexUsdPerKWp: pvCapexFromLcoe(usdPerKWh, base.pv, base.finance), floorUsdPerKWp: 0 },
+        idiotIndex: { floors: { ...(base.idiotIndex?.floors || {}), pv: undefined } },
+      });
       return yearContext(cfg, input.markets || {}, createState(cfg), 0, cfg.startYear, {}, { suppliers, sitesById });
     };
     const bestAt = (pathway, usdPerKWh, ctx) => {

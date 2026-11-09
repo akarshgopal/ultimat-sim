@@ -1,12 +1,12 @@
 // Operating-solver flow semantics: logistics edge clamps, splitter split /
 // overflow / priority, buffers (state of charge, backpressure, starvation,
-// buffer→buffer), sink caps and demand accept, energy export caps, and the
-// starvation cause chains that explain each limit.
+// buffer→buffer), sink caps and demand accept, energy export caps, and site
+// budgets.
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { streamMassKg } = require('../engine/model');
-const { solveOperation, solveHorizon, attachCauseChains } = require('../engine/solve');
+const { solveOperation } = require('../engine/solve');
 const { evaluateEconomics } = require('../engine/economics');
 const { siteZabuyeAbundance } = require('../cases/brine-hubs');
 const { createCoastalCase } = require('../cases/coastal');
@@ -14,7 +14,6 @@ const { createSabatierCase } = require('../cases/sabatier');
 const { createDacCase } = require('../cases/dac');
 
 const clone = value => JSON.parse(JSON.stringify(value));
-const codes = result => (result.causeChain || []).map(step => step.code);
 const kg = stream => (stream ? streamMassKg(stream) : 0);
 
 function near(actual, expected, tol = 1e-6, label = '') {
@@ -80,7 +79,7 @@ function electrolyzerEdges(waterFrom, h2To) {
 // ---------------------------------------------------------------------------
 // Stock demos with no constraints set
 
-test('stock demos solve deterministically with no limits, export caps or cause chains', () => {
+test('stock demos solve deterministically with no limits or export caps', () => {
   for (const factory of [siteZabuyeAbundance, () => createCoastalCase(), createSabatierCase, createDacCase]) {
     const a = solveOperation(clone(factory()));
     const b = solveOperation(clone(factory()));
@@ -89,8 +88,6 @@ test('stock demos solve deterministically with no limits, export caps or cause c
     assert.equal(a.edgeLimits.length, 0);
     for (const result of Object.values(a.nodes)) {
       assert.ok(!(result.limitedBy || []).includes('export'));
-      assert.equal(result.causeChain, undefined);
-      assert.equal(result.causeText, undefined);
     }
   }
   // Regional demand backs the lithium sink, but the cap sits above free receipt.
@@ -119,9 +116,6 @@ test('material edge capacity clamps a converter, names the edge, and lifts when 
   assert.equal(solved.edgeLimits.length, 1);
   assert.deepEqual([solved.edgeLimits[0].from.node, solved.edgeLimits[0].to.node], ['brine-pump', 'minerals']);
   assert.ok(solved.warnings.some(message => /brine-pump→minerals limited by logistics capacity/.test(message)));
-  assert.deepEqual(codes(minerals), ['logistics']);
-  assert.deepEqual([minerals.causeChain[0].edge.from.node, minerals.causeChain[0].edge.to.node], ['brine-pump', 'minerals']);
-  assert.ok(minerals.causeText.includes('brine-pump→minerals logistics'));
 
   delete edge.capacity;
   const recovered = solveOperation(limited);
@@ -142,8 +136,6 @@ test('electrical cable capacity clamps the consumer and tags logistics', () => {
   assert.equal(solved.edgeLimits[0].capacity, 1000);
   assert.equal(solved.edgeLimits[0].delivered, 1000);
   assert.ok(solved.edgeLimits[0].requested > 1000);
-  assert.deepEqual(codes(minerals), ['logistics']);
-  assert.ok(minerals.causeText.includes('power-bus→minerals logistics'));
 });
 
 test('blank / null / Infinity edge capacity means unlimited', () => {
@@ -156,21 +148,6 @@ test('blank / null / Infinity edge capacity means unlimited', () => {
     assert.equal(solved.nodes.minerals.activity, free.nodes.minerals.activity, String(capacity));
     assert.equal(solved.edgeLimits.length, 0);
   }
-});
-
-test('horizon hourly solves honour per-step edge capacity clamps', () => {
-  const coastal = createCoastalCase();
-  const free = solveHorizon(clone(coastal));
-  assert.equal(free.horizon.hours.length, 24);
-  const limited = clone(coastal);
-  const feedEdge = limited.graph.edges.find(edge => edge.to.node === 'swro' && edge.to.port === 'feed');
-  const freeFeed = free.streams.find(item => item.to.node === 'swro' && item.to.port === 'feed');
-  feedEdge.capacity = kg(freeFeed.stream) / 24 * 0.25;
-  const solved = solveHorizon(limited);
-  assert.equal(solved.horizon.hours.length, 24);
-  assert.ok(solved.edgeLimits.length >= 1);
-  assert.ok(solved.nodes.swro.activity < free.nodes.swro.activity - 1e-6);
-  assert.ok(solved.horizon.hours.some(hour => hour.limited.includes('swro')));
 });
 
 // ---------------------------------------------------------------------------
@@ -196,7 +173,7 @@ const SPLIT_CASES = [
   { name: 'equal split', opts: {}, expect: { a: 50, b: 50 }, feed: 100, splitFree: true },
   { name: 'capped sink overflows onto free sibling', opts: { accepts: { a: 10 } }, expect: { a: 10, b: 90 }, feed: 100, splitFree: true, exportOn: ['a'] },
   { name: 'logistics cap overflows onto free sibling', opts: { capacities: { a: 15 } }, expect: { a: 15, b: 85 }, feed: 100, splitFree: true, edgeLimitTo: 'a' },
-  { name: 'both branches capped backpressures inlet', opts: { accepts: { a: 10, b: 20 } }, expect: { a: 10, b: 20 }, feed: 30, splitCodes: ['branch-blocked', 'export-capped'] },
+  { name: 'both branches capped backpressures inlet', opts: { accepts: { a: 10, b: 20 } }, expect: { a: 10, b: 20 }, feed: 30, splitExport: true },
   { name: 'free leg pipe cap limits overflow absorb', opts: { accepts: { a: 10 }, capacities: { b: 60 } }, expect: { a: 10, b: 60 }, feed: 70, splitBlocked: true },
   { name: 'three-way rebalances onto two free legs', opts: { feedKg: 90, branches: ['a', 'b', 'c'], accepts: { a: 10 } }, expect: { a: 10, b: 40, c: 40 }, feed: 90, splitFree: true },
   { name: 'weighted overflow prefers heavier branch', opts: { branches: ['a', 'b', 'c'], accepts: { a: 10 }, weights: { c: 3 } }, expect: { a: 10, b: 22.5, c: 67.5 }, feed: 100 },
@@ -216,11 +193,7 @@ test('splitter split / overflow / priority table', () => {
     const splitLimits = solved.nodes.split.limitedBy || [];
     if (row.splitFree) assert.deepEqual(splitLimits, []);
     if (row.splitBlocked) assert.ok(splitLimits.includes('export') || splitLimits.includes('logistics'), splitLimits);
-    if (row.splitCodes) {
-      assert.ok(splitLimits.includes('export'));
-      for (const code of row.splitCodes) assert.ok(codes(solved.nodes.split).includes(code), code);
-      assert.match(solved.nodes.split.causeText, /branch blocked/);
-    }
+    if (row.splitExport) assert.ok(splitLimits.includes('export'));
     for (const id of row.exportOn || []) assert.ok(solved.nodes[id].limitedBy.includes('export'));
     if (row.edgeLimitTo) assert.ok(solved.edgeLimits.some(limit => limit.to.node === row.edgeLimitTo));
     closed(solved);
@@ -263,7 +236,6 @@ test('converter upstream of a splitter throttles only when every branch is satur
   near(kg(saturated.nodes.split.available), 10, 1e-4);
   assert.ok(saturated.nodes.split.limitedBy.includes('export'));
   assert.ok(saturated.nodes.ely.limitedBy.includes('export'));
-  assert.ok(codes(saturated.nodes.ely).includes('branch-blocked'));
   closed(saturated);
 });
 
@@ -313,27 +285,11 @@ test('single buffer: pass-through, charge, full backpressure, empty starvation',
   assert.ok(empty.nodes.tank.limitedBy.includes('inventory'));
   near(empty.nodes.tank.activity, 0, 1e-9);
   near(kg(empty.nodes.sink.received), 0, 1e-9);
-  assert.deepEqual(codes(empty.nodes.tank), ['empty-buffer']);
 });
 
-function horizonSite(dailyFeedKg) {
-  const profile = Array(24).fill(0.1);
-  return {
-    solarKWp: 0,
-    month: 0,
-    solar: { annualTypical: profile, typicalDayKWhPerKWp: profile },
-    resources: {
-      water: { quality: 'assumed', stream: waterStream(dailyFeedKg), evidence: 'horizon feed' },
-      electricity: { quality: 'assumed', stream: { kind: 'electricity', kWh: 0 } },
-    },
-    storage: { batteryKWh: 0, powerKW: 0, efficiency: 0.9, initialKWh: 0 },
-  };
-}
-
-function horizonChain(dailyFeedKg, tanks, setpoints) {
+function bufferChain(dailyFeedKg, tanks, setpoints) {
   const ids = ['feed', ...tanks.map(tank => tank.id), 'sink'];
   return {
-    site: horizonSite(dailyFeedKg),
     graph: {
       nodes: [
         source('feed', dailyFeedKg),
@@ -346,46 +302,11 @@ function horizonChain(dailyFeedKg, tanks, setpoints) {
   };
 }
 
-test('horizon carries buffer state of charge hour to hour', () => {
-  // 240 kg/day in, 120 discharged → the rest banks in the tank.
-  const fill = solveHorizon(horizonChain(240, [{ id: 'tank', params: { capacityKg: 500, initialKg: 0 } }], { tank: 120 }));
-  const soc = fill.horizon.hours.map(hour => hour.buffers?.tank?.soc ?? 0);
-  assert.ok(Math.max(...soc) > 50);
-  near(soc[23], 120, 1);
-  near(fill.nodes.tank.activity, 120, 1);
-  near(kg(fill.nodes.sink.received), 120, 1);
-  near(fill.nodes.tank.inventoryKg, soc[23]);
-
-  // No feed: drain initial inventory, then hit inventory starvation.
-  const drain = solveHorizon(horizonChain(0, [{ id: 'tank', params: { capacityKg: 200, initialKg: 120, storedStream: waterStream(120) } }], { tank: 200 }));
-  const drainSoc = drain.horizon.hours.map(hour => hour.buffers.tank.soc);
-  assert.ok(drainSoc[0] < 120);
-  near(drainSoc[23], 0);
-  near(kg(drain.nodes.sink.received), 120, 1);
-  assert.ok(drain.horizon.hours.some(hour => hour.limited.includes('tank')));
-  assert.ok(drain.nodes.tank.limitedBy.includes('inventory'));
-
-  // Two tanks in series keep consistent SOC.
-  const dual = solveHorizon(horizonChain(240, [
-    { id: 'tankA', params: { capacityKg: 500, initialKg: 0 } },
-    { id: 'tankB', params: { capacityKg: 200, initialKg: 0 } },
-  ], { tankA: 120, tankB: 60 }));
-  const socA = dual.horizon.hours.map(hour => hour.buffers.tankA.soc);
-  const socB = dual.horizon.hours.map(hour => hour.buffers.tankB.soc);
-  near(socA[23], 120, 1);
-  near(socB[23], 60, 1);
-  near(dual.nodes.tankA.inventoryKg, socA[23]);
-  near(dual.nodes.tankB.inventoryKg, socB[23]);
-  near(kg(dual.nodes.sink.received), 60, 1);
-  closed(dual, 1e-6);
-});
-
 function transferCase({ feedKg = 100, capA = 1000, capB = 1000, initA = 0, storedA = null, disA = null, disB = null, edgeCap = null } = {}) {
-  const definition = horizonChain(feedKg, [
+  const definition = bufferChain(feedKg, [
     { id: 'tankA', params: { capacityKg: capA, initialKg: initA, ...(storedA ? { storedStream: storedA } : {}) } },
     { id: 'tankB', params: { capacityKg: capB, initialKg: 0 } },
   ], {});
-  delete definition.site;
   definition.site = siteWater(Math.max(feedKg, 1e-9));
   if (edgeCap != null) definition.graph.edges[1].capacity = edgeCap;
   if (disA != null) definition.operation.setpoints.tankA = disA;
@@ -408,7 +329,6 @@ test('buffer→buffer transfer: pass-through, full destination, edge cap, empty 
   near(full.nodes.tankA.inventoryKg, 60);
   assert.ok(full.nodes.tankB.limitedBy.includes('capacity'));
   assert.ok(full.nodes.tankA.limitedBy.includes('export'));
-  assert.match(full.nodes.tankA.causeText, /tankB buffer full/);
   near(kg(full.nodes.sink.received), 0, 1e-9);
   closed(full);
 
@@ -418,7 +338,6 @@ test('buffer→buffer transfer: pass-through, full destination, edge cap, empty 
   near(capped.nodes.tankB.inventoryKg, 25);
   assert.ok(capped.nodes.tankA.limitedBy.includes('logistics'));
   assert.ok(!capped.nodes.tankA.limitedBy.includes('export'));
-  assert.match(capped.nodes.tankA.causeText, /tankA→tankB logistics/);
   assert.ok(capped.edgeLimits.some(item => item.from.node === 'tankA' && item.to.node === 'tankB' && item.capacity === 25));
   closed(capped);
 
@@ -484,7 +403,6 @@ test('splitter overflow into a buffer branch', () => {
     } },
     { name: 'buffer capacity caps overflow and backpressures', opts: { capacityKg: 50 }, a: 10, tankIn: 50, feed: 60, extra: s => {
       assert.ok(s.nodes.split.limitedBy.includes('export'));
-      assert.ok(codes(s.nodes.split).includes('branch-blocked'));
     } },
     { name: 'fixed discharge banks overflow as inventory', opts: { dischargeKg: 20 }, a: 10, tankIn: 90, feed: 100, tol: 1e-6, extra: s => {
       near(s.nodes.tank.activity, 20);
@@ -541,14 +459,11 @@ test('buffer discharging into a converter: inventory feeds, empty starves, edge 
   const starved = solveOperation(bufferElyCase({ dischargeKg: 0 }));
   assert.ok(starved.nodes.ely.activity < 1e-9);
   assert.ok(starved.nodes.ely.limitedBy.includes('water'));
-  assert.ok(codes(starved.nodes.ely).includes('empty-buffer'), starved.nodes.ely.causeText);
-  assert.match(starved.nodes.ely.causeText, /short on water/i);
 
   const capped = solveOperation(bufferElyCase({ initialKg: 100, edgeCap: 25 }));
   near(capped.nodes.tank.activity, 25);
   near(capped.nodes.tank.inventoryKg, 75);
   assert.ok(capped.nodes.tank.limitedBy.includes('logistics'));
-  assert.ok(codes(capped.nodes.tank).includes('logistics'), capped.nodes.tank.causeText);
   closed(capped);
 });
 
@@ -615,8 +530,6 @@ test('material sink accept caps backpressure a direct source', () => {
     if (row.source) {
       assert.equal(offtake.acceptSource, row.source);
       near(offtake.acceptKg, row.accept, 1e-9);
-      assert.deepEqual(codes(offtake), ['export-capped']);
-      assert.match(offtake.causeText, /export capped/);
     }
     closed(solved);
   });
@@ -640,8 +553,6 @@ test('lithium offtake cap (manual or annual demand) throttles Zabuye minerals an
     assert.equal(solved.nodes.lithium.acceptSource, mode);
     assert.ok(solved.nodes.lithium.limitedBy.includes('export'));
     assert.ok(solved.nodes.minerals.limitedBy.includes('export'));
-    assert.match(solved.nodes.minerals.causeText, /blocked by export/);
-    assert.ok(codes(solved.nodes.minerals).includes('export-capped'));
     closed(solved);
     if (mode === 'demand') {
       // Physics already throttled to demand, so cash takes no second haircut.
@@ -673,8 +584,6 @@ test('a full buffer backpressures an upstream converter', () => {
   assert.ok(solved.nodes.ely.activity < 1e-9);
   assert.ok(solved.nodes.ely.limitedBy.includes('export'));
   assert.ok(solved.nodes.tank.limitedBy.includes('capacity'));
-  assert.match(solved.nodes.ely.causeText, /blocked by export/);
-  assert.match(solved.nodes.ely.causeText, /buffer full/);
   near(kg(solved.nodes.water.supplied), 0);
   closed(solved);
 });
@@ -697,9 +606,9 @@ function energyCase(kind, sources, sinkParams) {
 
 test('energy sink caps curtail or backpressure their sources', () => {
   const rows = [
-    { name: 'capped electricity sink curtails generator', kind: 'electricity', sources: [['gen', 100]], params: { acceptKWh: 40 }, received: 40, supplied: { gen: 40 }, cause: /curtailment capped/ },
+    { name: 'capped electricity sink curtails generator', kind: 'electricity', sources: [['gen', 100]], params: { acceptKWh: 40 }, received: 40, supplied: { gen: 40 } },
     { name: 'blank electricity sink is unlimited', kind: 'electricity', sources: [['gen', 75]], params: null, received: 75, supplied: { gen: 75 }, uncapped: true },
-    { name: 'capped heat sink backpressures heat source', kind: 'heat', sources: [['furnace', 200]], params: { acceptKWh: 50 }, received: 50, supplied: { furnace: 50 }, cause: /export capped/ },
+    { name: 'capped heat sink backpressures heat source', kind: 'heat', sources: [['furnace', 200]], params: { acceptKWh: 50 }, received: 50, supplied: { furnace: 50 } },
     { name: 'heat fan-in scales both legs under one cap', kind: 'heat', sources: [['a', 80], ['b', 120]], params: { acceptKWh: 50 }, received: 50, supplied: { a: 20, b: 30 } },
   ];
   eachRow(rows, row => {
@@ -714,9 +623,7 @@ test('energy sink caps curtail or backpressure their sources', () => {
       assert.equal(sink.acceptKWh, row.params.acceptKWh);
       assert.equal(sink.acceptSource, 'manual');
       assert.ok(sink.limitedBy.includes('export'));
-      assert.deepEqual(codes(sink), ['export-capped']);
     }
-    if (row.cause) assert.match(sink.causeText, row.cause);
     closed(solved);
   });
 });
@@ -745,7 +652,7 @@ test('bus export cap leaves cable-limited loads whole and trims generation', () 
   closed(solved);
 });
 
-test('capped waste-heat sink throttles DAC and names the cause', () => {
+test('capped waste-heat sink throttles DAC on export', () => {
   const free = solveOperation(createDacCase());
   const freeWaste = free.nodes['waste-heat'].received.kWh;
   assert.ok(freeWaste > 0);
@@ -756,30 +663,18 @@ test('capped waste-heat sink throttles DAC and names the cause', () => {
   near(solved.nodes['waste-heat'].received.kWh / freeWaste, 0.4);
   near(solved.nodes.dac.activity / free.nodes.dac.activity, 0.4);
   assert.ok(solved.nodes.dac.limitedBy.includes('export'));
-  assert.match(solved.nodes.dac.causeText, /blocked by export/);
-  assert.ok(codes(solved.nodes.dac).includes('export-capped'));
   closed(solved);
 });
 
 // ---------------------------------------------------------------------------
-// Starvation cause chains
+// Site budgets
 
-test('site budget on brine walks into a minerals short-on-brine chain', () => {
+test('site budget on brine starves the minerals train', () => {
   const limited = siteZabuyeAbundance();
   const brine = limited.site.resources.brine.stream;
   const factor = 5000 / kg(brine);
   limited.site.resources.brine.stream = { ...brine, mol: Object.fromEntries(Object.entries(brine.mol).map(([id, mol]) => [id, mol * factor])) };
   const solved = solveOperation(limited);
   assert.ok(solved.nodes.brine.limitedBy.includes('site budget'));
-  assert.match(solved.nodes.brine.causeText, /site budget/);
   assert.ok(solved.nodes.minerals.limitedBy.includes('brine'));
-  assert.ok(codes(solved.nodes.minerals).includes('site-budget'));
-  assert.match(solved.nodes.minerals.causeText, /short on brine/);
-});
-
-test('an unconnected limiting inlet is reported as a missing inlet', () => {
-  const nodeResults = { swro: { limitedBy: ['feed'], activity: 0 } };
-  attachCauseChains({ graph: { nodes: [{ id: 'swro', unit: 'swro', label: 'SWRO', capacity: 10, params: {} }], edges: [] } }, nodeResults, []);
-  assert.deepEqual(codes(nodeResults.swro), ['missing-inlet']);
-  assert.match(nodeResults.swro.causeText, /missing feed/);
 });

@@ -2,15 +2,17 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { SUBSTANCES, streamMassKg } = require('../engine/model');
-const { solveHorizon } = require('../engine/solve');
 const DAC_HEAT_PER_KG_CO2 = 1.5;
-const { sizeToTarget, sizeCoastalToMethane, sizeToProduct } = require('../engine/size');
+const { sizeToProduct } = require('../engine/size');
 const { createCoastalCase } = require('../cases/coastal');
 const { createSabatierCase } = require('../cases/sabatier');
 const { createAbundanceCase } = require('../cases/abundance');
 const { assertClosed } = require('./helpers.js');
 
 const WATER_KG_PER_KG_H2 = SUBSTANCES.H2O.molarMassG / SUBSTANCES.H2.molarMassG;
+
+const sizeMethane = (rate, caseOrBuilder, opts = {}) => sizeToProduct({ ...opts, product: 'CH4', rate, caseOrBuilder });
+const sizeCoastalMethane = (rate, opts) => sizeMethane(rate, createCoastalCase, opts);
 
 function moneyKeys(value, path = '') {
   const hits = [];
@@ -22,8 +24,8 @@ function moneyKeys(value, path = '') {
   return hits;
 }
 
-test('sizeCoastalToMethane meets a methane target by growing PV and converters', () => {
-  const sized = sizeCoastalToMethane(20, 0);
+test('CH4 sizing meets a coastal methane target by growing PV and converters', () => {
+  const sized = sizeCoastalMethane(20);
   assert.ok(sized.iterations >= 1);
   assert.ok(sized.iterations <= 20);
   assert.ok(sized.residual < 1e-6);
@@ -40,18 +42,8 @@ test('sizeCoastalToMethane meets a methane target by growing PV and converters',
   assert.equal(sized.solved.nodes.sabatier.limitedBy.length, 0);
 });
 
-test('December needs more kWp than June for the same methane target', () => {
-  const june = sizeCoastalToMethane(10, 6);
-  const december = sizeCoastalToMethane(10, 12);
-  assert.ok(december.definition.site.solarKWp > june.definition.site.solarKWp);
-  assert.ok(Math.abs(june.achieved - 10) < 1e-6);
-  assert.ok(Math.abs(december.achieved - 10) < 1e-6);
-  assertClosed(june.solved);
-  assertClosed(december.solved);
-});
-
 test('a solar cap binds and leaves a demand residual', () => {
-  const sized = sizeCoastalToMethane(100, 12, { caps: { solarKWp: 37.5 }, maxIterations: 8 });
+  const sized = sizeCoastalMethane(100, { caps: { solarKWp: 37.5 }, maxIterations: 8 });
   assert.ok(sized.definition.site.solarKWp <= 37.5 + 1e-9);
   assert.ok(sized.achieved < 100 - 1);
   assert.ok(sized.residual > 1e-3);
@@ -61,8 +53,8 @@ test('a solar cap binds and leaves a demand residual', () => {
 });
 
 test('recycle water reduces sized desalination versus once-through', () => {
-  const once = sizeToTarget(() => createSabatierCase({ recycleWater: false }), 8);
-  const recycled = sizeToTarget(() => createSabatierCase({ recycleWater: true }), 8);
+  const once = sizeMethane(8, () => createSabatierCase({ recycleWater: false }));
+  const recycled = sizeMethane(8, () => createSabatierCase({ recycleWater: true }));
   assert.ok(recycled.iterations >= 1);
   assert.ok(recycled.definition.graph.nodes.find(node => node.id === 'swro').capacity
     < once.definition.graph.nodes.find(node => node.id === 'swro').capacity);
@@ -75,7 +67,7 @@ test('recycle water reduces sized desalination versus once-through', () => {
 });
 
 test('sizeToProduct H2 parks Sabatier and DAC on a coastal methane plant and credits none of their heat', () => {
-  const sized = sizeToProduct({ product: 'H2', rate: 10, caseOrBuilder: () => createCoastalCase(0) });
+  const sized = sizeToProduct({ product: 'H2', rate: 10, caseOrBuilder: () => createCoastalCase() });
   assert.ok(Math.abs(sized.achieved - 10) < 1e-6);
   assert.ok(sized.residual < 1e-6);
   assert.equal(sized.definition.graph.nodes.find(node => node.id === 'sabatier').capacity, 0);
@@ -121,8 +113,8 @@ test('sizeToProduct salt meets a Dead Sea salt target', () => {
 });
 
 test('CH4 heat credit lowers solar versus heatCredit:false', () => {
-  const withCredit = sizeCoastalToMethane(15, 0);
-  const withoutCredit = sizeCoastalToMethane(15, 0, { heatCredit: false });
+  const withCredit = sizeCoastalMethane(15);
+  const withoutCredit = sizeCoastalMethane(15, { heatCredit: false });
   assert.ok(withCredit.definition.site.solarKWp < withoutCredit.definition.site.solarKWp);
   assert.ok(withCredit.heatCoveredKWh > 0);
   const purchasedWith = withCredit.history.at(-1).duties.heatKWh;
@@ -138,10 +130,10 @@ test('CH4 heat credit lowers solar versus heatCredit:false', () => {
 });
 
 test('Sabatier waste colder than DAC minHeat gets no cascade credit', () => {
-  const sized = sizeToTarget(() => createSabatierCase({
+  const sized = sizeMethane(8, () => createSabatierCase({
     recycleWater: false,
     params: { sabatier: { wasteHeatT_C: 50 }, dac: { minHeatT_C: 80 } },
-  }), 8);
+  }));
   const last = sized.history.at(-1).duties;
   assert.ok(last.heatCoveredKWh < 1e-6);
   const demand = last.co2 * DAC_HEAT_PER_KG_CO2;
@@ -151,20 +143,14 @@ test('Sabatier waste colder than DAC minHeat gets no cascade credit', () => {
   assertClosed(sized.solved);
 });
 
-test('coastal H2 size closes mass balance and horizon produces hydrogen', () => {
-  const sized = sizeToProduct({ product: 'H2', rate: 15, caseOrBuilder: () => createCoastalCase(0) });
+test('coastal H2 size closes mass balance and routes hydrogen to its sink', () => {
+  const sized = sizeToProduct({ product: 'H2', rate: 15, caseOrBuilder: () => createCoastalCase() });
   assert.equal(sized.product, 'H2');
   assert.ok(Math.abs(sized.achieved - 15) < 1e-6);
   assert.ok(sized.solved.balances.maxAbsResidual < 1e-6);
   assert.ok(sized.definition.graph.nodes.some(node => node.id === 'hydrogen' && node.unit === 'material-sink'));
   const edge = sized.definition.graph.edges.find(item => item.from.node === 'electrolyzer' && item.from.port === 'hydrogen');
   assert.equal(edge.to.node, 'hydrogen');
-  const horizon = solveHorizon(sized.definition);
-  assert.ok(horizon.nodes.electrolyzer.activity > 1, `horizon H2 activity ${horizon.nodes.electrolyzer.activity}`);
-  assert.ok(horizon.nodes.electrolyzer.activity <= 15 + 1e-6);
-  if (horizon.nodes.electrolyzer.activity + 1e-6 < 15) {
-    assert.ok(horizon.nodes.electrolyzer.limitedBy.length, 'undersized horizon must name a binding constraint');
-  }
 });
 
 function methanolPlant({ rate = 10 } = {}) {

@@ -3,16 +3,16 @@ const test = require('node:test');
 
 const { SUBSTANCES, streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
-const { sizeToTarget, sizeToProduct } = require('../engine/size');
+const { sizeToProduct } = require('../engine/size');
 const { createCoastalCase, DAILY_PV, INTAKE_M3_PER_DAY } = require('../cases/coastal');
 const { siteDeadSeaAbundance, DEAD_SEA_PV } = require('../cases/brine-hubs');
 
 const warned = (solved, right) => solved.warnings.some(message => message.includes(`unverified site right: ${right}`));
 
-test('Almería site truth binds monthly PV and a full-ion seawater intake; solve warns on unverified rights only', () => {
-  const definition = createCoastalCase(6);
+test('Almería site truth binds annual-mean PV and a full-ion seawater intake; solve warns on unverified rights only', () => {
+  const definition = createCoastalCase();
   const { site } = definition;
-  assert.equal(site.dailyPVKWhPerKWp, DAILY_PV[6]);
+  assert.equal(site.dailyPVKWhPerKWp, DAILY_PV[0]);
   const seawater = site.resources.seawater.stream;
   assert.ok(seawater.mol['Mg+2'] > 0 && seawater.mol['SO4-2'] > 0, 'not a NaCl proxy');
   assert.ok(Math.abs(streamMassKg(seawater) - INTAKE_M3_PER_DAY * 1026) < 1e-9);
@@ -48,10 +48,10 @@ test('Dead Sea site truth is an Mg-rich brine with an unverified concession', ()
 });
 
 test('size-to-target cannot assume unverified intake or brine concession', () => {
-  const coastal = createCoastalCase(0);
+  const coastal = createCoastalCase();
   coastal.site.rights.seawaterIntake.status = 'unverified';
   coastal.site.rights.seawaterIntake.authorize = false;
-  assert.throws(() => sizeToTarget(coastal, 8), /size-to-target cannot assume seawaterIntake/);
+  assert.throws(() => sizeToProduct({ product: 'CH4', rate: 8, definition: coastal }), /size-to-target cannot assume seawaterIntake/);
   assert.throws(
     () => sizeToProduct({ product: 'lithium', rate: 1, definition: siteDeadSeaAbundance() }),
     /size-to-target cannot assume brineConcession/,

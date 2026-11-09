@@ -3,12 +3,11 @@
     typeof require === 'function' ? require('./model') : root.FlowsheetModel,
     typeof require === 'function' ? require('./solve') : root.FlowsheetSolver,
     typeof require === 'function' ? require('./footprint') : root.FlowsheetFootprint,
-    typeof require === 'function' ? require('./heat') : root.FlowsheetHeat,
-    typeof require === 'function' ? require('./economics') : root.FlowsheetEconomics
+    typeof require === 'function' ? require('./heat') : root.FlowsheetHeat
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FlowsheetSize = api;
-})(globalThis, (model, solver, footprint, heat, economics) => {
+})(globalThis, (model, solver, footprint, heat) => {
 const { SUBSTANCES, cloneStream, scaleStream, streamMassKg } = model;
 const { solveOperation } = solver;
 const { cascadeHeat } = heat;
@@ -21,13 +20,12 @@ const { cascadeHeat } = heat;
 //   -> waste heat cascades onto T-feasible process sinks; unmet heat is bought
 //      as electric resistance (COP=1) and counted in PV. Parked converters
 //      contribute no waste heat.
-//   -> solarKWp from site.dailyPVKWhPerKWp (else the typical-day hourly sum)
+//   -> solarKWp from site.dailyPVKWhPerKWp
 //   -> solveOperation
 //   -> recycle / yield credit from the solved plant
 //   -> repeat until the operating residual is within tolerance
 //
-// Prices never enter the sizing loop. sizeForPositiveCashflow scores dollars
-// only after solveOperation. Land hectares come from engine/footprint.js.
+// Prices never enter the sizing loop. Land hectares come from engine/footprint.js.
 // Solar installedCapex/fixedOM scale with kWp only so the definition stays
 // self-consistent; they do not feed back into iterateSize.
 
@@ -188,13 +186,7 @@ function hasWaterRecycle(definition, sabatier) {
 
 function dailyPvKWhPerKWp(definition) {
   const listed = Number(definition.site?.dailyPVKWhPerKWp);
-  if (listed > 0) return listed;
-  const hours = solver.hourlyProfile?.(definition.site);
-  if (hours?.length) {
-    const sum = hours.reduce((total, value) => total + value, 0);
-    if (sum > 0) return sum;
-  }
-  return 0;
+  return listed > 0 ? listed : 0;
 }
 
 function electricityNode(definition) {
@@ -1323,6 +1315,89 @@ function sizeDedicatedAmmonia(definition, target, opts) {
   });
 }
 
+// Brine-hub scaling for coupled ammonia: the hub's brine, downstream converters,
+// feeds and power all scale from the pre-sizing baseline by one ratio.
+const ABUNDANCE_DOWNSTREAM = Object.freeze(['chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']);
+// Cap on the multiplier versus the pre-sizing baseline.
+const ABSOLUTE_SCALE_CAP = 10;
+
+function scaleMaterialStream(stream, ratio) {
+  if (!stream || stream.kind !== 'material' || !stream.mol) return;
+  for (const key of Object.keys(stream.mol)) stream.mol[key] *= ratio;
+}
+
+function baselineAbundanceDuties(definition) {
+  const minerals = converter(definition, 'brine-minerals');
+  const brine = brineSource(definition, minerals);
+  if (!minerals || !brine?.params?.stream) throw new Error('Coupled ammonia sizing needs brine-minerals and a brine source');
+  return {
+    brineKg: streamMassKg(brine.params.stream),
+    setpoints: { ...(definition.operation.setpoints || {}) },
+    streams: Object.fromEntries(
+      definition.graph.nodes
+        .filter(node => node.params?.stream)
+        .map(node => [node.id, JSON.parse(JSON.stringify(node.params.stream))])
+    ),
+  };
+}
+
+function absoluteScale(scale) {
+  const value = Number(scale);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.min(value, ABSOLUTE_SCALE_CAP);
+}
+
+function applyAbundanceScale(definition, baseline, scale) {
+  const ratio = absoluteScale(scale);
+  const minerals = converter(definition, 'brine-minerals');
+  const brine = brineSource(definition, minerals);
+  const brineKg = baseline.brineKg * ratio;
+  brine.params.stream = JSON.parse(JSON.stringify(baseline.streams[brine.id] || brine.params.stream));
+  scaleMaterialStream(brine.params.stream, ratio);
+  setDuty(definition, minerals, brineKg);
+
+  const brinePump = nodeBy(definition, item => item.id === 'brine-pump' || item.unit === 'intake-pump');
+  if (brinePump) {
+    const density = Number(brinePump.params?.densityKgM3 ?? 1200) || 1200;
+    setDuty(definition, brinePump, brineKg / density);
+  }
+
+  for (const id of ABUNDANCE_DOWNSTREAM) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (node) setDuty(definition, node, Number(baseline.setpoints[id] || 0) * ratio);
+  }
+
+  for (const id of ['salt-feed', 'water', 'air', 'power']) {
+    const node = nodeBy(definition, item => item.id === id);
+    if (!node?.params?.stream || !baseline.streams[id]) continue;
+    node.params.stream = JSON.parse(JSON.stringify(baseline.streams[id]));
+    if (node.params.stream.kind === 'electricity') node.params.stream.kWh *= ratio;
+    else scaleMaterialStream(node.params.stream, ratio);
+  }
+
+  syncSiteResource(definition, brine);
+  const power = electricityNode(definition);
+  if (power) syncSiteResource(definition, power);
+  syncAbundanceSolar(definition, power);
+  definition.operation.boundaryLimitedBy = [];
+}
+
+// Abundance scales rewrite the electricity stream. Land uses site.solarKWp, so
+// the array has to follow that stream or the footprint stays on the seed size.
+function syncAbundanceSolar(definition, power) {
+  if (!definition.site || !power?.params?.stream) return;
+  const yieldPerKWp = dailyPvKWhPerKWp(definition);
+  const kWh = Number(power.params.stream.kWh) || 0;
+  if (!(yieldPerKWp > 0)) return;
+  const nextKWp = kWh / yieldPerKWp;
+  scaleSolarEconomics(power, Number(definition.site.solarKWp) || 0, nextKWp);
+  definition.site.solarKWp = nextKWp;
+  if (definition.site.resources?.electricity) {
+    definition.site.resources.electricity.stream = { kind: 'electricity', kWh };
+    definition.site.resources.electricity.evidence = `PVGIS typical-day × ${nextKWp} kWp`;
+  }
+}
+
 // Ammonia on a brine-minerals hub is a co-product: the whole hub scales from
 // its baseline by one ratio, and ammonia-per-scale is re-measured each solve.
 function sizeCoupledAmmonia(definition, target, opts) {
@@ -1370,7 +1445,7 @@ function sizeCoupledAmmonia(definition, target, opts) {
       ]);
     },
     apply: (current, duties) => {
-      applyAbundanceScale(current, baseline, duties.scale, 'full');
+      applyAbundanceScale(current, baseline, duties.scale);
       applyPowerAndSite(current, duties);
     },
     measure: (solved, duties) => {
@@ -1852,636 +1927,7 @@ function sizeToProduct(opts = {}) {
   return sizeMinerals(definition, product, rate, loopOpts);
 }
 
-function sizeToTarget(caseOrBuilder, target, opts = {}) {
-  if (!Number.isFinite(target) || target < 0) {
-    throw new Error('Methane target must be a non-negative finite kg/day');
-  }
-  return sizeToProduct({
-    product: 'CH4',
-    rate: target,
-    caseOrBuilder,
-    caps: opts.caps,
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    heatCredit: opts.heatCredit,
-  });
-}
-
-function sizeCoastalToMethane(target, month = 0, opts = {}) {
-  const coastal = typeof require === 'function' ? require('../cases/coastal') : globalThis.CoastalCase;
-  if (!coastal?.createCoastalCase) throw new Error('Coastal case is not loaded');
-  return sizeToTarget(() => coastal.createCoastalCase(month), target, opts);
-}
-
-// ---------------------------------------------------------------------------
-// Positive-cashflow search. Each candidate is sized and solved, then scored by
-// evaluateEconomics / scorePositiveCashflow.
-
-const { evaluateEconomics, scorePositiveCashflow } = economics || {};
-const ABUNDANCE_SCALES = [0.25, 0.5, 1, 1.5, 2];
-const FUEL_RATES = [0, 2, 5, 10, 15, 20];
-// Cap on the multiplier versus the pre-sizing seed (not the plant already on
-// screen), so repeated Optimize cannot compound 2× into 4×, 8×, …
-const ABSOLUTE_SCALE_CAP = 10;
-const REFINE_MAX_EXTRA = 6;
-const ABUNDANCE_DOWNSTREAM = Object.freeze(['chlor-alkali', 'bromine-recovery', 'asu', 'ammonia']);
-const ABUNDANCE_SALE_IDS = Object.freeze([
-  'lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'recovered-salt', 'caustic', 'bromine', 'bromide',
-]);
-const FUEL_SALE_IDS = Object.freeze(['methane', 'methanol', 'methanol-product', 'hydrogen', 'h2']);
-const NO_CASH_POSITIVE_SLATE = 'No cash-positive co-product slate under searched modes/scales';
-
-function failedCandidate(message) {
-  return {
-    mode: 'positive-cashflow',
-    error: message,
-    objective: {
-      met: false,
-      positiveSaleCount: 0,
-      activeSaleCount: 0,
-      annualNetCash: -Infinity,
-      formula: 'max |{sale sinks with R_i>0}| s.t. annualNetCash>0; ties -> max annualNetCash. Gate cash = R − OPEX − annualized CAPEX (CRF).',
-    },
-    warnings: [message],
-  };
-}
-
-function operatingRevenue(candidate) {
-  const fromObjective = Number(candidate?.objective?.annualRevenue);
-  if (Number.isFinite(fromObjective) && fromObjective > 0) return fromObjective;
-  const products = candidate?.objective?.products || candidate?.products || [];
-  let revenue = 0;
-  for (const product of products) revenue += Number(product.annualRevenue) || 0;
-  if (revenue > 0) return revenue;
-  return Number(candidate?.economics?.annualRevenue) || 0;
-}
-
-// Among cash-positive (met) candidates: most positive sales, then most cash.
-// positiveSaleCount is already met-gated by scorePositiveCashflow; activeSaleCount
-// is reporting-only and must not be used here. Unmet candidates rank by
-// operating revenue first, so a plant that sells something beats one that does not.
-function betterCashflowCandidate(left, right) {
-  if (!left) return right;
-  if (!right) return left;
-  if (left.objective.met !== right.objective.met) return left.objective.met ? left : right;
-  if (left.objective.met) {
-    if (left.objective.positiveSaleCount !== right.objective.positiveSaleCount) {
-      return left.objective.positiveSaleCount > right.objective.positiveSaleCount ? left : right;
-    }
-    return left.objective.annualNetCash >= right.objective.annualNetCash ? left : right;
-  }
-  const revLeft = operatingRevenue(left);
-  const revRight = operatingRevenue(right);
-  if ((revLeft > 0) !== (revRight > 0)) return revLeft > 0 ? left : right;
-  if (revLeft !== revRight) return revLeft > revRight ? left : right;
-  if (left.objective.positiveSaleCount !== right.objective.positiveSaleCount) {
-    return left.objective.positiveSaleCount > right.objective.positiveSaleCount ? left : right;
-  }
-  return left.objective.annualNetCash >= right.objective.annualNetCash ? left : right;
-}
-
-function gridKey(value) {
-  return Math.round(Number(value) * 1e6) / 1e6;
-}
-
-function cashOf(candidate) {
-  const cash = Number(candidate?.objective?.annualNetCash);
-  return Number.isFinite(cash) ? cash : -Infinity;
-}
-
-function midValue(left, right) {
-  const lo = Math.min(left, right);
-  const hi = Math.max(left, right);
-  if (!(hi > lo) || hi - lo < 1e-9) return null;
-  if (lo > 0) {
-    const geo = Math.sqrt(lo * hi);
-    if (Math.abs(geo - lo) < 1e-6 || Math.abs(geo - hi) < 1e-6) return (lo + hi) / 2;
-    return geo;
-  }
-  return (lo + hi) / 2;
-}
-
-function listedGrid(opts, key, fallback) {
-  const listed = opts && opts[key];
-  return listed && listed.length ? listed.slice() : fallback.slice();
-}
-
-function shouldRefine(opts, grid) {
-  if (opts && (opts.refine === false || opts.fast === true)) return false;
-  if (opts && opts.refine === true) return true;
-  return Array.isArray(grid) && grid.length >= 2;
-}
-
-function axisValueOf(candidate) {
-  const selected = candidate && candidate.selected;
-  if (!selected) return null;
-  if (Number.isFinite(Number(selected.rate)) && selected.family !== 'abundance') return Number(selected.rate);
-  if (Number.isFinite(Number(selected.scale))) return Number(selected.scale);
-  return null;
-}
-
-function nextRefineValue(sortedValues, resultAt, seen, best) {
-  const bestVal = axisValueOf(best);
-  const intervals = [];
-  for (let i = 0; i < sortedValues.length - 1; i += 1) {
-    const a = sortedValues[i];
-    const b = sortedValues[i + 1];
-    const mid = midValue(a, b);
-    if (mid == null || seen.has(gridKey(mid))) continue;
-    const ca = cashOf(resultAt.get(a));
-    const cb = cashOf(resultAt.get(b));
-    const signChange = (ca > 0) !== (cb > 0);
-    const touchesBest = bestVal != null && (Math.abs(a - bestVal) < 1e-9 || Math.abs(b - bestVal) < 1e-9);
-    intervals.push({ mid, signChange, touchesBest, a, b });
-  }
-  const crossing = intervals.find(item => item.signChange);
-  if (crossing) return crossing.mid;
-  const nearBest = intervals.filter(item => item.touchesBest);
-  if (nearBest.length) {
-    nearBest.sort((left, right) => (right.b - right.a) - (left.b - left.a));
-    return nearBest[0].mid;
-  }
-  return intervals.length ? intervals[0].mid : null;
-}
-
-function neighborMids(grid, center) {
-  const sorted = [...new Set((grid || []).map(gridKey).filter(value => Number.isFinite(value) && value >= 0))].sort((a, b) => a - b);
-  if (!sorted.length || !Number.isFinite(center)) return [];
-  const key = gridKey(center);
-  let index = sorted.findIndex(value => Math.abs(value - key) < 1e-9);
-  if (index < 0) {
-    index = sorted.reduce((best, value, i) => (
-      Math.abs(value - key) < Math.abs(sorted[best] - key) ? i : best
-    ), 0);
-  }
-  const extras = [];
-  if (index > 0) {
-    const mid = midValue(sorted[index - 1], sorted[index]);
-    if (mid != null) extras.push(gridKey(mid));
-  }
-  if (index < sorted.length - 1) {
-    const mid = midValue(sorted[index], sorted[index + 1]);
-    if (mid != null) extras.push(gridKey(mid));
-  }
-  return extras.filter(value => Math.abs(value - key) > 1e-9);
-}
-
-function refineAxis({ coarse, evaluate, enabled, maxExtra = REFINE_MAX_EXTRA }) {
-  const seen = new Set();
-  const resultAt = new Map();
-  let best = null;
-  let tried = 0;
-
-  const consider = (value) => {
-    const key = gridKey(value);
-    if (!Number.isFinite(key) || key < 0 || seen.has(key)) return;
-    seen.add(key);
-    tried += 1;
-    try {
-      const candidate = evaluate(value);
-      resultAt.set(key, candidate);
-      best = betterCashflowCandidate(best, candidate);
-    } catch (error) {
-      resultAt.set(key, failedCandidate(error.message));
-      if (!best) best = resultAt.get(key);
-    }
-  };
-
-  for (const value of coarse || []) consider(value);
-  if (enabled) {
-    const extraCap = Number.isFinite(Number(maxExtra)) ? Math.max(0, Math.floor(Number(maxExtra))) : REFINE_MAX_EXTRA;
-    for (let step = 0; step < extraCap; step += 1) {
-      const sorted = [...seen].sort((a, b) => a - b);
-      const next = nextRefineValue(sorted, resultAt, seen, best);
-      if (next == null) break;
-      consider(next);
-    }
-  }
-  return { best, tried };
-}
-
-function scaleMaterialStream(stream, ratio) {
-  if (!stream || stream.kind !== 'material' || !stream.mol) return;
-  for (const key of Object.keys(stream.mol)) stream.mol[key] *= ratio;
-}
-
-function removeGraphNodes(definition, ids) {
-  const drop = new Set(ids);
-  definition.graph.nodes = definition.graph.nodes.filter(node => !drop.has(node.id));
-  definition.graph.edges = definition.graph.edges.filter(edge => !drop.has(edge.from.node) && !drop.has(edge.to.node));
-  for (const id of drop) delete definition.operation.setpoints[id];
-  const priorities = definition.operation.priorities || {};
-  for (const [bus, order] of Object.entries(priorities)) {
-    priorities[bus] = (order || []).filter(id => !drop.has(id));
-  }
-}
-
-function isPreSizingSeed(seed) {
-  return Boolean(seed && Number(seed.brineKg) > 0 && seed.streams && typeof seed.streams === 'object');
-}
-
-function baselineAbundanceDuties(definition) {
-  const minerals = converter(definition, 'brine-minerals');
-  const brine = brineSource(definition, minerals);
-  if (!minerals || !brine?.params?.stream) throw new Error('sizeForPositiveCashflow needs brine-minerals and a brine source');
-  return {
-    brineKg: streamMassKg(brine.params.stream),
-    setpoints: { ...(definition.operation.setpoints || {}) },
-    streams: Object.fromEntries(
-      definition.graph.nodes
-        .filter(node => node.params?.stream)
-        .map(node => [node.id, JSON.parse(JSON.stringify(node.params.stream))])
-    ),
-  };
-}
-
-function baselineFromSeed(definition) {
-  const stamped = definition?.operation?.preSizingSeed;
-  if (isPreSizingSeed(stamped)) return JSON.parse(JSON.stringify(stamped));
-  return baselineAbundanceDuties(definition);
-}
-
-function absoluteScale(scale) {
-  const value = Number(scale);
-  if (!Number.isFinite(value) || value < 0) return 0;
-  return Math.min(value, ABSOLUTE_SCALE_CAP);
-}
-
-function stampPreSizingSeed(definition, baseline) {
-  if (!isPreSizingSeed(baseline) || isPreSizingSeed(definition.operation.preSizingSeed)) return;
-  definition.operation.preSizingSeed = JSON.parse(JSON.stringify(baseline));
-}
-
-function applyAbundanceScale(definition, baseline, scale, slateMode) {
-  const ratio = absoluteScale(scale);
-  stampPreSizingSeed(definition, baseline);
-  const minerals = converter(definition, 'brine-minerals');
-  const brine = brineSource(definition, minerals);
-  const brineKg = baseline.brineKg * ratio;
-  brine.params.stream = JSON.parse(JSON.stringify(baseline.streams[brine.id] || brine.params.stream));
-  scaleMaterialStream(brine.params.stream, ratio);
-  setDuty(definition, minerals, brineKg);
-
-  const brinePump = nodeBy(definition, item => item.id === 'brine-pump' || item.unit === 'intake-pump');
-  if (brinePump) {
-    const density = Number(brinePump.params?.densityKgM3 ?? 1200) || 1200;
-    setDuty(definition, brinePump, brineKg / density);
-  }
-
-  for (const id of ABUNDANCE_DOWNSTREAM) {
-    const node = nodeBy(definition, item => item.id === id);
-    if (node) setDuty(definition, node, Number(baseline.setpoints[id] || 0) * ratio);
-  }
-
-  for (const id of ['salt-feed', 'water', 'air', 'power']) {
-    const node = nodeBy(definition, item => item.id === id);
-    if (!node?.params?.stream || !baseline.streams[id]) continue;
-    node.params.stream = JSON.parse(JSON.stringify(baseline.streams[id]));
-    if (node.params.stream.kind === 'electricity') node.params.stream.kWh *= ratio;
-    else scaleMaterialStream(node.params.stream, ratio);
-  }
-
-  if (slateMode === 'minerals-only') {
-    minerals.params = { ...(minerals.params || {}), bromideRecovery: 0 };
-    for (const id of ABUNDANCE_DOWNSTREAM) parkConverter(definition, nodeBy(definition, item => item.id === id));
-    for (const id of ['salt-feed', 'water', 'air']) {
-      const node = nodeBy(definition, item => item.id === id);
-      if (!node?.params?.stream?.mol) continue;
-      for (const key of Object.keys(node.params.stream.mol)) node.params.stream.mol[key] = 0;
-    }
-    const power = electricityNode(definition);
-    if (power?.params?.stream) {
-      power.params.stream.kWh = brineKg * Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05)
-        + intakePumpElectricityKWh(definition, brineKg);
-    }
-  } else if (slateMode === 'minerals+halogens') {
-    if (!nodeBy(definition, item => item.id === 'hydrogen-vent')) {
-      definition.graph.nodes.push({ id: 'hydrogen-vent', unit: 'material-sink', economics: { disposition: 'vent' } });
-    }
-    const h2Edge = definition.graph.edges.find(edge => edge.from.node === 'chlor-alkali' && edge.from.port === 'hydrogen');
-    if (h2Edge) h2Edge.to = { node: 'hydrogen-vent', port: 'in' };
-    removeGraphNodes(definition, ['asu', 'ammonia', 'ammonia-product', 'oxygen', 'offgas', 'air']);
-    const ca = Number(definition.operation.setpoints['chlor-alkali'] || 0);
-    const br = Number(definition.operation.setpoints['bromine-recovery'] || 0);
-    const power = electricityNode(definition);
-    if (power?.params?.stream) {
-      // Unit defaults: chlor-alkali 2.5 kWh/kg NaOH, bromine recovery 0.2 kWh/kg Br2.
-      power.params.stream.kWh = brineKg * Number(minerals.params?.electricityKWhPerKgBrine ?? 0.05)
-        + intakePumpElectricityKWh(definition, brineKg)
-        + ca * 2.5 + br * 0.2;
-    }
-  }
-
-  syncSiteResource(definition, brine);
-  const power = electricityNode(definition);
-  if (power) syncSiteResource(definition, power);
-  syncAbundanceSolar(definition, power);
-  definition.operation.boundaryLimitedBy = [];
-}
-
-// Abundance scales rewrite the electricity stream. Land uses site.solarKWp, so
-// the array has to follow that stream or the footprint stays on the seed size.
-function syncAbundanceSolar(definition, power) {
-  if (!definition.site || !power?.params?.stream) return;
-  const yieldPerKWp = dailyPvKWhPerKWp(definition);
-  const kWh = Number(power.params.stream.kWh) || 0;
-  if (!(yieldPerKWp > 0)) return;
-  const nextKWp = kWh / yieldPerKWp;
-  scaleSolarEconomics(power, Number(definition.site.solarKWp) || 0, nextKWp);
-  definition.site.solarKWp = nextKWp;
-  if (definition.site.resources?.electricity) {
-    definition.site.resources.electricity.stream = { kind: 'electricity', kWh };
-    definition.site.resources.electricity.evidence = `PVGIS typical-day × ${nextKWp} kWp`;
-  }
-}
-
-// When mineral (and hub ammonia) sales outweigh fuel sales by tonnage, report
-// the winner as family=abundance even if it came from a joint or fuel search:
-// ammonia on a brine hub is a co-product, not a fuel.
-function selectedForSlate(candidate) {
-  const selected = candidate?.selected;
-  if (!selected || typeof selected !== 'object') return selected;
-  const definition = candidate.definition;
-  const hasMinerals = Boolean(converter(definition, 'brine-minerals'));
-  if (!hasMinerals) return selected;
-  const products = candidate.objective?.products || candidate.products || [];
-  let mineralKg = 0;
-  let fuelKg = 0;
-  for (const product of products) {
-    if (!(Number(product?.annualRevenue) > 0)) continue;
-    const id = String(product.id || '');
-    const kg = Number(product?.deliveredAmount) || 0;
-    if (ABUNDANCE_SALE_IDS.includes(id) || id === 'ammonia' || id === 'ammonia-product') mineralKg += kg;
-    else if (FUEL_SALE_IDS.includes(id)) fuelKg += kg;
-  }
-  if (!(mineralKg > 0 && mineralKg >= fuelKg)) return selected;
-  if (selected.family === 'abundance' && selected.product !== 'ammonia') return selected;
-  const next = { family: 'abundance' };
-  if (Number.isFinite(Number(selected.scale))) next.scale = Number(selected.scale);
-  if (selected.slateMode) next.slateMode = selected.slateMode;
-  return next;
-}
-
-function scoreSizedCandidate(definition, solved, selected, warnings = []) {
-  if (!evaluateEconomics || !scorePositiveCashflow) {
-    throw new Error('sizeForPositiveCashflow needs FlowsheetEconomics');
-  }
-  const economicsResult = evaluateEconomics(definition, solved);
-  const residual = Number(solved?.balances?.maxAbsResidual);
-  const objective = scorePositiveCashflow({
-    ...economicsResult,
-    maxAbsResidual: Number.isFinite(residual) ? residual : Infinity,
-  });
-  return {
-    mode: 'positive-cashflow',
-    definition,
-    solved,
-    economics: economicsResult,
-    objective,
-    products: objective.products,
-    selected,
-    warnings: [...warnings, ...(solved.warnings || [])],
-    residual: solved.balances?.maxAbsResidual ?? 0,
-    converged: (solved.balances?.maxAbsResidual ?? 0) < 1e-6,
-    iterations: 1,
-    heatCoveredKWh: solved.heatIntegration?.coveredKWh ?? 0,
-    heatResidualKWh: solved.heatIntegration?.residualDemandKWh ?? 0,
-  };
-}
-
-function fuelProductsOn(definition) {
-  const products = [];
-  if (converter(definition, 'sabatier') || productSink(definition, 'CH4') || nodeBy(definition, node => node.id === 'methane')) {
-    products.push('CH4');
-  }
-  if (converter(definition, 'electrolyzer')) products.push('H2');
-  if (converter(definition, 'methanol')) products.push('methanol');
-  if (converter(definition, 'ammonia')) products.push('ammonia');
-  return products;
-}
-
-function jointFuelProducts(definition) {
-  return fuelProductsOn(definition).filter(product => {
-    if (product === 'ammonia' && converter(definition, 'brine-minerals')) return false;
-    return true;
-  });
-}
-
-function evaluateAbundanceAt(seed, baseline, slateMode, scale) {
-  const definition = resolveDefinition(seed);
-  assertSizeMayAssume(definition, ['brine']);
-  const appliedScale = absoluteScale(scale);
-  applyAbundanceScale(definition, baseline, appliedScale, slateMode);
-  withholdUnauthorizedSupply(definition);
-  const solved = solveOperation(definition);
-  return scoreSizedCandidate(definition, solved, { family: 'abundance', slateMode, scale: appliedScale }, []);
-}
-
-function searchAbundanceCashflow(seed, opts) {
-  const baselineDef = resolveDefinition(seed);
-  const baseline = baselineFromSeed(baselineDef);
-  const modes = [];
-  if (converter(baselineDef, 'brine-minerals')) modes.push('minerals-only');
-  if (nodeBy(baselineDef, node => node.id === 'chlor-alkali') && nodeBy(baselineDef, node => node.id === 'bromine-recovery')) {
-    modes.push('minerals+halogens');
-  }
-  modes.push('full');
-  const scales = listedGrid(opts, 'scales', ABUNDANCE_SCALES);
-  const refine = shouldRefine(opts, scales);
-  let best = null;
-  let tried = 0;
-  for (const slateMode of modes) {
-    const found = refineAxis({
-      coarse: scales,
-      enabled: refine,
-      maxExtra: opts.maxRefine,
-      evaluate: scale => evaluateAbundanceAt(seed, baseline, slateMode, scale),
-    });
-    tried += found.tried;
-    best = betterCashflowCandidate(best, found.best);
-  }
-  if (!best || !best.definition) throw new Error(best?.error || 'sizeForPositiveCashflow found no feasible abundance slate');
-  best.candidatesTried = tried;
-  if (!best.objective.met) best.warnings = [...(best.warnings || []), NO_CASH_POSITIVE_SLATE];
-  return best;
-}
-
-// Size `caseOrBuilder` to `rate` of `product`, then score it as a cashflow candidate.
-function sizedCandidate(caseOrBuilder, product, rate, opts, selected) {
-  const sized = sizeToProduct({
-    product,
-    rate,
-    caseOrBuilder,
-    caps: opts.caps,
-    maxIterations: opts.maxIterations,
-    tolerance: opts.tolerance,
-    heatCredit: opts.heatCredit,
-  });
-  const candidate = scoreSizedCandidate(sized.definition, sized.solved, selected, sized.warnings);
-  candidate.iterations = sized.iterations;
-  candidate.history = sized.history;
-  candidate.residual = sized.residual;
-  candidate.converged = sized.converged;
-  candidate.heatCoveredKWh = sized.heatCoveredKWh;
-  candidate.heatResidualKWh = sized.heatResidualKWh;
-  return candidate;
-}
-
-function evaluateFuelAt(seed, product, rate, opts) {
-  return sizedCandidate(seed, product, rate, opts, { family: 'fuel', product, rate });
-}
-
-function searchFuelCashflow(seed, opts) {
-  const rates = listedGrid(opts, 'rates', FUEL_RATES);
-  const probe = resolveDefinition(seed);
-  const products = fuelProductsOn(probe);
-  if (!products.length) throw new Error('sizeForPositiveCashflow needs Sabatier/CH4, electrolyzer/H2, methanol, or ammonia sale paths');
-  const refine = shouldRefine(opts, rates);
-  let best = null;
-  let tried = 0;
-  for (const product of products) {
-    const found = refineAxis({
-      coarse: rates,
-      enabled: refine,
-      maxExtra: opts.maxRefine,
-      evaluate: rate => evaluateFuelAt(seed, product, rate, opts),
-    });
-    tried += found.tried;
-    if (found.best && found.best.definition) best = betterCashflowCandidate(best, found.best);
-  }
-  if (!best) throw new Error('sizeForPositiveCashflow found no feasible fuel sizing candidate');
-  best.candidatesTried = tried;
-  if (!best.objective.met) {
-    best.warnings = [...(best.warnings || []), 'No cash-positive fuel slate under searched rates; returning best annualNetCash'];
-  }
-  return best;
-}
-
-// Abundance hub scaled to `scale`, then a fuel sized on top of it.
-function evaluateJointAt(seed, baseline, scale, product, rate, opts) {
-  const scaled = resolveDefinition(seed);
-  const appliedScale = absoluteScale(scale);
-  applyAbundanceScale(scaled, baseline, appliedScale, 'full');
-  return sizedCandidate(scaled, product, rate, opts, { family: 'joint', slateMode: 'full', scale: appliedScale, product, rate });
-}
-
-function searchJointCashflow(seed, opts) {
-  const baselineDef = resolveDefinition(seed);
-  const products = jointFuelProducts(baselineDef);
-  if (!products.length) return null;
-  if (!converter(baselineDef, 'brine-minerals')) return null;
-  const baseline = baselineFromSeed(baselineDef);
-  const scales = listedGrid(opts, 'scales', ABUNDANCE_SCALES);
-  const rates = listedGrid(opts, 'rates', FUEL_RATES);
-  let best = null;
-  let tried = 0;
-  const seen = new Set();
-  const consider = (scale, product, rate) => {
-    const key = `${gridKey(scale)}|${product}|${gridKey(rate)}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    tried += 1;
-    try {
-      const candidate = evaluateJointAt(seed, baseline, scale, product, rate, opts);
-      best = betterCashflowCandidate(best, candidate);
-    } catch {
-      /* skip infeasible joint point */
-    }
-  };
-  for (const scale of scales) {
-    for (const product of products) {
-      for (const rate of rates) consider(scale, product, rate);
-    }
-  }
-  if (shouldRefine(opts, scales) && shouldRefine(opts, rates) && best?.selected) {
-    const product = best.selected.product;
-    const scale0 = Number(best.selected.scale);
-    const rate0 = Number(best.selected.rate);
-    const extraScales = neighborMids(scales, scale0);
-    const extraRates = neighborMids(rates, rate0);
-    for (const rate of extraRates) consider(scale0, product, rate);
-    for (const scale of extraScales) consider(scale, product, rate0);
-    for (let step = 0; step < Math.min(Number(opts.maxRefine) || REFINE_MAX_EXTRA, 4); step += 1) {
-      const moreRates = neighborMids([...rates, ...extraRates, rate0], best.selected.rate);
-      const moreScales = neighborMids([...scales, ...extraScales, scale0], best.selected.scale);
-      let added = false;
-      for (const rate of moreRates) {
-        const before = tried;
-        consider(best.selected.scale, product, rate);
-        if (tried > before) added = true;
-      }
-      for (const scale of moreScales) {
-        const before = tried;
-        consider(scale, product, best.selected.rate);
-        if (tried > before) added = true;
-      }
-      if (!added) break;
-    }
-  }
-  if (!best) {
-    return { candidatesTried: tried, objective: { met: false, positiveSaleCount: 0, activeSaleCount: 0, annualNetCash: -Infinity } };
-  }
-  best.candidatesTried = tried;
-  return best;
-}
-
-function sizeForPositiveCashflow(opts = {}) {
-  const caseOrBuilder = opts.definition ?? opts.caseOrBuilder;
-  if (!caseOrBuilder) throw new Error('sizeForPositiveCashflow needs a case definition or builder');
-  const probe = resolveDefinition(caseOrBuilder);
-  const hasAbundance = Boolean(converter(probe, 'brine-minerals'));
-  const fuels = fuelProductsOn(probe);
-  if (!hasAbundance && !fuels.length) {
-    throw new Error('sizeForPositiveCashflow supports abundance (brine minerals) or fuel (CH4/H2/methanol/ammonia) plants');
-  }
-
-  let best = null;
-  let tried = 0;
-  const familiesSearched = [];
-  const tryFamily = (family, search) => {
-    try {
-      const result = search();
-      if (!result) return;
-      tried += Number(result.candidatesTried) || 0;
-      familiesSearched.push(family);
-      if (result.definition || result.objective) best = betterCashflowCandidate(best, result);
-    } catch (error) {
-      familiesSearched.push(family);
-      tried += 1;
-      if (!best) best = failedCandidate(error.message);
-    }
-  };
-
-  if (hasAbundance) tryFamily('abundance', () => searchAbundanceCashflow(caseOrBuilder, opts));
-  if (fuels.length) tryFamily('fuel', () => searchFuelCashflow(caseOrBuilder, opts));
-  if (hasAbundance && jointFuelProducts(probe).length) {
-    tryFamily('joint', () => searchJointCashflow(caseOrBuilder, opts));
-  }
-
-  if (!best || !best.definition) {
-    throw new Error(best?.error || 'sizeForPositiveCashflow found no feasible co-product slate');
-  }
-  best.candidatesTried = tried;
-  best.familiesSearched = familiesSearched;
-  best.selected = selectedForSlate(best);
-  if (hasAbundance) {
-    try {
-      stampPreSizingSeed(best.definition, baselineFromSeed(probe));
-    } catch {
-      /* fuel-only winners without a brine baseline keep the definition as solved */
-    }
-  }
-  if (!best.objective.met && !(best.warnings || []).includes(NO_CASH_POSITIVE_SLATE)) {
-    best.warnings = [...(best.warnings || []), NO_CASH_POSITIVE_SLATE];
-  }
-  return best;
-}
-
 return {
-  sizeToTarget,
-  sizeCoastalToMethane,
   sizeToProduct,
-  sizeForPositiveCashflow,
-  ABSOLUTE_SCALE_CAP,
 };
 });

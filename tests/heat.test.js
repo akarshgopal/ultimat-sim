@@ -42,7 +42,7 @@ test('Sabatier waste heat is a cascade source that can cover DAC', () => {
 });
 
 test('coastal methane keeps heatIntegration and does not drop the heat source', () => {
-  const definition = createCoastalCase(6);
+  const definition = createCoastalCase();
   const solved = solveOperation(definition);
   assert.ok(definition.graph.nodes.some(node => node.unit === 'heat-source'));
   assert.ok(solved.heatIntegration);

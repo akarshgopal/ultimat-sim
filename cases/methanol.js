@@ -21,10 +21,9 @@ const EVIDENCE = [
   { label: 'Methanol: CO₂ + 3 H₂ → CH₃OH + H₂O; 0.5 kWh/kg synthesis/compression is screening. Product $0.40/kg is a commodity MeOH band mid, not a plant quote.' },
 ];
 
-function createMethanolCase(month = 0) {
-  if (!Number.isInteger(month) || month < 0 || month > 12) throw new Error('Month must be 0–12');
+function createMethanolCase() {
   const solarKWp = 20;
-  const electricityKWh = DAILY_PV[month] * solarKWp;
+  const electricityKWh = DAILY_PV[0] * solarKWp;
   const massKg = INTAKE_M3_PER_DAY * FEED_DENSITY_KG_M3;
   const seawater = streamFromAssay(assay, massKg);
   const air = scaleMaterial(gasFromCo2Ppm(422.45, 0.2115), 25000);
@@ -178,13 +177,12 @@ function createMethanolCase(month = 0) {
     name: 'Mejillones · Antofagasta, Chile',
     latitude: -23.100,
     longitude: -70.448,
-    month,
     solarKWp,
-    dailyPVKWhPerKWp: DAILY_PV[month],
+    dailyPVKWhPerKWp: DAILY_PV[0],
     resources,
     evidence: EVIDENCE,
     meteo: {
-      dailyPVKWhPerKWp: DAILY_PV[month],
+      dailyPVKWhPerKWp: DAILY_PV[0],
       monthlyPVKWhPerKWp: DAILY_PV.slice(),
       quality: 'cited',
       source: 'PVGIS-ERA5',

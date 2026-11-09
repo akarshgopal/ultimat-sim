@@ -6,7 +6,6 @@ const { solveOperation } = require('../engine/solve');
 const { createAbundanceCase } = require('../cases/abundance');
 const tea = require('../data/tea-screening.js');
 const { evaluateEconomics } = require('../engine/economics');
-const { sizeForPositiveCashflow } = require('../engine/size');
 
 const material = (substance, kg, phase = 'solid') => ({
   kind: 'material', mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG }, phase, T_C: 25, P_bar: 1,
@@ -93,17 +92,13 @@ test('TEA pack CAPEX scales linearly with capacity, or by the scale exponent whe
 });
 
 test('Dead Sea demo scale is cash-positive at minerals mid intensity; Atacama Li stays cash+', () => {
-  const deadSea = sizeForPositiveCashflow({ definition: createAbundanceCase(), scales: [1], rates: [0] });
-  assert.ok(deadSea.objective.annualNetCash > 0, 'mid=12 is cash+ at Dead Sea demo scale because 4% fixed OM tracks CAPEX');
+  const netCash = definition => evaluateEconomics(definition, solveOperation(definition)).annualNetCash;
+  const deadSea = netCash(createAbundanceCase());
+  assert.ok(deadSea > 0, 'mid=12 is cash+ at Dead Sea demo scale because 4% fixed OM tracks CAPEX');
 
-  const atacama = sizeForPositiveCashflow({
-    definition: createAbundanceCase({ assayId: 'atacama-lithium-brine', region: 'Atacama/Chile' }),
-    scales: [1],
-    rates: [0],
-  });
-  assert.equal(atacama.objective.met, true);
-  assert.ok(atacama.objective.annualNetCash > 0);
-  assert.ok(atacama.objective.annualNetCash > deadSea.objective.annualNetCash);
+  const atacama = netCash(createAbundanceCase({ assayId: 'atacama-lithium-brine', region: 'Atacama/Chile' }));
+  assert.ok(atacama > 0);
+  assert.ok(atacama > deadSea);
 });
 
 test('abundance sale products do not ship annualDemandLimit 1e12', () => {

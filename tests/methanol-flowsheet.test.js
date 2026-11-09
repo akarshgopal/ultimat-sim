@@ -25,7 +25,7 @@ test('methanol plant runs DAC, SWRO, and electrolysis on the frozen Mejillones s
 });
 
 test('sizeToProduct methanol meets a sink target on the Mejillones plant', () => {
-  const sized = sizeToProduct({ product: 'CH3OH', rate: 8, caseOrBuilder: () => createMethanolCase(0) });
+  const sized = sizeToProduct({ product: 'CH3OH', rate: 8, caseOrBuilder: () => createMethanolCase() });
   assert.equal(sized.product, 'methanol');
   assert.ok(Math.abs(sized.achieved - 8) < 1e-4, `achieved ${sized.achieved}`);
   assert.ok(sized.residual < 1e-6);

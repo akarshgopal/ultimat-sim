@@ -1,7 +1,6 @@
 const sabatier = require('./sabatier');
 const assay = require('../data/almeria-seawater.js');
 const tea = require('../data/tea-screening.js');
-const HOURLY = require('../data/pvgis-almeria-hourly.js');
 const { MILLERO_URL, streamFromAssay, right, nodeFinder, clone } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=36.834&lon=-2.463&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
 // Frozen PVGIS response: data/pvgis-almeria.json, retrieved 2026-09-05.
@@ -10,7 +9,7 @@ const INTAKE_M3_PER_DAY = 0.1;
 const FEED_DENSITY_KG_M3 = assay.density_kg_per_L * 1000;
 const ALBORAN_URL = 'https://en.wikipedia.org/wiki/Alboran_Sea';
 const EVIDENCE = [
-  { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; 2023 hourly typical day for dispatch', url: PVGIS_URL },
+  { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly', url: PVGIS_URL },
   { label: 'PEM: DOE 2022 system status, 55 kWh/kg H₂; not a future target', url: 'https://www.energy.gov/cmei/fuels/technical-targets-proton-exchange-membrane-electrolysis' },
   { label: 'SWRO plant-only SEC 3.1 kWh/m³ (the intake lift is on the intake pump); Elimelech & Phillip 2011; Voutchkov 2018 RO-train 2.5–2.8', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
   { label: 'Seawater: Millero/Pilson S=35 majors scaled 36.5/35 for Alboran MAW near Almería; not a NaCl proxy', url: MILLERO_URL },
@@ -20,10 +19,9 @@ const EVIDENCE = [
   { label: 'NASEM 2019 Negative Emissions Technologies — DAC heat-dominated (DOI)', url: 'https://doi.org/10.17226/25259' },
 ];
 
-function createCoastalCase(month = 0) {
-  if (!Number.isInteger(month) || month < 0 || month > 12) throw new Error('Month must be 0–12');
+function createCoastalCase() {
   const solarKWp = 37.5;
-  const electricityKWh = DAILY_PV[month] * solarKWp;
+  const electricityKWh = DAILY_PV[0] * solarKWp;
   const massKg = INTAKE_M3_PER_DAY * FEED_DENSITY_KG_M3;
   const seawater = streamFromAssay(assay, massKg);
   const h2 = 4 * 2.01588 / 16.04246;
@@ -65,14 +63,14 @@ function createCoastalCase(month = 0) {
   for (const id of ['air', 'seawater', 'electricity', 'heat', 'consumables']) node(id).siteResource = id;
   definition.site = {
     id: 'almeria-pvgis-2026-09-05', name: 'Almería coast · Spain', latitude: 36.834, longitude: -2.463,
-    month, solarKWp, dailyPVKWhPerKWp: DAILY_PV[month], resources, evidence: EVIDENCE,
+    solarKWp, dailyPVKWhPerKWp: DAILY_PV[0], resources, evidence: EVIDENCE,
     meteo: {
-      dailyPVKWhPerKWp: DAILY_PV[month],
+      dailyPVKWhPerKWp: DAILY_PV[0],
       monthlyPVKWhPerKWp: DAILY_PV.slice(),
       quality: 'cited',
       source: 'PVGIS-SARAH3/ERA5',
       retrieved: '2026-09-05',
-      notes: 'Frozen PVGIS-SARAH3/ERA5 monthly plus 2023 hourly typical day at 36.834, −2.463; not a plant-measured irradiance series.',
+      notes: 'Frozen PVGIS-SARAH3/ERA5 monthly at 36.834, −2.463; not a plant-measured irradiance series.',
       cite: {
         label: 'PVGIS-SARAH3 / ERA5, 2005–2023 monthly; frozen 2026-09-05',
         url: PVGIS_URL,
@@ -101,14 +99,7 @@ function createCoastalCase(month = 0) {
       brineConcession: right('concession', 'unverified', 'No brine or mineral concession at this coastal methane site'),
       saltPurchase: right('purchase', 'unverified', 'No salt purchase agreement; the plant does not buy salt'),
     },
-    solar: {
-      typicalMonths: HOURLY.typicalMonths,
-      annualTypical: HOURLY.annualTypical,
-      year: HOURLY.year,
-      database: HOURLY.database,
-      url: HOURLY.url,
-    },
-    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Alboran multi-ion assay (data/almeria-seawater.json), not a NaCl proxy. Seawater flows seawater→intake-pump→SWRO and air→gas-blower→DAC on the bus, with screening CAPEX + pad for those lifts; SWRO SEC is plant-only 3.1 kWh/m³ (intake share moved to the pump at 0.4 kWh/m³). Grid, freshwater, and seawater discharge rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
+    notes: 'Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Alboran multi-ion assay (data/almeria-seawater.json), not a NaCl proxy. Seawater flows seawater→intake-pump→SWRO and air→gas-blower→DAC on the bus, with screening CAPEX + pad for those lifts; SWRO SEC is plant-only 3.1 kWh/m³ (intake share moved to the pump at 0.4 kWh/m³). Grid, freshwater, and seawater discharge rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
   };
   definition.operation.boundaryLimitedBy = target < 5 ? ['site solar electricity'] : [];
   return definition;

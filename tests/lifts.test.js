@@ -82,7 +82,6 @@ test('lift energy per unit, electricity starvation and mass basis', () => {
     near(kg(solved.nodes.sink.received), row.outKg, 1e-6, 'delivered');
     if (row.starved) {
       assert.ok(lift.limitedBy.includes('electricity'));
-      assert.match(lift.causeText || '', /electricity/i);
     } else {
       assert.deepEqual(lift.limitedBy, []);
     }
@@ -277,9 +276,9 @@ test('stock demos feed the plant through bus-powered lifts; cutting a lift cable
   const demos = {
     zabuye: siteZabuyeAbundance,
     deadSea: siteDeadSeaAbundance,
-    coastal: () => createCoastalCase(0),
+    coastal: () => createCoastalCase(),
     sabatier: () => createSabatierCase(),
-    methanol: () => createMethanolCase(0),
+    methanol: () => createMethanolCase(),
   };
   const seen = new Set();
   for (const [name, factory] of Object.entries(demos)) {

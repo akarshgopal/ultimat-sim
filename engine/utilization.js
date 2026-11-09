@@ -331,7 +331,8 @@
       if (profile.hasBase) {
         for (const b of profile.buffers) {
           const kg = b.kgPerKg * sizeKgPerDay * outputFactor * (offHours / 24);
-          const usd = kg * (cfg.bufferUsdPerKg[b.substance] ?? cfg.bufferUsdPerKg.default);
+          const prices = costs.bufferUsdPerKg || cfg.bufferUsdPerKg;
+          const usd = kg * (prices[b.substance] ?? prices.default);
           bufferUsd += usd;
           buffers.push({ substance: b.substance, kg, usd });
         }

@@ -374,3 +374,29 @@ test('energy break-evens: cheaper equipment never raises the price a pathway nee
     assert.ok(above.today.npv < 0);
   }
 });
+
+test('idiot-index squeeze caps each class at materials floor × target, never raises a price', () => {
+  const floors = {
+    pv: { materialsUsdPerUnit: 150 },
+    battery: { materialsUsdPerUnit: 40 },
+    thermalStore: { materialsUsdPerUnit: 5 },
+    h2Storage: { materialsUsdPerUnit: 60 },
+    process: { floorFraction: 0.05 },
+    electrolyzer: { floorFraction: 0.1 },
+  };
+  const cfgFor = target => C.mergeConfig({ idiotIndex: { target, floors } });
+  close(C.squashUsd(cfgFor(2), 'pv', 758), 300);
+  close(C.squashUsd(cfgFor(10), 'pv', 758), 758, 1e-12); // floor × target above today's price: no change
+  close(C.squashUsd(cfgFor(null), 'pv', 758), 758);
+  close(C.squashFactor(cfgFor(2), 'process', 1), 0.1);
+  close(C.squashFactor(cfgFor(2), 'process', 0.05), 0.05); // learning already below the cap
+  close(C.squashFactor(cfgFor(2), 'dac', 1), 1); // no floor for this class: untouched
+
+  // In a run: PV, battery and equipment prices all fall, and plants get cheaper.
+  const rank = target => C.rankOpportunities({ pathways: [good], sites: SITES, markets: MARKETS, config: { idiotIndex: { target, floors } } })[0];
+  const today = rank(null);
+  const squashed = rank(1.5);
+  close(squashed.capex.pv / squashed.pvKWp, 150 * 1.5, 1e-9);
+  close(squashed.capex.process, today.capex.process * 0.05 * 1.5, 1e-9);
+  assert.ok(squashed.lcopUsdPerKg < today.lcopUsdPerKg);
+});

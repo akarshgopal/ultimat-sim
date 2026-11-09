@@ -93,6 +93,13 @@
     // Scenario lever: multiplies equipment capex (process, electrolyzer, DAC, desal classes; not
     // PV or storage). 0.1 = equipment 10× cheaper than the recipes' screening packs.
     equipmentCostMultiplier: 1,
+    // Idiot-index squeeze (Musk: installed cost ÷ raw-material cost). With a target T, every cost
+    // class is capped at its materials floor × T: price = min(today's price after learning and
+    // decline, floor × T). floors come from data/bom.js (the app's store passes them in):
+    //   pv / battery / thermalStore / h2Storage: { materialsUsdPerUnit } ($/kWp, $/kWh, $/kWh_th, $/kg H₂)
+    //   electrolyzer / desal / dac / process:     { floorFraction } (materials $ per $ of today's recipe capex)
+    // target null = today's prices (no squeeze).
+    idiotIndex: Object.freeze({ target: null, floors: Object.freeze({}) }),
     // Solar-only utilization and storage design (engine/utilization.js): flexible units are sized
     // for the hours the sun shines, baseload units are firmed with batteries / thermal stores,
     // intermediates between them are buffered. Recipes without a flowsheet keep 24 h costing.
@@ -358,8 +365,11 @@
       if (!design) {
         design = Utilization.designPlant(profile, site, sizeKgPerDay, {
           pvUsdPerKWp: ctx.pvUsdPerKWp * siteMult,
-          batteryUsdPerKWh: util.battery.usdPerKWh * storageFactor * siteMult,
-          thermalUsdPerKWh: util.thermal.usdPerKWh * storageFactor * siteMult,
+          batteryUsdPerKWh: (ctx.storagePrices?.battery ?? util.battery.usdPerKWh * storageFactor) * siteMult,
+          thermalUsdPerKWh: (ctx.storagePrices?.thermal ?? util.thermal.usdPerKWh * storageFactor) * siteMult,
+          bufferUsdPerKg: ctx.storagePrices
+            ? Object.fromEntries(Object.entries(ctx.storagePrices.bufferUsdPerKg).map(([k, v]) => [k, v * siteMult]))
+            : null,
           capex24ByClass,
         }, util);
         ctx.designCache?.set(designKey, design);
@@ -449,9 +459,11 @@
       const flh = u.utilization?.flexFullLoadHoursPerDay;
       if (profile?.hasBase && Number.isFinite(flh) && flh < 24) {
         const substance = PRODUCT_SUBSTANCE[item.product] || 'default';
-        const prices = util.bufferUsdPerKg;
+        const prices = ctx.storagePrices?.bufferUsdPerKg;
         const kg = item.kgPerDay * outputFactor * (24 - flh) / 24;
-        const usd = kg * (prices[substance] ?? prices.default) * (ctx.costFactors.storage ?? 1) * siteMult;
+        const usd = kg * (prices
+          ? (prices[substance] ?? prices.default)
+          : (util.bufferUsdPerKg[substance] ?? util.bufferUsdPerKg.default) * (ctx.costFactors.storage ?? 1)) * siteMult;
         item.bufferKg = kg;
         item.bufferUsd = usd;
         processByTech.storage += usd;
@@ -569,13 +581,41 @@
     };
   }
 
+  // Cap a cost at its materials floor × the target idiot index (absolute $ per unit).
+  function squashUsd(cfg, cls, usd) {
+    const target = cfg.idiotIndex?.target;
+    const materials = cfg.idiotIndex?.floors?.[cls]?.materialsUsdPerUnit;
+    return target > 0 && materials > 0 ? Math.min(usd, materials * target) : usd;
+  }
+  // Same for a cost factor relative to today's recipe price (floorFraction = materials / today).
+  function squashFactor(cfg, cls, factor) {
+    const target = cfg.idiotIndex?.target;
+    const ff = cfg.idiotIndex?.floors?.[cls]?.floorFraction;
+    return target > 0 && ff > 0 ? Math.min(factor, ff * target) : factor;
+  }
+
   function yearContext(cfg, markets, state, yearIndex, year, committedKg, extras = {}) {
     const costFactors = {};
     const equipment = Number.isFinite(cfg.equipmentCostMultiplier) ? cfg.equipmentCostMultiplier : 1;
     for (const cls of TECH_CLASSES) {
-      costFactors[cls] = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]) * (cls === 'storage' ? 1 : equipment);
+      const learned = techCostFactor(cfg.tech[cls] || {}, yearIndex, state.cumRefUsd[cls]);
+      costFactors[cls] = cls === 'storage' ? learned : squashFactor(cfg, cls, learned * equipment);
     }
-    const pvUsdPerKWp = pvCapexUsdPerKWp(cfg.pv, yearIndex);
+    const pvUsdPerKWp = squashUsd(cfg, 'pv', pvCapexUsdPerKWp(cfg.pv, yearIndex));
+    // Storage prices for this year: learning/decline on the storage class, then the squeeze.
+    const util = Utilization.mergeCfg(cfg.utilization || Utilization.DEFAULTS);
+    const sf = costFactors.storage;
+    const bufferUsdPerKg = {};
+    for (const [substance, usd] of Object.entries(util.bufferUsdPerKg)) {
+      bufferUsdPerKg[substance] = substance === 'H2'
+        ? squashUsd(cfg, 'h2Storage', usd * sf)
+        : usd * squashFactor(cfg, 'process', sf);
+    }
+    const storagePrices = {
+      battery: squashUsd(cfg, 'battery', util.battery.usdPerKWh * sf),
+      thermal: squashUsd(cfg, 'thermalStore', util.thermal.usdPerKWh * sf),
+      bufferUsdPerKg,
+    };
     const shareOf = (product, extraKg = 0) => {
       const group = marketGroupOf(cfg, product);
       const demandT = marketDemandT(markets[group], year);
@@ -595,7 +635,7 @@
       }
       return caps.get(group);
     };
-    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, priceFor, shareOf, capKg, designCache: new Map(), ...extras };
+    return { cfg, yearIndex, year, costFactors, pvUsdPerKWp, storagePrices, priceFor, shareOf, capKg, designCache: new Map(), ...extras };
   }
 
   function marketGroupOf(cfg, product) {
@@ -1123,6 +1163,8 @@
     TECH_CLASSES,
     solarLcoe,
     pvCapexFromLcoe,
+    squashUsd,
+    squashFactor,
     energyBreakevens,
     INFINITE_ORIGINS,
     annuityFactor,

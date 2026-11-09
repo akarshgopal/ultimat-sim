@@ -286,7 +286,7 @@
     if (Bom.COMMODITIES[material]) return Bom.COMMODITIES[material].usdPerKg;
     const alloy = p.alloys[material];
     if (alloy) return Bom.COMMODITIES['stainless-steel'].usdPerKg * alloy.premium;
-    return 0;
+    throw new Error(`urea design: no price for material '${material}'`);
   }
 
   function engineScaleFactor(sizeKgPerDay) {

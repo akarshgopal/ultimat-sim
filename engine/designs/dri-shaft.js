@@ -508,8 +508,8 @@
       usd: perKgDay(x.usdPlant),
       note: x.note,
     }));
-    bom.push({ part: `Installation (× ${p.installFactor})`, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(installedEquipmentUsd - equipmentUsd), note: 'erection, piping tie-ins, commissioning' });
-    bom.push({ part: 'Engineering, permits, owner', material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(engineeringUsd), note: 'per plant' });
+    bom.push({ part: `Installation (× ${p.installFactor})`, material: null, kg: null, usdMaterials: null, manufacturing: null, usd: perKgDay(installedEquipmentUsd - equipmentUsd), note: 'erection, piping tie-ins, commissioning' });
+    bom.push({ part: 'Engineering, permits, owner', material: null, kg: null, usdMaterials: null, manufacturing: null, usd: perKgDay(engineeringUsd), note: 'per plant' });
     bom.sort((a, b) => b.usd - a.usd);
 
     const installedUsdPerKgDay = perKgDay(installedUsd);

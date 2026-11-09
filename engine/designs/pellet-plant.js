@@ -297,7 +297,7 @@
       usd: perKgDay(x.usdPlant),
       note: x.note,
     }));
-    const overhead = (part, usd, note) => bom.push({ part, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(usd), note });
+    const overhead = (part, usd, note) => bom.push({ part, material: null, kg: null, usdMaterials: null, manufacturing: null, usd: perKgDay(usd), note });
     overhead(`Installation (× ${p.installFactor})`, installedEquipmentUsd - equipmentUsd, 'erection, tie-ins, commissioning');
     overhead('Engineering, permits, owner', p.engineeringUsdPerPlant, 'per plant');
     if (epcmUsd > 0) overhead(`EPCM / owner's costs (${(p.epcmFrac * 100).toFixed(0)}%)`, epcmUsd, 'scales with installed equipment');

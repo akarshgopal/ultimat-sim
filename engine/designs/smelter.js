@@ -51,7 +51,7 @@
   // prices 100 × ref = 1,000 t Al/day (≈ 365 kt/yr, below build.maxPlantKgPerDay 5,000 t/day), where
   // the recipe is 1890 × 100^−0.15 = $947 per kg/day (≈ $2,600 per t/yr).
   const RECIPE = Object.freeze({
-    aluminium: Object.freeze({ usdPerKgDay: 1890, kWhPerKg: 14, pathwayId: 'aluminium', alsoPathways: Object.freeze(['silicon']), refKgPerDay: 10000 }),
+    'aluminium-smelter': Object.freeze({ usdPerKgDay: 1890, kWhPerKg: 14, pathwayId: 'aluminium', alsoPathways: Object.freeze(['silicon']), refKgPerDay: 10000 }),
   });
   const ENGINE_SCALE = Object.freeze({ exponent: 0.85, floorFactor: 0.4 });
   const ENGINE_BASELOAD_TURNDOWN = 0.7; // engine/utilization.js DEFAULTS.baseloadMinTurndown
@@ -267,7 +267,7 @@
   }
 
   function recipeAtSize(kgPerDay) {
-    const recipe = RECIPE.aluminium;
+    const recipe = RECIPE['aluminium-smelter'];
     const f = (kgPerDay / recipe.refKgPerDay) ** (ENGINE_SCALE.exponent - 1);
     return recipe.usdPerKgDay * Math.max(ENGINE_SCALE.floorFactor, Math.min(1, f));
   }
@@ -563,8 +563,8 @@
       part: x.part, material: x.material, kg: perKgDay(x.kgPlant), usdMaterials: perKgDay(x.usdMaterialsPlant),
       manufacturing: x.manufacturing, usd: perKgDay(x.usdPlant), note: x.note,
     }));
-    outParts.push({ part: `Installation (× ${p.installFactor})`, material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(installedEquipmentUsd - equipmentUsd), note: 'erection, commissioning, pot preheat and start-up' });
-    outParts.push({ part: 'Engineering, permits, owner', material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: perKgDay(p.engineeringUsdPerPlant), note: 'per plant' });
+    outParts.push({ part: `Installation (× ${p.installFactor})`, material: null, kg: null, usdMaterials: null, manufacturing: null, usd: perKgDay(installedEquipmentUsd - equipmentUsd), note: 'erection, commissioning, pot preheat and start-up' });
+    outParts.push({ part: 'Engineering, permits, owner', material: null, kg: null, usdMaterials: null, manufacturing: null, usd: perKgDay(p.engineeringUsdPerPlant), note: 'per plant' });
     outParts.sort((a, b) => b.usd - a.usd);
 
     const installedUsdPerKgDay = perKgDay(installedUsd);
@@ -613,7 +613,7 @@
       recipeUsdPerKgDay,
       vsRecipe: {
         capexFactor: installedUsdPerKgDay / recipeUsdPerKgDay,
-        energyFactor: kWhPerKg / RECIPE.aluminium.kWhPerKg,
+        energyFactor: kWhPerKg / RECIPE['aluminium-smelter'].kWhPerKg,
         materialsFactor: materialsUsdPerKgDay / recipeUsdPerKgDay,
       },
       kpis: [

@@ -14,11 +14,11 @@ test('module follows the design contract', () => {
   assert.equal(D.id, 'smelter');
   assert.deepEqual([...D.units], ['aluminium-smelter']);
   // Recipe basis: the 'aluminium' pathway node, and the same unit per kg Al inside 'silicon'.
-  assert.equal(node('aluminium').capexUsdPerKgDay, D.RECIPE.aluminium.usdPerKgDay);
-  assert.equal(node('aluminium').kWhPerKg, D.RECIPE.aluminium.kWhPerKg);
+  assert.equal(node('aluminium').capexUsdPerKgDay, D.RECIPE['aluminium-smelter'].usdPerKgDay);
+  assert.equal(node('aluminium').kWhPerKg, D.RECIPE['aluminium-smelter'].kWhPerKg);
   const si = alEdge('silicon').kgPerKg;
-  assert.ok(Math.abs(node('silicon').capexUsdPerKgDay / si / D.RECIPE.aluminium.usdPerKgDay - 1) < 0.02);
-  assert.ok(Math.abs(node('silicon').kWhPerKg / si / D.RECIPE.aluminium.kWhPerKg - 1) < 0.02);
+  assert.ok(Math.abs(node('silicon').capexUsdPerKgDay / si / D.RECIPE['aluminium-smelter'].usdPerKgDay - 1) < 0.02);
+  assert.ok(Math.abs(node('silicon').kWhPerKg / si / D.RECIPE['aluminium-smelter'].kWhPerKg - 1) < 0.02);
   assert.ok(D.PRESETS.today && D.PRESETS.lean);
   for (const c of D.CONTROLS) assert.ok(c.key in D.DEFAULTS, c.key);
   const d = D.design();

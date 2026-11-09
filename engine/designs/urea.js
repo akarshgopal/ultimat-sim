@@ -636,8 +636,8 @@
       part: x.part, group: x.group, material: x.material, kg: per(x.kgPlant), usdMaterials: per(x.usdMaterialsPlant),
       manufacturing: x.manufacturing, usd: per(x.usdPlant), note: x.note,
     }));
-    outParts.push({ part: `Installation (× ${p.installFactor})`, group: 'bop', material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: per(installedEquipmentUsd - equipmentUsd), note: 'erection, tie-ins, insulation, commissioning' });
-    outParts.push({ part: 'Engineering, permits, licence', group: 'bop', material: null, kg: 0, usdMaterials: 0, manufacturing: null, usd: per(engineeringUsd), note: p.licenceUsdPerTpd > 0 ? `incl. licence $${p.licenceUsdPerTpd}/t·day` : 'repeat standard design' });
+    outParts.push({ part: `Installation (× ${p.installFactor})`, group: 'bop', material: null, kg: null, usdMaterials: null, manufacturing: null, usd: per(installedEquipmentUsd - equipmentUsd), note: 'erection, tie-ins, insulation, commissioning' });
+    outParts.push({ part: 'Engineering, permits, licence', group: 'bop', material: null, kg: null, usdMaterials: null, manufacturing: null, usd: per(engineeringUsd), note: p.licenceUsdPerTpd > 0 ? `incl. licence $${p.licenceUsdPerTpd}/t·day` : 'repeat standard design' });
     outParts.sort((x, y) => y.usd - x.usd);
     const groups = {};
     for (const x of outParts) groups[x.group] = (groups[x.group] || 0) + x.usd;

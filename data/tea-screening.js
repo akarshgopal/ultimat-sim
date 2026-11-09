@@ -27,7 +27,6 @@
 // freightUsdPerKg into purchases and breakdown.freight. bindSale nets seller-paid
 // freight from unitPrice (gateUnitPrice keeps the plant-gate). Screening FOB vs
 // landed — not a routing/GIS model and not a carrier contract.
-// Screening, not bankable quotes.
 
 function row(value, unit, quality, source, note, evidence) {
   return { value, unit, quality, source, note, evidence };
@@ -81,7 +80,7 @@ const USGS_IRON_ORE = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-or
 const SR_SAGUENAY_PFS_RELEASE = 'https://www.stockwatch.com/News/Item/Z-C!SR-3523298/C/SR?fmt=orig';
 const SR_SAGUENAY_PFS_NEWS = 'https://thedeepdive.ca/strategic-resources-reports-npv8-of-us957-million-for-iron-pellet-project/';
 const ISIJ_PELLET_ENERGY = 'https://www.jstage.jst.go.jp/article/isijinternational/54/3/54_596/_html/-char/en';
-const USGS_STEEL ='https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf';
+const USGS_STEEL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel.pdf';
 const USGS_TI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-titanium.pdf';
 const USGS_TI_2026 = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-titanium.pdf';
 const USGS_MG_METAL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-magnesium-metal.pdf';
@@ -455,11 +454,6 @@ const costs = {
     'Hall–Héroult anode carbon screening $0.50/kg. Not a calcined-coke contract.',
     [{ label: 'DOE aluminium industry roadmap (family; anode-carbon screening $0.50/kg, not a calcined-coke contract)', url: DOE_AL }]
   ),
-  alumina: row(
-    0.45, '$/kg', 'screening', 'smelter-grade alumina band',
-    'Smelter-grade alumina ~$300–600/t mid ($0.45/kg). Screening, not a Bayer quote. Alumina is the Hall–Héroult feed.',
-    [{ label: 'USGS MCS 2025 aluminum (alumina is the feed; screening mid $0.45/kg, not a Bayer quote)', url: USGS_AL }]
-  ),
   bauxite: row(
     0.04, '$/kg', 'screening', 'USGS MCS bauxite import-unit family',
     'USGS MCS bauxite-and-alumina crude dry bauxite import unit value ~$31–32/t (2024–2025e) inside a screening $30–50/t band; mid $0.04/kg. Not a mine contract and not a concession.',
@@ -512,7 +506,7 @@ const costs = {
   ),
   'iron-ore': row(
     0.13, '$/kg', 'screening', 'DR-grade pellet-feed concentrate: 62% Fe index + DR-grade premium',
-    'Purchased DR-grade pellet-feed concentrate (~67.5% Fe, SiO₂+Al₂O₃ ≲ 3.5%; e.g. magnetite concentrate) — the feed of an own pellet plant (pack pellet-plant), not lump/fines charged straight to a shaft and not finished pellets. Screening $130/dmt plant-gate: the Strategic Resources Port Saguenay DR pellet PFS (Mar 2024) buys concentrate at the 62% Fe CFR China index ($100/dmt) + DR-grade premium (65–62%) $35/dmt + Fe differential; its cash cost is $156/dmt pellets incl. $16/dmt conversion → ~$140/dmt delivered concentrate. Here $0.13 + screening inland-truck-short $0.01/kg = $140/t. 62% Fe index ~$99–112/t over 2024–25 (World Bank pink sheet; USGS MCS). Finished DR pellets trade at index + ~$70/dmt DR premium ≈ $150–180/t, which this concentrate + pellet-plant reproduces. Was $0.10/kg pure-Fe₂O₃ hematite with no pelletizing step. Not a mine contract.',
+    'Purchased DR-grade pellet-feed concentrate (~67.5% Fe, SiO₂+Al₂O₃ ≲ 3.5%; e.g. magnetite concentrate) — the feed of an own pellet plant (pack pellet-plant), not lump/fines charged straight to a shaft and not finished pellets. Screening $130/dmt plant-gate: the Strategic Resources Port Saguenay DR pellet PFS (Mar 2024) buys concentrate at the 62% Fe CFR China index ($100/dmt) + DR-grade premium (65–62%) $35/dmt + Fe differential; its cash cost is $156/dmt pellets incl. $16/dmt conversion → ~$140/dmt delivered concentrate. Here $0.13 + screening inland-truck-short $0.01/kg = $140/t. 62% Fe index ~$99–112/t over 2024–25 (World Bank pink sheet; USGS MCS). Finished DR pellets trade at index + ~$70/dmt DR premium ≈ $150–180/t, which this concentrate + pellet-plant reproduces. Not a mine contract.',
     [
       { label: 'Strategic Resources Port Saguenay pellet plant PFS release (12 Mar 2024): 62% CFR $100/dmt, DR-grade premium (65–62%) $35/dmt, DR pellet premium $70/dmt, cash cost $156/dmt incl. concentrate, conversion $16.31/dmt', url: SR_SAGUENAY_PFS_RELEASE },
       { label: 'World Bank commodity markets / pink sheet (iron ore 62% Fe CFR China, 2024 avg ~$109/dmt)', url: WB_PINK },
@@ -530,14 +524,6 @@ const costs = {
   'titanium-tetrachloride': row(
     1.50, '$/kg', 'screening', 'purchased TiCl4 intermediate',
     'Screening TiCl₄ purchase $1.50/kg. Not a chloride-process plant from rutile and not a TIMET/VSMPO quote. USGS titanium family is commodity context for the metal, not a TiCl₄ contract.',
-    [
-      { label: 'USGS MCS 2025 titanium (commodity-family context; screening TiCl₄ purchase, not a chloride-process plant)', url: USGS_TI },
-      { label: 'USGS MCS 2026 titanium (family context; TiCl₄ is a purchased intermediate in this demo)', url: USGS_TI_2026 },
-    ]
-  ),
-  'ticl4-feed': row(
-    1.50, '$/kg', 'screening', 'purchased TiCl4 intermediate',
-    'Alias of titanium-tetrachloride. Screening TiCl₄ purchase $1.50/kg. Not a chloride-process plant from rutile and not a TIMET/VSMPO quote. USGS titanium family is commodity context for the metal, not a TiCl₄ contract.',
     [
       { label: 'USGS MCS 2025 titanium (commodity-family context; screening TiCl₄ purchase, not a chloride-process plant)', url: USGS_TI },
       { label: 'USGS MCS 2026 titanium (family context; TiCl₄ is a purchased intermediate in this demo)', url: USGS_TI_2026 },
@@ -620,7 +606,7 @@ const packs = {
     capexIntensityBand: { low: 3, mid: 12, high: 40 },
     fixedOmPercent: 4, variableOm: 0.01, assetLifeYears: 20,
     quality: 'screening', source: 'NREL DLE TEA Table 3 brine-throughput conversion (OSTI 1782801)',
-    note: 'installedCapex = 12 $/ (kg brine/day) × capacity (scale exponent omitted). Screening brine-throughput intensity so CAPEX grows with size. Derived from NREL TEA lithium-from-geothermal-brines (OSTI 1782801 / NREL/TP-5700-79178, doi:10.2172/1782801) Table 3 / Ventura modeled Salton Sea IX: ~$52.3M CAPEX, 20,000 t/y LCE, Li ~400 mg/L, recovery ~90%. LCE/Li ≈ 5.323 → Li mass ≈ 3.76e6 kg/y → brine ≈ 1.04e7 m³/y ≈ 2.86e7 kg brine/day (ρ≈1) → ≈ $1.83 /(kg brine/day) (optimistic modeled). Same NREL table peer PEAs, converted the same way (screening arithmetic, not independent bankable quotes): EnergySource ~$15, Standard Lithium ~$6, Vulcan ~$10, Lake Resources Kachi ~$11, E3 Metals ~$4 /(kg brine/day). Literature DLE brine-throughput band ≈ $2–15 /(kg brine/day). Multi-product Dead Sea minerals hub ≠ Salton Sea Li-only DLE. Screening mid $12 is peer-PEA central (~$10–15); band low $3 / mid $12 / high $40 (conservative FOAK / multi-product uplift; still below the old unsupported $80 OOM, which was ~5–40× above the cited conversion). Dead Sea demo scale (1e5 kg brine/day) is cash-positive at this mid because 4% fixed O&M tracks installed CAPEX — the old ~+$80k operating margin / −$801k gate cash was an artifact of the $80 OOM, not a reason to keep $80 or to drop to NREL $1.83. Even mid=20 stays cash+; high=40 is cash−. Screening OOM, not bankable.',
+    note: 'installedCapex = 12 $/ (kg brine/day) × capacity (scale exponent omitted). Screening brine-throughput intensity so CAPEX grows with size. Derived from NREL TEA lithium-from-geothermal-brines (OSTI 1782801 / NREL/TP-5700-79178, doi:10.2172/1782801) Table 3 / Ventura modeled Salton Sea IX: ~$52.3M CAPEX, 20,000 t/y LCE, Li ~400 mg/L, recovery ~90%. LCE/Li ≈ 5.323 → Li mass ≈ 3.76e6 kg/y → brine ≈ 1.04e7 m³/y ≈ 2.86e7 kg brine/day (ρ≈1) → ≈ $1.83 /(kg brine/day) (optimistic modeled). Same NREL table peer PEAs, converted the same way (screening arithmetic, not independent bankable quotes): EnergySource ~$15, Standard Lithium ~$6, Vulcan ~$10, Lake Resources Kachi ~$11, E3 Metals ~$4 /(kg brine/day). Literature DLE brine-throughput band ≈ $2–15 /(kg brine/day). Multi-product Dead Sea minerals hub ≠ Salton Sea Li-only DLE. Screening mid $12 is peer-PEA central (~$10–15); band low $3 / mid $12 / high $40 (conservative FOAK / multi-product uplift). Dead Sea demo scale (1e5 kg brine/day) is cash-positive at this mid because 4% fixed O&M tracks installed CAPEX. Even mid=20 stays cash+; high=40 is cash−. Screening OOM, not bankable.',
     evidence: [
       { label: 'NREL TEA: lithium from geothermal brines (OSTI 1782801 / NREL/TP-5700-79178); Table 3 Ventura IX + same-table peer PEAs (not independent bankable quotes)', url: NREL_DLE, doi: '10.2172/1782801' },
     ],
@@ -906,12 +892,12 @@ const packs = {
     ],
   }),
 
-  // MECH18 — utility CAPEX packs (screening). Capacity basis = installed duty (m³/day or Nm³/day).
+  // Utility CAPEX packs (screening). Capacity basis = installed duty (m³/day or Nm³/day).
   'intake-pump': pack({
     capexIntensity: 350, intensityUnit: '$/(m³/day)',
     fixedOmPercent: 3, variableOm: 0, assetLifeYears: 20,
     quality: 'screening', source: 'open-intake / transfer pump TEA order',
-    note: 'installedCapex = 350 $/ (m³/day) × capacity. Screening mid of open-intake / transfer pump skid ~$150–800/(m³/day) (desal intake + process pump order). Not a vendor quote or head–flow curve. MECH8 energy (kWh/m³) is separate.',
+    note: 'installedCapex = 350 $/ (m³/day) × capacity. Screening mid of open-intake / transfer pump skid ~$150–800/(m³/day) (desal intake + process pump order). Not a vendor quote or head–flow curve. Pump energy (kWh/m³) is a unit param, not this pack.',
     evidence: [
       { label: 'Voutchkov 2018 desalination energy/cost family (DOI) — intake pump CAPEX is screening OOM, not a quote from this paper', url: VOUTCHKOV_2018, doi: '10.1016/j.desal.2017.10.033' },
       { label: 'Matches process equipment — centrifugal pump cost order', url: 'https://www.matche.com/equipcost/PumpCentr.html' },
@@ -921,7 +907,7 @@ const packs = {
     capexIntensity: 1.5, intensityUnit: '$/(Nm³/day)',
     fixedOmPercent: 3, variableOm: 0, assetLifeYears: 15,
     quality: 'screening', source: 'process fan / blower TEA order',
-    note: 'installedCapex = 1.5 $/ (Nm³/day) × capacity. Screening process fan/duct+filter band (~$0.5–5/(Nm³/day)); Keith CE contactor fan alone is cheaper. Not a fan curve or vendor quote. MECH10 energy (kWh/Nm³) is separate.',
+    note: 'installedCapex = 1.5 $/ (Nm³/day) × capacity. Screening process fan/duct+filter band (~$0.5–5/(Nm³/day)); Keith CE contactor fan alone is cheaper. Not a fan curve or vendor quote. Blower energy (kWh/Nm³) is a unit param, not this pack.',
     evidence: [
       { label: 'Keith et al. 2018 Carbon Engineering (contactor fan OOM; plant blower CAPEX is screening uplift)', url: 'https://doi.org/10.1016/j.joule.2018.05.006' },
       { label: 'IEA Direct Air Capture 2022 (family cite)', url: IEA_DAC },
@@ -1530,7 +1516,6 @@ const demandByRegion = {
   'asia-china': demandAsiaChina,
   default: demandDefault,
 };
-const DEMAND_REGIONS = demandByRegion;
 
 const IEA_ELEC_EVIDENCE = [
   { label: 'IEA Electricity 2024 (family; screening industrial tariff overlay, not a PPA)', url: IEA_ELEC },
@@ -1589,8 +1574,6 @@ const powerByRegion = {
   ),
 };
 
-// Product $/kg stays the global screening band unless a regional series is cited in priceByRegion.
-// Lithium is the USGS LCE proxy in every region (Chile is supply-side, not a LiCl contract).
 // Screening labor/construction/EPC location multipliers vs a US Gulf-ish baseline of 1.0.
 // Applied as capexIntensity_region = pack.capexIntensity × multiplier[region] in bindCapexPack.
 // Building-cost / ICP / IRENA installed-cost families as direction only; process equipment
@@ -1652,7 +1635,8 @@ const capexMultiplierByRegion = {
   // default omitted → 1
 };
 
-// Cited product-price overlays. Keys absent here stay on the global prices table.
+// Cited product-price overlays. Keys absent here stay on the global prices table. Lithium is the
+// USGS LCE proxy in every region (Chile is supply-side, not a LiCl contract).
 const priceByRegion = {
   'chile-atacama': {
     lithium: row(
@@ -1715,15 +1699,6 @@ function getCapexMultiplierForRegion(region) {
   return item && Number.isFinite(Number(item.value)) ? Number(item.value) : 1;
 }
 
-const fuelsCapexNote = row(
-  null, null, 'screening', 'NREL ATB / DOE H2 family',
-  'Fuel-path converter CAPEX uses process packs (electrolyzer, DAC, SWRO, Sabatier, methanol) with literature intensities, not demo lumps. Family: NREL ATB / DOE hydrogen electrolysis / IEA DAC.',
-  [
-    { label: 'NREL Annual Technology Baseline (family cite; not a plant quote)', url: NREL_ATB },
-    { label: 'DOE hydrogen production: electrolysis (family cite)', url: DOE_H2 },
-  ]
-);
-
 function must(map, key, kind) {
   const found = map[key];
   if (!found) throw new Error(`Unknown TEA ${kind} ${key}`);
@@ -1773,9 +1748,8 @@ function solarCapexOverlay(region) {
   return solarCapexByRegion[id] || null;
 }
 
-
-// MECH18 — tank CAPEX by fluid class ($/m³ capacity). Region multiplies via CAPEX×.
-// At ρ=1000 kg/m³, generic $500/m³ ≡ MECH17 $0.50/kg fallback.
+// Tank CAPEX by fluid class ($/m³ capacity). Region multiplies via CAPEX×.
+// At ρ=1000 kg/m³, generic $500/m³ ≡ the $0.50/kg water-equivalent fallback.
 const MATCH_TANK = 'https://www.matche.com/equipcost/Tank.html';
 const EPA_USP = 'https://www.epa.gov/sites/default/files/2014-03/documents/uspguide.pdf';
 const tankByFluid = {
@@ -1824,8 +1798,8 @@ const tankByFluid = {
     capexPerM3: 500,
     densityKgM3: 1000,
     quality: 'screening',
-    source: 'MECH17 $0.50/kg water-eq fallback',
-    note: 'Generic liquid tank screening $500/m³ ≡ MECH17 $0.50/kg at ρ=1000 kg/m³. Use when fluid class is unknown. Not a vendor quote.',
+    source: '$0.50/kg water-eq fallback',
+    note: 'Generic liquid tank screening $500/m³ ≡ $0.50/kg at ρ=1000 kg/m³. Use when fluid class is unknown. Not a vendor quote.',
     evidence: [
       { label: 'Matches process equipment — atmospheric storage tank cost order', url: MATCH_TANK },
       { label: 'EPA USP guide / tank-farm layout screening', url: EPA_USP },
@@ -1925,7 +1899,6 @@ function densityHintFromAssay(bag) {
       : 'salinity estimate (UNESCO 25 °C)',
   };
 }
-
 
 /** Screening tank CAPEX: (capacityKg / density) × $/m³ × regional CAPEX×. */
 function bindTankCapex(extra = {}) {
@@ -2038,17 +2011,6 @@ function bindCapex(key, extra = {}) {
   return bindCapexPack(key, extra);
 }
 
-function bindPriceFields(key) {
-  const item = must(prices, key, 'price');
-  return {
-    unitPrice: item.value,
-    quality: item.quality,
-    source: item.source,
-    note: item.note,
-    evidence: item.evidence,
-  };
-}
-
 function snapshot(map, keys) {
   return keys.map(key => {
     const item = map[key];
@@ -2069,7 +2031,7 @@ function snapshot(map, keys) {
 function snapshotPacks(keys) {
   return keys.map(key => {
     const item = packs[key];
-    const snapshot = {
+    const snap = {
       key,
       capexIntensity: item.capexIntensity,
       unit: item.intensityUnit,
@@ -2082,8 +2044,8 @@ function snapshotPacks(keys) {
       note: item.note,
       evidence: item.evidence,
     };
-    if (item.capexIntensityBand) snapshot.capexIntensityBand = item.capexIntensityBand;
-    return snapshot;
+    if (item.capexIntensityBand) snap.capexIntensityBand = item.capexIntensityBand;
+    return snap;
   });
 }
 
@@ -2120,7 +2082,6 @@ return {
   packs,
   demand,
   demandByRegion,
-  DEMAND_REGIONS,
   powerByRegion,
   capexMultiplierByRegion,
   priceByRegion,
@@ -2132,7 +2093,6 @@ return {
   REGION_STRING_TO_ID,
   DEFAULT_DEMAND_REGION_ID,
   DEMAND_REGION_LABELS,
-  fuelsCapexNote,
   EDITOR_DEMAND_DEFAULT,
   DEMAND_REGION,
   installedCapexFromPack,
@@ -2152,7 +2112,6 @@ return {
   bindCost,
   bindCapex,
   bindCapexPack,
-  bindPriceFields,
   abundanceEvidence,
 };
 });

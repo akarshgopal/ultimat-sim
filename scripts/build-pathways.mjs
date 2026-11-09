@@ -134,12 +134,12 @@ function pvgisFileKeys() {
   return { keys, files };
 }
 
-// Exact FILES key, else the longest FILES key that prefixes the case site id; aliases that
-// point at the same frozen JSON resolve to the canonical (non-dated) key.
-// Cases without a map site whose recipe is still tied to one place.
-// abundance.js defaults to the Dead Sea brine assay (DEFAULT_ASSAY_ID = 'dead-sea-brine').
+// Cases without a map site whose recipe is still tied to one place: abundance.js defaults to
+// the Dead Sea brine assay.
 const CASE_SITE_FALLBACK = Object.freeze({ 'abundance.js': 'levant-dead-sea' });
 
+// Exact FILES key, else the longest FILES key that prefixes the case site id; aliases that
+// point at the same frozen JSON resolve to the canonical (non-dated) key.
 function resolveSiteId(siteId) {
   if (!siteId) return null;
   const { keys, files } = pvgisFileKeys();
@@ -182,10 +182,6 @@ function streamAmount(stream) {
   if (stream.kind === 'material') return streamMassKg(stream);
   if (stream.kind === 'consumable') return Number(stream.amount) || 0;
   return Number(stream.kWh) || 0;
-}
-
-function isPvNode(node) {
-  return node.unit === 'electricity-source';
 }
 
 function electricityKWh(definition, solved) {
@@ -232,11 +228,10 @@ function nodeKind(unit) {
 
 function topSubstances(stream) {
   if (stream.kind !== 'material' || !stream.mol) return null;
-  const masses = Object.entries(stream.mol)
+  return Object.entries(stream.mol)
     .map(([sub, mol]) => [sub, mol * (SUBSTANCES[sub]?.molarMassG || 0) / 1000])
     .filter(([, kg]) => kg > 0)
     .sort((a, b) => b[1] - a[1]);
-  return masses;
 }
 
 function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg, nodeVarOm = new Map()) {
@@ -346,7 +341,7 @@ function analyseCase(file, factoryName, factory) {
     const fixedOM = one.breakdown.fixedOM;
     const variableOM = one.breakdown.variableOM;
     if (!(one.installedCapex > 0 || fixedOM > 0 || variableOM > 0)) continue;
-    if (isPvNode(node)) { pvCapex += one.installedCapex; continue; }
+    if (node.unit === 'electricity-source') { pvCapex += one.installedCapex; continue; }
     nodeCapex.set(node.id, one.installedCapex);
     if (variableOM > 0) nodeVarOm.set(node.id, variableOM / econ.periodDays);
     const ec = nodeEconomics(node, config);

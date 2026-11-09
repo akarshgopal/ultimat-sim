@@ -1,18 +1,8 @@
-(function exposeReeSxCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('../data/ionic-clay-longnan.js') : root.IonicClayLongnan,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.ReeSxCase = api;
-})(globalThis, (model, tea, clay, shared) => {
-const { projectEconomics, right, nodeFinder, clone, solarPowerNode } = shared;
+const tea = require('../data/tea-screening.js');
+const clay = require('../data/ionic-clay-longnan.js');
+const { projectEconomics, right, nodeFinder, clone, solarPowerNode } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=33.77&lon=-118.19&peakpower=1&loss=14&angle=20&aspect=180&outputformat=json';
-const pvgis = typeof require === 'function' ? require('../data/pvgis-long-beach.json') : null;
-const DAILY_PV_ED = pvgis ? pvgis.outputs.totals.fixed.E_d : 3.33;
-const DAILY_PV_EY = pvgis ? pvgis.outputs.totals.fixed.E_y : 1213.78;
+const { E_d: DAILY_PV_ED, E_y: DAILY_PV_EY } = require('../data/pvgis-long-beach.json').outputs.totals.fixed;
 const REO_KG_PER_DAY = 10;
 const RECOVERY = 0.95;
 const SEC = 5.3;
@@ -23,22 +13,12 @@ const ORNL_MSX = 'https://www.ornl.gov/publication/process-scale-energy-efficien
 const USGS_REE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-rare-earths.pdf';
 const LONG_BEACH_URL = 'https://en.wikipedia.org/wiki/Long_Beach,_California';
 
-function concentrateStream(kg) {
-  return {
-    kind: 'material',
-    mol: clay.concentrateMolForKg(kg),
-    phase: 'solid',
-    T_C: 25,
-    P_bar: 1,
-  };
-}
-
 function createReeSxCase() {
   const feedKg = REO_KG_PER_DAY / RECOVERY;
   const kWhPerDay = REO_KG_PER_DAY * SEC;
   const solarKWp = kWhPerDay / DAILY_PV_ED * 1.02;
   const electricityKWh = solarKWp * DAILY_PV_ED;
-  const concentrate = concentrateStream(feedKg);
+  const concentrate = { kind: 'material', mol: clay.concentrateMolForKg(feedKg), phase: 'solid', T_C: 25, P_bar: 1 };
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
     economics: projectEconomics(),
@@ -129,5 +109,4 @@ function createReeSxCase() {
   return definition;
 }
 
-return { createReeSxCase };
-});
+module.exports = { createReeSxCase };

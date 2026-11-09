@@ -41,20 +41,12 @@ function buildAssay({ id, site, salinity, quality, notes, evidence, retrieved = 
   const ions_g_per_kg = {};
   const mol_per_kg = {};
   for (const [ion, g] of Object.entries(MILLERO_S35)) {
-    const gg = g * scale;
-    ions_g_per_kg[ion] = gg;
-    mol_per_kg[ion] = gg / SUBSTANCES[ion].molarMassG;
+    ions_g_per_kg[ion] = g * scale;
+    mol_per_kg[ion] = g * scale / SUBSTANCES[ion].molarMassG;
   }
-  const density_kg_per_L = densityAt(salinity);
   return {
-    meta: {
-      retrieved,
-      id,
-      site,
-      quality,
-      notes,
-    },
-    density_kg_per_L,
+    meta: { retrieved, id, site, quality, notes },
+    density_kg_per_L: densityAt(salinity),
     salinity_g_per_kg: salinity,
     ions_g_per_kg,
     mol_per_kg,
@@ -280,5 +272,3 @@ for (const assay of ASSAYS) {
   writeFileSync(join(DATA, `${id}.js`), toUmd(GLOBALS[id], assay));
   console.log('wrote', id, 'S=', assay.salinity_g_per_kg, 'ρ=', assay.density_kg_per_L);
 }
-
-console.log(JSON.stringify({ count: ASSAYS.length, ids: ASSAYS.map((a) => a.meta.id) }, null, 2));

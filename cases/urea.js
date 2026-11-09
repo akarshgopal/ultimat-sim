@@ -1,14 +1,6 @@
-(function exposeUreaCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.UreaCase = api;
-})(globalThis, (model, tea, shared) => {
-const { SUBSTANCES } = model;
-const { projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-22.957&lon=14.505&peakpower=1&loss=14&angle=23&aspect=-179&raddatabase=PVGIS-ERA5&outputformat=json';
 const DAILY_PV_ED = 5.48;
 const UREA_KG_PER_DAY = 1000;
@@ -124,5 +116,4 @@ function createUreaCase() {
   return definition;
 }
 
-return { createUreaCase };
-});
+module.exports = { createUreaCase };

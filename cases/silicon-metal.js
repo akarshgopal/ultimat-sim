@@ -1,20 +1,10 @@
-(function exposeSiliconMetalCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.SiliconMetalCase = api;
-})(globalThis, (model, tea, shared) => {
 // Silicon on sunlight from crustal quartz: submerged-arc MG-Si (SiO₂ + 2C → Si + 2CO, 12 kWh/kg),
 // optionally refined to solar-grade polysilicon (Siemens-style, 65 kWh/kg). Same packs, energies
 // and feeds as the PV-module chain (cases/silicon.js), at stand-alone scale. siliconChain() is shared
 // with cases/polysilicon.js.
-const { SUBSTANCES } = model;
-const { projectEconomics, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
-const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
-const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const FEED_MARGIN = 1.05;
 const USGS_SI = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-silicon.pdf';
@@ -107,7 +97,7 @@ function siliconChain({ poly, kgPerDay }) {
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports', [
-        { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: 'https://en.wikipedia.org/wiki/Mejillones' },
+        { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: MEJILLONES_URL },
       ]),
       brineConcession: right('concession', 'unverified', 'No brine; purchased quartzite and carbon are not a mineral concession', [
         { label: 'USGS silica statistics (commodity context, not a concession)', url: USGS_SILICA },
@@ -135,5 +125,4 @@ function createSiliconMetalCase() {
   return siliconChain({ poly: false, kgPerDay: 10000 });
 }
 
-return { createSiliconMetalCase, siliconChain };
-});
+module.exports = { createSiliconMetalCase, siliconChain };

@@ -1,15 +1,5 @@
-(function exposeCementCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.CementCase = api;
-})(globalThis, (model, tea, shared) => {
-const { MEJILLONES_URL, projectEconomics, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
-const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
-const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const CEMENT_KG_PER_DAY = 1000;
 const SEC_CEMENT = 1.05;
@@ -141,5 +131,4 @@ function createCementCase() {
   return definition;
 }
 
-return { createCementCase };
-});
+module.exports = { createCementCase };

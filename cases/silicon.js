@@ -1,16 +1,6 @@
-(function exposeSiliconCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.SiliconCase = api;
-})(globalThis, (model, tea, shared) => {
-const { SUBSTANCES } = model;
-const { projectEconomics, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
-const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
-const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const MODULE_KG_PER_DAY = 1000;
 const POLY_KG_PER_DAY = MODULE_KG_PER_DAY * 0.0273;
@@ -193,7 +183,7 @@ function createSiliconCase() {
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports', [
-        { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: 'https://en.wikipedia.org/wiki/Mejillones' },
+        { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: MEJILLONES_URL },
       ]),
       brineConcession: right('concession', 'unverified', 'No brine; purchased quartzite/bauxite/caustic/carbon/Ag/glass/EVA are not a mineral concession', [
         { label: 'USGS silica statistics (commodity context, not a concession)', url: USGS_SILICA },
@@ -218,7 +208,7 @@ function createSiliconCase() {
       ]),
     },
     evidence: [
-      { label: 'Mejillones industrial geography', url: 'https://en.wikipedia.org/wiki/Mejillones' },
+      { label: 'Mejillones industrial geography', url: MEJILLONES_URL },
       { label: 'Solar: PVGIS-ERA5, 2005–2023 monthly; annual E_y 1923.52 kWh/kWp, E_d 5.27', url: PVGIS_URL },
       { label: 'USGS MCS 2025 silicon metal (MG-Si feed family; product is SoG poly, not silicon metal)', url: USGS_SI },
       { label: 'Fraunhofer ISE SoG polysilicon electricity 60–71 kWh/kg; screening SEC 65', url: FRAUNHOFER_POLYSI },
@@ -236,5 +226,4 @@ function createSiliconCase() {
   return definition;
 }
 
-return { createSiliconCase };
-});
+module.exports = { createSiliconCase };

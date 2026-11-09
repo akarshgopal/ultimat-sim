@@ -73,7 +73,10 @@ if (opts.rank) {
       console.log(`${y.year}  ${money(y.revenueUsd).padStart(8)}  ${money(y.opexUsd).padStart(8)}  ${money(y.capexUsd).padStart(8)}  ${money(y.cashUsd).padStart(8)}  ${String(y.plantsTotal).padStart(7)}  ${y.pvGWp.toFixed(2).padStart(7)}`);
     }
     const bySite = {};
-    for (const p of result.plants) bySite[`${p.pathwayId} @ ${p.siteId}`] = (bySite[`${p.pathwayId} @ ${p.siteId}`] || 0) + 1;
+    for (const p of result.plants) {
+      const key = `${p.pathwayId} @ ${p.siteId}`;
+      bySite[key] = (bySite[key] || 0) + 1;
+    }
     console.log('\nplants built:');
     for (const [key, n] of Object.entries(bySite).sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(4)}  ${key}`);
   }

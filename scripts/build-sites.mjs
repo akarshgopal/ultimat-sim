@@ -31,7 +31,7 @@ export function buildSiteRows() {
       ...row,
       pvKWhPerKWpDay: Number(row.pvKWhPerKWpDay.toPrecision(6)),
       // Frozen PVGIS monthly E_d (kWh/kWp·day, Jan..Dec): the utilization model's 12 typical days.
-      pvMonthlyKWhPerKWpDay: (pvgis.frozenSolarFor(presetById.get(row.id))?.monthlyPVKWhPerKWp || []).slice(1).map(v => Number(Number(v).toPrecision(4))),
+      pvMonthlyKWhPerKWpDay: (pvgis.frozenSolarFor(preset)?.monthlyPVKWhPerKWp || []).slice(1).map(v => Number(Number(v).toPrecision(4))),
       landUsdPerHa: row.landUsdPerHa == null ? null : Math.round(row.landUsdPerHa),
       landSource: land?.source ? { name: land.name || null, quality: land.quality || null, url: land.citeUrl || null } : null,
       notes: preset?.notes || '',
@@ -51,15 +51,16 @@ export function renderModule(rows) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const text = renderModule(buildSiteRows());
+  const rows = buildSiteRows();
+  const text = renderModule(rows);
   if (process.argv.includes('--check')) {
-    const current = readFileSync(OUT, 'utf8');
-    if (current !== text) {
+    if (readFileSync(OUT, 'utf8') !== text) {
       console.error('data/sites.js is stale: run node scripts/build-sites.mjs');
       process.exit(1);
     }
+    console.log('data/sites.js is up to date');
   } else {
     writeFileSync(OUT, text);
-    console.log(`wrote data/sites.js: ${JSON.parse(JSON.stringify(buildSiteRows())).length} sites`);
+    console.log(`wrote data/sites.js: ${rows.length} sites`);
   }
 }

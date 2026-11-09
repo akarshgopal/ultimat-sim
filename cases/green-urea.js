@@ -1,15 +1,7 @@
-(function exposeGreenUreaCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/benguela-atlantic-seawater.js') : root.BenguelaAtlanticSeawater,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.GreenUreaCase = api;
-})(globalThis, (model, assay, tea, shared) => {
-const { SUBSTANCES } = model;
-const { projectEconomics, material, streamFromAssay, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
+const { SUBSTANCES } = require('../engine/model');
+const assay = require('../data/benguela-atlantic-seawater.js');
+const tea = require('../data/tea-screening.js');
+const { MILLERO_URL, WOA_URL, projectEconomics, material, streamFromAssay, airFromNitrogenKg, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-22.957&lon=14.505&peakpower=1&loss=14&angle=23&aspect=-179&raddatabase=PVGIS-ERA5&outputformat=json';
 const DAILY_PV_ED = 5.48;
 const UREA_KG_PER_DAY = 1000;
@@ -25,33 +17,12 @@ const SEC_UREA = 0.8;
 const PRODUCT_DENSITY_KG_M3 = 1000;
 const FEED_DENSITY_KG_M3 = assay.density_kg_per_L * 1000;
 const REGION = 'Southern Africa';
-const MILLERO_URL = 'https://doi.org/10.1016/j.dsr.2007.10.001';
 const MOHRHOLZ_URL = 'https://doi.org/10.1016/j.csr.2007.10.001';
-const WOA_URL = 'https://doi.org/10.25923/70qt-9574';
 const IEA_NH3 = 'https://www.iea.org/reports/ammonia-technology-roadmap';
 const USGS_N = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-nitrogen.pdf';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const IEA_DAC = 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary';
 const WALVIS_URL = 'https://en.wikipedia.org/wiki/Walvis_Bay';
-// Ambient-air preset ratios from the flowsheet air source (N₂-dominated).
-const AIR_N2 = 788163;
-const AIR_O2 = 211409;
-const AIR_CO2 = 428;
-
-function airFromNitrogenKg(nitrogenKg) {
-  const n2Mol = nitrogenKg * 1000 / SUBSTANCES.N2.molarMassG;
-  return {
-    kind: 'material',
-    mol: {
-      N2: n2Mol,
-      O2: n2Mol * AIR_O2 / AIR_N2,
-      CO2: n2Mol * AIR_CO2 / AIR_N2,
-    },
-    phase: 'gas',
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createGreenUreaCase() {
   const ureaKg = UREA_KG_PER_DAY;
@@ -205,7 +176,7 @@ function createGreenUreaCase() {
       summary: 'Northern Benguela / SE Atlantic ~35.2 g/kg, Millero/Pilson S=35 majors scaled 35.2/35; multi-ion, not a NaCl proxy or Namport intake sample',
       quality: 'cited',
       salinity_g_per_kg: assay.salinity_g_per_kg,
-      evidence: Array.isArray(assay.evidence) ? assay.evidence.map(item => ({ ...item })) : [],
+      evidence: assay.evidence.map(item => ({ ...item })),
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports. Plant uses on-site PV sized to SWRO + PEM + ASU + Haber + urea.', [
@@ -241,5 +212,4 @@ function createGreenUreaCase() {
   return definition;
 }
 
-return { createGreenUreaCase };
-});
+module.exports = { createGreenUreaCase };

@@ -3,9 +3,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
 const BUILD_ID = getBuildId();
 
@@ -23,11 +21,8 @@ for (const entry of INCLUDE) {
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.cp(path.join(ROOT, entry), target, { recursive: true });
 }
-for (const entry of ['index.html']) {
-  const entryPath = path.join(DIST, entry);
-  const original = await fs.readFile(entryPath, 'utf8');
-  await fs.writeFile(entryPath, rewriteLocalAssetUrls(original, BUILD_ID));
-}
+const indexPath = path.join(DIST, 'index.html');
+await fs.writeFile(indexPath, rewriteLocalAssetUrls(await fs.readFile(indexPath, 'utf8'), BUILD_ID));
 
 console.log(`Built dist/ with asset version ${BUILD_ID}`);
 
@@ -51,8 +46,6 @@ function getBuildId() {
     return new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   }
 }
-
-
 
 function rewriteLocalAssetUrls(html, buildId) {
   return html.replace(/\b(src|href)=(["'])([^"']+)\2/g, (match, attribute, quote, url) => {

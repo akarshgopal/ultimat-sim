@@ -1,16 +1,7 @@
 // Sited brine-hub plant models: the Dead Sea and Zabuye (Tibet) abundance hubs at their map
 // points, with frozen PVGIS solar and site rights. Built on cases/abundance.js.
-(function exposeBrineHubCases(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('./abundance') : root.AbundanceCase,
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.BrineHubCases = api;
-})(globalThis, (abundance, model, shared) => {
-const { streamMassKg } = model;
-const { right, nodeFinder, clone } = shared;
+const abundance = require('./abundance');
+const { right, nodeFinder, clone } = require('./_shared.js');
 const tea = abundance.TEA;
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=31.16&lon=35.43&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
 // Frozen PVGIS response: data/pvgis-dead-sea.json, retrieved 2026-09-06.
@@ -115,7 +106,7 @@ function siteDeadSeaAbundance() {
       { label: 'Alsabbagh et al. 2021: Li+ 18 mg/L Dead Sea water', url: 'https://doi.org/10.1016/j.mineng.2021.107038' },
       { label: 'USGS salt statistics (purchased-salt context)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
     ],
-    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Brine composition is the frozen Dead Sea open-water ion assay (data/dead-sea-brine.json); a literature assay is not a mineral concession. Minerals CAPEX uses the tea-screening DLE brine-throughput mid (not the old $80 OOM). Dead Sea demo scale is cash-positive at that mid because 4% fixed O&M tracks CAPEX; high-band $40 stays cash-negative. MECH11 wires brine→intake-pump→minerals (0.4 kWh/m³ lift on the bus). MECH18 adds intake-pump screening CAPEX + campus pad. MECH19 applies Levant CAPEX× 0.85 (screening) to regionalized packs (minerals, chemicals, brine pump) — not a plant quote. Screening, not bankable. Freshwater and purchased salt are explicit assumptions. Grid, brine concession, and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
+    notes: 'Representative-day brine and ammonia hub. Solar is sized to the process load at PVGIS-SARAH3/ERA5 4.59 kWh/kWp·day (E_y 1674.85 / 365). Brine composition is the frozen Dead Sea open-water ion assay (data/dead-sea-brine.json); a literature assay is not a mineral concession. Minerals CAPEX uses the tea-screening DLE brine-throughput mid. Dead Sea demo scale is cash-positive at that mid because 4% fixed O&M tracks CAPEX; high-band $40 stays cash-negative. Brine flows brine→intake-pump→minerals (0.4 kWh/m³ lift on the bus) with screening intake-pump CAPEX + campus pad. Levant CAPEX× 0.85 (screening) applies to the regionalized packs (minerals, chemicals, brine pump) — not a plant quote. Screening, not bankable. Freshwater and purchased salt are explicit assumptions. Grid, brine concession, and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
   };
   return definition;
 }
@@ -215,12 +206,12 @@ function siteZabuyeAbundance() {
       { label: 'Murphy & Haji 2022 Table 1: Lake Zabuye carbonate brine majors', url: ZABUYE_ASSAY_URL },
       { label: 'USGS salt statistics (purchased-salt context)', url: 'https://www.usgs.gov/centers/national-minerals-information-center/salt-statistics-and-information' },
     ],
-    notes: 'Representative-day Zabuye brine hub. Solar is sized to the process load at frozen PVGIS-ERA5 E_y 2070.67 kWh/kWp (2070.67 / 365). Brine composition is the Murphy & Haji 2022 Table 1 carbonate assay (data/zabuye-lithium-brine.json); a literature assay is not a mineral concession. Brine concession is an explicit screening assumption so sizeForPositiveCashflow can run the capital-inclusive gate. Screening offtake uses the China/Asia USGS table (not a plant contract and not a silent ME-Levant inherit). MECH11 wires brine→intake-pump→minerals (0.4 kWh/m³ lift on the bus). MECH18 adds intake-pump screening CAPEX + campus pad. Screening, not bankable. Freshwater and purchased salt are explicit assumptions. Grid and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
+    notes: 'Representative-day Zabuye brine hub. Solar is sized to the process load at frozen PVGIS-ERA5 E_y 2070.67 kWh/kWp (2070.67 / 365). Brine composition is the Murphy & Haji 2022 Table 1 carbonate assay (data/zabuye-lithium-brine.json); a literature assay is not a mineral concession. Brine concession is an explicit screening assumption so sizeForPositiveCashflow can run the capital-inclusive gate. Screening offtake uses the China/Asia USGS table (not a plant contract and not a silent ME-Levant inherit). Brine flows brine→intake-pump→minerals (0.4 kWh/m³ lift on the bus) with screening intake-pump CAPEX + campus pad. Screening, not bankable. Freshwater and purchased salt are explicit assumptions. Grid and seawater intake/discharge rights are unverified. Annual economics repeat this day 365 times.',
   };
   return definition;
 }
 
-return {
+module.exports = {
   DEAD_SEA_PV,
   DAILY_PV,
   ZABUYE_PV,
@@ -228,4 +219,3 @@ return {
   siteDeadSeaAbundance,
   siteZabuyeAbundance,
 };
-});

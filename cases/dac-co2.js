@@ -1,18 +1,9 @@
 // Merchant CO₂ from air: blower → solid-sorbent DAC on PV at Mejillones, 1 t CO₂/day.
 // The captive CO₂ supplier for the recipes that otherwise buy co2-feed (green-mto, green-ft,
 // ft-liquids, green-urea, urea): engine/company.js maps co2-feed → co2 for make-vs-buy.
-(function exposeDacCo2Case(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.DacCo2Case = api;
-})(globalThis, (model, tea, shared) => {
-const { SUBSTANCES, streamMassKg } = model;
-const { MEJILLONES_URL, projectEconomics, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
-const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
+const { SUBSTANCES, streamMassKg } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 // Frozen PVGIS-ERA5 annual average at Mejillones: E_y 1923.52 kWh/kWp ÷ 365 (data/pvgis-mejillones.json).
 const DAILY_PV = 1923.52 / 365;
 const CO2_KG_PER_DAY = 1000;
@@ -143,5 +134,4 @@ function createDacCo2Case() {
   return definition;
 }
 
-return { createDacCo2Case, CO2_KG_PER_DAY };
-});
+module.exports = { createDacCo2Case };

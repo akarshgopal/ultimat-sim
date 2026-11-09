@@ -11,7 +11,6 @@
 // capacity contains, so the engine can squash each class toward its materials floor:
 //
 //   materialsUsdPerUnit(cls) = Σ line.kgPerUnit × COMMODITIES[line.material].usdPerKg
-//                              + cls.extraUsdPerUnit (non-commodity floor items; 0 for all classes here)
 //   idiotIndex(cls)          = cls.todayUsdPerUnit / materialsUsdPerUnit(cls)
 //   floorFraction(cls)       = 1 / idiotIndex(cls)
 //
@@ -34,7 +33,7 @@ const SCHEMA_VERSION = 1;
 const TROY_OZ_KG = 0.0311034768;
 const CNY_PER_USD = 7.2; // 2024 average order, used for Chinese spot quotes below
 
-// ── Commodity price sources (every URL was seen in a search result) ──────────────────────────
+// ── Commodity price sources ──────────────────────────────────────────────────────────────────
 const WB_PINK_2026_02 = 'https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/related/CMO-Pink-Sheet-February-2026.pdf';
 const WB_PINK_2026_01 = 'https://thedocs.worldbank.org/en/doc/18675f1d1639c7a34d463f59263ba0a2-0050012025/related/CMO-Pink-Sheet-January-2026.pdf';
 const METALCHARTS_NI_2024 = 'https://metalcharts.org/nickel-price-history/2024';
@@ -332,7 +331,6 @@ const CLASSES = {
       { material: 'polymer', kgPerUnit: 5.8, note: 'EVA/POE encapsulant + backsheet/junction box ≈1.3 kg/m²' },
       { material: 'concrete', kgPerUnit: 15, note: 'inverter/substation pads, roads excluded' },
     ],
-    extraUsdPerUnit: 0,
     quality: 'screening',
     sources: [
       { label: 'IRENA Renewable Power Generation Costs in 2023 (utility PV $758/kW)', url: IRENA_RPGC_2023 },
@@ -360,7 +358,6 @@ const CLASSES = {
       { material: 'steel', kgPerUnit: 3, note: 'racks, container/enclosure, HVAC' },
       { material: 'concrete', kgPerUnit: 10, note: 'foundation pads' },
     ],
-    extraUsdPerUnit: 0,
     quality: 'screening',
     sources: [
       { label: 'NREL ATB 2024: utility-scale battery storage', url: NREL_ATB_BATT_2024 },
@@ -376,7 +373,6 @@ const CLASSES = {
     chemistry: 'alkaline',
     kWPerUnit: KW_PER_KG_H2_DAY,
     lines: perKgDay(ALKALINE_PER_KW),
-    extraUsdPerUnit: 0,
     variants: {
       alkaline: { lines: perKgDay(ALKALINE_PER_KW), note: 'default: no PGM, no titanium; nickel + steel' },
       pem: { lines: perKgDay(PEM_PER_KW), note: 'iridium dominates (~$62/kW of ~$100/kW materials at 0.4 g Ir/kW)' },
@@ -404,7 +400,6 @@ const CLASSES = {
       { material: 'polymer', kgPerUnit: 9, note: 'HDPE intake/outfall pipes (~7 kg per m³/d for ~1 km each at 200,000 m³/d), RO elements (~1.3 kg per m³/d), FRP vessels' },
       { material: 'copper', kgPerUnit: 0.5, note: 'motors (~0.2 kW per m³/d), cabling, transformers' },
     ],
-    extraUsdPerUnit: 0,
     quality: 'screening',
     sources: [
       { label: 'Ghaffour et al. 2013 desalination cost review (DOI)', url: GHAFFOUR_2013 },
@@ -426,7 +421,6 @@ const CLASSES = {
       { material: 'refractory', kgPerUnit: 2, note: 'calciner lining (liquid-solvent route)' },
       { material: 'copper', kgPerUnit: 1.5, note: 'fan/compressor motors, power distribution' },
     ],
-    extraUsdPerUnit: 0,
     quality: 'screening',
     sources: [
       { label: 'IEA Direct Air Capture 2022', url: IEA_DAC },
@@ -449,7 +443,6 @@ const CLASSES = {
       { material: 'nickel', kgPerUnit: 0.01, note: 'NiCr/FeCrAl heater elements' },
       { material: 'concrete', kgPerUnit: 5, note: 'foundation' },
     ],
-    extraUsdPerUnit: 0,
     quality: 'screening',
     sources: [
       { label: 'pv magazine 2024: firebrick storage at ~1/10 of battery $/kWh (Stanford, $6/kWh 2035)', url: PVMAG_FIREBRICK_2024 },
@@ -467,7 +460,6 @@ const CLASSES = {
       { material: 'stainless-steel', kgPerUnit: 1, note: 'manifolds, valves, instrument tubing' },
       { material: 'concrete', kgPerUnit: 20, note: 'saddles/foundations' },
     ],
-    extraUsdPerUnit: 0,
     quality: 'screening',
     sources: [
       { label: 'DOE Hydrogen Program 2016 review: steel/concrete composite stationary vessels (~$800/kg)', url: DOE_H2_STORAGE_2016 },
@@ -487,7 +479,6 @@ const CLASSES = {
       { material: 'copper', kgPerUnit: 0.001, note: 'motors, MCC, cabling' },
       { material: 'polymer', kgPerUnit: 0.002, note: 'linings, insulation jacketing, gaskets' },
     ],
-    extraUsdPerUnit: 0,
     quality: 'screening',
     sources: [
       { label: 'Lang factor (fluids plant 4.74 × purchased equipment)', url: WIKI_LANG },
@@ -513,11 +504,10 @@ function linesUsd(lines) {
   }, 0);
 }
 
-// Σ kgPerUnit × commodity price (+ extraUsdPerUnit). Pass a class key or row; optional variant key.
+// Σ kgPerUnit × commodity price. Pass a class key or row; optional variant key.
 function materialsUsdPerUnit(c, variant) {
   const row = cls(c);
-  const lines = variant ? row.variants[variant].lines : row.lines;
-  return linesUsd(lines) + (row.extraUsdPerUnit || 0);
+  return linesUsd(variant ? row.variants[variant].lines : row.lines);
 }
 
 function idiotIndex(c, variant) {
@@ -542,9 +532,9 @@ function materialBreakdown(c, variant) {
 // stores) floor at their raw materials in $; the rest floor as a fraction of today's recipe price.
 const ABSOLUTE_FLOOR_CLASSES = ['pv', 'battery', 'thermalStore', 'h2Storage'];
 function floors() {
-  return Object.fromEntries(Object.keys(CLASSES).map(cls => [cls, ABSOLUTE_FLOOR_CLASSES.includes(cls)
-    ? { materialsUsdPerUnit: materialsUsdPerUnit(cls) }
-    : { floorFraction: floorFraction(cls) }]));
+  return Object.fromEntries(Object.keys(CLASSES).map(key => [key, ABSOLUTE_FLOOR_CLASSES.includes(key)
+    ? { materialsUsdPerUnit: materialsUsdPerUnit(key) }
+    : { floorFraction: floorFraction(key) }]));
 }
 
 return {

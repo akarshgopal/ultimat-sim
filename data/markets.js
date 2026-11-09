@@ -6,15 +6,15 @@
 // World-market sizes and reference prices for the multi-year company simulator.
 //
 // One row per SALE product key of TeaScreening.prices (feed/input-only keys such as
-// water are excluded) plus `hydrogen` (merchant + captive H₂). Unlike
+// water are excluded). Unlike
 // TeaScreening.demand (regional offtake caps), these rows are WORLD markets, used to
 // cap growth by market share and to lower realized price as the company's share rises:
 //
 //   share         = companyTonnes / worldDemandTPerYear
 //   realizedPrice = priceUsdPerKg × (1 − priceElasticity × share)
 //
-// priceUsdPerKg copies TeaScreening.prices[key].value (hydrogen copies
-// TeaScreening.costs['hydrogen-feed'].value) so the simulator and the screening TEA agree.
+// priceUsdPerKg copies TeaScreening.prices[key].value so the simulator and the screening
+// TEA agree.
 // `basis` states what the tonnage counts; it is chosen to match what the price is per kg
 // of (e.g. lithium is LCE because the screening price is an LCE proxy).
 // priceElasticity is always screening (deep commodity ~0.3, thin specialty ~0.8–1.0).
@@ -531,7 +531,7 @@ const MARKETS = {
     priceElasticity: 0.5,
     quality: 'cited',
     sources: [{ label: 'IEA Global Hydrogen Review 2025 — demand: almost 100 Mt in 2024 (+2%)', url: IEA_H2_2025 }],
-    note: 'Not in TeaScreening.prices; reference price is TeaScreening.costs hydrogen-feed ($2.00/kg grey–blue blend). ~85% is captive on-site (refining, ammonia, methanol); merchant H₂ is a few Mt. Low-emissions H₂ <1 Mt.',
+    note: 'Reference price is TeaScreening hydrogen ($2.00/kg grey–blue blend, equal to the hydrogen-feed purchase). ~85% is captive on-site (refining, ammonia, methanol); merchant H₂ is a few Mt. Low-emissions H₂ <1 Mt.',
   },
 };
 

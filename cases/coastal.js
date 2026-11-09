@@ -1,27 +1,18 @@
-(function exposeCoastalCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('./sabatier') : root.SabatierCase,
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/almeria-seawater.js') : root.AlmeriaSeawater,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.CoastalCase = api;
-})(globalThis, (sabatier, model, assay, shared) => {
-const { streamFromAssay, right, nodeFinder } = shared;
-const tea = typeof require === 'function' ? require('../data/tea-screening.js') : globalThis.TeaScreening;
-const HOURLY = typeof require === 'function' ? require('../data/pvgis-almeria-hourly.js') : globalThis.PvgisAlmeriaHourly;
+const sabatier = require('./sabatier');
+const assay = require('../data/almeria-seawater.js');
+const tea = require('../data/tea-screening.js');
+const HOURLY = require('../data/pvgis-almeria-hourly.js');
+const { MILLERO_URL, streamFromAssay, right, nodeFinder, clone } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=36.834&lon=-2.463&peakpower=1&loss=14&angle=30&aspect=0&outputformat=json';
 // Frozen PVGIS response: data/pvgis-almeria.json, retrieved 2026-09-05.
 const DAILY_PV = [1716.39 / 365, 3.75, 4.35, 4.75, 5.17, 5.37, 5.54, 5.52, 5.38, 4.91, 4.31, 3.72, 3.65];
 const INTAKE_M3_PER_DAY = 0.1;
 const FEED_DENSITY_KG_M3 = assay.density_kg_per_L * 1000;
-const MILLERO_URL = 'https://doi.org/10.1016/j.dsr.2007.10.001';
 const ALBORAN_URL = 'https://en.wikipedia.org/wiki/Alboran_Sea';
 const EVIDENCE = [
   { label: 'Solar: PVGIS-SARAH3 / ERA5, 2005–2023 monthly; 2023 hourly typical day for dispatch', url: PVGIS_URL },
   { label: 'PEM: DOE 2022 system status, 55 kWh/kg H₂; not a future target', url: 'https://www.energy.gov/cmei/fuels/technical-targets-proton-exchange-membrane-electrolysis' },
-  { label: 'SWRO plant-only SEC 3.1 kWh/m³ after MECH11 intake-pump (was 3.5 with intake); Elimelech & Phillip 2011; Voutchkov 2018 RO-train 2.5–2.8', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
+  { label: 'SWRO plant-only SEC 3.1 kWh/m³ (the intake lift is on the intake pump); Elimelech & Phillip 2011; Voutchkov 2018 RO-train 2.5–2.8', url: 'https://doi.org/10.1016/j.desal.2017.10.033' },
   { label: 'Seawater: Millero/Pilson S=35 majors scaled 36.5/35 for Alboran MAW near Almería; not a NaCl proxy', url: MILLERO_URL },
   { label: 'Alboran Sea Modified Atlantic Water salinity context (~36.5 g/kg)', url: ALBORAN_URL },
   { label: 'Air: 422.45 ppm, 2024 global estimate; dry O₂/N₂ balance is simplified', url: 'https://essd.copernicus.org/articles/17/965/2025/' },
@@ -38,8 +29,8 @@ function createCoastalCase(month = 0) {
   const h2 = 4 * 2.01588 / 16.04246;
   const co2 = 44.0095 / 16.04246;
   const water = h2 * 18.01528 / 2.01588;
-  // Match this example's upstream setpoints; installed capacities stay fixed.
-  // MECH11: SWRO plant-only 3.1 (+ intake-pump 0.4 on feed) and ~4 kWh/kg air-blower pad.
+  // Upstream setpoints follow the solar-limited target; installed capacities stay fixed.
+  // kWh/kg CH₄: PEM 55 + DAC 0.5 + SWRO plant-only 3.1 + intake pump 0.4 per m³, ~4 air-blower pad, 1 synthesis.
   const seawaterM3 = water / 1000 / 0.45;
   const target = Math.min(5, electricityKWh / (h2 * 55 + co2 * 0.5 + seawaterM3 * 3.1 + seawaterM3 * 0.4 + 4 + 1));
   const definition = sabatier.createSabatierCase({
@@ -52,26 +43,22 @@ function createCoastalCase(month = 0) {
   node('dac').params.consumablesPerKgCO2 = 0.02;
   node('consumables').params.stream = { kind: 'consumable', amount: 1, unit: 'kg/day', label: 'Amine sorbent makeup', chemicalId: 'amine-sorbent' };
   node('electricity').economics = tea.bindCapexPack('solar-pv', { capacity: solarKWp });
-  // MECH18: regional CAPEX× for Europe on intake pump + air blower (sabatier binds without region).
-  if (node('seawater-pump')) {
-    node('seawater-pump').economics = tea.bindCapexPack('intake-pump', { capacity: node('seawater-pump').capacity, region: 'Europe' });
-  }
-  if (node('air-blower')) {
-    node('air-blower').economics = tea.bindCapexPack('gas-blower', { capacity: node('air-blower').capacity, region: 'Europe' });
-  }
+  // Europe CAPEX× on the lifts (the sabatier case binds them without a region).
+  node('seawater-pump').economics = tea.bindCapexPack('intake-pump', { capacity: node('seawater-pump').capacity, region: 'Europe' });
+  node('air-blower').economics = tea.bindCapexPack('gas-blower', { capacity: node('air-blower').capacity, region: 'Europe' });
   definition.graph.nodes.push({ id: 'spent-media', unit: 'consumable-sink', economics: { disposition: 'disposal', disposalCost: 1 } });
   definition.graph.edges.push({ from: { node: 'dac', port: 'spentMedia' }, to: { node: 'spent-media', port: 'in' } });
   const assumed = 'Assumed accessible quantity; no local supply agreement verified';
   const resources = {
-    air: { stream: JSON.parse(JSON.stringify(node('air').params.stream)), quality: 'literature-estimate', evidence: assumed },
+    air: { stream: clone(node('air').params.stream), quality: 'literature-estimate', evidence: assumed },
     seawater: {
-      stream: JSON.parse(JSON.stringify(node('seawater').params.stream)),
+      stream: clone(node('seawater').params.stream),
       quality: 'cited',
       evidence: 'Alboran MAW multi-ion assay from frozen data/almeria-seawater.json (Millero/Pilson S=35 scaled 36.5/35). Daily intake is 0.1 m³; not an intake or discharge permit',
     },
-    electricity: { stream: JSON.parse(JSON.stringify(node('electricity').params.stream)), quality: 'literature-estimate', evidence: 'PVGIS-SARAH3/ERA5 monthly average × assumed 37.5 kWp array' },
-    heat: { stream: JSON.parse(JSON.stringify(node('heat').params.stream)), quality: 'user-assumption', evidence: assumed },
-    consumables: { stream: JSON.parse(JSON.stringify(node('consumables').params.stream)), quality: 'user-assumption', evidence: 'Makeup chemical is a screening assumption, not a vendor contract' },
+    electricity: { stream: clone(node('electricity').params.stream), quality: 'literature-estimate', evidence: 'PVGIS-SARAH3/ERA5 monthly average × assumed 37.5 kWp array' },
+    heat: { stream: clone(node('heat').params.stream), quality: 'user-assumption', evidence: assumed },
+    consumables: { stream: clone(node('consumables').params.stream), quality: 'user-assumption', evidence: 'Makeup chemical is a screening assumption, not a vendor contract' },
     grid: { stream: { kind: 'electricity', kWh: 0 }, quality: 'unverified', evidence: 'Unverified grid access; zero authorized imports' },
     freshwater: { stream: { kind: 'material', mol: { H2O: 0 }, phase: 'liquid', T_C: 25, P_bar: 1 }, quality: 'unverified', evidence: 'Unverified freshwater access; zero authorized supply' },
   };
@@ -114,17 +101,17 @@ function createCoastalCase(month = 0) {
       brineConcession: right('concession', 'unverified', 'No brine or mineral concession at this coastal methane site'),
       saltPurchase: right('purchase', 'unverified', 'No salt purchase agreement; the plant does not buy salt'),
     },
-    solar: HOURLY ? {
+    solar: {
       typicalMonths: HOURLY.typicalMonths,
       annualTypical: HOURLY.annualTypical,
       year: HOURLY.year,
       database: HOURLY.database,
       url: HOURLY.url,
-    } : null,
-    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Alboran multi-ion assay (data/almeria-seawater.json), not a NaCl proxy. MECH11 wires seawater→intake-pump→SWRO and air→gas-blower→DAC on the bus; MECH18 adds screening CAPEX+pad for those lifts; SWRO SEC is plant-only 3.1 kWh/m³ (intake share moved to the pump at 0.4 kWh/m³). Grid, freshwater, and seawater discharge rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
+    },
+    notes: 'Hourly typical-day dispatch from PVGIS 2023 seriescalc; night hours have no PV unless a battery is assumed. Intake 0.1 m³/day and 30 kWh/day heat at 100°C are assumed, not permitted supplies. Seawater is the frozen Alboran multi-ion assay (data/almeria-seawater.json), not a NaCl proxy. Seawater flows seawater→intake-pump→SWRO and air→gas-blower→DAC on the bus, with screening CAPEX + pad for those lifts; SWRO SEC is plant-only 3.1 kWh/m³ (intake share moved to the pump at 0.4 kWh/m³). Grid, freshwater, and seawater discharge rights are unverified zeros. SWRO includes ideal polishing; CO₂ is ideal dry gas. All costs are illustrative USD assumptions, not local quotes. Annual economics repeat the selected typical day for 365 days.',
   };
   definition.operation.boundaryLimitedBy = target < 5 ? ['site solar electricity'] : [];
   return definition;
 }
-return { createCoastalCase, DAILY_PV, seawaterFromAssay: streamFromAssay, INTAKE_M3_PER_DAY };
-});
+
+module.exports = { createCoastalCase, DAILY_PV, INTAKE_M3_PER_DAY };

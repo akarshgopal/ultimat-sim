@@ -1,33 +1,23 @@
-(function exposeGreenHydrogenCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/benguela-atlantic-seawater.js') : root.BenguelaAtlanticSeawater,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.GreenHydrogenCase = api;
-})(globalThis, (model, assay, tea, shared) => {
-const { SUBSTANCES } = model;
-const { projectEconomics, streamFromAssay, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
 // Seawater → SWRO → PEM electrolysis → merchant/captive H₂ (+ O₂). The company simulator uses
 // this recipe as the make-vs-buy supplier for plants that buy hydrogen-feed (DRI, FT).
+const { SUBSTANCES } = require('../engine/model');
+const assay = require('../data/benguela-atlantic-seawater.js');
+const tea = require('../data/tea-screening.js');
+const { MILLERO_URL, WOA_URL, projectEconomics, streamFromAssay, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-22.957&lon=14.505&peakpower=1&loss=14&angle=23&aspect=-179&raddatabase=PVGIS-ERA5&outputformat=json';
 const DAILY_PV_ED = 5.48;
 const H2_KG_PER_DAY = 1000;
 const FEED_MARGIN = 1.05;
 const RECOVERY = 0.45;
-const O2_RECOVERY = 0.95;
 const SEC_H2 = 52;
 const SEC_SWRO = 3.5;
 const PRODUCT_DENSITY_KG_M3 = 1000;
 const FEED_DENSITY_KG_M3 = assay.density_kg_per_L * 1000;
 const REGION = 'Southern Africa';
-const MILLERO_URL = 'https://doi.org/10.1016/j.dsr.2007.10.001';
 const MOHRHOLZ_URL = 'https://doi.org/10.1016/j.csr.2007.10.001';
-const WOA_URL = 'https://doi.org/10.25923/70qt-9574';
 const WALVIS_URL = 'https://en.wikipedia.org/wiki/Walvis_Bay';
 const IEA_H2 = 'https://www.iea.org/reports/global-hydrogen-review-2024';
+
 function createGreenHydrogenCase() {
   const h2Kg = H2_KG_PER_DAY;
   const waterKg = h2Kg * SUBSTANCES.H2O.molarMassG / SUBSTANCES.H2.molarMassG;
@@ -123,7 +113,7 @@ function createGreenHydrogenCase() {
       summary: 'Northern Benguela / SE Atlantic ~35.2 g/kg, Millero/Pilson S=35 majors scaled 35.2/35; multi-ion, not a NaCl proxy or Namport intake sample',
       quality: 'cited',
       salinity_g_per_kg: assay.salinity_g_per_kg,
-      evidence: Array.isArray(assay.evidence) ? assay.evidence.map(item => ({ ...item })) : [],
+      evidence: assay.evidence.map(item => ({ ...item })),
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports', [
@@ -153,5 +143,4 @@ function createGreenHydrogenCase() {
   return definition;
 }
 
-return { createGreenHydrogenCase };
-});
+module.exports = { createGreenHydrogenCase };

@@ -1,53 +1,28 @@
-(function exposeAbundanceCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? {
-      'dead-sea-brine': require('../data/dead-sea-brine.js'),
-      'persian-gulf-sabkha-brine': require('../data/persian-gulf-sabkha-brine.js'),
-      'atacama-lithium-brine': require('../data/atacama-lithium-brine.js'),
-      'lake-mackay-wa-brine': require('../data/lake-mackay-wa-brine.js'),
-      'great-salt-lake-brine': require('../data/great-salt-lake-brine.js'),
-      'salton-sea-brine': require('../data/salton-sea-brine.js'),
-      'uyuni-lithium-brine': require('../data/uyuni-lithium-brine.js'),
-      'qaidam-brine': require('../data/qaidam-brine.js'),
-      'danakil-brine': require('../data/danakil-brine.js'),
-      'searles-lake-brine': require('../data/searles-lake-brine.js'),
-      'red-sea-sabkha-brine': require('../data/red-sea-sabkha-brine.js'),
-      'kutch-subsoil-brine': require('../data/kutch-subsoil-brine.js'),
-      'texas-gulf-desal-brine': require('../data/texas-gulf-desal-brine.js'),
-      'mediterranean-swro-brine': require('../data/mediterranean-swro-brine.js'),
-      'hombre-muerto-lithium-brine': require('../data/hombre-muerto-lithium-brine.js'),
-      'maricunga-lithium-brine': require('../data/maricunga-lithium-brine.js'),
-      'clayton-valley-brine': require('../data/clayton-valley-brine.js'),
-      'zabuye-lithium-brine': require('../data/zabuye-lithium-brine.js'),
-    } : {
-      'dead-sea-brine': root.DeadSeaBrine,
-      'persian-gulf-sabkha-brine': root.PersianGulfSabkhaBrine,
-      'atacama-lithium-brine': root.AtacamaLithiumBrine,
-      'lake-mackay-wa-brine': root.LakeMackayWaBrine,
-      'great-salt-lake-brine': root.GreatSaltLakeBrine,
-      'salton-sea-brine': root.SaltonSeaBrine,
-      'uyuni-lithium-brine': root.UyuniLithiumBrine,
-      'qaidam-brine': root.QaidamBrine,
-      'danakil-brine': root.DanakilBrine,
-      'searles-lake-brine': root.SearlesLakeBrine,
-      'red-sea-sabkha-brine': root.RedSeaSabkhaBrine,
-      'kutch-subsoil-brine': root.KutchSubsoilBrine,
-      'texas-gulf-desal-brine': root.TexasGulfDesalBrine,
-      'mediterranean-swro-brine': root.MediterraneanSwroBrine,
-      'hombre-muerto-lithium-brine': root.HombreMuertoLithiumBrine,
-      'maricunga-lithium-brine': root.MaricungaLithiumBrine,
-      'clayton-valley-brine': root.ClaytonValleyBrine,
-      'zabuye-lithium-brine': root.ZabuyeLithiumBrine,
-    },
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.AbundanceCase = api;
-})(globalThis, (model, assays, tea, shared) => {
-const { SUBSTANCES, streamMassKg } = model;
-const { projectEconomics, streamFromAssay, powerToBusEdge } = shared;
+const { SUBSTANCES, streamMassKg } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { projectEconomics, streamFromAssay, powerToBusEdge } = require('./_shared.js');
+
+const ASSAY_IDS = [
+  'dead-sea-brine',
+  'persian-gulf-sabkha-brine',
+  'atacama-lithium-brine',
+  'lake-mackay-wa-brine',
+  'great-salt-lake-brine',
+  'salton-sea-brine',
+  'uyuni-lithium-brine',
+  'qaidam-brine',
+  'danakil-brine',
+  'searles-lake-brine',
+  'red-sea-sabkha-brine',
+  'kutch-subsoil-brine',
+  'texas-gulf-desal-brine',
+  'mediterranean-swro-brine',
+  'hombre-muerto-lithium-brine',
+  'maricunga-lithium-brine',
+  'clayton-valley-brine',
+  'zabuye-lithium-brine',
+];
+const assays = Object.fromEntries(ASSAY_IDS.map(id => [id, require(`../data/${id}.js`)]));
 const MASS_KG_PER_DAY = 100000;
 const DEFAULT_ASSAY_ID = 'dead-sea-brine';
 
@@ -78,7 +53,7 @@ function createAbundanceCase(options = {}) {
   const brineKg = streamMassKg(brine);
   const brineDensityKgM3 = (Number(assay.density_kg_per_L) > 0 ? Number(assay.density_kg_per_L) : 1.2) * 1000;
   const brineM3 = brineKg / brineDensityKgM3;
-  // MECH11: lake lift on an intake-pump (0.4 kWh/m³ screening); not folded into minerals SEC. MECH18: intake-pump screening CAPEX + campus pad.
+  // Lake lift on the intake pump (0.4 kWh/m³ screening), kept out of the minerals SEC.
   const brinePumpKWh = brineM3 * 0.4;
   const powerKWh = brineKg * 0.05 + brinePumpKWh + causticKg * 2.5 + bromineKg * 0.2 + nitrogenKg * 0.25 + ammoniaKg * 0.6 + 10;
   const outputs = ['lithium', 'magnesium', 'potash', 'gypsum', 'salt', 'raffinate'];
@@ -141,5 +116,4 @@ function createAbundanceCase(options = {}) {
   };
 }
 
-return { createAbundanceCase, TEA: tea };
-});
+module.exports = { createAbundanceCase, TEA: tea };

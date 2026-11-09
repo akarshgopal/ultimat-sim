@@ -1,16 +1,7 @@
-(function exposeGreenH2DriCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/atacama-pacific-seawater.js') : root.AtacamaPacificSeawater,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.GreenH2DriCase = api;
-})(globalThis, (model, assay, tea, shared) => {
-const { SUBSTANCES } = model;
-const { MEJILLONES_URL, projectEconomics, streamFromAssay, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
-const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
+const { SUBSTANCES } = require('../engine/model');
+const assay = require('../data/atacama-pacific-seawater.js');
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, MILLERO_URL, WOA_URL, projectEconomics, streamFromAssay, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const FE_KG_PER_DAY = 1000;
 const SEC_DRI = 0.7;
@@ -32,8 +23,6 @@ const USGS_STEEL = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-iron-steel
 const IEA_H2 = 'https://www.iea.org/reports/global-hydrogen-review-2024';
 const DOE_H2 = 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electrolysis';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
-const MILLERO_URL = 'https://doi.org/10.1016/j.dsr.2007.10.001';
-const WOA_URL = 'https://doi.org/10.25923/70qt-9574';
 const UNCTAD_TRANSPORT = 'https://unctad.org/publication/trade-and-transport-dataset';
 const WB_FREIGHT_LOGISTICS = 'https://documents1.worldbank.org/curated/en/620801468168857019/pdf/558370PUB0cost1C0disclosed071221101.pdf';
 const LINDE_LOX_TANKER = 'https://static.prd.echannel.linde.com/wcsstore/SE_REN_Industrial_Gas_Store/pdf/Prislista_Flytande_gaser_Industri_2024_01.pdf';
@@ -60,15 +49,12 @@ function createGreenH2DriCase() {
   };
   const seawater = streamFromAssay(assay, seawaterKg);
   const power = { kind: 'electricity', kWh: electricityKWh };
-  const seawaterCost = tea.costs && tea.costs.seawater
-    ? tea.bindCost('seawater', { region: REGION })
-    : { unitCost: 0 };
   const definition = {
     economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'iron-ore', unit: 'material-source', sourcePreset: 'ironOre', params: { stream: concentrate }, economics: tea.bindCost('iron-ore', { region: REGION, freight: 'inland-truck-short' }) },
-        { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: seawaterCost },
+        { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: tea.bindCost('seawater', { region: REGION }) },
         solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -177,7 +163,7 @@ function createGreenH2DriCase() {
       summary: 'SE Pacific / Atacama coast ~34.9 g/kg, Millero/Pilson S=35 majors scaled 34.9/35; multi-ion, not a NaCl proxy or Mejillones intake sample',
       quality: 'cited',
       salinity_g_per_kg: assay.salinity_g_per_kg,
-      evidence: Array.isArray(assay.evidence) ? assay.evidence.map(item => ({ ...item })) : [],
+      evidence: assay.evidence.map(item => ({ ...item })),
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports. Plant uses on-site PV sized to SWRO + PEM + DRI shaft.', [
@@ -215,5 +201,4 @@ function createGreenH2DriCase() {
   return definition;
 }
 
-return { createGreenH2DriCase };
-});
+module.exports = { createGreenH2DriCase };

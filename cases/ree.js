@@ -1,16 +1,7 @@
-(function exposeReeCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('../data/ionic-clay-longnan.js') : root.IonicClayLongnan,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.ReeCase = api;
-})(globalThis, (model, tea, clay, shared) => {
-const { SUBSTANCES } = model;
-const { projectEconomics, right, nodeFinder, clone, solarPowerNode } = shared;
-const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const clay = require('../data/ionic-clay-longnan.js');
+const { projectEconomics, material, right, nodeFinder, clone, solarPowerNode } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-13.53&lon=-48.22&peakpower=1&loss=14&angle=13&aspect=180&outputformat=json';
 const DAILY_PV_ED = 4.24;
 const DAILY_PV_EY = 1546.98;
@@ -152,5 +143,4 @@ function createReeCase() {
   return definition;
 }
 
-return { createReeCase };
-});
+module.exports = { createReeCase };

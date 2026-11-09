@@ -1,19 +1,9 @@
-(function exposeAluminiumCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.AluminiumCase = api;
-})(globalThis, (model, tea, shared) => {
 // Primary aluminium on sunlight: crustal bauxite → Bayer alumina → Hall–Héroult smelter, sold as
 // ingot. Same Bayer and smelter screening packs, energies and feeds as the PV-module chain
 // (cases/silicon.js), at a stand-alone smelter scale.
-const { SUBSTANCES } = model;
-const { projectEconomics, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = shared;
-const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
-const PVGIS_URL = shared.MEJILLONES_PVGIS_URL;
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const AL_KG_PER_DAY = 10000;
 const FEED_MARGIN = 1.05;
@@ -113,7 +103,7 @@ function createAluminiumCase() {
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports', [
-        { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: 'https://en.wikipedia.org/wiki/Mejillones' },
+        { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: MEJILLONES_URL },
       ]),
       brineConcession: right('concession', 'unverified', 'No brine; purchased bauxite, caustic and anode carbon are not a mineral concession', [
         { label: 'USGS MCS 2025 bauxite and alumina (commodity context, not a concession)', url: USGS_BAUXITE },
@@ -137,5 +127,4 @@ function createAluminiumCase() {
   return definition;
 }
 
-return { createAluminiumCase };
-});
+module.exports = { createAluminiumCase };

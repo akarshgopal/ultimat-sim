@@ -1,15 +1,6 @@
-(function exposeBioforgeCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening,
-    typeof require === 'function' ? require('./_shared.js') : root.CaseShared
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.BioforgeCase = api;
-})(globalThis, (model, tea, shared) => {
-const { SUBSTANCES } = model;
-const { projectEconomics, right, nodeFinder, clone } = shared;
-const material = (substance, kg, phase = 'solid') => shared.material(substance, kg, phase);
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { projectEconomics, material, right, nodeFinder, clone } = require('./_shared.js');
 const GLUCONIC_KG_PER_DAY = 1000;
 const FEED_MARGIN = 1.02;
 const SEC = 0.05;
@@ -140,5 +131,4 @@ function createBioforgeCase() {
   return definition;
 }
 
-return { createBioforgeCase };
-});
+module.exports = { createBioforgeCase };

@@ -11,7 +11,7 @@
 .v-sites .map-note { padding: 6px 10px; font-size: 11px; }
 .v-sites .map-leaflet { height: 420px; }
 .v-sites .site-map.is-compact .map-leaflet { height: 300px; }
-.v-sites .lf-site { fill: var(--surface); fill-opacity: 0.9; stroke: #6b7280; stroke-width: 1.2; }
+.v-sites .lf-site { fill: var(--surface); fill-opacity: 0.9; stroke: var(--text-3); stroke-width: 1.2; }
 .v-sites .lf-site.is-built { fill: var(--accent); fill-opacity: 0.5; stroke: var(--accent); stroke-width: 1.5; }
 .v-sites .lf-site.is-current { stroke: var(--neg); stroke-width: 3; }
 

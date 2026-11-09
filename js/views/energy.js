@@ -224,7 +224,7 @@
             })),
             { key: 'free', label: 'Cost at 0¢/kWh', num: true, title: 'Net cost per kg with free electricity, at the current equipment multiplier', get: x => x.r.atFreeEnergy.lcopUsdPerKg,
               render: x => `${UI.usdKg(x.r.atFreeEnergy.lcopUsdPerKg)} vs ${UI.usdKg(x.r.today?.priceUsdPerKg)}` },
-          ], rows, { sortKey: 'best', sortDir: 'desc', rowClass: x => (best(x) < 0 ? 'is-dim' : '') }));
+          ], rows, { sortKey: 'e' + s.equip, sortDir: 'desc', rowClass: x => (best(x) < 0 ? 'is-dim' : '') }));
 
           // Cost structure at the current scenario.
           const parts = [

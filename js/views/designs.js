@@ -82,8 +82,10 @@
         const p = D.design(params()).params; // merged with defaults
         for (const b of presetSeg.children) b.setAttribute('aria-pressed', String(b.dataset.preset === preset));
         for (const { c, input, out } of controls) {
-          input.value = String(p[c.key]);
-          if (out) out.textContent = `${p[c.key]} ${c.unit || ''}`.trim();
+          // null = the design picks its own value (e.g. per reactor): park the slider mid-range.
+          const v = p[c.key];
+          input.value = String(v ?? (c.options ? c.options[0][0] : (c.min + c.max) / 2));
+          if (out) out.textContent = v == null ? 'auto' : `${v} ${c.unit || ''}`.trim();
         }
       }
 
@@ -120,7 +122,9 @@
         const p = d.params;
         const o = D.simulatorOverride(p);
         const factors = Object.entries(o).map(([u, f]) => `${u} capex ×${UI.num(f.capexFactor, 2)}, energy ×${UI.num(f.energyFactor, 2)}${f.flexible === true ? ', sun-following' : f.flexible === false ? ', firmed' : ''}`).join(' · ');
-        const recipe = Object.values(D.RECIPE || {})[0];
+        // A single-unit design compares with its recipe unit; multi-unit designs show per-unit factors.
+        const recipes = Object.values(D.RECIPE || {});
+        const recipe = recipes.length === 1 ? recipes[0] : null;
         const product = UI.productName(D.product);
         const base = [
           UI.kpi('Installed', UI.usd(d.installedUsdPerKgDay), `per kg/day of ${product}` + (recipe ? ` · recipe ${UI.usd(recipe.usdPerKgDay)}` : '')),

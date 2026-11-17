@@ -35,10 +35,10 @@ data/site-presets.js + PVGIS + engine/land.js ──▶ scripts/build-sites.mjs 
 | | Share of world tonnage feasible | Abundant (≤ ½ today's price) |
 |---|---|---|
 | Today | 39% | ~0% |
-| Frontier | 94% | 25% |
+| Frontier | 94% | 22% |
 
 - **Energy alone unlocks little.** 10× cheaper solar by itself adds almost nothing: equipment running ~7 sun-hours a day dominates most recipes. Cheap solar plus lean equipment and squeezed margins does.
-- **What binds the company is not money.** The default 25-year run makes ~4.3 Gt today and ~8.5 Gt at the frontier, where it ends with over $1 trillion unspent. The limits are the 10% share-of-market ceiling and solar per site (50 GW each). With 100% share and 1 TW per site, the frontier company reaches ~6.8 Gt/yr by 2051 (57 Gt cumulative) on 21 TW of PV — and fills every site again.
+- **What binds the company is not money.** The default 25-year run makes ~4.3 Gt today and ~8.5 Gt at the frontier, where it ends with over $1 trillion unspent. The limits are the 10% share-of-market ceiling and solar per site (50 GW each). With 100% share and 1 TW per site, the frontier company reaches ~6.6 Gt/yr by 2051 (56 Gt cumulative) on 21 TW of PV — and fills every site again.
 
 ## How the company simulator works
 

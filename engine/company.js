@@ -466,8 +466,10 @@
           // output) and follow its own scale law from there: (size / ref)^(scaleExponent − 1), or the
           // engine's law when it has none.
           const ref = (n.refMultiple ?? designRefMultiple) * pathway.refOutputKgPerDay;
+          // The exponent is fitted over ref/10…ref×10; outside that range it is held flat (no further
+          // economies or diseconomies are claimed).
           const scale = scaleFactor(cfg.scale, ref, pathway.refOutputKgPerDay) * (n.scaleExponent
-            ? (sizeKgPerDay / ref) ** (n.scaleExponent - 1)
+            ? Math.min(10, Math.max(0.1, sizeKgPerDay / ref)) ** (n.scaleExponent - 1)
             : scaleFactor(cfg.scale, sizeKgPerDay, pathway.refOutputKgPerDay) / scaleFactor(cfg.scale, ref, pathway.refOutputKgPerDay));
           usdPerKgDay += designed * scale;
         }
@@ -1016,7 +1018,14 @@
     for (;;) {
       let bestIndex = -1;
       for (let i = 0; i < feasible.length; i += 1) {
-        if (scores[i] > -Infinity && (bestIndex < 0 || scores[i] > scores[bestIndex])) bestIndex = i;
+        if (!(scores[i] > -Infinity)) continue;
+        if (bestIndex < 0) { bestIndex = i; continue; }
+        const d = scores[i] - scores[bestIndex];
+        // Near-ties go to the larger plant: with size-independent costs every size scores within a
+        // fraction of a percent (a plant's own output nudges its price), and a myopic pick would
+        // otherwise build thousands of the smallest.
+        const tie = Math.abs(d) <= 1e-3 * Math.max(Math.abs(scores[i]), Math.abs(scores[bestIndex]));
+        if (tie ? feasible[i].sizeKgPerDay > feasible[bestIndex].sizeKgPerDay : d > 0) bestIndex = i;
       }
       if (bestIndex < 0) return null;
       if (salesFit(cfg, ctx, feasible[bestIndex], committedKg)) return feasible[bestIndex];

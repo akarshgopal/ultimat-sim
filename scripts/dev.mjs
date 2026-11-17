@@ -3,10 +3,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const rootArgument = process.argv[2] || '.';
-const ROOT = path.resolve(__dirname, '..', rootArgument);
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', process.argv[2] || '.');
 const PORT = Number(process.env.PORT || process.env.npm_config_port || 4173);
 
 const MIME_TYPES = {

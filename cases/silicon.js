@@ -1,13 +1,6 @@
-(function exposeSiliconCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.SiliconCase = api;
-})(globalThis, (model, tea) => {
-const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const MODULE_KG_PER_DAY = 1000;
 const POLY_KG_PER_DAY = MODULE_KG_PER_DAY * 0.0273;
@@ -29,26 +22,6 @@ const FRAUNHOFER_PV = 'https://www.ise.fraunhofer.de/content/dam/ise/de/document
 const REW_POLYSI = 'https://www.renewableenergyworld.com/solar/advancements-in-the-commercial-production-of-polysilicon/';
 const NREL_SOLAR_2025 = 'https://www.nrel.gov/docs/';
 const REGION = 'Atacama/Chile';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase = 'solid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createSiliconCase() {
   const quartzKg = SI_KG_PER_DAY * SUBSTANCES.SiO2.molarMassG / SUBSTANCES.Si.molarMassG * FEED_MARGIN;
@@ -73,7 +46,7 @@ function createSiliconCase() {
   const eva = material('EVA', evaKg);
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'quartz', unit: 'material-source', sourcePreset: 'quartz', params: { stream: quartz }, economics: tea.bindCost('quartz', { freight: 'bulk-dry-shortsea' }) },
@@ -84,7 +57,7 @@ function createSiliconCase() {
         { id: 'silver', unit: 'material-source', sourcePreset: 'silver', params: { stream: silver }, economics: tea.bindCost('silver', { freight: 'chile-coast-container' }) },
         { id: 'glass', unit: 'material-source', sourcePreset: 'float-glass', params: { stream: glass }, economics: tea.bindCost('float-glass', { freight: 'bulk-dry-shortsea' }) },
         { id: 'eva', unit: 'material-source', sourcePreset: 'eva', params: { stream: eva }, economics: tea.bindCost('eva-encapsulant', { freight: 'chile-coast-container' }) },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         { id: 'mg-si', unit: 'mg-si', capacity: SI_KG_PER_DAY, params: { electricityKWhPerKg: 12 }, economics: tea.bindCapexPack('mg-si', { capacity: SI_KG_PER_DAY, region: REGION }) },
         { id: 'polysilicon', unit: 'polysilicon', capacity: POLY_KG_PER_DAY, params: { electricityKWhPerKg: 65 }, economics: tea.bindCapexPack('polysilicon', { capacity: POLY_KG_PER_DAY, region: REGION }) },
@@ -106,7 +79,7 @@ function createSiliconCase() {
         { from: { node: 'silver', port: 'out' }, to: { node: 'pv-module', port: 'silver' } },
         { from: { node: 'glass', port: 'out' }, to: { node: 'pv-module', port: 'glass' } },
         { from: { node: 'eva', port: 'out' }, to: { node: 'pv-module', port: 'eva' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'mg-si', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'polysilicon', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'bayer-alumina', port: 'electricity' } },
@@ -132,8 +105,7 @@ function createSiliconCase() {
       priorities: { 'power-bus': ['mg-si', 'polysilicon', 'bayer-alumina', 'aluminium-smelter', 'pv-module'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('quartz').siteResource = 'quartz';
   node('reductant').siteResource = 'reductant';
@@ -211,7 +183,7 @@ function createSiliconCase() {
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports', [
-        { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: 'https://en.wikipedia.org/wiki/Mejillones' },
+        { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: MEJILLONES_URL },
       ]),
       brineConcession: right('concession', 'unverified', 'No brine; purchased quartzite/bauxite/caustic/carbon/Ag/glass/EVA are not a mineral concession', [
         { label: 'USGS silica statistics (commodity context, not a concession)', url: USGS_SILICA },
@@ -236,7 +208,7 @@ function createSiliconCase() {
       ]),
     },
     evidence: [
-      { label: 'Mejillones industrial geography', url: 'https://en.wikipedia.org/wiki/Mejillones' },
+      { label: 'Mejillones industrial geography', url: MEJILLONES_URL },
       { label: 'Solar: PVGIS-ERA5, 2005–2023 monthly; annual E_y 1923.52 kWh/kWp, E_d 5.27', url: PVGIS_URL },
       { label: 'USGS MCS 2025 silicon metal (MG-Si feed family; product is SoG poly, not silicon metal)', url: USGS_SI },
       { label: 'Fraunhofer ISE SoG polysilicon electricity 60–71 kWh/kg; screening SEC 65', url: FRAUNHOFER_POLYSI },
@@ -254,5 +226,4 @@ function createSiliconCase() {
   return definition;
 }
 
-return { createSiliconCase };
-});
+module.exports = { createSiliconCase };

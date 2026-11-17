@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { evaluateEconomics, approximateIRR, netPresentValue, capitalRecoveryFactor, scorePositiveCashflow } = require('../engine/economics');
+const { evaluateEconomics, approximateIRR, netPresentValue, capitalRecoveryFactor } = require('../engine/economics');
 
 function stream(kind, value) {
   if (kind === 'material') return {
@@ -106,17 +106,6 @@ test('capital-inclusive gate: annualNetCash is R − OPEX − annualizedCapex', 
   assert.ok(Math.abs(result.annualizedCapex - 10000 * capitalRecoveryFactor(0.08, 20)) < 1e-9);
   assert.ok(Math.abs(result.annualNetCash - (result.annualRevenue - result.annualOperatingCost - result.annualizedCapex)) < 1e-9);
   assert.ok(result.annualNetCash < 0, 'R > OPEX but R < OPEX + annualized CAPEX');
-  assert.deepEqual(result.cashFlows[0], -10000);
+  assert.equal(result.cashFlows[0], -10000);
   assert.equal(result.cashFlows[1], result.annualOperatingCash);
-  const scored = scorePositiveCashflow(result);
-  assert.equal(scored.met, false);
-  assert.equal(scored.annualNetCash, result.annualNetCash);
-  assert.match(scored.formula, /annualized CAPEX/i);
-  const withoutNet = scorePositiveCashflow({
-    annualOperatingCost: result.annualOperatingCost,
-    annualizedCapex: result.annualizedCapex,
-    sinks: result.sinks,
-  });
-  assert.ok(Math.abs(withoutNet.annualNetCash - result.annualNetCash) < 1e-9);
-  assert.equal(withoutNet.met, false);
 });

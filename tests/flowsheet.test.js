@@ -1,38 +1,12 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { SUBSTANCES, streamMassKg } = require('../engine/model');
+const { streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
-
-function materialFromKg(kg, volumeM3, density = 1025) {
-  const soluteKg = Object.values(kg).reduce((sum, value) => sum + value, 0);
-  const components = { H2O: volumeM3 * density - soluteKg, ...kg };
-  return {
-    kind: 'material',
-    mol: Object.fromEntries(
-      Object.entries(components).map(([substance, mass]) => [
-        substance,
-        mass * 1000 / SUBSTANCES[substance].molarMassG,
-      ])
-    ),
-    phase: 'liquid',
-    T_C: 25,
-    P_bar: 1,
-  };
-}
+const { materialFromKg, SEAWATER_100M3_KG } = require('./helpers.js');
 
 function swroCase({ requested = 40, capacity = 100, electricity = 500, recovery = 0.45 } = {}) {
-  const feed = materialFromKg({
-    'Na+': 1080,
-    'Cl-': 1940,
-    'Mg+2': 129,
-    'Ca+2': 41,
-    'K+': 39,
-    'SO4-2': 270,
-    'Br-': 6.7,
-    'Li+': 0.017,
-    B: 0.45,
-  }, 100);
+  const feed = materialFromKg(SEAWATER_100M3_KG, 100);
 
   return {
     graph: {

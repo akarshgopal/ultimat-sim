@@ -1,13 +1,7 @@
-(function exposeGreenUreaCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/benguela-atlantic-seawater.js') : root.BenguelaAtlanticSeawater,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.GreenUreaCase = api;
-})(globalThis, (model, assay, tea) => {
-const { SUBSTANCES } = model;
+const { SUBSTANCES } = require('../engine/model');
+const assay = require('../data/benguela-atlantic-seawater.js');
+const tea = require('../data/tea-screening.js');
+const { MILLERO_URL, WOA_URL, projectEconomics, material, streamFromAssay, airFromNitrogenKg, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-22.957&lon=14.505&peakpower=1&loss=14&angle=23&aspect=-179&raddatabase=PVGIS-ERA5&outputformat=json';
 const DAILY_PV_ED = 5.48;
 const UREA_KG_PER_DAY = 1000;
@@ -23,64 +17,12 @@ const SEC_UREA = 0.8;
 const PRODUCT_DENSITY_KG_M3 = 1000;
 const FEED_DENSITY_KG_M3 = assay.density_kg_per_L * 1000;
 const REGION = 'Southern Africa';
-const MILLERO_URL = 'https://doi.org/10.1016/j.dsr.2007.10.001';
 const MOHRHOLZ_URL = 'https://doi.org/10.1016/j.csr.2007.10.001';
-const WOA_URL = 'https://doi.org/10.25923/70qt-9574';
 const IEA_NH3 = 'https://www.iea.org/reports/ammonia-technology-roadmap';
 const USGS_N = 'https://pubs.usgs.gov/periodicals/mcs2025/mcs2025-nitrogen.pdf';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const IEA_DAC = 'https://www.iea.org/reports/direct-air-capture-2022/executive-summary';
 const WALVIS_URL = 'https://en.wikipedia.org/wiki/Walvis_Bay';
-// Ambient-air preset ratios from the flowsheet air source (N₂-dominated).
-const AIR_N2 = 788163;
-const AIR_O2 = 211409;
-const AIR_CO2 = 428;
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase) {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
-
-function seawaterFromAssay(seawaterAssay, massKg) {
-  const gPerKg = seawaterAssay.ions_g_per_kg;
-  const molPerKg = seawaterAssay.mol_per_kg;
-  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
-  const mol = {
-    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
-  };
-  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
-  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
-}
-
-function airFromNitrogenKg(nitrogenKg) {
-  const n2Mol = nitrogenKg * 1000 / SUBSTANCES.N2.molarMassG;
-  return {
-    kind: 'material',
-    mol: {
-      N2: n2Mol,
-      O2: n2Mol * AIR_O2 / AIR_N2,
-      CO2: n2Mol * AIR_CO2 / AIR_N2,
-    },
-    phase: 'gas',
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createGreenUreaCase() {
   const ureaKg = UREA_KG_PER_DAY;
@@ -98,17 +40,17 @@ function createGreenUreaCase() {
   const solarKWp = kWhPerDay / DAILY_PV_ED * 1.02;
   const electricityKWh = solarKWp * DAILY_PV_ED;
   const carbonDioxide = material('CO2', co2Kg, 'gas');
-  const seawater = seawaterFromAssay(assay, seawaterKg);
+  const seawater = streamFromAssay(assay, seawaterKg);
   const air = airFromNitrogenKg(airN2Kg);
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: tea.bindCost('seawater') },
         { id: 'air', unit: 'material-source', sourcePreset: 'air', params: { stream: air }, economics: { unitCost: 0 } },
         { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed', { freight: 'chile-coast-container' }) },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'swro',
@@ -168,7 +110,7 @@ function createGreenUreaCase() {
         { from: { node: 'co2-feed', port: 'out' }, to: { node: 'urea', port: 'carbonDioxide' } },
         { from: { node: 'urea', port: 'urea' }, to: { node: 'urea-product', port: 'in' } },
         { from: { node: 'urea', port: 'water' }, to: { node: 'process-water', port: 'in' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'electrolyzer', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'asu', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'ammonia', port: 'electricity' } },
@@ -181,8 +123,7 @@ function createGreenUreaCase() {
       priorities: { 'power-bus': ['electrolyzer', 'asu', 'ammonia', 'urea', 'swro'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('seawater').siteResource = 'seawater';
   node('air').siteResource = 'air';
@@ -235,7 +176,7 @@ function createGreenUreaCase() {
       summary: 'Northern Benguela / SE Atlantic ~35.2 g/kg, Millero/Pilson S=35 majors scaled 35.2/35; multi-ion, not a NaCl proxy or Namport intake sample',
       quality: 'cited',
       salinity_g_per_kg: assay.salinity_g_per_kg,
-      evidence: Array.isArray(assay.evidence) ? assay.evidence.map(item => ({ ...item })) : [],
+      evidence: assay.evidence.map(item => ({ ...item })),
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports. Plant uses on-site PV sized to SWRO + PEM + ASU + Haber + urea.', [
@@ -271,5 +212,4 @@ function createGreenUreaCase() {
   return definition;
 }
 
-return { createGreenUreaCase };
-});
+module.exports = { createGreenUreaCase };

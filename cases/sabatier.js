@@ -1,13 +1,6 @@
-(function exposeSabatierCase(root, factory) {
-  const commonJs = typeof module === 'object' && module.exports;
-  const api = factory(
-    commonJs ? require('../engine/model') : root.FlowsheetModel,
-    commonJs ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (commonJs) module.exports = api;
-  else root.SabatierCase = api;
-})(globalThis, (model, tea) => {
-const { streamMassKg } = model;
+const { streamMassKg } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { projectEconomics, scaleMaterial, gasFromCo2Ppm } = require('./_shared.js');
 const H2O_KG_PER_KG_H2 = 18.01528 / 2.01588;
 const H2_KG_PER_KG_CH4 = 4 * 2.01588 / 16.04246;
 const CO2_KG_PER_KG_CH4 = 44.0095 / 16.04246;
@@ -18,21 +11,6 @@ const GAS_PRESETS = {
   natural_gas_flue: { co2Ppm: 40000, oxygenShare: 0.125 },
   coal_flue: { co2Ppm: 130000, oxygenShare: 0.046 },
 };
-
-function gasFromCo2Ppm(co2Ppm, oxygenShare) {
-  if (!Number.isFinite(co2Ppm) || co2Ppm < 0 || co2Ppm > 1e6) {
-    throw new Error('co2Ppm must be between 0 and 1,000,000');
-  }
-  const co2Mol = co2Ppm;
-  const balanceMol = 1e6 - co2Mol;
-  return {
-    kind: 'material',
-    mol: { CO2: co2Mol, O2: balanceMol * oxygenShare, N2: balanceMol * (1 - oxygenShare) },
-    phase: 'gas',
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 const DEFAULT_SEAWATER = {
   kind: 'material',
@@ -51,8 +29,8 @@ const DEFAULT_PARAMS = {
   },
   swro: {
     recovery: 0.45,
-    // Plant-only SEC after MECH11 intake-pump takes the ~0.4 kWh/m³ open-intake share
-    // (was 3.5 plant-with-intake; Elimelech & Phillip 2011 band; Voutchkov RO-train 2.5–2.8).
+    // Plant-only SEC; the ~0.4 kWh/m³ open-intake share is on the intake pump
+    // (Elimelech & Phillip 2011 band; Voutchkov RO-train 2.5–2.8).
     secKWhPerM3: 3.1,
     feedDensityKgM3: 1000,
     productDensityKgM3: 1000,
@@ -65,11 +43,6 @@ const DEFAULT_PARAMS = {
     wasteHeatT_C: 250, // screening reject T
   },
 };
-
-function scaleMaterial(stream, targetKg) {
-  const factor = targetKg / streamMassKg(stream);
-  return { ...stream, mol: Object.fromEntries(Object.entries(stream.mol).map(([id, mol]) => [id, mol * factor])) };
-}
 
 function createSabatierCase(overrides = {}) {
   const params = {
@@ -106,14 +79,12 @@ function createSabatierCase(overrides = {}) {
     : Infinity;
   const offgasKgPerKgCH4 = airKgPerKgCH4 - CO2_KG_PER_KG_CH4;
   const seawaterM3PerKgCH4 = productWaterKgPerKgCH4 / 1000 / params.swro.recovery;
-  // MECH11: explicit intake-pump @ 0.4 kWh/m³ + air blower @ 0.001 kWh/Nm³ (screening).
+  // Screening lifts: intake pump 0.4 kWh/m³, air blower 0.001 kWh/Nm³.
   const intakePumpKWhPerKgCH4 = seawaterM3PerKgCH4 * 0.4;
-  const airNm3PerKg = (() => {
-    const totalMol = Object.values(air.mol || {}).reduce((sum, amount) => sum + amount, 0);
-    const mass = streamMassKg(air);
-    if (!(mass > 0) || !(totalMol > 0)) return 22.414 / 29; // ~Nm³/kg dry air fallback
-    return (totalMol * 22.414 / 1000) / mass;
-  })();
+  const airTotalMol = Object.values(air.mol || {}).reduce((sum, amount) => sum + amount, 0);
+  const airNm3PerKg = airMassKg > 0 && airTotalMol > 0
+    ? (airTotalMol * 22.414 / 1000) / airMassKg
+    : 22.414 / 29; // ~Nm³/kg dry air
   const blowerKWhPerKgCH4 = Number.isFinite(airKgPerKgCH4) ? airKgPerKgCH4 * airNm3PerKg * 0.001 : 0;
   const electricityKWhPerKgCH4 =
     CO2_KG_PER_KG_CH4 * params.dac.electricityKWhPerKgCO2
@@ -153,7 +124,7 @@ function createSabatierCase(overrides = {}) {
   }
 
   return {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'air', unit: 'material-source', params: { stream: air }, economics: { unitCost: 0 } },
@@ -261,5 +232,4 @@ function createSabatierCase(overrides = {}) {
   };
 }
 
-return { createSabatierCase };
-});
+module.exports = { createSabatierCase };

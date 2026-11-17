@@ -1,13 +1,5 @@
-(function exposeCementCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.CementCase = api;
-})(globalThis, (model, tea) => {
-const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, projectEconomics, material, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const CEMENT_KG_PER_DAY = 1000;
 const SEC_CEMENT = 1.05;
@@ -24,28 +16,7 @@ const CEMEX_SOLID_TIC = 'https://mb.com.ph/2022/02/12/solid-cement-to-pursue-323
 const SAMARKAND_CEMENT_TIC = 'https://www.globalcement.com/news/item/16382-china-energy-international-group-samarkand-cement-installs-kiln-at-upcoming-samarkand-cement-plant';
 const DUGONG_CEMENT_TIC = 'https://www.globalcement.com/news/11756-dugong-cimentos-announces-upcoming-1-8mt-yr-integrated-cement-plant-in-mozambique';
 const CEMENT_CAPEX_BENCH = 'https://www.cementequipment.org/cement-technical-package/package-tools/76038938-capex-of-cement-companies/';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
 const NS_TRUCK_RATES = 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase = 'solid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
 
 function createCementCase() {
   const limestoneKg = CEMENT_KG_PER_DAY * LIMESTONE_KG_PER_KG * FEED_MARGIN;
@@ -57,12 +28,12 @@ function createCementCase() {
   const clay = material('SiO2', clayKg);
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'limestone-feed', unit: 'material-source', sourcePreset: 'limestone', params: { stream: limestone }, economics: tea.bindCost('limestone', { freight: 'inland-truck-short' }) },
         { id: 'clay-feed', unit: 'material-source', sourcePreset: 'kiln-clay', params: { stream: clay }, economics: tea.bindCost('kiln-clay', { freight: 'inland-truck-short' }) },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'cement',
@@ -77,7 +48,7 @@ function createCementCase() {
       edges: [
         { from: { node: 'limestone-feed', port: 'out' }, to: { node: 'cement', port: 'limestone' } },
         { from: { node: 'clay-feed', port: 'out' }, to: { node: 'cement', port: 'clay' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'cement', port: 'electricity' } },
         { from: { node: 'cement', port: 'cement' }, to: { node: 'cement-product', port: 'in' } },
         { from: { node: 'cement', port: 'carbonDioxide' }, to: { node: 'process-co2', port: 'in' } },
@@ -88,8 +59,7 @@ function createCementCase() {
       priorities: { 'power-bus': ['cement'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('limestone-feed').siteResource = 'limestone';
   node('clay-feed').siteResource = 'kiln-clay';
@@ -161,5 +131,4 @@ function createCementCase() {
   return definition;
 }
 
-return { createCementCase };
-});
+module.exports = { createCementCase };

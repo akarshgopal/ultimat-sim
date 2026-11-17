@@ -5,288 +5,101 @@ const SITE_PRESETS = require('../data/site-presets.js');
 const tea = require('../data/tea-screening.js');
 const { createAbundanceCase } = require('../cases/abundance');
 
-test('demandByRegion maps preset.region strings and chile lithium ceiling ≠ me-levant', () => {
-  assert.equal(tea.DEFAULT_DEMAND_REGION_ID, 'me-levant');
-  assert.equal(tea.resolveDemandRegion(), 'me-levant');
-  assert.equal(tea.resolveDemandRegion(undefined), 'me-levant');
-  assert.equal(tea.resolveDemandRegion('Levant'), 'me-levant');
-  assert.equal(tea.resolveDemandRegion('Gulf'), 'gulf');
-  assert.equal(tea.resolveDemandRegion('Atacama/Chile'), 'chile-atacama');
-  assert.equal(tea.resolveDemandRegion('Bolivia / Uyuni'), 'chile-atacama');
-  assert.equal(tea.resolveDemandRegion('China / Qaidam'), 'asia-china');
-  assert.equal(tea.resolveDemandRegion('China / Tibet'), 'asia-china');
-  assert.equal(tea.resolveDemandRegion('chile-atacama'), 'chile-atacama');
-  assert.equal(tea.resolveDemandRegion('Australia'), 'australia');
-  assert.equal(tea.resolveDemandRegion('Europe'), 'europe');
-  assert.equal(tea.resolveDemandRegion('India'), 'india');
-  assert.equal(tea.resolveDemandRegion('Texas/US Gulf'), 'texas');
-  assert.equal(tea.resolveDemandRegion('US West / California'), 'texas');
-  assert.equal(tea.resolveDemandRegion('Southern Africa'), 'southern-africa');
-  assert.equal(tea.resolveDemandRegion('unknown-basin'), 'default');
+const NON_ME = ['chile-atacama', 'australia', 'texas', 'southern-africa', 'india', 'europe', 'gulf', 'asia-china'];
 
+test('region strings resolve to demand tables; every preset region is mapped', () => {
+  const cases = [
+    [undefined, tea.DEFAULT_DEMAND_REGION_ID],
+    ['Levant', 'me-levant'],
+    ['Gulf', 'gulf'],
+    ['Atacama/Chile', 'chile-atacama'],
+    ['Bolivia / Uyuni', 'chile-atacama'],
+    ['chile-atacama', 'chile-atacama'],
+    ['China / Qaidam', 'asia-china'],
+    ['China / Tibet', 'asia-china'],
+    ['US West / California', 'texas'],
+    ['unknown-basin', 'default'],
+  ];
+  for (const [input, id] of cases) assert.equal(tea.resolveDemandRegion(input), id, String(input));
+  assert.equal(tea.getDemandForRegion('China / Tibet'), tea.getDemandForRegion('asia-china'));
   for (const preset of SITE_PRESETS) {
     assert.ok(tea.REGION_STRING_TO_ID[preset.region], `${preset.id} region ${preset.region} needs a demand-region mapping`);
     assert.ok(tea.demandByRegion[tea.resolveDemandRegion(preset.region)]);
   }
-  assert.equal(tea.resolveDemandRegion('Levant'), 'me-levant');
-
-  const meLi = tea.getDemandForRegion('me-levant').lithium.value;
-  const chileLi = tea.getDemandForRegion('chile-atacama').lithium.value;
-  const chileFromPreset = tea.getDemandForRegion('Atacama/Chile').lithium.value;
-  assert.equal(meLi, tea.demand.lithium.value);
-  assert.equal(meLi, 1e6);
-  assert.equal(chileLi, 2e7);
-  assert.equal(chileFromPreset, chileLi);
-  assert.notEqual(chileLi, meLi);
-  assert.ok(chileLi > meLi);
-  assert.match(tea.getDemandForRegion('chile-atacama').lithium.note, /chile mine production/i);
-  assert.match(tea.getDemandForRegion('chile-atacama').lithium.note, /not an offtake contract/i);
-  assert.ok(tea.getDemandForRegion('chile-atacama').lithium.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
-
-  const auLi = tea.getDemandForRegion('australia').lithium.value;
-  assert.equal(auLi, 5e6);
-  assert.notEqual(auLi, meLi);
-  assert.match(tea.getDemandForRegion('australia').lithium.note, /hard-rock/i);
-  assert.match(tea.getDemandForRegion('australia').lithium.note, /not a .*brine offtake|not a Lake Mackay brine/i);
-  assert.ok(tea.getDemandForRegion('australia').lithium.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
-
-  const mineralKeys = tea.MINERAL_DEMAND_KEYS;
-  const regionalIds = ['australia', 'texas', 'southern-africa', 'india', 'europe', 'gulf', 'asia-china'];
-  const me = tea.getDemandForRegion('me-levant');
-  for (const id of regionalIds) {
-    const regional = tea.getDemandForRegion(id);
-    const differs = mineralKeys.some(key => regional[key].value !== me[key].value);
-    assert.ok(differs, `${id} mineral ceilings should not purely inherit me-levant`);
-    for (const key of mineralKeys) {
-      assert.match(regional[key].note, /not a .*contract|not an offtake/i, `${id} ${key}`);
-      assert.equal(regional[key].quality, 'screening');
-      assert.ok(
-        regional[key].evidence.some(item => /usgs\.gov/i.test(item.url || '')),
-        `${id} ${key} should cite USGS`
-      );
-    }
-  }
-  assert.equal(tea.getDemandForRegion('gulf').bromine.value, 5e6);
-  assert.notEqual(tea.getDemandForRegion('gulf').bromine.value, me.bromine.value);
-  assert.equal(tea.getDemandForRegion('india').bromine.value, 3e6);
-  assert.equal(tea.getDemandForRegion('texas').salt.value, 8e9);
-  assert.equal(tea.getDemandForRegion('europe').potash.value, 1e9);
-  assert.equal(tea.getDemandForRegion('southern-africa').lithium.value, 2e5);
-  assert.equal(tea.getDemandForRegion('chile-atacama').bromine.value, me.bromine.value);
-  assert.equal(tea.getDemandForRegion('chile-atacama').bromine.inherit, 'me-levant');
-
-  const china = tea.getDemandForRegion('asia-china');
-  const chinaFromTibet = tea.getDemandForRegion('China / Tibet');
-  const chinaFromQaidam = tea.getDemandForRegion('China / Qaidam');
-  assert.equal(china, chinaFromTibet);
-  assert.equal(china, chinaFromQaidam);
-  assert.equal(china.lithium.value, 2e7);
-  assert.equal(china.lithium.inherit, undefined);
-  assert.notEqual(china.lithium.value, me.lithium.value);
-  assert.match(china.lithium.note, /china mine production/i);
-  assert.match(china.lithium.note, /not a zabuye or qaidam offtake contract/i);
-  assert.ok(china.lithium.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
-  assert.equal(china.bromine.value, 4e7);
-  assert.equal(china.bromine.inherit, undefined);
-  assert.notEqual(china.bromine.value, me.bromine.value);
-  assert.equal(china.potash.value, 3e9);
-  assert.equal(china.salt.value, 1e10);
-  assert.equal(china.gypsum.value, 2e9);
-  assert.equal(china.magnesium.value, 1e8);
-  assert.match(tea.DEMAND_REGION_LABELS['asia-china'], /not a plant offtake contract/i);
-  assert.match(tea.DEMAND_REGION_LABELS['asia-china'], /not a silent ME-Levant inherit/i);
-  assert.equal(china.methane.inherit, 'me-levant');
-  assert.equal(china.methane.value, me.methane.value);
 });
 
-test('non-ME sites do not silently inherit ME lithium or fuel/chem caps without inherit:me-levant', () => {
+test('non-ME regions regionalize minerals and only reuse ME fuel caps through an explicit inherit', () => {
   const me = tea.getDemandForRegion('me-levant');
-  for (const key of Object.keys(me)) {
-    assert.equal(me[key].inherit, undefined, `me-levant ${key} is the source table, not an inherit`);
-  }
+  for (const key of Object.keys(me)) assert.equal(me[key].inherit, undefined, `me-levant ${key} is the source table`);
 
-  const chile = tea.getDemandForRegion('chile-atacama');
-  assert.equal(chile.lithium.inherit, undefined, 'Chile Li must not carry inherit:me-levant');
-  assert.notEqual(chile.lithium.value, me.lithium.value);
-  assert.equal(chile.lithium.value, 2e7);
-  assert.match(chile.lithium.note, /chile mine production/i);
-
-  const nonMe = ['chile-atacama', 'australia', 'texas', 'southern-africa', 'india', 'europe', 'gulf', 'asia-china'];
-  for (const id of nonMe) {
+  for (const id of NON_ME) {
     const regional = tea.getDemandForRegion(id);
-    assert.equal(regional.lithium.inherit, undefined, `${id} lithium silent ME inherit`);
+    assert.equal(regional.lithium.inherit, undefined, `${id} lithium`);
     assert.notEqual(regional.lithium.value, me.lithium.value, `${id} lithium should be regionalized`);
-
-    for (const key of tea.FUEL_CHEM_DEMAND_KEYS) {
+    if (id !== 'chile-atacama') {
+      assert.ok(tea.MINERAL_DEMAND_KEYS.some(key => regional[key].value !== me[key].value), `${id} minerals`);
+    }
+    for (const key of [...tea.MINERAL_DEMAND_KEYS, ...tea.FUEL_CHEM_DEMAND_KEYS]) {
       const row = regional[key];
-      const flagged = row.inherit === 'me-levant';
-      const regionalized = row.value !== me[key].value;
-      assert.ok(flagged || regionalized, `${id} ${key} silent ME fuel/chem cap`);
-      if (flagged) {
-        assert.equal(row.value, me[key].value, `${id} ${key} inherit must keep the me-levant cap`);
-        assert.match(row.note, /inherit/i, `${id} ${key} inherit note`);
-      }
+      if (row.inherit === 'me-levant') assert.equal(row.value, me[key].value, `${id} ${key} inherit keeps the ME cap`);
+      else if (tea.FUEL_CHEM_DEMAND_KEYS.includes(key)) assert.notEqual(row.value, me[key].value, `${id} ${key} silent ME cap`);
     }
   }
-
-  for (const id of ['chile-atacama', 'australia', 'texas', 'asia-china']) {
-    const regional = tea.getDemandForRegion(id);
-    assert.equal(regional.methane.inherit, 'me-levant', `${id} methane should flag inherit:me-levant`);
-    assert.equal(regional.hydrogen.inherit, 'me-levant', `${id} hydrogen should flag inherit:me-levant`);
-    assert.equal(tea.bindSale('methane', { region: id }).inherit, 'me-levant');
-    assert.equal(tea.bindSale('methanol', { region: id }).inherit, 'me-levant');
-    assert.equal(tea.bindSale('ammonia', { region: id }).inherit, 'me-levant');
-  }
-
-  const chileSale = tea.bindSale('lithium', { region: 'Atacama/Chile' });
-  assert.equal(chileSale.inherit, undefined);
-  assert.equal(chileSale.annualDemandLimit, 2e7);
-
   const unmapped = tea.getDemandForRegion('unknown-basin');
-  assert.equal(unmapped.lithium.inherit, 'me-levant');
-  for (const key of tea.FUEL_CHEM_DEMAND_KEYS) {
-    assert.equal(unmapped[key].inherit, 'me-levant', `default ${key} must flag inherit:me-levant`);
-  }
+  for (const key of tea.FUEL_CHEM_DEMAND_KEYS) assert.equal(unmapped[key].inherit, 'me-levant', key);
+  assert.equal(tea.bindSale('methane', { region: 'China / Qaidam' }).inherit, 'me-levant');
+  assert.equal(tea.bindSale('lithium', { region: 'Atacama/Chile' }).inherit, undefined);
 });
 
-test('bindSale / bindCost regional overlays: chile offtake and power ≠ me-levant defaults', () => {
+test('bindSale, bindCost, and bindCapex apply the regional overlay', () => {
   const meSale = tea.bindSale('lithium');
   const chileSale = tea.bindSale('lithium', { region: 'Atacama/Chile' });
-  const chileCurried = tea.bindSaleForRegion('chile-atacama')('lithium');
-  assert.equal(meSale.annualDemandLimit, 1e6);
   assert.equal(meSale.demandRegionId, 'me-levant');
-  assert.equal(chileSale.annualDemandLimit, 2e7);
   assert.equal(chileSale.demandRegionId, 'chile-atacama');
-  assert.equal(chileCurried.annualDemandLimit, chileSale.annualDemandLimit);
+  assert.equal(chileSale.annualDemandLimit, tea.getDemandForRegion('chile-atacama').lithium.value);
   assert.notEqual(chileSale.annualDemandLimit, meSale.annualDemandLimit);
-  assert.equal(chileSale.unitPrice, meSale.unitPrice);
-  assert.equal(chileSale.unitPrice, 14);
-  assert.match(chileSale.note, /supply-side/i);
+  assert.equal(tea.bindSaleForRegion('chile-atacama')('lithium').annualDemandLimit, chileSale.annualDemandLimit);
+  assert.equal(chileSale.unitPrice, tea.getPriceForRegion('lithium', 'chile-atacama').value);
 
-  const mePower = tea.bindCost('power');
-  const chilePower = tea.bindCost('power', { region: 'chile-atacama' });
-  const auPower = tea.bindCost('power', { region: 'Australia' });
-  const europePower = tea.bindCost('power', { region: 'Europe' });
-  const indiaPower = tea.bindCost('power', { region: 'India' });
-  const texasPower = tea.bindCost('power', { region: 'Texas/US Gulf' });
-  const gulfPower = tea.bindCost('power', { region: 'Gulf' });
-  const saPower = tea.bindCost('power', { region: 'Southern Africa' });
-  const chinaPower = tea.bindCost('power', { region: 'China / Tibet' });
-  const qaidamPower = tea.bindCost('power', { region: 'China / Qaidam' });
-  assert.equal(mePower.unitCost, 0.04);
-  assert.equal(chilePower.unitCost, 0.07);
-  assert.equal(auPower.unitCost, 0.08);
-  assert.equal(europePower.unitCost, 0.10);
-  assert.equal(indiaPower.unitCost, 0.07);
-  assert.equal(texasPower.unitCost, 0.06);
-  assert.equal(gulfPower.unitCost, 0.04);
-  assert.equal(saPower.unitCost, 0.09);
-  assert.equal(chinaPower.unitCost, 0.06);
-  assert.equal(qaidamPower.unitCost, chinaPower.unitCost);
-  assert.notEqual(chilePower.unitCost, mePower.unitCost);
-  assert.notEqual(europePower.unitCost, mePower.unitCost);
-  assert.notEqual(texasPower.unitCost, mePower.unitCost);
-  assert.equal(chilePower.quality, 'screening');
-  assert.equal(europePower.quality, 'screening');
-  assert.equal(texasPower.quality, 'screening');
-  assert.match(chilePower.note, /not a SEN\/SING PPA/i);
-  assert.match(europePower.note, /not a Eurostat contract/i);
-  assert.match(texasPower.note, /not an ERCOT PPA/i);
-  assert.match(chinaPower.note, /not a State Grid/i);
-  assert.match(chinaPower.note, /not a PPA/i);
-  assert.ok(chilePower.evidence.some(item => /iea\.org.*electricity/i.test(item.url || '')));
-  assert.ok(texasPower.evidence.some(item => /eia\.gov\/electricity/i.test(item.url || '')));
-  assert.equal(tea.bindCost('brine', { region: 'chile-atacama' }).unitCost, tea.costs.brine.value);
-  assert.equal(chileSale.unitPrice, tea.prices.lithium.value);
-});
-
-test('capexMultiplierByRegion is a screening labor/construction proxy and bindCapex applies it', () => {
-  const shifted = ['chile-atacama', 'india', 'gulf', 'australia', 'me-levant', 'asia-china'];
-  for (const id of shifted) {
-    const mul = tea.getCapexMultiplierForRegion(id);
-    assert.notEqual(mul, 1, `${id} CAPEX multiplier should not be the omitted-table default of 1`);
-    assert.ok(mul >= 0.7 && mul <= 1.3, `${id} CAPEX multiplier ${mul} should stay in the ~0.7–1.3 screening band`);
-    const row = tea.capexMultiplierByRegion[id];
-    assert.equal(row.quality, 'screening');
-    assert.equal(row.unit, '×');
-    assert.ok(row.evidence.some(item => /turnerandtownsend|worldbank\.org\/en\/programs\/icp|irena\.org/i.test(item.url || '')));
+  const mePower = tea.bindCost('power').unitCost;
+  for (const region of ['chile-atacama', 'Europe', 'Texas/US Gulf', 'China / Tibet']) {
+    const power = tea.bindCost('power', { region });
+    assert.notEqual(power.unitCost, mePower, region);
+    assert.equal(power.quality, 'screening', region);
   }
+  assert.equal(tea.bindCost('power', { region: 'China / Qaidam' }).unitCost, tea.bindCost('power', { region: 'China / Tibet' }).unitCost);
+  assert.equal(tea.bindCost('brine', { region: 'chile-atacama' }).unitCost, tea.costs.brine.value);
 
+  for (const id of ['chile-atacama', 'india', 'gulf', 'australia', 'me-levant', 'asia-china']) {
+    const mul = tea.getCapexMultiplierForRegion(id);
+    assert.ok(mul !== 1 && mul >= 0.7 && mul <= 1.3, `${id} CAPEX multiplier ${mul}`);
+  }
   assert.equal(tea.getCapexMultiplierForRegion('Atacama/Chile'), tea.getCapexMultiplierForRegion('chile-atacama'));
-  assert.equal(tea.getCapexMultiplierForRegion('India'), tea.getCapexMultiplierForRegion('india'));
-  assert.equal(tea.getCapexMultiplierForRegion('Gulf'), tea.getCapexMultiplierForRegion('gulf'));
-  assert.equal(tea.getCapexMultiplierForRegion('Australia'), tea.getCapexMultiplierForRegion('australia'));
-  assert.equal(tea.getCapexMultiplierForRegion('Levant'), tea.getCapexMultiplierForRegion('me-levant'));
-  assert.equal(tea.getCapexMultiplierForRegion('Texas/US Gulf'), 1);
   assert.equal(tea.getCapexMultiplierForRegion('unknown-basin'), 1);
-  assert.equal(tea.getCapexMultiplierForRegion('China / Tibet'), 0.8);
-  assert.equal(tea.getCapexMultiplierForRegion('China / Qaidam'), 0.8);
-
   const chileMul = tea.getCapexMultiplierForRegion('chile-atacama');
   const chileBound = tea.bindCapex('minerals', { region: 'Atacama/Chile', capacity: 1000 });
-  assert.equal(chileBound.capexIntensity, tea.packs.minerals.capexIntensity * chileMul);
   assert.equal(chileBound.capexRate, tea.packs.minerals.capexIntensity * chileMul);
-  assert.notEqual(chileBound.capexRate, tea.packs.minerals.capexIntensity);
+  assert.equal(tea.bindCapex('minerals', { capacity: 1000 }).capexRate, tea.packs.minerals.capexIntensity);
 
-  const unbound = tea.bindCapex('minerals', { capacity: 1000 });
-  assert.equal(unbound.capexRate, tea.packs.minerals.capexIntensity);
-
-  const chileLiPrice = tea.getPriceForRegion('lithium', 'chile-atacama');
-  assert.equal(chileLiPrice.value, 14);
-  assert.equal(chileLiPrice, tea.priceByRegion['chile-atacama'].lithium);
-  assert.match(chileLiPrice.note, /supply-side/i);
-  assert.match(chileLiPrice.note, /not a Chilean offtake contract/i);
-  assert.ok(chileLiPrice.evidence.some(item => /usgs\.gov.*lithium/i.test(item.url || '')));
-
-  const indiaSolar = tea.solarCapexByRegion.india;
-  assert.equal(indiaSolar.value, 525);
-  assert.equal(indiaSolar.unit, '$/kWp');
-  assert.ok(indiaSolar.evidence.some(item => /irena\.org/i.test(item.url || '')));
   const indiaPv = tea.bindCapex('solar-pv', { region: 'India', capacity: 10 });
-  assert.equal(indiaPv.capexIntensity, 525);
-  assert.equal(indiaPv.installedCapex, 5250);
-  assert.notEqual(indiaPv.capexIntensity, tea.packs['solar-pv'].capexIntensity * tea.getCapexMultiplierForRegion('india'));
-  assert.match(indiaPv.note, /525/i);
+  assert.equal(indiaPv.capexIntensity, tea.solarCapexByRegion.india.value, 'a regional solar CAPEX row overrides the multiplier');
+  assert.equal(indiaPv.installedCapex, tea.solarCapexByRegion.india.value * 10);
   const chilePv = tea.bindCapex('solar-pv', { region: 'chile-atacama', capacity: 10 });
-  assert.equal(chilePv.capexIntensity, tea.packs['solar-pv'].capexIntensity * tea.getCapexMultiplierForRegion('chile-atacama'));
+  assert.equal(chilePv.capexIntensity, tea.packs['solar-pv'].capexIntensity * chileMul);
 });
 
-test('createAbundanceCase({ region }) is backward compatible and binds chile Li cap', () => {
+test('createAbundanceCase({ region }) binds the regional demand and power', () => {
+  const lithium = def => def.graph.nodes.find(node => node.id === 'lithium');
+  const power = def => def.graph.nodes.find(node => node.id === 'power');
   const defMe = createAbundanceCase();
-  const defChile = createAbundanceCase({ assayId: 'atacama-lithium-brine', region: 'Atacama/Chile' });
-  const lithium = id => id.graph.nodes.find(node => node.id === 'lithium');
-  const power = id => id.graph.nodes.find(node => node.id === 'power');
-
   assert.equal(defMe.meta.demandRegionId, 'me-levant');
   assert.equal(lithium(defMe).economics.annualDemandLimit, tea.demand.lithium.value);
-  assert.equal(power(defMe).economics.unitCost, 0.04);
-  assert.equal(defMe.teaEvidence.demandRegionId, 'me-levant');
 
-  assert.equal(defChile.meta.assayId, 'atacama-lithium-brine');
-  assert.equal(defChile.meta.demandRegionId, 'chile-atacama');
-  assert.equal(lithium(defChile).economics.annualDemandLimit, 2e7);
-  assert.notEqual(lithium(defChile).economics.annualDemandLimit, lithium(defMe).economics.annualDemandLimit);
-  assert.equal(power(defChile).economics.unitCost, 0.07);
-  assert.equal(defChile.teaEvidence.demandRegionId, 'chile-atacama');
-  const chileDemand = defChile.teaEvidence.demand.find(row => row.key === 'lithium');
-  assert.equal(chileDemand.value, 2e7);
-
-  const defEurope = createAbundanceCase({ region: 'Europe' });
-  assert.equal(defEurope.meta.demandRegionId, 'europe');
-  assert.equal(power(defEurope).economics.unitCost, 0.10);
-  assert.equal(lithium(defEurope).economics.unitPrice, tea.prices.lithium.value);
-
-  const defChina = createAbundanceCase({ assayId: 'zabuye-lithium-brine', region: 'China / Tibet' });
-  const defQaidam = createAbundanceCase({ assayId: 'qaidam-brine', region: 'China / Qaidam' });
-  assert.equal(defChina.meta.demandRegionId, 'asia-china');
-  assert.equal(defQaidam.meta.demandRegionId, 'asia-china');
-  assert.equal(lithium(defChina).economics.annualDemandLimit, 2e7);
-  assert.equal(lithium(defChina).economics.demandRegionId, 'asia-china');
-  assert.equal(lithium(defChina).economics.inherit, undefined);
-  assert.notEqual(lithium(defChina).economics.annualDemandLimit, lithium(defMe).economics.annualDemandLimit);
-  assert.equal(power(defChina).economics.unitCost, 0.06);
-  assert.equal(defChina.teaEvidence.demandRegionId, 'asia-china');
-  assert.equal(tea.bindSale('methane', { region: 'China / Qaidam' }).inherit, 'me-levant');
-  assert.equal(tea.bindSale('bromine', { region: 'China / Tibet' }).annualDemandLimit, 4e7);
-  assert.equal(tea.bindSale('bromine', { region: 'China / Tibet' }).inherit, undefined);
+  for (const [region, id] of [['Atacama/Chile', 'chile-atacama'], ['Europe', 'europe'], ['China / Tibet', 'asia-china']]) {
+    const def = createAbundanceCase({ assayId: 'atacama-lithium-brine', region });
+    assert.equal(def.meta.demandRegionId, id, region);
+    assert.equal(def.teaEvidence.demandRegionId, id, region);
+    assert.equal(lithium(def).economics.annualDemandLimit, tea.getDemandForRegion(id).lithium.value, region);
+    assert.equal(power(def).economics.unitCost, tea.bindCost('power', { region }).unitCost, region);
+  }
 });

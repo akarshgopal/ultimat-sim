@@ -1,12 +1,6 @@
-(function exposeBioforgeCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.BioforgeCase = api;
-})(globalThis, (model, tea) => {
-const { SUBSTANCES } = model;
+const { SUBSTANCES } = require('../engine/model');
+const tea = require('../data/tea-screening.js');
+const { projectEconomics, material, right, nodeFinder, clone } = require('./_shared.js');
 const GLUCONIC_KG_PER_DAY = 1000;
 const FEED_MARGIN = 1.02;
 const SEC = 0.05;
@@ -22,26 +16,6 @@ const OPENPR = 'https://www.openpr.com/news/4394627/track-gluconic-acid-price-in
 const ADM = 'https://www.adm.com/en-us/news/news-releases/2024/4/solugen-breaks-ground-on-bioforge-marshall-facility-bolstering-u-s.--biomanufacturing-capabilities/';
 const DOE_LPO = 'https://solugen.com/blog/2024/06/13/solugen-secures-conditional-commitment-for-213-6m-doe-loan-guarantee-bolstering-u-s-leadership-in-green-manufacturing-and-domestic-chemical-production/';
 
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase = 'solid') {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
-
 function createBioforgeCase() {
   const dextroseKg = GLUCONIC_KG_PER_DAY * SUBSTANCES.C6H12O6.molarMassG / SUBSTANCES.C6H12O7.molarMassG * FEED_MARGIN;
   const oxygenKg = GLUCONIC_KG_PER_DAY * SUBSTANCES.O2.molarMassG / SUBSTANCES.C6H12O7.molarMassG * FEED_MARGIN;
@@ -52,7 +26,7 @@ function createBioforgeCase() {
   const water = material('H2O', waterKg, 'liquid');
   const power = { kind: 'electricity', kWh: electricityKWh };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'dextrose', unit: 'material-source', sourcePreset: 'dextrose', params: { stream: dextrose }, economics: tea.bindCost('dextrose') },
@@ -93,8 +67,7 @@ function createBioforgeCase() {
       setpoints: { bioforge: GLUCONIC_KG_PER_DAY },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('dextrose').siteResource = 'dextrose';
   node('water').siteResource = 'water';
@@ -158,5 +131,4 @@ function createBioforgeCase() {
   return definition;
 }
 
-return { createBioforgeCase };
-});
+module.exports = { createBioforgeCase };

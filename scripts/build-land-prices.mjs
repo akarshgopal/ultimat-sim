@@ -13,57 +13,28 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..');
-const DATA = join(ROOT, 'data');
+const DATA = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
+// Optional raw inputs for a full rebuild; without them the script merges the extra records
+// into the committed data/land-prices.json.
+const APRI_PATH = '/tmp/apri_lprc.json';
+const NE_COUNTRIES_PATH = '/tmp/ne_countries.geojson';
+const NE_STATES_PATH = '/tmp/ne_states.geojson';
 
 const ACRES_PER_HA = 2.47105; // 1 ha = 2.47105 acres → $/ha = $/acre × ACRES_PER_HA
-const FX = Object.freeze({
-  pair: 'EURUSD',
-  rate: 1.1622,
-  date: '2026-09-04',
+const frankfurter = (pair, rate, date) => Object.freeze({
+  pair,
+  rate,
+  date,
   source: 'Frankfurter (ECB reference rates)',
   citeUrl: 'https://www.frankfurter.app/',
 });
-
-const FX_AUDUSD = Object.freeze({
-  pair: 'AUDUSD',
-  rate: 0.71728,
-  date: '2026-09-11',
-  source: 'Frankfurter (ECB reference rates)',
-  citeUrl: 'https://www.frankfurter.app/',
-});
-
-const FX_CADUSD = Object.freeze({
-  pair: 'CADUSD',
-  rate: 0.72161,
-  date: '2026-09-11',
-  source: 'Frankfurter (ECB reference rates)',
-  citeUrl: 'https://www.frankfurter.app/',
-});
-
-// Frankfurter (ECB) USD quotes, 2026-09-18. usdPerHa = local / USDxxx.
-const FX_USDJPY = Object.freeze({
-  pair: 'USDJPY',
-  rate: 157.89,
-  date: '2026-09-18',
-  source: 'Frankfurter (ECB reference rates)',
-  citeUrl: 'https://www.frankfurter.app/',
-});
-const FX_USDZAR = Object.freeze({
-  pair: 'USDZAR',
-  rate: 16.2724,
-  date: '2026-09-18',
-  source: 'Frankfurter (ECB reference rates)',
-  citeUrl: 'https://www.frankfurter.app/',
-});
-const FX_USDINR = Object.freeze({
-  pair: 'USDINR',
-  rate: 95.88,
-  date: '2026-09-18',
-  source: 'Frankfurter (ECB reference rates)',
-  citeUrl: 'https://www.frankfurter.app/',
-});
+const FX = frankfurter('EURUSD', 1.1622, '2026-09-04');
+const FX_AUDUSD = frankfurter('AUDUSD', 0.71728, '2026-09-11');
+const FX_CADUSD = frankfurter('CADUSD', 0.72161, '2026-09-11');
+// USD quotes: usdPerHa = local / USDxxx.
+const FX_USDJPY = frankfurter('USDJPY', 157.89, '2026-09-18');
+const FX_USDZAR = frankfurter('USDZAR', 16.2724, '2026-09-18');
+const FX_USDINR = frankfurter('USDINR', 95.88, '2026-09-18');
 // Saudi riyal official peg (SAMA). AED/QAR/OMR are similarly dollar-pegged.
 const FX_USDSAR = Object.freeze({
   pair: 'USDSAR',
@@ -112,15 +83,11 @@ const NASS_NAMES = Object.freeze({
 
 const EUROSTAT_ISO = Object.freeze({ EL: 'GR', UK: 'GB' }); // Eurostat geo → ISO_A2_EH
 
-function roundMoney(n) {
-  return Math.round(n);
-}
-
 function buildUsRecords() {
   return Object.entries(NASS_2025_USD_PER_ACRE).map(([postal, usdPerAcre]) => ({
     id: `US-${postal}`,
     name: NASS_NAMES[postal],
-    usdPerHa: roundMoney(usdPerAcre * ACRES_PER_HA),
+    usdPerHa: Math.round(usdPerAcre * ACRES_PER_HA),
     usdPerAcre,
     year: 2025,
     source: 'USDA NASS Land Values 2025 — farm real estate average',
@@ -131,16 +98,15 @@ function buildUsRecords() {
   }));
 }
 
-
 function buildCanadaRecords() {
   return Object.entries(STATCAN_2025_CAD_PER_ACRE).map(([id, cadPerAcre]) => {
     const usdPerAcre = cadPerAcre * FX_CADUSD.rate;
     return {
       id,
       name: id === 'CA' ? 'Canada' : id,
-      usdPerHa: roundMoney(usdPerAcre * ACRES_PER_HA),
+      usdPerHa: Math.round(usdPerAcre * ACRES_PER_HA),
       cadPerAcre,
-      usdPerAcre: roundMoney(usdPerAcre),
+      usdPerAcre: Math.round(usdPerAcre),
       year: 2025,
       source: 'Statistics Canada Table 32-10-0047-01 — farm land and buildings value per acre (CAD) → USD',
       citeUrl: 'https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3210004701',
@@ -156,7 +122,7 @@ function buildAustraliaRecords() {
   return Object.entries(ABARES_2023_AUD_PER_HA).map(([id, audPerHa]) => ({
     id,
     name: 'Australia',
-    usdPerHa: roundMoney(audPerHa * FX_AUDUSD.rate),
+    usdPerHa: Math.round(audPerHa * FX_AUDUSD.rate),
     audPerHa,
     year: 2023,
     source: 'ABARES Farmland Price Indicator via DAFF — national broadacre AUD/ha → USD',
@@ -174,9 +140,6 @@ function extractEurostat(apriPath) {
   const size = d.size;
   const dims = d.dimension;
   const indexOf = (dim) => dims[dim].category.index;
-  const labels = {
-    geo: dims.geo.category.label,
-  };
   const freqI = indexOf('freq').A;
   const unitI = indexOf('unit').EUR_HA;
   const agri = indexOf('agriprod');
@@ -205,7 +168,7 @@ function extractEurostat(apriPath) {
         const p = pos([freqI, unitI, agri[ac], geo[g], time[year]]);
         const v = d.value[String(p)];
         if (v != null && Number.isFinite(v) && v > 0) {
-          best = { geo: g, name: labels.geo[g], year: Number(year), agriprod: ac, eurPerHa: v };
+          best = { geo: g, name: dims.geo.category.label[g], year: Number(year), agriprod: ac, eurPerHa: v };
           break;
         }
       }
@@ -217,7 +180,7 @@ function extractEurostat(apriPath) {
       id: iso,
       eurostatGeo: best.geo,
       name: best.name,
-      usdPerHa: roundMoney(best.eurPerHa * FX.rate),
+      usdPerHa: Math.round(best.eurPerHa * FX.rate),
       eurPerHa: best.eurPerHa,
       year: best.year,
       agriprod: best.agriprod,
@@ -252,7 +215,7 @@ function buildExtraRecords() {
   const jpyPerHa = NCA_2025_JPY_PER_10A * 10;
   const inrPerHa = INDIA_SCREENING_INR_PER_ACRE * ACRES_PER_HA;
   const sarPerHa = (SAUDI_MOJ_2023_SAR / SAUDI_MOJ_2023_M2) * 10000;
-  const saudiUsd = roundMoney(sarPerHa / FX_USDSAR.rate);
+  const saudiUsd = Math.round(sarPerHa / FX_USDSAR.rate);
   const gulfProxyNote = 'Screening GCC agricultural land $/ha — Saudi MoJ 2023 ag-land deal average as regional proxy (no published national farmland statistical series). Not cadastral, not industrial parcel quotes.';
   const gulfCite = 'https://www.alwatan.com.sa/article/1138667';
 
@@ -271,9 +234,9 @@ function buildExtraRecords() {
     {
       id: 'IN',
       name: 'India',
-      usdPerHa: roundMoney(inrPerHa / FX_USDINR.rate),
+      usdPerHa: Math.round(inrPerHa / FX_USDINR.rate),
       inrPerAcre: INDIA_SCREENING_INR_PER_ACRE,
-      inrPerHa: roundMoney(inrPerHa),
+      inrPerHa: Math.round(inrPerHa),
       year: 2024,
       source: 'Screening agricultural land $/ha (India) — Gujarat farmland acre-order ~₹4 lakh/acre → USD/ha. Not MOSPI/NABARD official, not cadastral, not Mundra SEZ quotes.',
       citeUrl: 'https://www.iima.ac.in/sites/default/files/2025-12/ISALPI%20Index%20December%202025%20%20Release%20%20%281%29.pdf',
@@ -285,7 +248,7 @@ function buildExtraRecords() {
     {
       id: 'JP',
       name: 'Japan',
-      usdPerHa: roundMoney(jpyPerHa / FX_USDJPY.rate),
+      usdPerHa: Math.round(jpyPerHa / FX_USDJPY.rate),
       jpyPer10a: NCA_2025_JPY_PER_10A,
       jpyPerHa,
       year: 2025,
@@ -299,7 +262,7 @@ function buildExtraRecords() {
     {
       id: 'ZA',
       name: 'South Africa',
-      usdPerHa: roundMoney(WCDOA_2024_ZAR_PER_HA / FX_USDZAR.rate),
+      usdPerHa: Math.round(WCDOA_2024_ZAR_PER_HA / FX_USDZAR.rate),
       zarPerHa: WCDOA_2024_ZAR_PER_HA,
       year: 2024,
       source: 'Screening agricultural land $/ha (South Africa) — Western Cape DoA Dec 2024 provincial sheet R23,317/ha as national/regional proxy. Not cadastral, not Cape Town industrial parcel quotes.',
@@ -313,7 +276,7 @@ function buildExtraRecords() {
       id: 'SA',
       name: 'Saudi Arabia',
       usdPerHa: saudiUsd,
-      sarPerHa: roundMoney(sarPerHa),
+      sarPerHa: Math.round(sarPerHa),
       year: 2023,
       source: 'Saudi Ministry of Justice real-estate indicator 2023 — 1,571 agricultural-land deals, SAR 2.180 billion on 219.1 million m² → USD/ha',
       citeUrl: gulfCite,
@@ -381,13 +344,8 @@ function stripFeature(f, props) {
 }
 
 function buildAdmin(priceIds) {
-  const countriesPath = '/tmp/ne_countries.geojson';
-  const statesPath = '/tmp/ne_states.geojson';
-  if (!existsSync(countriesPath) || !existsSync(statesPath)) {
-    throw new Error('Missing /tmp/ne_countries.geojson or /tmp/ne_states.geojson — download Natural Earth 110m first');
-  }
-  const countries = JSON.parse(readFileSync(countriesPath, 'utf8'));
-  const states = JSON.parse(readFileSync(statesPath, 'utf8'));
+  const countries = JSON.parse(readFileSync(NE_COUNTRIES_PATH, 'utf8'));
+  const states = JSON.parse(readFileSync(NE_STATES_PATH, 'utf8'));
   const features = [];
 
   // US states (contiguous published by NASS — exclude AK/HI; skip DC)
@@ -504,11 +462,10 @@ function stampAdminHasPrice(admin, priceIds) {
   return admin;
 }
 
-const apriPath = '/tmp/apri_lprc.json';
+const BUNDLE_TITLE = 'Agricultural land values (official + labeled screening)';
+const BUNDLE_NOTE = 'Early siting proxy from official agricultural land-price statistics plus labeled screening national/regional proxies — not cadastral, not industrial parcel quotes, not transaction comps. Record quality is cited vs screening.';
 const extras = buildExtraRecords();
-const canRebuild = existsSync(apriPath)
-  && existsSync('/tmp/ne_countries.geojson')
-  && existsSync('/tmp/ne_states.geojson');
+const canRebuild = [APRI_PATH, NE_COUNTRIES_PATH, NE_STATES_PATH].every(p => existsSync(p));
 
 if (!canRebuild) {
   const existing = JSON.parse(readFileSync(join(DATA, 'land-prices.json'), 'utf8'));
@@ -522,8 +479,8 @@ if (!canRebuild) {
     ...existing,
     meta: {
       ...existing.meta,
-      title: 'Agricultural land values (official + labeled screening)',
-      note: 'Early siting proxy from official agricultural land-price statistics plus labeled screening national/regional proxies — not cadastral, not industrial parcel quotes, not transaction comps. Record quality is cited vs screening.',
+      title: BUNDLE_TITLE,
+      note: BUNDLE_NOTE,
       sources,
       fxExtra: { ...(existing.meta?.fxExtra || {}), ...extraFx() },
       generatedAt: new Date().toISOString(),
@@ -543,21 +500,20 @@ if (!canRebuild) {
 }
 
 const us = buildUsRecords();
-const eu = extractEurostat(apriPath);
+const eu = extractEurostat(APRI_PATH);
 const ca = buildCanadaRecords();
 const au = buildAustraliaRecords();
-const extra = extras;
 const byId = new Map();
-for (const r of [...us, ...eu, ...ca, ...au, ...extra]) {
+for (const r of [...us, ...eu, ...ca, ...au, ...extras]) {
   if (byId.has(r.id)) throw new Error(`Duplicate id ${r.id}`);
   byId.set(r.id, r);
 }
 
 const bundle = {
   meta: {
-    title: 'Agricultural land values (official + labeled screening)',
+    title: BUNDLE_TITLE,
     units: 'USD/ha',
-    note: 'Early siting proxy from official agricultural land-price statistics plus labeled screening national/regional proxies — not cadastral, not industrial parcel quotes, not transaction comps. Record quality is cited vs screening.',
+    note: BUNDLE_NOTE,
     acresPerHa: ACRES_PER_HA,
     fx: FX,
     sources: [
@@ -593,21 +549,17 @@ const priceIds = new Set(bundle.records.map((r) => r.id));
 const admin = buildAdmin(priceIds);
 writeBundle(bundle, admin);
 
-const usCount = us.length;
-const euCount = eu.length;
-const adminBytes = Buffer.byteLength(JSON.stringify(admin));
-const priceBytes = Buffer.byteLength(JSON.stringify(bundle));
 console.log(JSON.stringify({
   mode: 'rebuild',
-  usStates: usCount,
-  euCountries: euCount,
+  usStates: us.length,
+  euCountries: eu.length,
   canada: ca.length,
   australia: au.length,
-  extras: extra.length,
+  extras: extras.length,
   totalRecords: bundle.records.length,
   adminFeatures: admin.features.length,
-  landPricesJsonBytes: priceBytes,
-  landAdminGeojsonBytes: adminBytes,
+  landPricesJsonBytes: Buffer.byteLength(JSON.stringify(bundle)),
+  landAdminGeojsonBytes: Buffer.byteLength(JSON.stringify(admin)),
   fx: FX,
   fxAud: FX_AUDUSD,
   fxCad: FX_CADUSD,

@@ -4,12 +4,7 @@ const test = require('node:test');
 const { streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
 const { createDacCase } = require('../cases/dac');
-
-function assertClosed(solved) {
-  assert.ok(solved.balances.maxAbsResidual < 1e-8);
-  assert.ok(Math.abs(solved.balances.electricityKWh) < 1e-8);
-  assert.ok(Math.abs(solved.balances.heatKWh) < 1e-8);
-}
+const { assertClosed } = require('./helpers.js');
 
 test('DAC captures CO2, rejects air, and closes elemental/electric/heat balances', () => {
   const solved = solveOperation(createDacCase());
@@ -19,11 +14,7 @@ test('DAC captures CO2, rejects air, and closes elemental/electric/heat balances
   assert.deepEqual(dac.limitedBy, []);
   assert.ok(streamMassKg(solved.nodes['captured-co2'].received) > 0);
   assert.ok(streamMassKg(solved.nodes['depleted-air'].received) > 0);
-  assertClosed(solved);
-
-  for (const [element, amount] of Object.entries(solved.balances.elements)) {
-    assert.ok(Math.abs(amount) < 1e-8, `${element} balance should close`);
-  }
+  assertClosed(solved, { elements: true });
 });
 
 test('DAC reports heat quantity or temperature as its active limit', () => {

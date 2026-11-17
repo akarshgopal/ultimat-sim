@@ -1,0 +1,18 @@
+/* Energy view — scoped by .v-energy. */
+.v-energy .card + .card { margin-top: var(--gap); }
+.v-energy .en-levers { display: flex; flex-wrap: wrap; gap: 12px 32px; margin-bottom: 8px; }
+.v-energy .en-levers .segmented { flex-wrap: wrap; }
+.v-energy .kpis { margin-top: 12px; }
+.v-energy .en-yes { color: var(--pos); font-weight: 600; }
+.v-energy .en-no { color: var(--text-2); }
+.v-energy .en-never { color: var(--text-3); font-style: italic; }
+.v-energy .en-bars { display: flex; flex-direction: column; gap: 6px; }
+.v-energy .en-bar-row { display: grid; grid-template-columns: minmax(140px, 260px) minmax(0, 1fr) minmax(140px, 220px); gap: 10px; align-items: center; font-size: 12px; }
+.v-energy .en-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-energy .en-bar { position: relative; display: flex; height: 14px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.v-energy .en-bar span { height: 100%; }
+.v-energy .en-price { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+.v-energy .en-bar-value { white-space: nowrap; color: var(--text-2); }
+@media (max-width: 680px) {
+  .v-energy .en-bar-row { grid-template-columns: 1fr; gap: 2px; }
+}

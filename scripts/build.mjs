@@ -3,22 +3,26 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
 const BUILD_ID = getBuildId();
 
-const EXCLUDED_PATH_PREFIXES = ['.git', 'dist', 'node_modules', 'scripts', 'tests', '.github'];
-const EXCLUDED_ROOT_FILES = new Set(['.gitignore', 'package.json', 'package-lock.json', 'vercel.json']);
+// Ship exactly what the browser loads: the page, its styles and scripts, the simulation
+// worker's imports, and the three generated data files. Plant models, the solver and
+// generators run in Node only (scripts/build-pathways.mjs, scripts/build-sites.mjs).
+const INCLUDE = [
+  'index.html', 'app.css', 'css', 'js', 'favicon.svg', 'LICENSE', 'NOTICE',
+  'engine/utilization.js', 'engine/company.js', 'engine/designs', 'data/pathways.js', 'data/markets.js', 'data/sites.js', 'data/bom.js',
+];
 await fs.rm(DIST, { recursive: true, force: true });
 await fs.mkdir(DIST, { recursive: true });
-await copyProjectTree(ROOT, DIST, '');
-for (const entry of ['index.html', 'flowsheet.html']) {
-  const entryPath = path.join(DIST, entry);
-  const original = await fs.readFile(entryPath, 'utf8');
-  await fs.writeFile(entryPath, rewriteLocalAssetUrls(original, BUILD_ID));
+for (const entry of INCLUDE) {
+  const target = path.join(DIST, entry);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.cp(path.join(ROOT, entry), target, { recursive: true });
 }
+const indexPath = path.join(DIST, 'index.html');
+await fs.writeFile(indexPath, rewriteLocalAssetUrls(await fs.readFile(indexPath, 'utf8'), BUILD_ID));
 
 console.log(`Built dist/ with asset version ${BUILD_ID}`);
 
@@ -40,37 +44,6 @@ function getBuildId() {
     }).trim();
   } catch {
     return new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-  }
-}
-
-function shouldSkip(relativePath) {
-  const normalized = relativePath.split(path.sep).join('/');
-  if (!normalized) return false;
-
-  const pathParts = normalized.split('/');
-  if (EXCLUDED_PATH_PREFIXES.includes(pathParts[0])) return true;
-  if (pathParts.length === 1 && EXCLUDED_ROOT_FILES.has(pathParts[0])) return true;
-
-  return false;
-}
-
-async function copyProjectTree(sourceDir, targetDir, relativePath) {
-  const entries = await fs.readdir(sourceDir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const entryRelativePath = relativePath ? path.join(relativePath, entry.name) : entry.name;
-    if (shouldSkip(entryRelativePath)) continue;
-
-    const sourcePath = path.join(sourceDir, entry.name);
-    const targetPath = path.join(targetDir, entry.name);
-
-    if (entry.isDirectory()) {
-      await fs.mkdir(targetPath, { recursive: true });
-      await copyProjectTree(sourcePath, targetPath, entryRelativePath);
-      continue;
-    }
-
-    await fs.copyFile(sourcePath, targetPath);
   }
 }
 

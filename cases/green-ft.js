@@ -1,14 +1,7 @@
-(function exposeGreenFtCase(root, factory) {
-  const api = factory(
-    typeof require === 'function' ? require('../engine/model') : root.FlowsheetModel,
-    typeof require === 'function' ? require('../data/atacama-pacific-seawater.js') : root.AtacamaPacificSeawater,
-    typeof require === 'function' ? require('../data/tea-screening.js') : root.TeaScreening
-  );
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.GreenFtCase = api;
-})(globalThis, (model, assay, tea) => {
-const { SUBSTANCES } = model;
-const PVGIS_URL = 'https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=-23.100&lon=-70.448&peakpower=1&loss=14&angle=23&aspect=180&outputformat=json';
+const { SUBSTANCES } = require('../engine/model');
+const assay = require('../data/atacama-pacific-seawater.js');
+const tea = require('../data/tea-screening.js');
+const { MEJILLONES_PVGIS_URL: PVGIS_URL, MEJILLONES_URL, MILLERO_URL, WOA_URL, projectEconomics, material, streamFromAssay, right, nodeFinder, clone, solarPowerNode, powerToBusEdge } = require('./_shared.js');
 const DAILY_PV_ED = 5.27;
 const DIESEL_KG_PER_DAY = 1000;
 const SEC_FT = 0.22;
@@ -27,40 +20,6 @@ const DOE_H2 = 'https://www.energy.gov/eere/fuelcells/hydrogen-production-electr
 const EIA_DIESEL = 'https://www.eia.gov/petroleum/gasdiesel/';
 const WB_PINK = 'https://www.worldbank.org/en/research/commodity-markets';
 const IPCC_FUEL_NCV = 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/2_Volume2/V2_1_Ch1_Introduction.pdf';
-const MEJILLONES_URL = 'https://en.wikipedia.org/wiki/Mejillones';
-const MILLERO_URL = 'https://doi.org/10.1016/j.dsr.2007.10.001';
-const WOA_URL = 'https://doi.org/10.25923/70qt-9574';
-
-function right(kind, status, note, evidence) {
-  return {
-    kind,
-    status,
-    authorize: status === 'authorized' || status === 'assumed',
-    note,
-    ...(evidence ? { evidence } : {}),
-  };
-}
-
-function material(substance, kg, phase) {
-  return {
-    kind: 'material',
-    mol: { [substance]: kg * 1000 / SUBSTANCES[substance].molarMassG },
-    phase,
-    T_C: 25,
-    P_bar: 1,
-  };
-}
-
-function seawaterFromAssay(seawaterAssay, massKg) {
-  const gPerKg = seawaterAssay.ions_g_per_kg;
-  const molPerKg = seawaterAssay.mol_per_kg;
-  const saltMassKg = Object.values(gPerKg).reduce((sum, grams) => sum + grams, 0) / 1000 * massKg;
-  const mol = {
-    H2O: (massKg - saltMassKg) * 1000 / SUBSTANCES.H2O.molarMassG,
-  };
-  for (const [id, amount] of Object.entries(molPerKg)) mol[id] = amount * massKg;
-  return { kind: 'material', phase: 'liquid', T_C: 25, P_bar: 1, mol };
-}
 
 function createGreenFtCase() {
   const dieselKg = DIESEL_KG_PER_DAY;
@@ -74,18 +33,15 @@ function createGreenFtCase() {
   const solarKWp = kWhPerDay / DAILY_PV_ED * 1.02;
   const electricityKWh = solarKWp * DAILY_PV_ED;
   const carbonDioxide = material('CO2', co2Kg, 'gas');
-  const seawater = seawaterFromAssay(assay, seawaterKg);
+  const seawater = streamFromAssay(assay, seawaterKg);
   const power = { kind: 'electricity', kWh: electricityKWh };
-  const seawaterCost = tea.costs && tea.costs.seawater
-    ? tea.bindCost('seawater', { region: REGION })
-    : { unitCost: 0 };
   const definition = {
-    economics: { periodDays: 365, projectLifeYears: 20, discountRate: 0.08 },
+    economics: projectEconomics(),
     graph: {
       nodes: [
         { id: 'co2-feed', unit: 'material-source', sourcePreset: 'co2', params: { stream: carbonDioxide }, economics: tea.bindCost('co2-feed', { freight: 'chile-coast-container' }) },
-        { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: seawaterCost },
-        { id: 'power', unit: 'electricity-source', params: { stream: power }, economics: tea.bindCapexPack('solar-pv', { capacity: solarKWp, region: REGION }) },
+        { id: 'seawater', unit: 'material-source', sourcePreset: 'seawater', params: { stream: seawater }, economics: tea.bindCost('seawater', { region: REGION }) },
+        solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
           id: 'swro',
@@ -124,7 +80,7 @@ function createGreenFtCase() {
         { from: { node: 'electrolyzer', port: 'waterReject' }, to: { node: 'waterReject', port: 'in' } },
         { from: { node: 'ft-liquids', port: 'diesel' }, to: { node: 'diesel-product', port: 'in' } },
         { from: { node: 'ft-liquids', port: 'water' }, to: { node: 'process-water', port: 'in' } },
-        { from: { node: 'power', port: 'out' }, to: { node: 'power-bus', port: 'in' } },
+        powerToBusEdge(),
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'electrolyzer', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'ft-liquids', port: 'electricity' } },
         { from: { node: 'power-bus', port: 'out' }, to: { node: 'swro', port: 'electricity' } },
@@ -135,8 +91,7 @@ function createGreenFtCase() {
       priorities: { 'power-bus': ['electrolyzer', 'ft-liquids', 'swro'] },
     },
   };
-  const node = id => definition.graph.nodes.find(item => item.id === id);
-  const clone = stream => JSON.parse(JSON.stringify(stream));
+  const node = nodeFinder(definition);
   node('power').siteResource = 'electricity';
   node('co2-feed').siteResource = 'co2';
   node('seawater').siteResource = 'seawater';
@@ -183,7 +138,7 @@ function createGreenFtCase() {
       summary: 'SE Pacific / Atacama coast ~34.9 g/kg, Millero/Pilson S=35 majors scaled 34.9/35; multi-ion, not a NaCl proxy or Mejillones intake sample',
       quality: 'cited',
       salinity_g_per_kg: assay.salinity_g_per_kg,
-      evidence: Array.isArray(assay.evidence) ? assay.evidence.map(item => ({ ...item })) : [],
+      evidence: assay.evidence.map(item => ({ ...item })),
     },
     rights: {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports. Plant uses on-site PV sized to SWRO + PEM + FT island.', [
@@ -217,5 +172,4 @@ function createGreenFtCase() {
   return definition;
 }
 
-return { createGreenFtCase };
-});
+module.exports = { createGreenFtCase };

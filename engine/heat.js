@@ -7,12 +7,12 @@
 // no ΔT_min, no composite curves, no capital targeting, no graph mutation.
 
 function cascadeHeat({ sources = [], sinks = [] } = {}) {
-  const sourceList = (sources || []).map(item => ({
+  const sourceList = sources.map(item => ({
     id: item.id,
     kWh: Number(item.kWh) || 0,
     T_C: Number(item.T_C),
   }));
-  const sinkList = (sinks || []).map(item => ({
+  const sinkList = sinks.map(item => ({
     id: item.id,
     demandKWh: Number(item.demandKWh) || 0,
     minT_C: Number(item.minT_C) || 0,
@@ -33,7 +33,6 @@ function cascadeHeat({ sources = [], sinks = [] } = {}) {
     for (const sinkIndex of sinkOrder) {
       if (remaining[sourceIndex] <= 0) break;
       const kWh = Math.min(remaining[sourceIndex], unmet[sinkIndex]);
-      if (kWh <= 0) continue;
       matches.push({
         from: sourceList[sourceIndex].id,
         to: sinkList[sinkIndex].id,

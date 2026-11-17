@@ -1,9 +1,4 @@
-// CLI/orphan-only. Do not add cases/dac.js to index.html.
-(function exposeDacCase(root, factory) {
-  const api = factory();
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.DacCase = api;
-})(globalThis, () => {
+// DAC unit test harness, not a production plant (scripts/build-pathways.mjs skips it).
 const DEFAULT_AIR = {
   kind: 'material',
   mol: { CO2: 10000, N2: 90000 },
@@ -67,5 +62,4 @@ function createDacCase(overrides = {}) {
   };
 }
 
-return { createDacCase };
-});
+module.exports = { createDacCase };

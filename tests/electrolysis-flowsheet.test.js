@@ -3,23 +3,7 @@ const test = require('node:test');
 
 const { SUBSTANCES, streamMassKg } = require('../engine/model');
 const { solveOperation } = require('../engine/solve');
-
-function materialFromKg(kg, volumeM3, density = 1025) {
-  const soluteKg = Object.values(kg).reduce((sum, value) => sum + value, 0);
-  const components = { H2O: volumeM3 * density - soluteKg, ...kg };
-  return {
-    kind: 'material',
-    mol: Object.fromEntries(
-      Object.entries(components).map(([substance, mass]) => [
-        substance,
-        mass * 1000 / SUBSTANCES[substance].molarMassG,
-      ])
-    ),
-    phase: 'liquid',
-    T_C: 25,
-    P_bar: 1,
-  };
-}
+const { materialFromKg, SEAWATER_100M3_KG } = require('./helpers.js');
 
 const WATER_KG_PER_KG_H2 = SUBSTANCES.H2O.molarMassG / SUBSTANCES.H2.molarMassG;
 const PRODUCT_WATER_KG_PER_M3 = 1000;
@@ -30,17 +14,7 @@ function electrolysisCase({
   electrolyzerRequested = 5,
   electrolyzerCapacity = 10,
 } = {}) {
-  const feed = materialFromKg({
-    'Na+': 1080,
-    'Cl-': 1940,
-    'Mg+2': 129,
-    'Ca+2': 41,
-    'K+': 39,
-    'SO4-2': 270,
-    'Br-': 6.7,
-    'Li+': 0.017,
-    B: 0.45,
-  }, 100);
+  const feed = materialFromKg(SEAWATER_100M3_KG, 100);
   const requestedRo = roRequested ?? electrolyzerRequested * WATER_KG_PER_KG_H2 / PRODUCT_WATER_KG_PER_M3;
 
   return {

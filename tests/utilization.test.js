@@ -44,14 +44,19 @@ test('baseload block: stored through the night, never below the turndown floor',
     assert.ok(d.storeKWh > 10 * 1000, 'about a night of storage per kW of steady load');
     assert.ok(d.outputFactor >= cfg.baseloadMinTurndown && d.outputFactor <= 1);
   }
-  // Dearer storage never buys more output.
-  for (let i = 1; i < designs.length; i += 1) assert.ok(designs[i].outputFactor <= designs[i - 1].outputFactor + 1e-12);
-  // Dear PV and dear equipment push towards full output.
+  // Dearer storage never buys more storage per unit of output (it buys PV instead).
+  for (let i = 1; i < designs.length; i += 1) {
+    assert.ok(designs[i].storeKWh / designs[i].outputFactor <= designs[i - 1].storeKWh / designs[i - 1].outputFactor + 1e-6);
+  }
+  // Dear equipment pushes towards full output.
   const firm = U.baseDesign(solar, 1000, 1e9, 1000, store(300));
   assert.ok(firm.outputFactor > 0.97);
-  // Without the turndown floor the optimizer would idle a "steady" plant at night.
-  const noFloor = U.baseDesign(solar, 1000, 1e6, 1000, store(300), 0);
-  assert.ok(noFloor.outputFactor < 0.5);
+  // A steady unit runs around the clock at one rate per month, never below the floor; the store
+  // covers that rate through the worst month's night.
+  for (const d of [...designs, firm]) {
+    assert.equal(d.monthRate.length, 12);
+    for (const u of d.monthRate) assert.ok(u >= cfg.baseloadMinTurndown - 1e-9 && u <= 1 + 1e-12);
+  }
   assert.equal(U.baseDesign(solar, 0, 0, 1000, store(300)).outputFactor, 1);
 });
 
@@ -103,4 +108,28 @@ test('utilization raises solar-only costs versus the old 24 h costing, and is re
 test('recipes without a flowsheet keep the 24 h costing', () => {
   const legacy = { ...pathway('cement'), id: 'legacy', flowsheet: undefined };
   assert.equal(U.operatingProfile(legacy, cfg), null);
+});
+
+test('weather replay: a design replayed through its own typical days reaches its output without trips', () => {
+  const mej = site('chile-mejillones');
+  const solar = U.siteSolar(mej, cfg);
+  // One year of hourly kW/kWp built from the design's 12 typical half-hourly days.
+  const g = [];
+  const month = [];
+  solar.months.forEach((m, mi) => {
+    for (let d = 0; d < m.days; d += 1) {
+      for (let h = 0; h < 24; h += 1) {
+        g.push((m.profile[2 * h] + m.profile[2 * h + 1]) / 2);
+        month.push(mi);
+      }
+    }
+  });
+  for (const id of ['cement', 'green-ammonia', 'green-hydrogen']) {
+    const p = pathway(id);
+    const prof = U.operatingProfile(p, cfg);
+    const d = U.designPlant(prof, mej, 1e5, { pvUsdPerKWp: 758, capex24ByClass: { process: 1e8, electrolyzer: 5e7, desal: 1e6 } }, cfg);
+    const r = U.replayWeather(d.blocks, Float64Array.from(g), Uint8Array.from(month));
+    assert.ok(Math.abs(r.outputFactor - d.outputFactor) < 0.03, `${id}: replay ${r.outputFactor} vs design ${d.outputFactor}`);
+    assert.ok(r.tripDayShare < 0.02, `${id}: trips on ${r.tripDayShare} of typical days`);
+  }
 });

@@ -658,8 +658,11 @@
         bufferUsd: design.bufferUsd,
         buffers: design.buffers,
         storageUsd: design.storageUsd,
+        batteryUsd: design.batteryUsd,
+        thermalUsd: design.thermalUsd,
         storageReplacementUsdPerYear,
         alternatives: design.alternatives,
+        blocks: design.blocks,
       } : null,
     };
   }

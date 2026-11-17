@@ -103,7 +103,7 @@ Runs every check: engine, designs, data staleness, and Playwright tests of each 
 ## Known limits
 
 - **Screening economics.** Constant real prices over a plant's life, no tax or inflation, simple annuity debt. Elasticities, learning rates and many capex packs are screening assumptions.
-- **Typical days, not weather.** Day-to-day variability, multi-day storage and grid backup are not modelled.
+- **Designed on typical days.** Plants are sized on 12 typical days per site. A stress test replays them through ten real years of hourly weather ([`docs/weather-stress.md`](docs/weather-stress.md), `npm run weather`): the frontier holds (94% feasible even with steady units firmed against cloudy runs), while today's feasibility relies on kilns tolerating a few trips a month. Grid backup and inter-site sharing are not modelled.
 - **Design factors are exact only at their reference plant size.** Several designs fall in cost with size faster than the engine's single scale law.
 - **Make-vs-buy is one level deep and per plant.** TiCl₄, Mg, PLS and REE concentrates have no supplier recipe.
 - **Captive markets.** Much ammonia, H₂, O₂ and DRI is captive; the share ceiling is the only guard.

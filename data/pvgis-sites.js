@@ -1,6 +1,23 @@
 // Frozen PVGIS PVcalc responses (data/pvgis-*.json) keyed by site id; dated case-site aliases
 // point at the same file. Node only.
 const FILES = Object.freeze({
+  'namibia-luderitz': 'pvgis-luderitz.json',
+  'southafrica-boegoebaai': 'pvgis-boegoebaai.json',
+  'mauritania-nouadhibou': 'pvgis-nouadhibou.json',
+  'morocco-tarfaya': 'pvgis-tarfaya.json',
+  'egypt-berenice': 'pvgis-berenice.json',
+  'eritrea-assab': 'pvgis-assab.json',
+  'jordan-aqaba': 'pvgis-aqaba.json',
+  'pakistan-gwadar': 'pvgis-gwadar.json',
+  'au-onslow': 'pvgis-onslow.json',
+  'au-geraldton': 'pvgis-geraldton.json',
+  'au-port-augusta': 'pvgis-port-augusta.json',
+  'chile-taltal': 'pvgis-taltal.json',
+  'chile-iquique': 'pvgis-iquique.json',
+  'peru-marcona': 'pvgis-marcona.json',
+  'mexico-puerto-penasco': 'pvgis-puerto-penasco.json',
+  'libya-misrata': 'pvgis-misrata.json',
+  'tunisia-gabes': 'pvgis-gabes.json',
   'oman-duqm': 'pvgis-duqm.json',
   'india-mundra': 'pvgis-mundra.json',
   'namibia-walvis-bay': 'pvgis-walvis-bay.json',

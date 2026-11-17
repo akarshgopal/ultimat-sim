@@ -23,7 +23,7 @@ const COUNTRY = {
   'china-qaidam': 'CHN', 'ethiopia-danakil': 'ETH', 'namibia-walvis-bay': 'NAM', 'spain-almeria': 'ESP',
   'argentina-hombre-muerto': 'ARG', 'chile-salar-de-maricunga': 'CHL', 'us-clayton-valley': 'USA',
   'china-zabuye': 'CHN', 'argentina-puerto-madryn': 'ARG', 'levant-dead-sea': 'JOR', 'israel-ashkelon': 'ISR',
-  'djibouti-doraleh': 'DJI', 'us-huntington-beach': 'USA', 'mexico-guerrero-negro': 'MEX',
+  'djibouti-doraleh': 'DJI', 'namibia-luderitz': 'NAM', 'southafrica-boegoebaai': 'ZAF', 'mauritania-nouadhibou': 'MRT', 'morocco-tarfaya': 'MAR', 'egypt-berenice': 'EGY', 'eritrea-assab': 'ERI', 'jordan-aqaba': 'JOR', 'pakistan-gwadar': 'PAK', 'au-onslow': 'AUS', 'au-geraldton': 'AUS', 'au-port-augusta': 'AUS', 'chile-taltal': 'CHL', 'chile-iquique': 'CHL', 'peru-marcona': 'PER', 'mexico-puerto-penasco': 'MEX', 'libya-misrata': 'LBY', 'tunisia-gabes': 'TUN', 'us-huntington-beach': 'USA', 'mexico-guerrero-negro': 'MEX',
 };
 // A site draws on the land within this radius (half of it for a coastal site, the rest is sea),
 // or on its share of the country when the country is smaller, times the country's suitable share.

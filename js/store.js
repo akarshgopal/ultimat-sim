@@ -80,7 +80,8 @@
     { group: 'finance', key: 'equity', label: 'Start equity', unit: '$M', min: 1, max: 100000, step: 1, def: D.finance.initialEquityUsd / 1e6 },
     { group: 'finance', key: 'debt', label: 'Debt share of capex', unit: '%', min: 0, max: 90, step: 5, def: pct(D.finance.debtFraction) },
     { group: 'finance', key: 'rate', label: 'Discount rate', unit: '%', min: 0, max: 30, step: 0.5, def: pct(D.finance.discountRate) },
-    { group: 'build', key: 'pvSite', label: 'Max PV per site', unit: 'GWp', min: 0.1, max: 1000, step: 1, def: D.build.maxPvGWpPerSite },
+    { group: 'build', key: 'land', label: 'Land use per site', unit: '%', min: 0.1, max: 100, step: 0.5, def: pct(D.build.landUseShare),
+      hint: 'Share of the land suitable for utility PV around each site (World Bank/ESMAP) that the company may cover.' },
     { group: 'build', key: 'lead', label: 'Build lead time', unit: 'yr', min: 0, max: 10, step: 1, def: D.build.leadTimeYears },
     { group: 'build', key: 'buildStart', label: 'Construction capacity, year 1', unit: '$M/yr', min: 1, max: 1e6, step: 50, def: D.build.initialBuildUsdPerYear / 1e6,
       hint: 'Capex the company can put in the ground in its first year.' },
@@ -162,7 +163,7 @@
       finance: { initialEquityUsd: s.equity * 1e6, debtFraction: s.debt / 100, discountRate: s.rate / 100 },
       build: {
         maxMarketShare: s.share / 100,
-        maxPvGWpPerSite: s.pvSite,
+        landUseShare: s.land / 100,
         leadTimeYears: Math.round(s.lead),
         initialBuildUsdPerYear: s.buildStart * 1e6,
         buildGrowthPerYear: s.buildGrowth / 100,

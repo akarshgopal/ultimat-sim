@@ -21,6 +21,7 @@ const FLAGS = {
   '--debt': (cfg, v) => { (cfg.finance ||= {}).debtFraction = Number(v); },
   '--share': (cfg, v) => { (cfg.build ||= {}).maxMarketShare = Number(v); },
   '--site-gw': (cfg, v) => { (cfg.build ||= {}).maxPvGWpPerSite = Number(v); },
+  '--land-share': (cfg, v) => { (cfg.build ||= {}).landUseShare = Number(v); },
   '--pv': (cfg, v) => { (cfg.pv ||= {}).capexUsdPerKWp = Number(v); },
   '--only': (cfg, v) => { (cfg.build ||= {}).allowPathways = v.split(','); },
 };

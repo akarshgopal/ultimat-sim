@@ -73,7 +73,10 @@
       maxPlantKgPerDay: 5e6,
       allowPathways: null, // null = all; else array of pathway ids
       allowSites: null, // null = all; else array of site ids
-      maxPvGWpPerSite: 50, // land / interconnection / permitting ceiling per site (~800 km² at 1.6 ha/MWp)
+      // Solar per site: at most this share of the site's suitable land (site.suitableLandKm2, from the
+      // World Bank/ESMAP Level 1 land in its catchment) at pv.landHaPerKWp, and optionally a flat cap.
+      landUseShare: 0.02,
+      maxPvGWpPerSite: null,
       // Only build plants whose every feed comes from ocean/brine/air/rock/water or a captive
       // supplier: forces make-not-buy and skips plants that would still buy an intermediate.
       infiniteSourcesOnly: false,
@@ -111,6 +114,10 @@
     // Factors are exact at refMultiple × the recipe's reference output, the plant size the
     // abundance scoreboard prices; a unit's scaleExponent carries them to other sizes.
     designs: Object.freeze({ units: Object.freeze({}), refMultiple: 100 }),
+    // Overland haulage from an inland site to its port (site.portDistanceKm), charged on products,
+    // coproducts and bought feeds. World Bank (Iimi 2023): a full 20 t truck over 100 km ≈ US$91,
+    // i.e. ~$0.046 per t·km; Lao PDR ~$0.06. Screening $0.05.
+    logistics: Object.freeze({ inlandUsdPerTKm: 0.05 }),
     // Idiot-index squeeze (Musk: installed cost ÷ raw-material cost). With a target T, every cost
     // class is capped at its materials floor × T: price = min(today's price after learning and
     // decline, floor × T). floors come from data/bom.js (the app's store passes them in):
@@ -223,6 +230,17 @@
     return Math.max(scaleCfg.floorFactor ?? 0, Math.min(1, f));
   }
 
+  // A site's solar ceiling (kWp): its suitable land × build.landUseShare at pv.landHaPerKWp, and at
+  // most build.maxPvGWpPerSite when set. Sites without land data have only the flat cap.
+  function sitePvCapKWp(site, cfg) {
+    const share = Number(cfg.build.landUseShare);
+    const land = site?.suitableLandKm2 > 0 && share > 0
+      ? (site.suitableLandKm2 * share * 100) / cfg.pv.landHaPerKWp
+      : Infinity;
+    const flat = Number(cfg.build.maxPvGWpPerSite) > 0 ? cfg.build.maxPvGWpPerSite * 1e6 : Infinity;
+    return Math.min(land, flat);
+  }
+
   function marketDemandT(market, year) {
     if (!market) return Infinity;
     const base = Number(market.worldDemandTPerYear);
@@ -291,8 +309,8 @@
       const ref = sitesById.get(pathway.refSiteId);
       return Boolean(ref?.brineAssayId && site.brineAssayId === ref.brineAssayId);
     }
-    // Inland brine hubs (salars, salt lakes) host brine recipes only: no port, no bulk logistics.
-    if (site.kind === 'brine-hub') return false;
+    // Seawater recipes need a coast. Inland sites host the rest and pay overland freight to a port
+    // (logistics.inlandUsdPerTKm × site.portDistanceKm) on what they sell and buy.
     if (origins.has('ocean') && !site.coastal) return false;
     return true;
   }
@@ -549,6 +567,14 @@
     let equipmentOm = (processCapex - storageUsd) * (Number(pathway.fixedOmFracPerYear) || 0);
     let feedCost = annualKg * feedUsdPerKg;
     let otherVariable = annualKg * Math.max(0, (Number(pathway.variableOmUsdPerKg) || 0) + variableOmDelta);
+
+    // Inland sites haul their product, coproducts and bought feeds to and from a port (in other O&M).
+    const haulUsdPerKg = (Number(site.portDistanceKm) || 0) * (cfg.logistics?.inlandUsdPerTKm ?? 0) / 1000;
+    if (haulUsdPerKg > 0) {
+      const boughtKgPerKg = feedsKgPerYear.reduce((t, f) => t + (f.origin === 'intermediate' || f.origin === 'crust' || f.origin === 'consumable' ? f.kg : 0), 0) / Math.max(annualKg, 1e-12);
+      const soldKgPerKg = 1 + (pathway.coproducts || []).reduce((t, co) => t + (Number(co.kgPerKg) || 0), 0);
+      otherVariable += annualKg * haulUsdPerKg * (soldKgPerKg + boughtKgPerKg);
+    }
 
     const price = ctx.priceFor(pathway.product, null, annualKg);
     const sales = [{ product: pathway.product, kgPerYear: annualKg, fallbackUsdPerKg: null }];
@@ -942,7 +968,7 @@
   // cache: pathway id → Map(site|size → { ev, stamp }); an evaluation's costs hold for the year, and a
   // stale stamp (a build moved one of its markets) only re-prices it.
   function pickBuild(cfg, ctx, candidates, committedKg, budgetUsd, sitePvKWp, cache, capexRoomUsd) {
-    const sitePvCapKWp = (Number(cfg.build.maxPvGWpPerSite) || Infinity) * 1e6;
+    const capOf = site => sitePvCapKWp(site, cfg);
     // Pass 1: feasible (NPV ≥ 0, hurdle met) and affordable options; per pathway × site, sizes
     // are ascending and stop at the first that breaks a site or market ceiling.
     const feasible = [];
@@ -956,7 +982,7 @@
       if (!(headroomKg > 0)) continue;
       const stamp = cache.stamps.get(pathway.id) || 0;
       for (const site of pathwaySites) {
-        const pvRoomKWp = sitePvCapKWp - (sitePvKWp[site.id] || 0);
+        const pvRoomKWp = capOf(site) - (sitePvKWp[site.id] || 0);
         if (!(pvRoomKWp > 0)) continue;
         for (const size of sizes) {
           if (size * 365 > headroomKg) break;
@@ -1000,7 +1026,7 @@
           for (const site of c.sites) {
             if (seen.has(site.id)) continue;
             seen.add(site.id);
-            pvRoom += Math.max(0, sitePvCapKWp - (sitePvKWp[site.id] || 0));
+            pvRoom += Math.max(0, capOf(site) - (sitePvKWp[site.id] || 0));
           }
         }
         const debtFree = 1 - cfg.finance.debtFraction;
@@ -1587,6 +1613,7 @@
     pvCapexUsdPerKWp,
     scaleFactor,
     marketDemandT,
+    sitePvCapKWp: (site, config) => sitePvCapKWp(site, merge(DEFAULTS, config || {})),
     realizedPrice,
     buildSites,
     siteAllowsPathway,

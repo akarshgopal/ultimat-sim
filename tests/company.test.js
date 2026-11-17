@@ -147,15 +147,17 @@ test('buildSites reads presets and frozen PVGIS yields from the repo data', () =
   close(mej.pvKWhPerKWpDay, 1923.52 / 365, 1e-3);
 });
 
-test('inland brine hubs host only brine recipes', () => {
-  const hub = { id: 'hub', name: 'Hub', kind: 'brine-hub', coastal: false, brineAssayId: 'b1', pvKWhPerKWpDay: 7, landUsdPerHa: 1 };
-  const sites = [...SITES, hub];
-  const byId = new Map(sites.map(s => [s.id, s]));
-  assert.equal(C.siteAllowsPathway(hub, good, byId), false);
+test('inland sites host non-seawater recipes and pay overland freight to a port', () => {
+  const hub = { id: 'hub', name: 'Hub', kind: 'brine-hub', coastal: false, brineAssayId: 'b1', pvKWhPerKWpDay: 5, landUsdPerHa: 1000, portDistanceKm: 0 };
+  const byId = new Map([...SITES, hub].map(s => [s.id, s]));
+  assert.equal(C.siteAllowsPathway(hub, good, byId), true);
   assert.equal(C.siteAllowsPathway(hub, brine, byId), true);
-  const result = C.simulateCompany({ pathways: [good], sites, markets: MARKETS, config: { years: 8 } });
-  assert.ok(result.plants.length > 0);
-  assert.ok(result.plants.every(p => p.siteId !== 'hub'));
+  // The same plant costs more per kg the farther it is from a port.
+  const at = km => C.evaluateAtYear({ pathways: [good], sites: [{ ...hub, portDistanceKm: km }], markets: MARKETS, config: {} }, good.id, 'hub', good.refOutputKgPerDay, 0);
+  const near = at(0);
+  const far = at(1000);
+  // 1 kg of product out and 1 kg of bought rock in, each hauled 1,000 km.
+  close(far.lcopUsdPerKg - near.lcopUsdPerKg, 2 * 1000 * C.DEFAULTS.logistics.inlandUsdPerTKm / 1000, 1e-6);
 });
 
 test('per-site PV ceiling spreads plants across sites', () => {

@@ -158,6 +158,12 @@
   }
 
   // ---------------------------------------------------------------- shared bits
+  // Each site's solar ceiling in this scenario (its suitable land × the land-use share).
+  function ceilings(Store, sites, scenario) {
+    const config = Store.toConfig(scenario);
+    return Object.fromEntries(sites.map(s => [s.id, Company.sitePvCapKWp(s, config)]));
+  }
+
   function pvMeter(UI, kWp, ceilingKWp) {
     const frac = ceilingKWp > 0 ? Math.min(1, kWp / ceilingKWp) : 0;
     return UI.meter(`${kWp > 0 ? UI.num(kWp / 1e6, 3) : '0'} / ${UI.num(ceilingKWp / 1e6, 3)}`, frac, `${UI.pct(frac)} of the per-site ceiling`);
@@ -191,7 +197,7 @@
       el('div', { class: 'stack' }, [
         kpis,
         UI.card('Where the company builds', 'Circle area ∝ PV capacity built in the current run. Click a site for detail.', map.el),
-        UI.card('All sites', 'PV built vs the scenario’s per-site ceiling. Click a row for detail.', tableBox),
+        UI.card('All sites', 'PV built vs each site’s ceiling: the scenario’s share of the land suitable for PV in its catchment. Click a row for detail.', tableBox),
       ]),
     );
 
@@ -201,15 +207,15 @@
       lastResult = result;
       const pv = pvBySite(result);
       const plants = plantsBySite(result);
-      const ceilingKWp = scenario.pvSite * 1e6;
-      map.update(pv, ceilingKWp);
+      const cap = ceilings(Store, sites, scenario);
+      map.update(pv, Math.max(...Object.values(cap).filter(Number.isFinite)));
       const used = sites.filter(s => pv[s.id] > 0);
       const totalKWp = Object.values(pv).reduce((a, b) => a + b, 0);
-      const atCeiling = used.filter(s => pv[s.id] >= ceilingKWp * 0.95).length;
+      const atCeiling = used.filter(s => pv[s.id] >= cap[s.id] * 0.95).length;
       kpis.replaceChildren(
         UI.kpi('Sites used', result ? `${used.length} of ${sites.length}` : '—', 'with at least one plant'),
         UI.kpi('PV built', result ? UI.num(totalKWp / 1e6, 3) + ' GWp' : '—', 'all plants in the run'),
-        UI.kpi('Sites at ceiling', result ? String(atCeiling) : '—', `≥ 95% of ${UI.num(scenario.pvSite)} GWp`),
+        UI.kpi('Sites at ceiling', result ? String(atCeiling) : '—', `≥ 95% of ${UI.num(scenario.land)}% of suitable land`),
         UI.kpi('Best solar', UI.num(Math.max(...sites.map(s => s.pvKWhPerKWpDay)), 3), 'kWh/kWp·day'),
       );
       const columns = [
@@ -220,7 +226,8 @@
         { key: 'land', label: 'Land', num: true, get: s => s.landUsdPerHa, render: s => el('span', {}, [landText(UI, s), el('span', { class: 'cell-sub' }, UI.qualityTag(s.landSource?.quality) || 'default')]) },
         { key: 'res', label: 'Resources', get: s => (s.coastal ? 2 : 0) + (s.brineAssayId ? 1 : 0), render: s => resourceTags(UI, s) },
         { key: 'plants', label: 'Plants', num: true, get: s => plants[s.id]?.length || 0 },
-        { key: 'pv', label: 'PV GWp / ceiling', num: true, get: s => pv[s.id] || 0, render: s => pvMeter(UI, pv[s.id] || 0, ceilingKWp) },
+        { key: 'landKm2', label: 'Suitable land', num: true, title: 'Land suitable for utility PV in the site’s catchment (World Bank/ESMAP Level 1)', get: s => s.suitableLandKm2 || 0, render: s => (s.suitableLandKm2 ? UI.num(s.suitableLandKm2) + ' km²' : '—') },
+        { key: 'pv', label: 'PV GWp / ceiling', num: true, get: s => pv[s.id] || 0, render: s => pvMeter(UI, pv[s.id] || 0, cap[s.id]) },
         { key: 'paths', label: 'Pathways', num: true, title: 'Pathways whose feeds this site can supply', get: s => hostBySite.get(s.id).length,
           render: s => el('span', { title: hostBySite.get(s.id).map(p => p.name).join('\n') }, String(hostBySite.get(s.id).length)) },
       ];
@@ -297,15 +304,16 @@
       lastResult = result;
       const pv = pvBySite(result);
       const plants = plantsBySite(result)[site.id] || [];
-      const ceilingKWp = scenario.pvSite * 1e6;
-      map.update(pv, ceilingKWp);
+      const cap = ceilings(Store, Store.SITES, scenario);
+      const ceilingKWp = cap[site.id];
+      map.update(pv, Math.max(...Object.values(cap).filter(Number.isFinite)));
       const capex = plants.reduce((sum, p) => sum + p.capexUsd, 0);
       const landHa = plants.reduce((sum, p) => sum + (p.landHa || 0), 0);
       kpis.replaceChildren(
         UI.kpi('Solar yield', UI.num(site.pvKWhPerKWpDay, 3), 'kWh/kWp·day'),
         UI.kpi('Land', site.landUsdPerHa > 0 ? UI.usd(site.landUsdPerHa) : '—', 'per hectare'),
         UI.kpi('Plants here', result ? String(plants.length) : '—', result ? `${UI.usd(capex)} capex` : ''),
-        UI.kpi('PV built', result ? UI.num((pv[site.id] || 0) / 1e6, 3) + ' GWp' : '—', `ceiling ${UI.num(scenario.pvSite)} GWp · ${UI.pct((pv[site.id] || 0) / ceilingKWp)}`),
+        UI.kpi('PV built', result ? UI.num((pv[site.id] || 0) / 1e6, 3) + ' GWp' : '—', `ceiling ${UI.num(ceilingKWp / 1e6)} GWp (${UI.num(scenario.land)}% of ${UI.num(site.suitableLandKm2)} km² suitable) · ${UI.pct((pv[site.id] || 0) / ceilingKWp)}`),
         UI.kpi('Land used', result ? UI.num(landHa) + ' ha' : '—', 'PV field'),
       );
       if (!plants.length) {

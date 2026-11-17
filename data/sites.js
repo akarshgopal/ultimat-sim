@@ -37,6 +37,9 @@
         "quality": "screening",
         "url": "https://www.alwatan.com.sa/article/1138667"
       },
+      "country": "ARE",
+      "suitableLandKm2": 35959,
+      "portDistanceKm": 0,
       "notes": "Abu Dhabi Gulf industrial coast at the Taweelah power and desalination complex. Location preset only — not an EWEC connection, intake permit, or offtake. Live PVGIS on select."
     },
     {
@@ -72,6 +75,9 @@
         "quality": "screening",
         "url": "https://www.alwatan.com.sa/article/1138667"
       },
+      "country": "QAT",
+      "suitableLandKm2": 10412,
+      "portDistanceKm": 0,
       "notes": "Qatar North Field industrial city on the Gulf. Location preset only — not a Qatargas/QP concession, grid connection, or port lease. Live PVGIS on select."
     },
     {
@@ -107,6 +113,9 @@
         "quality": "cited",
         "url": "https://www.alwatan.com.sa/article/1138667"
       },
+      "country": "SAU",
+      "suitableLandKm2": 22419,
+      "portDistanceKm": 0,
       "notes": "Saudi Gulf industrial and SWCC desalination coast at Ras Al-Khair. Location preset only — not a SWCC connection, intake permit, or offtake. Persian Gulf seawater assay is basin-average screening, not a Ras Al-Khair reject sample. Geography-matched Abu Dhabi sabkha process-brine assay is Gulf regional screening, not a Ras Al-Khair concession sample. Live PVGIS on select."
     },
     {
@@ -142,6 +151,9 @@
         "quality": "cited",
         "url": "https://www.alwatan.com.sa/article/1138667"
       },
+      "country": "SAU",
+      "suitableLandKm2": 21599,
+      "portDistanceKm": 0,
       "notes": "NEOM industrial city on the northern Red Sea, about 25 km north of Duba. Location preset only — Oxagon is a planned hub, not a verified offtake, desal permit, or grid right. Red Sea seawater assay is basin typical, not an Oxagon intake sample. Geography-matched Jizan sabkha process-brine assay is Red Sea regional screening, not an Oxagon concession sample. Live PVGIS on select."
     },
     {
@@ -173,6 +185,9 @@
         4.05
       ],
       "landSource": null,
+      "country": "EGY",
+      "suitableLandKm2": 12689,
+      "portDistanceKm": 0,
       "notes": "SCZONE / Ain Sokhna port on the western Gulf of Suez. Location preset only — not a port concession, grid connection, or industrial-zone lease. Red Sea seawater assay is basin typical, not a Sokhna intake sample. Geography-matched Jizan sabkha process-brine assay is Red Sea regional screening, not a Sokhna concession sample and not Dead Sea chemistry. Live PVGIS on select."
     },
     {
@@ -208,6 +223,9 @@
         "quality": "cited",
         "url": "https://www.alwatan.com.sa/article/1138667"
       },
+      "country": "SAU",
+      "suitableLandKm2": 24178,
+      "portDistanceKm": 0,
       "notes": "Yanbu industrial city / King Fahd Industrial Port on the Red Sea. Location preset only — not a Royal Commission lease, SWCC intake, or grid right. Red Sea seawater assay is basin typical, not a Yanbu intake sample. Geography-matched Jizan sabkha process-brine assay is Red Sea regional screening (Banat et al. 2005 covers Jeddah–Yanbu sabkhas), not a Yanbu concession sample. Live PVGIS on select."
     },
     {
@@ -243,6 +261,9 @@
         "quality": "screening",
         "url": "https://www.alwatan.com.sa/article/1138667"
       },
+      "country": "OMN",
+      "suitableLandKm2": 28092,
+      "portDistanceKm": 0,
       "notes": "Port of Duqm / SEZAD on the Arabian Sea. Location preset only — not a SEZAD lease, intake permit, or grid right. Abundance permanently skipped: no cited Arabian Sea process-brine or Duqm desal-reject mean (Gulf sabkha is not Arabian Sea). Live PVGIS on select."
     },
     {
@@ -278,6 +299,9 @@
         "quality": "cited",
         "url": "https://www.agriculture.gov.au/about/news/broadacre-farmland-prices-strong-growth"
       },
+      "country": "AUS",
+      "suitableLandKm2": 14407,
+      "portDistanceKm": 0,
       "notes": "Pilbara iron-ore export harbour on the Indian Ocean. Location preset only — not a port authority lease, water licence, or network connection. Live PVGIS on select."
     },
     {
@@ -313,6 +337,9 @@
         "quality": "cited",
         "url": "https://www.agriculture.gov.au/about/news/broadacre-farmland-prices-strong-growth"
       },
+      "country": "AUS",
+      "suitableLandKm2": 14407,
+      "portDistanceKm": 0,
       "notes": "Kwinana Industrial Area south of Perth, Cockburn Sound. Location preset only — not a KIA lease, desal offtake, or Western Power connection. Geography-matched Lake Mackay WA playa process-brine assay is WA salt-lake regional screening like Port Hedland, not a Kwinana reject sample or mining lease. Live PVGIS on select."
     },
     {
@@ -348,6 +375,9 @@
         "quality": "cited",
         "url": "https://www.agriculture.gov.au/about/news/broadacre-farmland-prices-strong-growth"
       },
+      "country": "AUS",
+      "suitableLandKm2": 28815,
+      "portDistanceKm": 1372,
       "notes": "Lake Mackay playa (East Pilbara–adjacent / Gibson Desert). Location preset only — literature process-brine assay is not a mineral concession or mining lease. Live PVGIS on select."
     },
     {
@@ -383,6 +413,9 @@
         "quality": "screening",
         "url": "https://www.iima.ac.in/sites/default/files/2025-12/ISALPI%20Index%20December%202025%20%20Release%20%20%281%29.pdf"
       },
+      "country": "IND",
+      "suitableLandKm2": 54909,
+      "portDistanceKm": 0,
       "notes": "Mundra Port / SEZ on the Gulf of Kutch. Location preset only — not an Adani Ports lease, desal permit, or GETCO connection. Geography-matched Gujarat coastal sub-soil brine (Bhavnagar / Little Rann of Kutch Table 6 medians) is regional screening, not a Mundra salt-works or intake sample. Live PVGIS on select."
     },
     {
@@ -418,6 +451,9 @@
         "quality": "cited",
         "url": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf"
       },
+      "country": "USA",
+      "suitableLandKm2": 41676,
+      "portDistanceKm": 0,
       "notes": "Port of Corpus Christi inner harbour on the Texas Gulf. Location preset only — not a port lease, TCEQ water right, or ERCOT interconnection. PCCA Harbor Island design-basis average Outfall 001 (50% recovery) is a cited desal-reject proxy, not a measured process-brine sample, not Great Salt Lake or Salton Sea chemistry. Live PVGIS on select."
     },
     {
@@ -453,6 +489,9 @@
         "quality": "cited",
         "url": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf"
       },
+      "country": "USA",
+      "suitableLandKm2": 83353,
+      "portDistanceKm": 1251,
       "notes": "Great Salt Lake south-arm industrial shore (Utah). Location preset only — Murphy & Haji 2022 Table 1 process-brine assay is not a mineral concession, Compass Minerals lease, or US Magnesium right. Live PVGIS on select."
     },
     {
@@ -488,6 +527,9 @@
         "quality": "cited",
         "url": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf"
       },
+      "country": "USA",
+      "suitableLandKm2": 66470,
+      "portDistanceKm": 297,
       "notes": "Salton Sea Known Geothermal Resource Area (Imperial Valley, CA). Location preset only — Stringfellow & Dobson 2021 Table 2 post-flash SSGF literature-mean assay is not a mineral concession, Controlled Thermal Resources lease, or EnergySource right. Not Texas Gulf seawater. Live PVGIS on select."
     },
     {
@@ -523,6 +565,9 @@
         "quality": "cited",
         "url": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf"
       },
+      "country": "USA",
+      "suitableLandKm2": 54076,
+      "portDistanceKm": 309,
       "notes": "Searles Lake playa (San Bernardino County, CA). Location preset only — Teeple 1929 interstitial brine is screening chemistry, not a Searles Valley Minerals lease or concession sample. Not Texas Gulf seawater. Live PVGIS on select."
     },
     {
@@ -554,6 +599,9 @@
         3.92
       ],
       "landSource": null,
+      "country": "MAR",
+      "suitableLandKm2": 51001,
+      "portDistanceKm": 0,
       "notes": "Atlantic Morocco at Agadir. Location preset only — not an ONEE connection, desal concession, or port lease. Abundance permanently skipped: no cited Morocco Atlantic process-brine or Chtouka reject ion table. Live PVGIS on select."
     },
     {
@@ -585,6 +633,9 @@
         4.78
       ],
       "landSource": null,
+      "country": "ESH",
+      "suitableLandKm2": 51001,
+      "portDistanceKm": 0,
       "notes": "Atlantic Sahara coast at Dakhla. Strong desert solar and seawater in the same place; location preset only — not a hydrogen offtake, desal permit, or grid right. Abundance permanently skipped: no cited Sahara Atlantic process-brine or Dakhla reject ion table. Live PVGIS on select."
     },
     {
@@ -620,6 +671,9 @@
         "quality": "screening",
         "url": "https://www.odepa.gob.cl/estadisticas-del-sector/estadisticas-productivas"
       },
+      "country": "CHL",
+      "suitableLandKm2": 25330,
+      "portDistanceKm": 0,
       "notes": "Mejillones industrial bay on the Atacama coast. Desert-class solar next to a minerals port; location preset only — not a SEN connection, desal concession, or port lease. Live PVGIS on select."
     },
     {
@@ -655,6 +709,9 @@
         "quality": "screening",
         "url": "https://www.odepa.gob.cl/estadisticas-del-sector/estadisticas-productivas"
       },
+      "country": "CHL",
+      "suitableLandKm2": 41869,
+      "portDistanceKm": 297,
       "notes": "Salar de Atacama nucleus (Antofagasta Region). Location preset only — Murphy & Haji 2022 Table 1 regional nucleus brine is screening chemistry, not an SQM or Albemarle concession sample. Not Mejillones seawater. Live PVGIS on select."
     },
     {
@@ -686,6 +743,9 @@
         7.08
       ],
       "landSource": null,
+      "country": "BOL",
+      "suitableLandKm2": 43373,
+      "portDistanceKm": 557,
       "notes": "Salar de Uyuni nucleus (Potosí Department). Location preset only — Murphy & Haji 2022 Table 1 regional brine is screening chemistry, not a YLB or other Bolivian concession sample. Screening offtake inherits Atacama/Chile TEA (YAGNI, not a Bolivia offtake table). Not Salar de Atacama / Mejillones chemistry. Live PVGIS on select."
     },
     {
@@ -717,6 +777,9 @@
         4.08
       ],
       "landSource": null,
+      "country": "CHN",
+      "suitableLandKm2": 63661,
+      "portDistanceKm": 3437,
       "notes": "Kunteyi/Dayantan intercrystalline brine (northern Qaidam Basin, Qinghai). Location preset only — Ren et al. 2023 Table 1 sample 5 is screening chemistry, not a Qinghai Salt Lake or Qinghai Lithium concession sample. East Taijinar Li-rich table brine is a different Qaidam lake, not this assay. Screening offtake uses the China/Asia USGS table (not a plant contract and not a silent ME-Levant inherit). Live PVGIS on select."
     },
     {
@@ -748,6 +811,9 @@
         4.89
       ],
       "landSource": null,
+      "country": "ETH",
+      "suitableLandKm2": 104502,
+      "portDistanceKm": 549,
       "notes": "Dallol salt pan (northern Danakil Depression, Afar). Location preset only — Garrett/Martini 1969 salt-pan majors are screening chemistry, not an Allana/ICL potash concession sample. Screening offtake inherits Red Sea / Levant TEA. Not Red Sea seawater. Live PVGIS on select."
     },
     {
@@ -779,6 +845,9 @@
         5.72
       ],
       "landSource": null,
+      "country": "NAM",
+      "suitableLandKm2": 45848,
+      "portDistanceKm": 0,
       "notes": "Namib coast harbour at Walvis Bay. Location preset only — not a Namport lease, desal permit, or NamPower connection. Abundance permanently skipped: no frozen Walvis Salt Holdings ion table; Namib pan/spring chemistry is not a Walvis salt-field assay. Live PVGIS on select."
     },
     {
@@ -814,6 +883,9 @@
         "quality": "cited",
         "url": "https://ec.europa.eu/eurostat/databrowser/view/apri_lprc/default/table"
       },
+      "country": "ESP",
+      "suitableLandKm2": 53715,
+      "portDistanceKm": 0,
       "notes": "Same Alboran coordinates as the coastal methane demo (36.834, −2.463). This row is a Location preset only and does not load that factory. Intake remains assumed; grid, freshwater, and discharge stay unverified. Spanish Mediterranean SWRO reject (Villar et al. 2023 Table 2) is a cited desal-reject proxy, not an Almería/Carboneras plant sample and not Alboran Millero seawater. Live PVGIS on select; frozen Almería typical days are a fallback if the API is down."
     },
     {
@@ -845,6 +917,9 @@
         7.03
       ],
       "landSource": null,
+      "country": "ARG",
+      "suitableLandKm2": 63290,
+      "portDistanceKm": 573,
       "notes": "Salar del Hombre Muerto nucleus (Argentine Puna). Location preset only — Murphy & Haji 2022 Table 1 well brine is screening chemistry, not an Arcadium/Livent/Posco mineral concession sample (not a mineral concession). Screening offtake inherits Atacama/Chile TEA (YAGNI, not an Argentina offtake table). Not Mejillones / Atacama / Uyuni chemistry. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea or Uyuni solar clone."
     },
     {
@@ -880,6 +955,9 @@
         "quality": "screening",
         "url": "https://www.odepa.gob.cl/estadisticas-del-sector/estadisticas-productivas"
       },
+      "country": "CHL",
+      "suitableLandKm2": 53577,
+      "portDistanceKm": 582,
       "notes": "Salar de Maricunga (Atacama Region, Chile). Location preset only — Minera Salar Blanco Stage One DFS 2022 Table 1-1 basin averages (718 samples) are screening chemistry, not an MSB/Codelco concession sample. Not Salar de Atacama nucleus chemistry and not Mejillones seawater. Frozen PVGIS-ERA5 on select (per-site series) — not an Atacama or Dead Sea solar clone."
     },
     {
@@ -915,6 +993,9 @@
         "quality": "cited",
         "url": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf"
       },
+      "country": "USA",
+      "suitableLandKm2": 69901,
+      "portDistanceKm": 594,
       "notes": "Clayton Valley playa aquifer near Silver Peak (Esmeralda County, Nevada). Location preset only — Pure Energy CV-3 average majors are screening chemistry, not an Albemarle Silver Peak concession sample. SO4 not reported in the CV-3 table and is omitted (not invented). Not Salton Sea / Searles / Texas Gulf chemistry. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea or Salton solar clone."
     },
     {
@@ -946,6 +1027,9 @@
         5.12
       ],
       "landSource": null,
+      "country": "CHN",
+      "suitableLandKm2": 63661,
+      "portDistanceKm": 2223,
       "notes": "Lake Zabuye / Zhabuye carbonate-type salt lake (Tibetan Plateau). Location preset only — Murphy & Haji 2022 Table 1 majors are screening chemistry, not a Tibet Mineral/Zabuye concession sample. Screening offtake uses the China/Asia USGS table (not a plant contract and not a silent ME-Levant inherit). Not Qaidam/Kunteyi intercrystalline chemistry. PVGIS: frozen PVGIS-ERA5 PVcalc (2026-09-27, E_y 2070.67 kWh/kWp at 31.35, 84.05; data/pvgis-zabuye.json) — not a screening-band yield and not a Qaidam or Dead Sea solar clone."
     },
     {
@@ -977,6 +1061,9 @@
         5.78
       ],
       "landSource": null,
+      "country": "ARG",
+      "suitableLandKm2": 41218,
+      "portDistanceKm": 0,
       "notes": "Puerto Madryn industrial port on the Patagonian Atlantic. Location preset only — not an Aluar lease, desal permit, or grid right. Patagonian Atlantic seawater assay is Millero-scaled shelf screening, not a Madryn intake sample. Geography-matched Salar del Hombre Muerto process-brine assay is Argentine Puna regional screening, not a Madryn salt-works or mineral concession sample. Screening offtake inherits Atacama/Chile TEA. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea or Uyuni solar clone."
     },
     {
@@ -1008,6 +1095,9 @@
         3.77
       ],
       "landSource": null,
+      "country": "JOR",
+      "suitableLandKm2": 38538,
+      "portDistanceKm": 127,
       "notes": "Dead Sea industrial shore (31.16, 35.43). Location preset only — the frozen open-water ion assay is screening chemistry, not an ICL/APC concession sample. Same coordinates and name as the brine and ammonia demo so the Location menu matches the Overview title. Not Ashkelon seawater. PVGIS: frozen PVGIS-SARAH3/ERA5 PVcalc (2026-09-06, E_y 1674.85 kWh/kWp; data/pvgis-dead-sea.json)."
     },
     {
@@ -1039,6 +1129,9 @@
         3.41
       ],
       "landSource": null,
+      "country": "ISR",
+      "suitableLandKm2": 20071,
+      "portDistanceKm": 0,
       "notes": "Ashkelon Mediterranean industrial / SWRO coast. Location preset only — not an IDE Ashkelon desal concession, IEC connection, or offtake. Levantine Mediterranean seawater assay is Millero-scaled eastern-Med screening (S≈39), not a western Alboran/Almería proxy and not an Ashkelon intake sample. Geography-matched Dead Sea open-water process-brine assay is Levant inland screening, not an Ashkelon SWRO-reject sample and not a mineral concession. Screening offtake inherits Red Sea / Levant TEA. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea solar clone onto the coast."
     },
     {
@@ -1070,6 +1163,9 @@
         4.7
       ],
       "landSource": null,
+      "country": "DJI",
+      "suitableLandKm2": 21460,
+      "portDistanceKm": 0,
       "notes": "Doraleh Multipurpose Port on the Djibouti Red Sea / Gulf of Aden approach. Location preset only — not a port lease, desal permit, or grid right. Red Sea seawater assay is basin typical, not a Doraleh intake sample. Geography-matched Dallol/Danakil salt-pan process-brine assay is Afar inland screening, not a Doraleh reject sample and not an Allana/ICL concession. Screening offtake inherits Red Sea / Levant TEA. Frozen PVGIS-ERA5 on select (per-site series) — not a Dead Sea or Danakil solar clone."
     },
     {
@@ -1105,6 +1201,9 @@
         "quality": "cited",
         "url": "https://www.nass.usda.gov/Publications/Todays_Reports/reports/land0825.pdf"
       },
+      "country": "USA",
+      "suitableLandKm2": 29059,
+      "portDistanceKm": 0,
       "notes": "Huntington Beach–Long Beach Southern California Bight industrial / desal corridor. Location preset only — not an AES/Poseidon desal concession, SCE interconnection, or offtake. Southern California Bight seawater assay is Millero-scaled open-coast screening (S≈33.5), not a Huntington intake sample. Geography-matched Salton Sea geothermal process-brine assay is Imperial Valley inland screening, not a Huntington SWRO-reject sample and not a mineral concession. Screening offtake inherits default / US TEA overlays where present. Frozen PVGIS-ERA5 on select (per-site series) — not a Salton Sea or Dead Sea solar clone onto the coast."
     },
     {
@@ -1136,6 +1235,9 @@
         3.95
       ],
       "landSource": null,
+      "country": "MEX",
+      "suitableLandKm2": 43153,
+      "portDistanceKm": 0,
       "notes": "Exportadora de Sal (ESSA) Guerrero Negro solar saltworks on the Baja Pacific / Ojo de Liebre approach. Location preset only — not an ESSA lease, desal permit, or CFE connection. Baja Pacific seawater assay is Millero open-coast screening (S=35), not the modestly hypersaline Ojo de Liebre lagoon feed and not an ESSA intake sample. Dillon et al. 2013 Table 1 Pond 9 evaporative process-brine assay is ESSA saltern screening chemistry, not a crystallizer Pond 11/12 sample and not a mineral concession. Frozen PVGIS-ERA5 on select (per-site series) — not a Salton or Dead Sea solar clone."
     }
   ],

@@ -38,7 +38,7 @@ The questions: how far can a pot ride the sun, what does the hardware that lets 
 | Heat-balance hardware | none (fixed shell cooling, h ≈ 30 W/m²K) | shell heat exchangers, h 6–110 W/m²K | same | same |
 | Power conversion | AC rectiformers, 552 MW | DC/DC from PV, 548 MW DC peak, one 843 V line | 467 MW | 576 MW |
 
-Lean override: `{ capexFactor: 0.464, energyFactor: 0.924, materialsFactor: 0.130, minTurndown: 0.707, flexible: false }`; today's: `{ 1.017, 1.011, 0.162, 0.858, false }`. The inert-anode preset also passes `feedFactors: { 'carbon-anode': 0 }`.
+Lean override: `{ capexFactor: 0.464, energyFactor: 0.924, materialsFactor: 0.130, minTurndown: 0.707, flexible: false, refMultiple: 100, scaleExponent: 0.79 }`; today's: `{ 1.017, 1.011, 0.162, 0.858, false, 100, 0.78 }`. The inert-anode preset also passes `feedFactors: { 'carbon-anode': 0 }`.
 
 ### The cell and its heat balance
 
@@ -75,7 +75,7 @@ Shell heat exchangers buy roughly **−27% / +32% around nominal** on a daily cy
 
 **The night floor is set by the anode stroke and by top + bottom losses, not by the side wall.** Going deeper needs insulated lids or covers, a longer anode stroke, or the kWh penalty of very long ACDs (9 cm: floor 0.51, 13.23 kWh/kg).
 
-**Engine translation.** The engine enforces `minTurndown` as a daily-energy floor in the worst month: direct PV plus store ≥ t × 24 h of full load (`baseDesign`'s `worstMonth`). A line at peak for H ≈ 8 h on direct PV and at night floor f for the rest needs t = f + (1 − f)·H/24; the design reports this t (the ~8 h is from the engine's baseload curves at k ≈ 2–4 kWp/kW at the best sites). For a conventional potline physics gives 0.858, stricter than the engine's generic 0.7 default, so the recipe row assumes more flexibility than real pots have.
+**Engine translation.** Firmed units run at one steady rate per month around the clock, never below `minTurndown`, with the store sized for that rate's night (`engine/utilization.js`, `curvesFor`). That cannot express this design's daily swing (≥ 1.3× by day, the night floor f by night), so the design passes the daily-average equivalent t = f + (1 − f)·H/24 with H ≈ 8 h of direct-PV peak. This is conservative for a modulating potline: a design that rides PV within the day needs less storage than a steady one. For a conventional potline the physical floor gives t = 0.858, stricter than the engine's generic 0.7 default.
 
 ### Design levers (lean baseline; aluminium $/kg at the best site, today's PV / frontier)
 
@@ -227,6 +227,6 @@ Instrumentation throughout: individual pot voltage, current and resistance noise
 
 ## Engine changes recommended (open)
 
-1. **Make `minTurndown` a night floor, not a daily-energy floor.** `baseDesign` tests `worstMonth = (direct + fromStore)/24 ≥ t`, which lets a unit with t = 0.7 sit at ~55% overnight, while the README defines it as the lowest fraction of full load the unit can hold through the night. Compare the worst month's `fromStore / deficit` with t in `curvesFor`; designs could then pass the physical night floor (0.56 lean, 0.79 today) instead of the H-hour translation. Revisit the generic 0.7 default: for a conventional potline it is too generous.
+1. **Let firmed units modulate within the day.** The engine now holds steady units at one rate per month (no longer only a daily-energy floor; see [`docs/weather-stress.md`](../weather-stress.md)). A unit that can swing between a day boost and a night floor f would need a second operating mode: full rate on direct PV, at least f overnight. That would credit this design's modulation directly instead of through t.
 2. **Unit heat export.** The smelter rejects ~5 kWh/kg Al, half as 150–300 °C air from the shell heat exchangers, while Bayer in the same flowsheet buys 6.6 kWh/kg of heat. A `heatExportKWhPerKg` with a temperature on a designed unit, netted against a co-located thermal unit's energy, would price pot-heat recovery.
 3. **Process-class floor for metallurgical units.** `bom.js`'s `process` class (0.045 of recipe) understates a potline ~3×, which is why the designed smelter looks dearer than the recipe under `idiotIndex.target`. Give electrolytic-metal units their own class (graphite, aluminium, steel, refractory), or let recipe units of a designed type use that design's `materialsFactor`.

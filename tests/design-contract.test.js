@@ -38,11 +38,17 @@ for (const file of FILES) {
       }
     }
 
-    const o = D.simulatorOverride(D.PRESETS.lean.params);
-    assert.deepEqual(Object.keys(o).sort(), [...D.units].sort(), 'one override per unit');
-    for (const [unit, f] of Object.entries(o)) {
-      assert.ok(f.capexFactor > 0 && f.energyFactor > 0, unit);
-      assert.ok(f.materialsFactor > 0 && f.materialsFactor < f.capexFactor, `${unit}: raw materials are a floor below the installed cost`);
+    for (const preset of ['today', 'lean']) {
+      const o = D.simulatorOverride(D.PRESETS[preset].params);
+      assert.deepEqual(Object.keys(o).sort(), [...D.units].sort(), 'one override per unit');
+      for (const [unit, f] of Object.entries(o)) {
+        assert.ok(f.capexFactor > 0 && f.energyFactor > 0, unit);
+        assert.ok(f.materialsFactor > 0 && f.materialsFactor < f.capexFactor, `${unit}: raw materials are a floor below the installed cost`);
+        // The plant size the factors hold at, × the recipe pathway's reference output, and the design's
+        // own scale law around it (installed $ per plant ∝ size^scaleExponent).
+        assert.ok(Number.isFinite(f.refMultiple) && f.refMultiple >= 1 && f.refMultiple <= 1e4, `${unit} (${preset}): refMultiple ${f.refMultiple}`);
+        assert.ok(f.scaleExponent >= 0.2 && f.scaleExponent <= 1, `${unit} (${preset}): scaleExponent ${f.scaleExponent}`);
+      }
     }
   });
 }

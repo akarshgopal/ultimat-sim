@@ -262,9 +262,16 @@
     return { best, curve };
   }
 
+  // The stack and BoP are priced per kW with no plant-size term (stacks are numbered up), so the
+  // design's $ per kg/day is the same at every size: scaleExponent 1. The factors are taken against
+  // the unscaled recipe, i.e. at the recipe's reference output (refMultiple 1).
   function simulatorOverride(params) {
     const d = design(params);
-    return { electrolyzer: { capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor, materialsFactor: d.materialsUsdPerKgDay / RECIPE.electrolyzer.usdPerKgDay, flexible: true } };
+    return { electrolyzer: {
+      capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor,
+      materialsFactor: d.materialsUsdPerKgDay / RECIPE.electrolyzer.usdPerKgDay, flexible: true,
+      refMultiple: 1, scaleExponent: 1,
+    } };
   }
 
   const CONTROLS = Object.freeze([

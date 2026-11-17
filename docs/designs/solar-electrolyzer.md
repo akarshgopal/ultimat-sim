@@ -32,6 +32,7 @@ The electrolyzer feeds the largest material markets reachable from sunlight and 
 | Full-load h/day, stack oversizing (PV $758 → $76) | 7.2 → 8.6 h, 3.35× → 2.79× | 6.6 → 7.2 h, 3.65× → 3.35× |
 | PV per kg H₂/day (PV $758 → $76) | 9.8 → 12.5 kWp | 10.0 → 10.2 kWp |
 | `simulatorOverride` capex / energy / materials factor | 0.284 / 0.980 / 0.0263 | **0.0307 / 1.016 / 0.0087** |
+| `refMultiple` / `scaleExponent` | 1 / 1 (priced per kW: no plant-size term) | 1 / 1 |
 
 `lcoh()` sizes PV and stack together with the utilization model's sun-following block (8%, plant life). Read it as two coupled programs:
 

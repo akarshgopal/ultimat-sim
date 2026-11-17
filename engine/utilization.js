@@ -243,47 +243,57 @@
       for (let i = 0; i < STEPS; i += 1) used += Math.min(m.profile[i], r) * DT;
       return sum + m.days * used;
     }, 0));
-    // Baseload: per month and k (kWp per kW of steady load), direct supply, surplus and deficit (kWh per kW·day).
-    const base = K_GRID.map(k => months.map(m => {
-      let direct = 0;
-      let surplus = 0;
-      for (let i = 0; i < STEPS; i += 1) {
-        const pv = k * m.profile[i];
-        direct += Math.min(pv, 1) * DT;
-        surplus += Math.max(pv - 1, 0) * DT;
-      }
-      return { days: m.days, direct, surplus, deficit: 24 - direct };
-    }));
     const annualKWhPerKWp = months.reduce((sum, m) => sum + m.days * m.energy, 0);
-    // Per store round-trip efficiency: annual output factor and worst-month store draw (kWh per
-    // kW·day) for each k. Memoized so a plant design is O(grid), not O(grid × months).
+    // A firmed unit cannot stop at night, so in each month it runs at one steady rate u (≤ 1, in kW
+    // per kW of nameplate) around the clock: the highest u whose daily energy balance closes,
+    //   Σ min(k·pv, u)·dt + η · Σ max(k·pv − u, 0)·dt ≥ 24·u,
+    // with the store covering 24·u − Σ min(k·pv, u)·dt overnight. Per store round-trip efficiency η and
+    // k: the monthly rates, annual output factor, worst-month rate and the store that worst night
+    // needs (kWh per kW). Memoized so a plant design is O(grid), not O(grid × months).
     const storeCurves = new Map();
     const curvesFor = eta => {
       if (storeCurves.has(eta)) return storeCurves.get(eta);
       const outputFactor = new Float64Array(K_GRID.length);
       const storeNeed = new Float64Array(K_GRID.length);
       const worstMonth = new Float64Array(K_GRID.length);
-      base.forEach((months, i) => {
+      const monthRate = [];
+      K_GRID.forEach((k, i) => {
         let served = 0;
         let days = 0;
         let need = 0;
         let worst = 1;
-        for (const m of months) {
-          const fromStore = Math.min(eta * m.surplus, m.deficit);
-          served += m.days * (m.direct + fromStore);
+        const rates = new Float64Array(12);
+        months.forEach((m, mi) => {
+          const balance = u => {
+            let direct = 0;
+            let surplus = 0;
+            for (let s = 0; s < STEPS; s += 1) {
+              const pv = k * m.profile[s];
+              direct += Math.min(pv, u) * DT;
+              surplus += Math.max(pv - u, 0) * DT;
+            }
+            return { direct, ok: direct + eta * surplus >= 24 * u };
+          };
+          let lo = 0;
+          let hi = 1;
+          if (balance(1).ok) lo = 1;
+          else for (let it = 0; it < 30; it += 1) { const mid = (lo + hi) / 2; if (balance(mid).ok) lo = mid; else hi = mid; }
+          rates[mi] = lo;
+          served += m.days * lo;
           days += m.days;
-          need = Math.max(need, fromStore);
-          worst = Math.min(worst, (m.direct + fromStore) / 24);
-        }
-        outputFactor[i] = Math.min(1, served / (24 * days));
+          need = Math.max(need, 24 * lo - balance(lo).direct);
+          worst = Math.min(worst, lo);
+        });
+        outputFactor[i] = served / days;
         storeNeed[i] = need;
         worstMonth[i] = worst;
+        monthRate.push(rates);
       });
-      const curves = { outputFactor, storeNeed, worstMonth };
+      const curves = { outputFactor, storeNeed, worstMonth, monthRate };
       storeCurves.set(eta, curves);
       return curves;
     };
-    const solar = { months, flexUsed, base, annualKWhPerKWp, curvesFor };
+    const solar = { months, flexUsed, annualKWhPerKWp, curvesFor };
     solarCache.set(key, solar);
     solarBySite.set(site, { fraction: cfg.solarDayFraction, solar });
     return solar;
@@ -291,6 +301,71 @@
 
   // ------------------------------------------------------------------ block designs
   // Flexible block: annual energy E (kWh), equipment capex at 24 h nameplate K24 ($), PV $/kWp.
+  // ------------------------------------------------------------------ weather replay
+  // Run a designed plant (designPlant().blocks) hour by hour through a real PV series (kW per kWp,
+  // local solar time). Stores and intermediate buffers carry over between hours and days, so runs of
+  // cloudy days empty them. The plant runs each hour at the highest rate u ≤ 1 that its PV, stores and
+  // buffers allow; stored energy is spread evenly over the hours until the sun returns (tonight's
+  // length is known; tomorrow's weather is not). A firmed block that cannot hold its minimum turndown
+  // trips (u = 0 that hour).
+  // Returns the realized output factor (mean u for firmed plants, delivered / nameplate for purely
+  // sun-following ones), tripped hours, and the share of days with any trip.
+  // monthOfHour[h] (0–11) picks the design's planned steady rate for that month.
+  function replayWeather(blocks, pvKWperKWp, monthOfHour) {
+    const n = pvKWperKWp.length;
+    const { elec, heat, flex, buffers, hasBase, sizeKgPerDay } = blocks;
+    const nameplateKgPerH = sizeKgPerDay / 24;
+    if (!hasBase) {
+      // Sun-following only: output is what the flexible units make from the PV they can use.
+      let kg = 0;
+      for (let h = 0; h < n; h += 1) kg += Math.min(flex.pvKWp * pvKWperKWp[h], flex.capKW) / Math.max(flex.kWhPerKg, 1e-12);
+      return { outputFactor: kg / (nameplateKgPerH * n), trippedHours: 0, tripDayShare: 0 };
+    }
+    // Hours until PV returns (1 while the sun is up).
+    const toSun = new Uint16Array(n);
+    for (let h = n - 1, k = 1; h >= 0; h -= 1) {
+      k = pvKWperKWp[h] > 0.02 ? 1 : k + 1;
+      toSun[h] = Math.min(k, 48);
+    }
+    const usable = b => b.storeKWh * (b.store?.depthOfDischarge ?? 1);
+    const st = { elec: usable(elec) / 2, heat: usable(heat) / 2 };
+    const buf = buffers.map(b => b.capKg / 2);
+    let served = 0;
+    let tripped = 0;
+    const tripDays = new Set();
+    for (let h = 0; h < n; h += 1) {
+      const g = pvKWperKWp[h];
+      const made = flex.kWhPerKg > 0 ? Math.min(flex.pvKWp * g, flex.capKW) / flex.kWhPerKg : 0; // kg product-equivalent
+      // Planned steady rate this month; the design sized its store for it.
+      let u = blocks.monthRate ? blocks.monthRate[monthOfHour[h]] : 1;
+      for (const b of [elec, heat]) if (b.loadKW > 0 && b.monthRate) u = Math.min(u, b.monthRate[monthOfHour[h]]);
+      for (const [key, b] of [['elec', elec], ['heat', heat]]) {
+        if (b.loadKW > 0) u = Math.min(u, (b.pvKWp * g + st[key] / toSun[h]) / b.loadKW);
+      }
+      buffers.forEach((b, i) => {
+        if (b.kgPerKg > 0) u = Math.min(u, (buf[i] + made * b.kgPerKg) / (nameplateKgPerH * b.kgPerKg));
+      });
+      const floor = Math.max(elec.loadKW > 0 ? elec.minTurndown : 0, heat.loadKW > 0 ? heat.minTurndown : 0);
+      if (u < floor - 1e-9) {
+        u = 0;
+        tripped += 1;
+        tripDays.add(Math.floor(h / 24));
+      }
+      u = Math.max(0, Math.min(1, u));
+      served += u;
+      for (const [key, b] of [['elec', elec], ['heat', heat]]) {
+        if (!(b.loadKW > 0)) continue;
+        const net = b.pvKWp * g - u * b.loadKW; // kWh this hour
+        const eta = b.store?.roundTrip ?? 1;
+        st[key] = net >= 0 ? Math.min(usable(b), st[key] + net * eta) : Math.max(0, st[key] + net);
+      }
+      buffers.forEach((b, i) => {
+        buf[i] = Math.max(0, Math.min(b.capKg, buf[i] + (made - u * nameplateKgPerH) * b.kgPerKg));
+      });
+    }
+    return { outputFactor: served / n, trippedHours: tripped, tripDayShare: tripDays.size / (n / 24) };
+  }
+
   function flexDesign(solar, energyKWhYr, k24Usd, pvUsdPerKWp) {
     if (!(energyKWhYr > 0)) return { pvKWp: 0, nameplateFactor: 1, fullLoadHoursPerDay: 24, ratio: null };
     const avgKW = energyKWhYr / 8760;
@@ -311,7 +386,7 @@
   // Baseload block on one store type: steady load L (kW), units capex K24 ($).
   // minTurndown: every month must hold the load at ≥ this fraction of full rate (night included).
   function baseDesign(solar, loadKW, k24Usd, pvUsdPerKWp, store, minTurndown = DEFAULTS.baseloadMinTurndown) {
-    if (!(loadKW > 0)) return { pvKWp: 0, storeKWh: 0, outputFactor: 1, pvPerKW: 0 };
+    if (!(loadKW > 0)) return { pvKWp: 0, storeKWh: 0, outputFactor: 1, pvPerKW: 0, monthRate: null };
     let best = null;
     const curves = solar.curvesFor(store.roundTrip);
     K_GRID.forEach((k, i) => {
@@ -320,7 +395,7 @@
       const storeKWh = (curves.storeNeed[i] / store.depthOfDischarge) * loadKW;
       const pvKWp = k * loadKW;
       const cost = (pvKWp * pvUsdPerKWp + storeKWh * store.usdPerKWh + k24Usd) / Math.max(outputFactor, 1e-6);
-      if (!best || cost < best.cost) best = { cost, pvKWp, storeKWh, outputFactor, pvPerKW: k };
+      if (!best || cost < best.cost) best = { cost, pvKWp, storeKWh, outputFactor, pvPerKW: k, monthRate: curves.monthRate[i] };
     });
     // No k on the grid meets the turndown floor (very poor winter sun): take the most PV.
     if (!best) {
@@ -330,6 +405,7 @@
         storeKWh: (curves.storeNeed[i] / store.depthOfDischarge) * loadKW,
         outputFactor: curves.outputFactor[i],
         pvPerKW: K_GRID[i],
+        monthRate: curves.monthRate[i],
         belowTurndown: true,
       };
     }
@@ -365,8 +441,23 @@
       const baseTotalKWh = Math.max(profile.baseKWh + profile.baseThermalKWh, 1e-12);
       const baseElec = baseDesign(solar, (profile.baseKWh * sizeKgPerDay) / 24, baseUsd * (profile.baseKWh / baseTotalKWh), costs.pvUsdPerKWp, battery, profile.baseMinTurndown ?? cfg.baseloadMinTurndown);
       const baseHeat = baseDesign(solar, (profile.baseThermalKWh * sizeKgPerDay) / 24, baseUsd * (profile.baseThermalKWh / baseTotalKWh), costs.pvUsdPerKWp, thermal, profile.thermalMinTurndown ?? cfg.baseloadMinTurndown);
-      const outputFactor = Math.min(baseElec.outputFactor, baseHeat.outputFactor);
+      let outputFactor = Math.min(baseElec.outputFactor, baseHeat.outputFactor);
       const flexD = flexDesign(solar, profile.flexKWh * sizeKgPerDay * 365 * outputFactor, sum(flex), costs.pvUsdPerKWp);
+      // Steady units fed by sun-following ones can only run as fast as that month's supply: a buffer
+      // covers the night, not a dark season. Each month's rate is the lower of the two.
+      let monthRate = null;
+      if (profile.hasBase && profile.hasFlex && flexD.ratio) {
+        const needKWhPerDay = profile.flexKWh * sizeKgPerDay;
+        let served = 0;
+        monthRate = solar.months.map((m, mi) => {
+          let usable = 0;
+          for (let i = 0; i < STEPS; i += 1) usable += Math.min(m.profile[i], flexD.ratio) * DT;
+          const u = Math.min(baseElec.monthRate?.[mi] ?? 1, baseHeat.monthRate?.[mi] ?? 1, (flexD.pvKWp * usable) / needKWhPerDay);
+          served += m.days * u;
+          return u;
+        });
+        outputFactor = served / 365;
+      }
       const offHours = Math.max(0, 24 - flexD.fullLoadHoursPerDay);
       let bufferUsd = 0;
       const buffers = [];
@@ -383,6 +474,16 @@
       for (const cls of Object.keys(k24)) capexByClass[cls] = flex[cls] * flexD.nameplateFactor + base[cls];
       candidates.push({
         strategy: profile.hasFlex ? 'sun-following' : 'firmed',
+        // What replayWeather() needs to run this design through real hours.
+        blocks: {
+          elec: { loadKW: (profile.baseKWh * sizeKgPerDay) / 24, pvKWp: baseElec.pvKWp, storeKWh: baseElec.storeKWh, monthRate: baseElec.monthRate, store: battery, minTurndown: profile.baseMinTurndown ?? cfg.baseloadMinTurndown },
+          heat: { loadKW: (profile.baseThermalKWh * sizeKgPerDay) / 24, pvKWp: baseHeat.pvKWp, storeKWh: baseHeat.storeKWh, monthRate: baseHeat.monthRate, store: thermal, minTurndown: profile.thermalMinTurndown ?? cfg.baseloadMinTurndown },
+          flex: { pvKWp: flexD.pvKWp, capKW: (flexD.ratio || 0) * flexD.pvKWp, kWhPerKg: profile.flexKWh },
+          buffers: profile.hasBase ? profile.buffers.map((b, i) => ({ substance: b.substance, kgPerKg: b.kgPerKg, capKg: buffers[i]?.kg || 0 })) : [],
+          hasBase: profile.hasBase,
+          monthRate,
+          sizeKgPerDay,
+        },
         outputFactor,
         pvKWp: flexD.pvKWp + baseElec.pvKWp + baseHeat.pvKWp,
         batteryKWh: baseElec.storeKWh,
@@ -403,6 +504,14 @@
       const baseHeat = baseDesign(solar, (profile.baseThermalKWh * sizeKgPerDay) / 24, all * (1 - elecShare), costs.pvUsdPerKWp, thermal, profile.thermalMinTurndown ?? cfg.baseloadMinTurndown);
       candidates.push({
         strategy: 'firmed',
+        blocks: {
+          elec: { loadKW: (elecKWh * sizeKgPerDay) / 24, pvKWp: baseElec.pvKWp, storeKWh: baseElec.storeKWh, monthRate: baseElec.monthRate, store: battery, minTurndown: profile.baseMinTurndown ?? cfg.baseloadMinTurndown },
+          heat: { loadKW: (profile.baseThermalKWh * sizeKgPerDay) / 24, pvKWp: baseHeat.pvKWp, storeKWh: baseHeat.storeKWh, monthRate: baseHeat.monthRate, store: thermal, minTurndown: profile.thermalMinTurndown ?? cfg.baseloadMinTurndown },
+          flex: { pvKWp: 0, capKW: 0, kWhPerKg: 0 },
+          buffers: [],
+          hasBase: true,
+          sizeKgPerDay,
+        },
         outputFactor: Math.min(baseElec.outputFactor, baseHeat.outputFactor),
         pvKWp: baseElec.pvKWp + baseHeat.pvKWp,
         batteryKWh: baseElec.storeKWh,
@@ -428,5 +537,5 @@
     return { ...candidates[0], alternatives: candidates.map(c => ({ strategy: c.strategy, capexPerOutput: c.capexPerOutput, outputFactor: c.outputFactor })) };
   }
 
-  return { DEFAULTS, UNIT_TECH, mergeCfg, operatingProfile, siteSolar, dayLengthHours, flexDesign, baseDesign, designPlant };
+  return { DEFAULTS, UNIT_TECH, mergeCfg, operatingProfile, replayWeather, siteSolar, dayLengthHours, flexDesign, baseDesign, designPlant };
 });

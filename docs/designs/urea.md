@@ -38,7 +38,7 @@ Urea is the largest nitrogen product (213 Mt/yr at $0.40/kg). At today's PV it c
 | Energy vs recipe (0.8) | 0.94× | 0.51× |
 | Variable O&M, $/kg | 0.025 | 0.0055 |
 | Operation | Baseload on a heat store, turndown 60% | Baseload, firmed as electricity, turndown 50% |
-| `simulatorOverride().urea` | `{ capexFactor 0.913, energyFactor 0.938, materialsFactor 0.0153, variableOmFactor 0.828, flexible false, thermal true, minTurndown 0.6 }` | `{ capexFactor 0.139, energyFactor 0.511, materialsFactor 0.0060, variableOmFactor 0.183, flexible false, thermal false, minTurndown 0.5 }` |
+| `simulatorOverride().urea` | `{ capexFactor 0.913, energyFactor 0.938, materialsFactor 0.0153, variableOmFactor 0.828, flexible false, thermal true, minTurndown 0.6, refMultiple 100, scaleExponent 0.61 }` | `{ capexFactor 0.139, energyFactor 0.511, materialsFactor 0.0060, variableOmFactor 0.183, flexible false, thermal false, minTurndown 0.5, refMultiple 100, scaleExponent 0.65 }` |
 
 Other presets (lean except for the change named):
 
@@ -228,7 +228,7 @@ Instrument the pilot for model feedback: reactor N/C and H/C (online densitomete
 1. **Partial thermal firming.** `thermal` is all-or-nothing per unit; this unit is ~50% heat (stripper top-up) and ~50% electricity (recompressor, CO₂ compressor). Add `thermalShare` (fraction of the unit's kWh a heat store can carry).
 2. **Heat integration across units.** Without recompression the unit rejects ~0.3 kWh/kg of 147 °C LP steam, and a co-located DAC needs ~100 °C regeneration heat. A `heatExportKWhPerKg` on designs, consumed through `heatFactor` on co-located units, would value it.
 3. **Internal water recycle.** Process condensate (0.30 kg/kg urea) could replace SWRO product in `green-urea`; flowsheet edges from a unit's water sink to the electrolyzer would show it. Small value, but it matters inland.
-4. **Per-design scale law.** This design falls faster than size^0.85 above 300 t/day and past the 0.4 floor ($29 per kg/day at 3,500 t/day vs $79 at 100). A `scaleExponent` or size → factor table would let a design price the plant sizes it was drawn for.
+4. **Per-design scale law (done).** This design falls faster than size^0.85 above 300 t/day and past the 0.4 floor ($29 per kg/day at 3,500 t/day vs $79 at 100). The override now returns `refMultiple` 100 and `scaleExponent` fitted from 10 to 1,000 t/day (lean 0.65, today 0.61); a size → factor table would track it better far from 100 t/day.
 5. **Parallel trains and turndown.** A plant with n trains can block one in at night (turndown ≈ train turndown ÷ n). The engine could choose n when it designs the firmed block.
 
 ## Reproduce
@@ -238,7 +238,7 @@ const U = require('./engine/designs/urea.js');
 U.design(U.PRESETS.lean.params);                                    // tables above (also today, heatStore, duplex, sunFollowing)
 U.sweep(U.PRESETS.lean.params, 'reactorC', [175, 180, 185, 190, 195]);
 U.scaleCurve(U.PRESETS.lean.params, [1e4, 1e5, 1e6, 3.5e6]);
-const units = U.simulatorOverride(U.PRESETS.lean.params);           // { urea: { capexFactor, energyFactor, materialsFactor, variableOmFactor, flexible, thermal, minTurndown } }
+const units = U.simulatorOverride(U.PRESETS.lean.params);           // { urea: { capexFactor, energyFactor, materialsFactor, variableOmFactor, flexible, thermal, minTurndown, refMultiple, scaleExponent } }
 // Frontier: config = { pv: { capexUsdPerKWp: C.DEFAULTS.pv.capexUsdPerKWp / 10, floorUsdPerKWp: C.DEFAULTS.pv.floorUsdPerKWp / 10 },
 //   idiotIndex: { target: 1.5, floors: Bom.floors() }, designs: { units: { ...every design's lean override } } }
 ```

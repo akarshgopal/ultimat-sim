@@ -582,17 +582,39 @@
     };
   }
 
-  // { ammonia, asu } factors vs the recipe, per kg NH₃/day. Costed at the recipe's reference size,
-  // where the engine's own scale factor is 1, so the factors compare like with like.
-  function simulatorOverride(params = {}) {
-    const d = design({ ...params, plantKgPerDay: RECIPE.ammonia.refKgPerDay });
+  // Engine scale law for recipe units (engine/company.js DEFAULTS.scale) and the plant the abundance
+  // scoreboard prices (sizeMultiple 100 × the recipe's reference output).
+  const ENGINE_SCALE = Object.freeze({ exponent: 0.85, floorFactor: 0.4 });
+  const SCOREBOARD_SIZE_MULTIPLE = 100;
+  function recipeScale(sizeKgPerDay) {
+    const f = (sizeKgPerDay / RECIPE.ammonia.refKgPerDay) ** (ENGINE_SCALE.exponent - 1);
+    return Math.max(ENGINE_SCALE.floorFactor, Math.min(1, f));
+  }
+  // Installed $ per plant ∝ size^e, fitted to the model a decade either side of the reference size.
+  function fitScaleExponent(usdPerKgDayLo, usdPerKgDayHi) {
+    const e = 1 + Math.log10(usdPerKgDayHi / usdPerKgDayLo) / 2;
+    return Number.isFinite(e) ? Math.min(1, Math.max(0.2, e)) : undefined;
+  }
+
+  // { ammonia, asu } factors vs the recipe, per kg NH₃/day, costed at the scoreboard plant (100 t/day
+  // unless opts.sizeKgPerDay says otherwise) against the recipe scaled to that size the way the engine
+  // scales it. The design's own scale law (scaleExponent) carries them to other sizes; DEFAULTS.plantKgPerDay
+  // (1 t/day, where the today preset is calibrated) only sets what design() describes.
+  function simulatorOverride(params = {}, { sizeKgPerDay = SCOREBOARD_SIZE_MULTIPLE * RECIPE.ammonia.refKgPerDay } = {}) {
+    const at = S => design({ ...params, plantKgPerDay: S });
+    const d = at(sizeKgPerDay);
+    const lo = at(sizeKgPerDay / 10);
+    const hi = at(sizeKgPerDay * 10);
+    const sf = recipeScale(sizeKgPerDay);
     const out = {};
     for (const unit of ['ammonia', 'asu']) {
       out[unit] = {
-        capexFactor: d.byUnit[unit].installedUsdPerKgDay / RECIPE[unit].usdPerKgDay,
+        capexFactor: d.byUnit[unit].installedUsdPerKgDay / (RECIPE[unit].usdPerKgDay * sf),
         energyFactor: d.byUnit[unit].kWhPerKg / RECIPE[unit].kWhPerKg,
-        materialsFactor: d.byUnit[unit].materialsUsdPerKgDay / RECIPE[unit].usdPerKgDay,
+        materialsFactor: d.byUnit[unit].materialsUsdPerKgDay / (RECIPE[unit].usdPerKgDay * sf),
         flexible: d.flexible,
+        refMultiple: sizeKgPerDay / RECIPE.ammonia.refKgPerDay,
+        scaleExponent: fitScaleExponent(lo.byUnit[unit].installedUsdPerKgDay, hi.byUnit[unit].installedUsdPerKgDay),
       };
     }
     return out;
@@ -613,6 +635,7 @@
     nh3VapourBar,
     vessel: (V, P, params = {}, lOverD) => vessel(V, P, merge(params), lOverD),
     design,
+    recipeScale,
     simulatorOverride,
   };
 });

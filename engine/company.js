@@ -105,10 +105,12 @@
     // Scenario lever: multiplies equipment capex (process, electrolyzer, DAC, desal classes; not
     // PV or storage). 0.1 = equipment 10× cheaper than the recipes' screening packs.
     equipmentCostMultiplier: 1,
-    // Engineered unit designs (engine/designs/*.js): { units: { <flowsheet unit>: { capexFactor,
-    // energyFactor } } }. Each scales that unit's own capex and kWh in every recipe flowsheet that
-    // contains it (other units in the same cost class are untouched).
-    designs: Object.freeze({ units: Object.freeze({}) }),
+    // Engineered unit designs (engine/designs/*.js; contract in engine/designs/README.md):
+    // { units: { <flowsheet unit>: { capexFactor, energyFactor, … } } }. Each re-prices that unit in
+    // every recipe flowsheet that contains it (other units in the same cost class are untouched).
+    // Factors are exact at refMultiple × the recipe's reference output, the plant size the
+    // abundance scoreboard prices; a unit's scaleExponent carries them to other sizes.
+    designs: Object.freeze({ units: Object.freeze({}), refMultiple: 100 }),
     // Idiot-index squeeze (Musk: installed cost ÷ raw-material cost). With a target T, every cost
     // class is capped at its materials floor × T: price = min(today's price after learning and
     // decline, floor × T). floors come from data/bom.js (the app's store passes them in):
@@ -299,10 +301,10 @@
   // Plant economics
 
   // Recipe capex per kg/day by class, with designed units re-priced from their flowsheet share.
-  // out.designed[cls] = { usd, floorUsd, unfloored }: the designed units' own capex in that class
-  // and their raw-materials floor (designs.units.<unit>.materialsFactor × recipe capex), so the
-  // class-wide idiot-index cap does not squeeze a design a second time (see evaluatePlant).
-  // unfloored: some designed unit in the class has no materialsFactor, so it is not squeezed.
+  // out.designed[cls] = { usd, nodes: [{ usd, floorUsd, scaleExponent }] }: each designed unit's own
+  // capex in that class, its raw-materials floor (designs.units.<unit>.materialsFactor × recipe capex;
+  // null = not squeezed) so the class-wide idiot-index cap does not squeeze a design a second time,
+  // and its own scale law (see evaluatePlant).
   function capexByTech(pathway, cfg) {
     const out = { designed: null };
     for (const cls of TECH_CLASSES) out[cls] = Number(pathway.capexByTechUsdPerKgDay?.[cls]) || 0;
@@ -316,10 +318,14 @@
         const recipe = Number(node.capexUsdPerKgDay) || 0;
         out[cls] = Math.max(0, out[cls] + recipe * (factor - 1));
         out.designed = out.designed || {};
-        const slot = out.designed[cls] || (out.designed[cls] = { usd: 0, floorUsd: 0, unfloored: false });
+        const slot = out.designed[cls] || (out.designed[cls] = { usd: 0, nodes: [] });
         slot.usd += recipe * factor;
-        if (Number(d.materialsFactor) > 0) slot.floorUsd += recipe * d.materialsFactor;
-        else slot.unfloored = true;
+        slot.nodes.push({
+          usd: recipe * factor,
+          floorUsd: Number(d.materialsFactor) > 0 ? recipe * d.materialsFactor : null,
+          scaleExponent: Number(d.scaleExponent) > 0 ? Math.min(1, Math.max(0.2, Number(d.scaleExponent))) : null,
+          refMultiple: Number(d.refMultiple) > 0 ? Number(d.refMultiple) : null,
+        });
       }
     }
     return out;
@@ -442,19 +448,33 @@
     const refCapexByTech = {};
     let processCapex = 0;
     const target = cfg.idiotIndex?.target > 0 ? cfg.idiotIndex.target : null;
+    const designRefMultiple = Number(cfg.designs?.refMultiple) || 100;
     for (const cls of TECH_CLASSES) {
       // Recipe units take the class factor (learning × equipment, squeezed to the class floor).
       // Designed units take learning × equipment only, squeezed to their own materials floor.
       const d = perKgDay.designed?.[cls];
-      let usdPerKgDay = perKgDay[cls] * (ctx.costFactors[cls] ?? 1);
+      // $ per kg/day at this plant size, before the site multiplier.
+      let usdPerKgDay = perKgDay[cls] * (ctx.costFactors[cls] ?? 1) * sf;
       if (d && cls !== 'storage') {
         const raw = ctx.rawFactors?.[cls] ?? ctx.costFactors[cls] ?? 1;
-        let designed = d.usd * raw;
-        // Same rule as recipe units: squeezed only when the class has a materials floor configured.
-        if (target && !d.unfloored && ctx.floors?.[cls]) designed = Math.min(designed, d.floorUsd * target);
-        usdPerKgDay = Math.max(0, perKgDay[cls] - d.usd) * (ctx.costFactors[cls] ?? 1) + designed;
+        usdPerKgDay = Math.max(0, perKgDay[cls] - d.usd) * (ctx.costFactors[cls] ?? 1) * sf;
+        for (const n of d.nodes) {
+          let designed = n.usd * raw;
+          // Same rule as recipe units: squeezed only when the class has a materials floor configured.
+          if (target && n.floorUsd != null && ctx.floors?.[cls]) designed = Math.min(designed, n.floorUsd * target);
+          // A design's factors are exact at its reference size (refMultiple × the recipe's reference
+          // output) and follow its own scale law from there: (size / ref)^(scaleExponent − 1), or the
+          // engine's law when it has none.
+          const ref = (n.refMultiple ?? designRefMultiple) * pathway.refOutputKgPerDay;
+          // The exponent is fitted over ref/10…ref×10; outside that range it is held flat (no further
+          // economies or diseconomies are claimed).
+          const scale = scaleFactor(cfg.scale, ref, pathway.refOutputKgPerDay) * (n.scaleExponent
+            ? Math.min(10, Math.max(0.1, sizeKgPerDay / ref)) ** (n.scaleExponent - 1)
+            : scaleFactor(cfg.scale, sizeKgPerDay, pathway.refOutputKgPerDay) / scaleFactor(cfg.scale, ref, pathway.refOutputKgPerDay));
+          usdPerKgDay += designed * scale;
+        }
       }
-      const value = usdPerKgDay * sizeKgPerDay * sf * siteMult;
+      const value = usdPerKgDay * sizeKgPerDay * siteMult;
       processByTech[cls] = value;
       refCapexByTech[cls] = perKgDay[cls] * sizeKgPerDay;
       processCapex += value;
@@ -658,8 +678,11 @@
         bufferUsd: design.bufferUsd,
         buffers: design.buffers,
         storageUsd: design.storageUsd,
+        batteryUsd: design.batteryUsd,
+        thermalUsd: design.thermalUsd,
         storageReplacementUsdPerYear,
         alternatives: design.alternatives,
+        blocks: design.blocks,
       } : null,
     };
   }
@@ -995,7 +1018,14 @@
     for (;;) {
       let bestIndex = -1;
       for (let i = 0; i < feasible.length; i += 1) {
-        if (scores[i] > -Infinity && (bestIndex < 0 || scores[i] > scores[bestIndex])) bestIndex = i;
+        if (!(scores[i] > -Infinity)) continue;
+        if (bestIndex < 0) { bestIndex = i; continue; }
+        const d = scores[i] - scores[bestIndex];
+        // Near-ties go to the larger plant: with size-independent costs every size scores within a
+        // fraction of a percent (a plant's own output nudges its price), and a myopic pick would
+        // otherwise build thousands of the smallest.
+        const tie = Math.abs(d) <= 1e-3 * Math.max(Math.abs(scores[i]), Math.abs(scores[bestIndex]));
+        if (tie ? feasible[i].sizeKgPerDay > feasible[bestIndex].sizeKgPerDay : d > 0) bestIndex = i;
       }
       if (bestIndex < 0) return null;
       if (salesFit(cfg, ctx, feasible[bestIndex], committedKg)) return feasible[bestIndex];

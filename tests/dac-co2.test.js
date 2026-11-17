@@ -9,7 +9,13 @@ const PATHWAYS = companyData().pathways;
 const dacCo2 = PATHWAYS.find(p => p.id === 'dac-co2');
 const BUYERS = ['green-mto', 'green-ft'];
 const subset = ids => PATHWAYS.filter(p => ids.includes(p.id));
-const frontier = { pv: cheapPv(), designs: { units: D.simulatorOverride(D.PRESETS.lean.params) } };
+// The scoreboard frontier: 10× cheaper PV and the idiot-index target. The DAC is priced flat per kg
+// CO₂/day (modules numbered up, scaleExponent 1), so on cheaper PV alone lean DAC is ~$0.054/kg.
+const frontier = {
+  pv: cheapPv(),
+  idiotIndex: { target: 1.5, floors: require('../data/bom.js').floors() },
+  designs: { units: D.simulatorOverride(D.PRESETS.lean.params) },
+};
 const rank = (pathways, config) => new Map(rankAll(config, { pathways }).map(r => [r.pathwayId, r]));
 const co2Item = row => (row.integration || []).find(item => item.feedId === 'co2-feed');
 
@@ -30,7 +36,7 @@ test('dac-co2 makes CO₂ from air alone on the solid-sorbent recipe basis', () 
   within(dac.variableOmUsdPerKg, 0.05 + D.RECIPE['dac-solid'].consumablesKgPerKg * D.RECIPE['dac-solid'].consumablesUsdPerKg, 1e-6);
 });
 
-test('today the DAC costs more than bought CO₂; lean DAC on 10× cheaper PV integrates it', () => {
+test('today the DAC costs more than bought CO₂; lean DAC at the frontier integrates it', () => {
   const ids = [...BUYERS, 'dac-co2'];
   const today = rank(subset(ids), {});
   for (const id of BUYERS) assert.equal(co2Item(today.get(id)), undefined, `${id} buys CO₂ today`);

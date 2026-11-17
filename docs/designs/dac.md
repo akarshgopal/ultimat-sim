@@ -64,7 +64,7 @@ The lean sensible-heat terms are before 30% bed-to-bed recovery. Today's preset 
 | `dac`, `dac-solid` | 0.889 / 0.306 / 0.0288 | **0.0366 / 0.138 / 0.0081** | heatFactor 0.576, consumablesFactor 0.189, variableOmFactor 0 (today: 1.45, 6.31, 0) |
 | `gas-blower` | 0.00126 / 0.120 / 0.000131 | **0.000375 / 0.0722 / 0.000104** | — |
 
-All three units are `flexible: true`. The blower factors are tiny because the recipe's blower is a generic process pad at $1.5/(Nm³/day) and 3.6 kPa, while a contactor moves ~1,600 m³ of air per kg CO₂ against 130–180 Pa with large axial fans costing ~$0.4–2.5 per kg CO₂/day. `variableOmFactor` 0: the pack's variable O&M is covered by sorbent makeup and fixed O&M.
+All three units are `flexible: true`, `refMultiple: 1` and `scaleExponent: 1`: contactor modules and fans are priced per kg CO₂/day with no plant-size term (numbered up), so their $ per kg/day is the same at every plant size rather than falling with the engine's 0.85 law. Before this was passed, the engine halved them at the 100 t/day scoreboard plant; priced flat, lean DAC on 10× cheaper PV alone is ~$0.054/kg CO₂ and needs the idiot-index target to beat bought CO₂ ($0.029/kg at the frontier), and frontier numbers below that predate the change are slightly optimistic. The blower factors are tiny because the recipe's blower is a generic process pad at $1.5/(Nm³/day) and 3.6 kPa, while a contactor moves ~1,600 m³ of air per kg CO₂ against 130–180 Pa with large axial fans costing ~$0.4–2.5 per kg CO₂/day. `variableOmFactor` 0: the pack's variable O&M is covered by sorbent makeup and fixed O&M.
 
 ### Design choices (lean otherwise; installed $/kg·d, PV kWh/kg, idiot index, $/kg CO₂ at PV $758 → $76)
 

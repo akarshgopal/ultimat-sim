@@ -48,8 +48,15 @@ test('presets: today lands near the recipe basis; the lean target is far cheaper
 
 test('the override re-prices ammonia and ASU in every recipe that has them, and nothing else', () => {
   const o = H.simulatorOverride(H.PRESETS.lean.params);
-  const d = H.design(H.PRESETS.lean.params);
-  within(o.ammonia.capexFactor, d.byUnit.ammonia.installedUsdPerKgDay / H.RECIPE.ammonia.usdPerKgDay, 1e-12);
+  // Costed at the scoreboard plant (100 × the 1 t/day reference) against the recipe scaled there.
+  const d = H.design({ ...H.PRESETS.lean.params, plantKgPerDay: 100000 });
+  within(o.ammonia.capexFactor, d.byUnit.ammonia.installedUsdPerKgDay / (H.RECIPE.ammonia.usdPerKgDay * H.recipeScale(100000)), 1e-12);
+  assert.equal(o.ammonia.refMultiple, 100);
+  assert.ok(o.ammonia.scaleExponent > 0.5 && o.ammonia.scaleExponent < 0.85, 'falls faster with size than the engine law');
+  // The old 1 t/day basis is still available.
+  const at1 = H.simulatorOverride(H.PRESETS.lean.params, { sizeKgPerDay: 1000 });
+  assert.equal(at1.ammonia.refMultiple, 1);
+  within(at1.ammonia.capexFactor, H.design(H.PRESETS.lean.params).byUnit.ammonia.installedUsdPerKgDay / H.RECIPE.ammonia.usdPerKgDay, 1e-12);
   const recipe = rank({});
   const designed = rank({ designs: { units: o } });
   assert.ok(lcop(designed, 'green-ammonia') < lcop(recipe, 'green-ammonia'));

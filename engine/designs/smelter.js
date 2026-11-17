@@ -638,10 +638,25 @@
     return deficitW > 0 ? cell.window.ledgeBufferKWh * 1000 / deficitW : Infinity;
   }
 
+  // Installed $ per plant ∝ size^e, fitted to the model a decade either side of the reference size
+  // (engine/company.js applies it as $ per kg/day ∝ (size / ref)^(e − 1)).
+  function fitScaleExponent(usdPerKgDayLo, usdPerKgDayHi) {
+    const e = 1 + Math.log10(usdPerKgDayHi / usdPerKgDayLo) / 2;
+    return Number.isFinite(e) ? Math.min(1, Math.max(0.2, e)) : undefined;
+  }
+
   function simulatorOverride(params) {
     const d = design(params);
+    // Factors hold at this plant (default: the scoreboard's, 100 × the recipe reference).
+    const S = d.params.plantKgAlPerDay;
+    const refMultiple = S / RECIPE['aluminium-smelter'].refKgPerDay;
+    const scaleExponent = fitScaleExponent(
+      design({ ...params, plantKgAlPerDay: S / 10 }).installedUsdPerKgDay,
+      design({ ...params, plantKgAlPerDay: S * 10 }).installedUsdPerKgDay);
     return { 'aluminium-smelter': {
       capexFactor: d.vsRecipe.capexFactor,
+      refMultiple,
+      scaleExponent,
       energyFactor: d.vsRecipe.energyFactor,
       materialsFactor: d.vsRecipe.materialsFactor,
       minTurndown: d.minTurndown,

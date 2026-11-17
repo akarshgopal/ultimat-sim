@@ -363,10 +363,25 @@
     });
   }
 
+  // Installed $ per plant ∝ size^e, fitted to the model a decade either side of the reference size
+  // (engine/company.js applies it as $ per kg/day ∝ (size / ref)^(e − 1)).
+  function fitScaleExponent(usdPerKgDayLo, usdPerKgDayHi) {
+    const e = 1 + Math.log10(usdPerKgDayHi / usdPerKgDayLo) / 2;
+    return Number.isFinite(e) ? Math.min(1, Math.max(0.2, e)) : undefined;
+  }
+
   function simulatorOverride(params) {
     const d = design(params);
+    // Factors hold at this plant (default: the scoreboard's, 100 × the recipe reference).
+    const S = d.params.plantKgFePerDay;
+    const refMultiple = S / RECIPE['pellet-plant'].refKgPerDay;
+    const scaleExponent = fitScaleExponent(
+      design({ ...params, plantKgFePerDay: S / 10 }).installedUsdPerKgDay,
+      design({ ...params, plantKgFePerDay: S * 10 }).installedUsdPerKgDay);
     return { 'pellet-plant': {
       capexFactor: d.vsRecipe.capexFactor,
+      refMultiple,
+      scaleExponent,
       energyFactor: d.vsRecipe.energyFactor,
       materialsFactor: d.vsRecipe.capexFactor / d.idiotIndex,
       variableOmFactor: d.vsRecipe.variableOmFactor,

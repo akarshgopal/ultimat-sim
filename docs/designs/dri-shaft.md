@@ -172,6 +172,6 @@ Instrumentation throughout: burden temperature probes at three heights, bustle a
 
 ## Engine and design changes recommended (open)
 
-1. **Size-dependent design factors.** `capexFactor` is computed at 100 t/day against the recipe at that size (`recipeAtSize`: the engine's `(size/ref)^-0.15`, floored at 0.4). The design's scale curve is much steeper, so plants of other sizes get the wrong factor. Accept `capexFactor` as a function of `sizeKgPerDay` (or a table), or lower `scale.floorFactor` for process units.
+1. **Size-dependent design factors (partly done).** `capexFactor` is computed at 100 t/day against the recipe at that size (`recipeAtSize`: the engine's `(size/ref)^-0.15`, floored at 0.4), and the override now passes `refMultiple` 100 and the model's `scaleExponent` (today 0.23, lean 0.24, fitted from 10 to 1,000 t/day). The curve is not a power law (lean: $346 → $39 → $10 → $8 per kg/day at 10 / 100 / 1,000 / 5,000 t/day; it flattens once shafts reach their 250 t/day maximum), so the single exponent is too steep far above the reference (the engine would price a 5,000 t/day plant at ~$2); a size → factor table would fix it.
 2. **Partial thermal firming.** The unit is ~82% heat and ~18% electricity (compressors, press), but `thermal` puts all of it on the heat store.
 3. **Pass `minTurndown`.** The override does not yet pass the design's turndown to the firmed block.

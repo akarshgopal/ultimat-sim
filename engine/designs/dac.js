@@ -519,10 +519,15 @@
   //   consumablesFactor  sorbent replacement $/kg CO₂ ÷ the recipe's 0.02 kg × $2
   //   variableOmFactor   0: the pack's $0.05/kg CO₂ variable O&M is covered by sorbent + fixed O&M
   // The fans are the recipe's separate `gas-blower` unit.
+  // Contactor modules and fans are priced per kg CO₂/day with no plant-size term (modules are
+  // numbered up), so both units carry scaleExponent 1, with factors taken against the unscaled recipe
+  // (refMultiple 1: the recipe's reference output).
   function simulatorOverride(params) {
     const d = design(params);
     const dac = {
       capexFactor: d.dacUsdPerKgDay / RECIPE_DAC.usdPerKgDay,
+      refMultiple: 1,
+      scaleExponent: 1,
       energyFactor: d.energy.electricKWhPerKg / RECIPE_DAC.kWhPerKg,
       flexible: true,
       heatFactor: d.energy.regenKWhPerKg / RECIPE_DAC.heatKWhPerKg,
@@ -535,6 +540,8 @@
       'dac-solid': { ...dac },
       'gas-blower': {
         capexFactor: d.fanUsdPerKgDay / RECIPE['gas-blower'].usdPerKgDay,
+        refMultiple: 1,
+        scaleExponent: 1,
         energyFactor: d.energy.fanKWhPerKg / RECIPE['gas-blower'].kWhPerKg,
         flexible: true,
         materialsFactor: d.fanMaterialsUsdPerKgDay / RECIPE['gas-blower'].usdPerKgDay,

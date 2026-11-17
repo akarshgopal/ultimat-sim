@@ -48,7 +48,7 @@ A hydrogen shaft (`docs/designs/dri-shaft.md`) needs DR-grade pellets (≥ 67% F
 | Grate | 4.9 m², 1 disc | 4.1 m², 1 disc |
 | Variable O&M | $6.0/t (bentonite + consumables; variableOmFactor 1.0) | $4.1/t (variableOmFactor 0.68) |
 | Operation | Baseload, battery-firmed, turndown 70% | Baseload on a heat store (`thermal: true`), turndown 60% |
-| Override | `{ capexFactor 3.41, energyFactor 1.22, materialsFactor 0.134, variableOmFactor 1.0, thermal false, minTurndown 0.7 }` | `{ capexFactor 0.619, energyFactor 0.509, materialsFactor 0.058, variableOmFactor 0.683, thermal true, minTurndown 0.6 }` |
+| Override | `{ capexFactor 3.41, energyFactor 1.22, materialsFactor 0.134, variableOmFactor 1.0, thermal false, minTurndown 0.7, refMultiple 100, scaleExponent 0.48 }` | `{ capexFactor 0.619, energyFactor 0.509, materialsFactor 0.058, variableOmFactor 0.683, thermal true, minTurndown 0.6, refMultiple 100, scaleExponent 0.36 }` |
 
 **Why today does not land on the recipe.** The recipe pack is a world-scale plant ($117/t-yr), and the engine scales it further from the 1 t/day reference, so at 100 t Fe/day it prices the pellet plant at $62 per t pellets/yr, cheaper than any real 54 kt/yr plant. The today design reproduces the cited peer band where it should: $103/t-yr at 6,000 t Fe/day (3.2 Mt pellets/yr) against $117 for Port Saguenay. At the scoreboard size it costs 3.4× the scaled recipe; in $/kg that is small (see the scoreboard).
 
@@ -181,6 +181,6 @@ Where today's $114 goes instead: installation at 2.0× equipment ($37), engineer
 
 ## Engine changes recommended (open)
 
-1. **Size-dependent design factors.** The recipe pack is world-scale and the engine scales it down further by size, so it under-prices small plants (today-built is 3.4× the scaled recipe at 100 t/day). Accept `capexFactor` as a function of size, or use small-plant pack intensities with the engine's scale curve.
+1. **Size-dependent design factors.** The recipe pack is world-scale and the engine scales it down further by size, so it under-prices small plants (today-built is 3.4× the scaled recipe at 100 t/day). The override now passes `refMultiple` 100 and the model's `scaleExponent` (today 0.48, lean 0.36); a size → factor table, or small-plant pack intensities, would still fit better far from 100 t/day.
 2. **Gangue through the shaft.** Let `hydrogen-dri` accept a mixed ore stream (Fe₂O₃ + gangue to the product or a slag port), so the pellet plant does not have to split gangue out.
 3. **Partial thermal firming.** Fans and drives (~32% of the lean plant's kWh) are firmed on the heat store with the rest; a `thermalShare` would firm only the heat.

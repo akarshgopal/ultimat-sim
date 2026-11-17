@@ -37,7 +37,8 @@ The recipe basis is $1,900 (loop) + $313 (ASU) per kg NH₃/day and 0.6 + 0.206 
 | Converter wall | 18.8 mm (Ø 0.28 m) | 18.7 mm |
 | H₂ lost (purge + deoxo) | 2.5 g/kg NH₃ | 1.0 g/kg |
 | Operation | baseload (turndown 50%, 1%/min) | **sun-following** (turndown 20%, 5%/min, 7.6 min buffer) |
-| `simulatorOverride` (capex / energy / materials factor) | `ammonia` 0.865 / 0.981 / 0.0057; `asu` 0.679 / 1.59 / 0.0117 | `ammonia` 0.0749 / 1.43 / 0.0022; `asu` 0.0503 / 0.759 / 0.0031 |
+| Factors at 1 t/day (capex / energy / materials), `simulatorOverride(params, { sizeKgPerDay: 1000 })` | `ammonia` 0.865 / 0.981 / 0.0057; `asu` 0.679 / 1.59 / 0.0117 | `ammonia` 0.0749 / 1.43 / 0.0022; `asu` 0.0503 / 0.759 / 0.0031 |
+| `simulatorOverride` at the scoreboard plant, 100 t/day (capex / energy / materials factor; `refMultiple` 100, `scaleExponent`) | `ammonia` 0.200 / 0.981 / 0.0056, e 0.69; `asu` 0.252 / 1.59 / 0.0108, e 0.74 | `ammonia` 0.0259 / 1.42 / 0.0030, e 0.76; `asu` 0.0207 / 0.759 / 0.0032, e 0.78 |
 
 The lean loop uses *more* kWh per kg than the recipe because it compresses H₂ from 1.05 bar (0.57 kWh/kg) where today's pressurized stacks deliver it at 30 bar (0.29 kWh/kg). The energy moved from the electrolyzer to the loop; at frontier PV it is worth < $0.01/kg.
 
@@ -53,7 +54,7 @@ Where today's $1,855 goes: instruments and safety systems $350, engineering $300
 | 1,000,000 | 137 | 24 | 19.2 | 6.5 | 885 |
 | 3,000,000 (world scale) | 118 | 22 | 17.4 | 6.2 | 885 |
 
-Fixed per-plant costs (instruments, engineering) make the model fall much faster with size than the engine's 0.85 exponent with its 0.4 floor, so a factor quoted at 1 t/day understates the design at the scoreboard's 100 t/day. `simulatorOverride(params, { sizeKgPerDay: 100000 })` gives the like-for-like factor there: lean `ammonia` 0.026, `asu` 0.021. At 100 t/day the largest lean lines are instruments ($3.8), piping ($2.8), the makeup compressor ($2.0) and labour ($1.6).
+Fixed per-plant costs (instruments, engineering) make the model fall much faster with size than the engine's 0.85 exponent with its 0.4 floor, so a factor quoted at 1 t/day understates the design at the scoreboard's 100 t/day. `simulatorOverride` therefore costs the design at 100 t/day by default (`refMultiple` 100; `{ sizeKgPerDay }` picks another size) against the recipe scaled there: lean `ammonia` 0.026, `asu` 0.021. Its `scaleExponent` (lean 0.76 / 0.78, fitted from 10 to 1,000 t/day) carries the factors to other plant sizes. The design view and the tables above stay at 1 t/day, where the today preset is calibrated; at 100 t/day the today loop models at 0.20× the scaled recipe, so treat large-plant factors as optimistic. At 100 t/day the largest lean lines are instruments ($3.8), piping ($2.8), the makeup compressor ($2.0) and labour ($1.6).
 
 ### Loop pressure and catalyst (lean, 100 t/day; $/kg/day · kWh/kg · recycle)
 
@@ -176,6 +177,6 @@ Instrument everything for model feedback: bed temperature profiles, NH₃ at con
 ## Engine and design changes recommended (open)
 
 1. **Pass `minTurndown`.** The engine takes a per-unit firmed turndown; this design's baseload variant should pass its own floor (0.2 lean, 0.5 today) so a firmed loop needs less battery.
-2. **Per-design scale law.** `scaleFactor` applies one exponent (0.85, floor 0.4) to every process unit, while this design falls ~3× per decade from 1 to 10 t/day and keeps falling past the floor. Allow `designs.units.<unit>.scaleExponent` / `scaleFloor`, or a size → factor table. Until then, `simulatorOverride(params, { sizeKgPerDay })` gives the factor at the size of interest.
+2. **Per-design scale law (done).** The engine now takes `refMultiple` and `scaleExponent` per unit; this design returns both at 100 t/day. Open: the law is a single exponent with no floor, while this design falls ~3× per decade from 1 to 10 t/day and only ~1.5× per decade past 100 t/day, so a size → factor table would track it better far from the reference.
 3. **Buffers only flow flexible → baseload.** If the loop were flexible and the ASU baseload (or the reverse), the N₂ buffer would be missing. This design sets both units' `flexible` together; the engine could warn when connected units are split.
 4. **Oversizing is linear.** `flexDesign` multiplies equipment capex by the nameplate factor (~3.5×); with economies of scale the flexible penalty is overstated by roughly 3.5^0.15 ≈ 20% for the loop.

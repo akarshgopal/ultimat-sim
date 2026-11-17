@@ -38,7 +38,7 @@ The questions: how far can a pot ride the sun, what does the hardware that lets 
 | Heat-balance hardware | none (fixed shell cooling, h ≈ 30 W/m²K) | shell heat exchangers, h 6–110 W/m²K | same | same |
 | Power conversion | AC rectiformers, 552 MW | DC/DC from PV, 548 MW DC peak, one 843 V line | 467 MW | 576 MW |
 
-Lean override: `{ capexFactor: 0.464, energyFactor: 0.924, materialsFactor: 0.130, minTurndown: 0.707, flexible: false }`; today's: `{ 1.017, 1.011, 0.162, 0.858, false }`. The inert-anode preset also passes `feedFactors: { 'carbon-anode': 0 }`.
+Lean override: `{ capexFactor: 0.464, energyFactor: 0.924, materialsFactor: 0.130, minTurndown: 0.707, flexible: false, refMultiple: 100, scaleExponent: 0.79 }`; today's: `{ 1.017, 1.011, 0.162, 0.858, false, 100, 0.78 }`. The inert-anode preset also passes `feedFactors: { 'carbon-anode': 0 }`.
 
 ### The cell and its heat balance
 

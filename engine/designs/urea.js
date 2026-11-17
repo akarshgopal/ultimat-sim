@@ -729,13 +729,28 @@
     });
   }
 
+  // Installed $ per plant ∝ size^e, fitted to the model a decade either side of the reference size
+  // (engine/company.js applies it as $ per kg/day ∝ (size / ref)^(e − 1)).
+  function fitScaleExponent(usdPerKgDayLo, usdPerKgDayHi) {
+    const e = 1 + Math.log10(usdPerKgDayHi / usdPerKgDayLo) / 2;
+    return Number.isFinite(e) ? Math.min(1, Math.max(0.2, e)) : undefined;
+  }
+
   // Costed at params.plantKgPerDay (default: the scoreboard plant) against the recipe scaled the way the
   // engine scales it to the same size.
   function simulatorOverride(params = {}) {
     const d = design(params);
+    // Factors hold at this plant (default: the scoreboard's, 100 × the recipe reference).
+    const S = d.plantKgPerDay;
+    const refMultiple = S / RECIPE.urea.refKgPerDay;
+    const scaleExponent = fitScaleExponent(
+      design({ ...params, plantKgPerDay: S / 10 }).installedUsdPerKgDay,
+      design({ ...params, plantKgPerDay: S * 10 }).installedUsdPerKgDay);
     return {
       urea: {
         capexFactor: d.vsRecipe.capexFactor,
+        refMultiple,
+        scaleExponent,
         energyFactor: d.vsRecipe.energyFactor,
         materialsFactor: d.vsRecipe.materialsFactor,
         variableOmFactor: d.vsRecipe.variableOmFactor,

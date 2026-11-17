@@ -814,15 +814,24 @@
   }
 
   // Factors for all three units from the same params. The top-level knobs and scaleKgPerDay apply to
-  // params.reactor only; the others use their own blocks at their scoreboard scale.
+  // params.reactor only; the others use their own blocks at their scoreboard scale. Each unit's factors
+  // hold at its scaleKgPerDay (refMultiple × the recipe reference); scaleExponent is the model's own
+  // scale law there, fitted a decade either side: installed $ per plant ∝ size^e.
   function simulatorOverride(params = {}) {
     const out = {};
     for (const unit of ['methanol', 'sabatier', 'mto']) {
       const own = (params.reactor || DEFAULTS.reactor) === unit;
-      const d = design({ ...params, reactor: unit, scaleKgPerDay: own ? params.scaleKgPerDay : null,
-        ...(own ? {} : { pressureBar: null, temperatureC: null, ghsvPerH: null }) });
+      const unitParams = { ...params, reactor: unit, scaleKgPerDay: own ? params.scaleKgPerDay : null,
+        ...(own ? {} : { pressureBar: null, temperatureC: null, ghsvPerH: null }) };
+      const d = design(unitParams);
+      const S = d.scaleKgPerDay;
+      const lo = design({ ...unitParams, scaleKgPerDay: S / 10 }).capexUsdPerKgDay;
+      const hi = design({ ...unitParams, scaleKgPerDay: S * 10 }).capexUsdPerKgDay;
+      const e = 1 + Math.log10(hi / lo) / 2;
       out[unit] = {
         capexFactor: d.vsRecipe.capexFactor,
+        refMultiple: S / RECIPE[unit].refKgPerDay,
+        scaleExponent: Number.isFinite(e) ? Math.min(1, Math.max(0.2, e)) : undefined,
         energyFactor: d.vsRecipe.energyFactor,
         materialsFactor: d.vsRecipe.materialsFactor,
         flexible: d.flexible,

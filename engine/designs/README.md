@@ -13,7 +13,19 @@ config.designs.units = {
 };
 ```
 
-- `capexFactor` — designed installed capex ÷ the recipe's, per kg/day of the same product.
+- `capexFactor` — designed installed capex ÷ the recipe's, per kg/day of the same product, both at the
+  same plant size: `refMultiple` × the recipe pathway's `refOutputKgPerDay`, with the recipe scaled
+  there the way the engine scales it (`config.scale`: exponent 0.85, floor 0.4).
+- `refMultiple` — the plant size at which `capexFactor` and `materialsFactor` hold, as a multiple of
+  the recipe pathway's reference output (`data/pathways.js` `refOutputKgPerDay`). Default
+  `config.designs.refMultiple` (100: the plant the abundance scoreboard prices). Cost designs at the
+  scoreboard plant unless the design is size-independent; then 1 (the unscaled recipe) is simplest.
+- `scaleExponent` (0.2–1) — the design's own scale law around its reference size: installed $ per
+  plant ∝ size^scaleExponent, i.e. $ per kg/day ∝ (size / ref)^(scaleExponent − 1), with no floor.
+  Fit it from the model a decade either side of the reference size,
+  `e = 1 + log10(c(10·ref) / c(ref/10)) / 2` (c = installed $ per kg/day), clamped to [0.2, 1].
+  Numbered-up modules priced per unit of capacity (electrolyzer stacks, DAC contactors) return 1.
+  Omitted: the engine's global law.
 - `energyFactor` — designed kWh/kg ÷ the recipe's.
 - `materialsFactor` — the design's raw-materials cost ÷ the recipe's capex, per kg/day. The
   idiot-index target squeezes a designed unit to its *own* materials × target (recipe units are
@@ -68,7 +80,7 @@ api = {
     kpis: [{ label, value, sub }],      // 3–6 headline numbers specific to this design (strings)
   }),
   // One entry per unit; the optional keys are those listed above.
-  simulatorOverride(params) => ({ <unit>: { capexFactor, energyFactor, materialsFactor, flexible?, thermal?, ... } }),
+  simulatorOverride(params) => ({ <unit>: { capexFactor, energyFactor, materialsFactor, refMultiple, scaleExponent, flexible?, thermal?, ... } }),
 };
 ```
 

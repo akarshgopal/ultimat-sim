@@ -52,6 +52,7 @@ const USGS_SILICA = 'https://www.usgs.gov/centers/national-minerals-information-
 const USGS_SODA_ASH = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-soda-ash.pdf';
 const USGS_SAND_IND = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-sand-industrial.pdf';
 const USGS_STONE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-stone-crushed.pdf';
+const LC3_INDIA_2016 = 'https://lc3.ch/wp-content/uploads/2023/03/An-economic-analysis-of-the-production-of-limestone-calcined-clay-cement-in-India-2016.pdf';
 const USGS_CEMENT = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-cement.pdf';
 const USGS_COPPER = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-copper.pdf';
 const SANTA_CRUZ_PFS_2026 = 'https://www.sec.gov/Archives/edgar/data/1879016/000110465926109810/tm2625798d1_ex99-1.htm';
@@ -438,6 +439,19 @@ const costs = {
     0.02, '$/kg', 'screening', 'USGS crushed stone / common clay family',
     'Kiln clay/shale/silica corrective screening $0.02/kg, same bulk-quarry family as crushed stone 2025e $18.50/t. Not kaolin, not glass-sand ($0.04), and not a retune of limestone.',
     [{ label: 'USGS MCS 2026 stone (crushed) — 2025e $18.50/t; screening kiln-clay/shale $0.02/kg, not a clay-pit contract', url: USGS_STONE }]
+  ),
+  'quarried-limestone': row(
+    0.003, '$/kg', 'screening', 'LC3 India 2016: limestone delivered to the plant Rs 200/t',
+    'Own-quarry limestone at an integrated cement plant: drilled, blasted, loaded and conveyed from a captive quarry a few km away. LC3 India economic analysis (2016) assumes limestone delivered at the plant Rs 200/t (≈ $3/t) and lower-grade limestone Rs 100/t; screening $0.003/kg. The quarry equipment is in the cement capex pack (quarry-to-pack TICs); this is its operating cost. Not the USGS crushed-stone sale price ($18.50/t), which carries a quarry\'s margin and aggregate grading.',
+    [
+      { label: 'Bishnoi & Maity (2016), An economic analysis of the production of limestone calcined clay cement in India — limestone delivered Rs 200/t', url: LC3_INDIA_2016 },
+      { label: 'USGS MCS 2026 stone (crushed) — 2025e sale value $18.50/t (the price a buyer pays, for contrast)', url: USGS_STONE },
+    ]
+  ),
+  'quarried-clay': row(
+    0.003, '$/kg', 'screening', 'same captive-quarry cost as quarried-limestone',
+    'Own-quarry kiln clay/shale/silica corrective at an integrated cement plant, at the same screening $0.003/kg as its limestone (LC3 India 2016: limestone delivered Rs 200/t). The quarry equipment is in the cement capex pack. Not kaolin.',
+    [{ label: 'Bishnoi & Maity (2016), LC3 economic analysis, India — limestone delivered Rs 200/t; clay at the same screening cost', url: LC3_INDIA_2016 }]
   ),
   'pls-copper': row(
     9.36, '$/kg', 'screening', 'contained Cu in PLS at 96.5% of USGS LME 2025e',

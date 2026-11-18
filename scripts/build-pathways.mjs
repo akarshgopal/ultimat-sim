@@ -45,7 +45,7 @@ const NAMES = {
   'abundance.js': 'Dead Sea brine minerals hub (DLE Li, salt, Br2, Mg, potash, chlor-alkali, NH3)',
   'aluminium.js': 'Primary aluminium from bauxite (Bayer + Hall–Héroult)',
   'bioforge.js': 'Gluconic acid + H2O2 from purchased dextrose (Bioforge)',
-  'cement.js': 'Clinker from purchased limestone + clay',
+  'cement.js': 'Clinker from own-quarry limestone + clay',
   'coastal.js': 'Coastal e-methane (DAC + SWRO + PEM + Sabatier), Almeria',
   'cu-ew.js': 'Copper cathode by SX-EW from purchased PLS',
   'dac-co2.js': 'CO2 from air by solid-sorbent DAC on PV, Mejillones',
@@ -86,7 +86,7 @@ const ORIGIN = {
   brine: 'brine',
   air: 'air', oxygen: 'air',
   water: 'water',
-  limestone: 'crust', 'kiln-clay': 'crust', 'silica-sand': 'crust', 'soda-ash': 'crust', 'iron-ore': 'crust',
+  limestone: 'crust', 'kiln-clay': 'crust', 'quarried-limestone': 'crust', 'quarried-clay': 'crust', 'silica-sand': 'crust', 'soda-ash': 'crust', 'iron-ore': 'crust',
   ironore: 'crust', quartz: 'crust', bauxite: 'crust', 'ionic-clay': 'crust', salt: 'crust', 'salt-feed': 'crust',
 };
 const INFINITE_ORIGINS = new Set(['ocean', 'brine', 'air', 'crust', 'water']);

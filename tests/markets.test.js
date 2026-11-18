@@ -7,7 +7,7 @@ const { MARKETS } = require('../data/markets.js');
 // Keys of TeaScreening.prices that are feeds/inputs, not sale products.
 const INPUT_ONLY = new Set([
   'water', 'brine', 'seawater', 'power', 'quartz', 'limestone', 'bauxite', 'silica-sand',
-  'soda-ash', 'kiln-clay', 'iron-ore', 'alumina', 'dextrose', 'ionic-clay',
+  'soda-ash', 'kiln-clay', 'quarried-limestone', 'quarried-clay', 'iron-ore', 'alumina', 'dextrose', 'ionic-clay',
 ]);
 const isSaleKey = (key) => !INPUT_ONLY.has(key) && !key.endsWith('-feed');
 const SALE_KEYS = Object.keys(tea.prices).filter(isSaleKey);

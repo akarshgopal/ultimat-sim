@@ -108,7 +108,8 @@ function createMethanolCase() {
         },
         { id: 'depleted-air', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'waste-heat', unit: 'heat-sink', economics: { disposition: 'vent' } },
-        { id: 'brine', unit: 'material-sink', economics: { disposition: 'disposal', disposalCost: 0.02 } },
+        // SWRO brine returns to sea through the outfall, which the SWRO capex pack already includes.
+        { id: 'brine', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'oxygen', unit: 'material-sink', economics: { disposition: 'vent' } },
         { id: 'water-reject', unit: 'material-sink', economics: { disposition: 'disposal', disposalCost: 0.001 } },
         { id: 'spent-media', unit: 'consumable-sink', economics: { disposition: 'disposal', disposalCost: 1 } },

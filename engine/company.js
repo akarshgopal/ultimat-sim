@@ -90,7 +90,8 @@
       // utility-scale PV USD 758/kW. ≈ $0.046/kWh at 2,000 kWh/kWp·yr with an 8%/25-yr CRF.
       // Think in $/kWh: pvCapexFromLcoe / solarLcoe convert between the two.
       capexUsdPerKWp: 758,
-      fixedOmUsdPerKWpYear: 20,
+      // O&M as a share of capex per year ($20/kWp·yr on $758/kWp), so cheaper PV is cheaper to run.
+      fixedOmFracPerYear: 20 / 758,
       lcoeRefYieldKWhPerKWpYear: 2000, // reference sunbelt yield for quoting $/kWh
       lifeYears: 25,
       exogenousDeclinePerYear: 0.06,
@@ -204,11 +205,11 @@
     return Math.max(techCfg.floorFraction ?? 0, exo * learn);
   }
 
-  // Solar electricity price ↔ PV capex. O&M is held at the configured O&M/capex ratio, so a
-  // $/kWh target moves capex and O&M together. Quoted at the reference yield; a site's own price
-  // scales with refYield / siteYield.
+  // Solar electricity price ↔ PV capex. O&M is a fixed share of capex, so a $/kWh target moves
+  // capex and O&M together. Quoted at the reference yield; a site's own price scales with
+  // refYield / siteYield.
   function pvOmFraction(pvCfg) {
-    return pvCfg.capexUsdPerKWp > 0 ? (pvCfg.fixedOmUsdPerKWpYear || 0) / pvCfg.capexUsdPerKWp : 0;
+    return Number(pvCfg.fixedOmFracPerYear) || 0;
   }
   function solarLcoe(pvCfg, financeCfg, capexUsdPerKWp = pvCfg.capexUsdPerKWp, yieldKWhPerKWpYear = pvCfg.lcoeRefYieldKWhPerKWpYear) {
     const crf = 1 / annuityFactor(financeCfg.discountRate, pvCfg.lifeYears);

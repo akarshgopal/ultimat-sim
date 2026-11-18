@@ -156,6 +156,8 @@ const REGION_STRING_TO_ID = {
   'Argentina / Patagonia': 'chile-atacama',
   'China / Tibet': 'asia-china',
   'Mexico / Baja': 'default',
+  'Mexico / Sonora': 'default',
+  Peru: 'chile-atacama',
   'North Africa': 'default',
   'Southern Africa': 'southern-africa',
   Europe: 'europe',

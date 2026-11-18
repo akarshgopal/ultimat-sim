@@ -9,7 +9,7 @@ npm run weather:fetch    # re-fetch the hourly data (PVGIS, ~2 MB)
 
 ## Method
 
-- **Weather:** PVGIS-ERA5 hourly output, 2014–2023, for the eight sites the scoreboard and the company use most (`data/weather-hourly.js`, from `scripts/build-weather.mjs`). Each site uses its frozen PVcalc tilt, azimuth and losses, and the series is rescaled so its mean matches the site's annual yield: only the pattern changes, not the level.
+- **Weather:** PVGIS-ERA5 hourly output, 2014–2023, for the twelve sites the scoreboard and the company use most (`data/weather-hourly.js`, from `scripts/build-weather.mjs`). Each site uses its frozen PVcalc tilt, azimuth and losses, and the series is rescaled so its mean matches the site's annual yield: only the pattern changes, not the level.
 - **Design:** unchanged from the simulator — the plant's PV, battery, heat store, intermediate buffers and sun-following units as `designPlant()` sizes them for that site and year-0 costs.
 - **Operation** (`replayWeather()`): steady units run at the design's planned rate for the month; stored energy is spread over the hours until the sun returns (tonight's length is known, tomorrow's weather is not); intermediate buffers feed steady units from sun-following ones. If PV, store and buffer cannot hold a steady unit at its minimum turndown, it trips for that hour.
 - **Cost:** capital and fixed costs are spread over the output actually reached. "Firmed" adds the storage (battery, heat store and buffers scaled together) that cuts trips to about one day a year, annualized at the design's own storage prices.
@@ -19,13 +19,13 @@ npm run weather:fetch    # re-fetch the hourly data (PVGIS, ~2 MB)
 | | Feasible share of world tonnage | | |
 |---|---|---|---|
 | | Typical days | Real weather, accepting trips | Real weather, firmed to ≤ 1 trip day a year |
-| Today | 39.5% | 39.5% | **1.3%** |
+| Today | 39.5% | 39.5% | **0%** |
 | Frontier | 93.6% | 93.6% | **93.6%** |
 
 - **Output barely moves.** Real weather costs firmed plants 1–4% of annual output at Walvis Bay and Dakhla, 4% at the Dead Sea. Sun-following plants (electrolysis, DAC, methane, methanol) lose nothing: they never promised a night.
 - **Trips do.** Steady units trip on 2–5% of days at the sunbelt coasts and on 12.5% at the Dead Sea, where winter brings cloudy runs.
 - **At the frontier, firming is cheap.** Storage at 1.5× its raw materials makes the 3–10× larger stores that ride through cloudy runs affordable: cement 0.59 → 0.65× its price, aluminium 0.41 → 0.61×, polysilicon 0.52 → 0.87×. The 94% headline holds.
-- **Today, it is not.** At $350/kWh batteries, firming cement (0.95 → 1.18×), PV modules (0.67 → 1.01×), silicon (0.76 → 1.44×) and the Dead Sea brine hub pushes them past their prices. Today's feasibility relies on steady units tolerating a few trips a month: plausible for cement and glass kilns, which can bank hot for a day; not for an aluminium smelter, whose pots freeze.
+- **Today, it is not.** At $350/kWh batteries, firming every steady plant against cloudy runs pushes it past its price (cement 0.95 → 1.18×, PV modules 0.67 → 1.01×, silicon 0.76 → 1.44× at Walvis Bay). Today's feasibility relies on steady units tolerating a few trips a month: plausible for cement and glass kilns, which can bank hot for a day; not for an aluminium smelter, whose pots freeze.
 
 ## What changed in the model
 
@@ -36,6 +36,6 @@ Building the replay exposed two inconsistencies in the typical-day design, now f
 
 ## Limits
 
-- Ten years of reanalysis at eight sites; no inter-site smoothing (a company with plants on several coasts could share firm power).
+- Ten years of reanalysis at twelve sites; no inter-site smoothing (a company with plants on several coasts could share firm power).
 - Firming adds storage only; adding PV, curtailing, or hot standby for brief trips can be cheaper. The firmed numbers are an upper bound on the cost of riding through weather.
 - A trip is an hour below turndown; restart costs and damage (frozen pots) are not costed.

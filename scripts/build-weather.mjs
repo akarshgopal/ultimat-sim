@@ -23,6 +23,10 @@ const SITES = {
   'au-port-hedland': 'pvgis-port-hedland.json',
   'saudi-oxagon': 'pvgis-oxagon.json',
   'spain-almeria': 'pvgis-almeria.json',
+  'chile-taltal': 'pvgis-taltal.json',
+  'namibia-luderitz': 'pvgis-luderitz.json',
+  'mauritania-nouadhibou': 'pvgis-nouadhibou.json',
+  'chile-iquique': 'pvgis-iquique.json',
 };
 const API = 'https://re.jrc.ec.europa.eu/api/v5_3/seriescalc';
 

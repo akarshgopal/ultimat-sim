@@ -11,12 +11,11 @@ const IPCC_CEMENT_CO2 = 'https://www.ipcc-nggip.iges.or.jp/public/2006gl/pdf/3_V
 const IEA_CEMENT_ARCHIVE = 'https://web.archive.org/web/20230528230323/https://www.iea.org/reports/cement';
 const ECRA_CEMENT_2022 = 'https://api.ecra-online.org/fileadmin/files/tp/ECRA_Technology_Papers_2022.pdf';
 const USGS_CEMENT = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-cement.pdf';
-const USGS_STONE = 'https://pubs.usgs.gov/periodicals/mcs2026/mcs2026-stone-crushed.pdf';
 const CEMEX_SOLID_TIC = 'https://mb.com.ph/2022/02/12/solid-cement-to-pursue-323-m-expansion/';
 const SAMARKAND_CEMENT_TIC = 'https://www.globalcement.com/news/item/16382-china-energy-international-group-samarkand-cement-installs-kiln-at-upcoming-samarkand-cement-plant';
 const DUGONG_CEMENT_TIC = 'https://www.globalcement.com/news/11756-dugong-cimentos-announces-upcoming-1-8mt-yr-integrated-cement-plant-in-mozambique';
 const CEMENT_CAPEX_BENCH = 'https://www.cementequipment.org/cement-technical-package/package-tools/76038938-capex-of-cement-companies/';
-const NS_TRUCK_RATES = 'https://novascotia.ca/tran/publications/asphalt/Truck_Haul_Rates_2024.pdf';
+const LC3_INDIA_2016 = 'https://lc3.ch/wp-content/uploads/2023/03/An-economic-analysis-of-the-production-of-limestone-calcined-clay-cement-in-India-2016.pdf';
 
 function createCementCase() {
   const limestoneKg = CEMENT_KG_PER_DAY * LIMESTONE_KG_PER_KG * FEED_MARGIN;
@@ -31,8 +30,8 @@ function createCementCase() {
     economics: projectEconomics(),
     graph: {
       nodes: [
-        { id: 'limestone-feed', unit: 'material-source', sourcePreset: 'limestone', params: { stream: limestone }, economics: tea.bindCost('limestone', { freight: 'inland-truck-short' }) },
-        { id: 'clay-feed', unit: 'material-source', sourcePreset: 'kiln-clay', params: { stream: clay }, economics: tea.bindCost('kiln-clay', { freight: 'inland-truck-short' }) },
+        { id: 'limestone-feed', unit: 'material-source', sourcePreset: 'limestone', params: { stream: limestone }, economics: tea.bindCost('quarried-limestone') },
+        { id: 'clay-feed', unit: 'material-source', sourcePreset: 'kiln-clay', params: { stream: clay }, economics: tea.bindCost('quarried-clay') },
         solarPowerNode(power, solarKWp, REGION),
         { id: 'power-bus', unit: 'electrical-bus' },
         {
@@ -80,12 +79,12 @@ function createCementCase() {
       limestone: {
         stream: clone(node('limestone-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased carbonate stone assumed available at screening $0.02/kg plant-gate plus screening inland-truck-short freight $0.01/kg (~$10/t; ~50–100 km gravel/bulk family; quarry short-haul story). Not a mine-haul quote, not a carrier contract, not a distance/GIS model, and not a quarry concession. USGS crushed stone 2025e $18.50/t. Not a chemical-lime contract.',
+        evidence: 'Own-quarry carbonate stone from a captive quarry a few km from the kiln, at a screening $0.003/kg delivered (LC3 India 2016: Rs 200/t). Quarry equipment is in the quarry-to-pack cement capex. Not a quarry concession.',
       },
       'kiln-clay': {
         stream: clone(node('clay-feed').params.stream),
         quality: 'user-assumption',
-        evidence: 'Purchased clay/shale/silica kiln feed as SiO2 proxy at screening $0.02/kg plant-gate plus screening inland-truck-short freight $0.01/kg (~$10/t; ~50–100 km gravel/bulk family; quarry short-haul story). Not a mine-haul quote, not a carrier contract, not a distance/GIS model, and not a clay-pit concession. USGS crushed-stone family. Not kaolin.',
+        evidence: 'Own-quarry clay/shale/silica kiln corrective as SiO2 proxy at the same screening $0.003/kg as the limestone. Not a clay-pit concession. Not kaolin.',
       },
     },
     meteo: {
@@ -103,13 +102,8 @@ function createCementCase() {
       gridImport: right('grid', 'unverified', 'Unverified grid access; zero authorized imports. Plant uses on-site PV sized to the cement SEC proxy.', [
         { label: 'Wikipedia: Mejillones (context, not an interconnection)', url: MEJILLONES_URL },
       ]),
-      limestonePurchase: right('purchase', 'assumed', 'Purchased carbonate stone assumed available at screening $0.02/kg plus screening inland-truck-short freight $0.01/kg; not a mine-haul quote, not a chemical-lime contract or quarry concession', [
-        { label: 'USGS MCS 2026 stone (crushed) — 2025e $18.50/t; screening purchase, not a contract', url: USGS_STONE },
-        { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (screening inland-truck-short $0.01/kg; not a mine-haul quote)', url: NS_TRUCK_RATES },
-      ]),
-      clayPurchase: right('purchase', 'assumed', 'Purchased kiln clay/shale/silica as SiO2 proxy at screening $0.02/kg plus screening inland-truck-short freight $0.01/kg; not a mine-haul quote, not a clay-pit concession', [
-        { label: 'USGS MCS 2026 stone (crushed) — 2025e $18.50/t; kiln-clay screening $0.02/kg, not a contract', url: USGS_STONE },
-        { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (screening inland-truck-short $0.01/kg; not a mine-haul quote)', url: NS_TRUCK_RATES },
+      quarry: right('concession', 'unverified', 'Captive limestone and clay quarry assumed within a few km of the kiln; no quarry concession is held', [
+        { label: 'LC3 India 2016 — limestone delivered to the plant Rs 200/t (screening $0.003/kg)', url: LC3_INDIA_2016 },
       ]),
     },
     evidence: [
@@ -119,14 +113,13 @@ function createCementCase() {
       { label: 'IEA Cement (archived) — global thermal intensity of clinker ~3.4–3.5 GJ/t; electricity ~105 kWh/t cement', url: IEA_CEMENT_ARCHIVE },
       { label: 'ECRA Technology Papers 2022 — GCCA GNR 2019 grey clinker 3,460 MJ/t; cement electricity ~102 kWh/t', url: ECRA_CEMENT_2022 },
       { label: 'USGS MCS 2026 cement — 2025e mill unit value $160/t', url: USGS_CEMENT },
-      { label: 'USGS MCS 2026 crushed stone — 2025e $18.50/t; limestone and kiln-clay screening $0.02/kg', url: USGS_STONE },
-      { label: 'Nova Scotia Public Works Truck Rates for Haulage of Bulk Material, Table 1 Standard Gravel Tonne KM Rates, effective Feb 1, 2024 (screening inland-truck-short $0.01/kg on limestone/clay; not a mine-haul quote)', url: NS_TRUCK_RATES },
+      { label: 'LC3 India 2016 — limestone delivered to the plant Rs 200/t; own-quarry stone and clay screening $0.003/kg', url: LC3_INDIA_2016 },
       { label: 'Industry greenfield dry-process $120–250 / t-y clinker', url: CEMENT_CAPEX_BENCH },
       { label: 'Cemex Solid 1.5 Mtpa integrated line TIC $235–323M', url: CEMEX_SOLID_TIC },
       { label: 'Samarkand Cement 3 Mt/yr kiln US$313m', url: SAMARKAND_CEMENT_TIC },
       { label: 'Dugong Cimentos 1.8 Mt/yr integrated US$330m', url: DUGONG_CEMENT_TIC },
     ],
-    notes: 'Purchased limestone + clay/silica (SiO2 kiln-feed proxy) → screening grey clinker as a Portland-cement proxy at the Mejillones map point. Product is clinker; gypsum ~4–5% (EN 197-1 CEM I) omitted. Sale is USGS mill portland/blended $0.16/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (bulk commodity offtake; not a voyage quote; screening FOB vs landed). Purchased limestone and kiln-clay carry screening inland-truck-short freight $0.01/kg (~$10/t short-haul gravel/bulk family; quarry short-haul story; not a mine-haul quote, not a carrier contract, and not a distance/GIS model). Not a logistics model. IPCC 0.52 kg process CO2/kg clinker; limestone 1.183 kg/kg and clay 0.337 kg/kg close the dry mass (BREF 1.57 t raw/t clinker is wet-raw). SEC 1.05 kWh/kg is an electricity-as-total-energy proxy for IEA ~3.4 GJ/t clinker thermal plus ~100 kWh/t cement electricity; real kiln is heat-dominated. Pack $60/(kg cement/day) mid of published dry-process grey plant TICs (~$35–90). Fuel carbon is not emitted because energy is the electricity proxy. Not a wet-process kiln, not blended CEM II/III, not CCUS, not a quarry concession. Cash sign whatever falls out. Not bankable. Chile CAPEX× 1.05 unchanged.',
+    notes: 'Own-quarry limestone + clay/silica (SiO2 kiln-feed proxy) → screening grey clinker as a Portland-cement proxy at the Mejillones map point. Product is clinker; gypsum ~4–5% (EN 197-1 CEM I) omitted. Sale is USGS mill portland/blended $0.16/kg plant-gate, net of screening bulk-dry-shortsea freight $0.03/kg (bulk commodity offtake; not a voyage quote; screening FOB vs landed). Limestone and clay come from a captive quarry a few km away at a screening $0.003/kg delivered (LC3 India 2016: Rs 200/t); the quarry is in the quarry-to-pack capex. IPCC 0.52 kg process CO2/kg clinker; limestone 1.183 kg/kg and clay 0.337 kg/kg close the dry mass (BREF 1.57 t raw/t clinker is wet-raw). SEC 1.05 kWh/kg is an electricity-as-total-energy proxy for IEA ~3.4 GJ/t clinker thermal plus ~100 kWh/t cement electricity; real kiln is heat-dominated. Pack $60/(kg cement/day) mid of published dry-process grey plant TICs (~$35–90). Fuel carbon is not emitted because energy is the electricity proxy. Not a wet-process kiln, not blended CEM II/III, not CCUS, not a quarry concession. Cash sign whatever falls out. Not bankable. Chile CAPEX× 1.05 unchanged.',
   };
   return definition;
 }

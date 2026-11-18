@@ -351,6 +351,15 @@ test('solar $/kWh and PV capex convert both ways; O&M moves with capex', () => {
   close(C.solarLcoe(pv, fin, pv.capexUsdPerKWp, 3000), usd * 2000 / 3000, 1e-12);
 });
 
+test('a plant on 10× cheaper PV pays 10× less PV O&M', () => {
+  // A scenario that sets only PV capex (the $/kWh slider, the frontier) must not keep $20/kWp·yr O&M.
+  const rank = capex => C.rankOpportunities({ pathways: [good], sites: SITES, markets: MARKETS, config: { pv: { capexUsdPerKWp: capex, floorUsdPerKWp: 0 } } })[0];
+  const full = rank(C.DEFAULTS.pv.capexUsdPerKWp);
+  const tenth = rank(C.DEFAULTS.pv.capexUsdPerKWp / 10);
+  close(full.costParts.pvOm / full.pvKWp, 20, 1e-9);
+  close(tenth.costParts.pvOm / tenth.pvKWp, 2, 1e-9);
+});
+
 test('equipment multiplier scales non-storage equipment capex only', () => {
   const rank = equip => C.rankOpportunities({ pathways: [good], sites: SITES, markets: MARKETS, config: { equipmentCostMultiplier: equip } })[0];
   const full = rank(1);

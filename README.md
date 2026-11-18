@@ -35,10 +35,11 @@ data/site-presets.js + PVGIS + engine/land.js ──▶ scripts/build-sites.mjs 
 | | Share of world tonnage feasible | Abundant (≤ ½ today's price) |
 |---|---|---|
 | Today | 39% | ~0% |
-| Frontier | 94% | 22% |
+| Frontier | 94% | 92% |
 
-- **Energy alone unlocks little.** 10× cheaper solar by itself adds almost nothing: equipment running ~7 sun-hours a day dominates most recipes. Cheap solar plus lean equipment and squeezed margins does.
-- **What binds the company is not money: it is land.** The default 25-year run makes ~4.3 Gt today and ~8.7 Gt at the frontier, where it ends with over $1 trillion unspent. Each site may cover a share of the land suitable for utility PV in its catchment (World Bank/ESMAP; default 2%). With 100% market share the frontier company reaches 1.7 Gt/yr by 2051 at 2% land use (filling all 2.3 TW it may build), 6.0 Gt/yr at 10% (8.6 TW), 6.6 Gt/yr at 25% (18 TW; there land no longer binds). Coastal sites fill first; inland sites fill when they are within a few hundred km of a port, since they pay overland freight on everything they sell and buy.
+- **Energy alone unlocks little.** 10× cheaper solar by itself lifts the feasible share only from 39% to 40% (cement turns abundant; little else moves): equipment running ~7 sun-hours a day dominates most recipes. Cheap solar plus lean equipment and squeezed margins does.
+- **What binds the company is not money: it is land.** The default 25-year run makes ~4.7 Gt today and ~9.3 Gt at the frontier, where it ends with ~$1.9 trillion unspent. Each site may cover a share of the land suitable for utility PV in its catchment (World Bank/ESMAP; default 2%). With 100% market share the frontier company reaches 2.2 Gt/yr by 2051 at 2% land use (filling all 2.3 TW it may build), 6.2 Gt/yr at 10%, 6.8 Gt/yr at 25% (18 TW; there land no longer binds). Coastal sites fill first; inland sites fill when they are within a few hundred km of a port, since they pay overland freight on everything they sell and buy.
+- **Abundance at the frontier is about 70% methane and cement.** Both are made at under a third of today's price (e-methane $0.30/kg against $1, clinker $0.043/kg against $0.16). What is left feasible but not abundant is steel (bought iron ore is $0.21 of its $0.25/kg) and copper (bought leach solution); polysilicon and aluminium lose abundance once their steady units are firmed against cloudy weather.
 
 ## How the company simulator works
 
@@ -103,7 +104,7 @@ Runs every check: engine, designs, data staleness, and Playwright tests of each 
 ## Known limits
 
 - **Screening economics.** Constant real prices over a plant's life, no tax or inflation, simple annuity debt. Elasticities, learning rates and many capex packs are screening assumptions.
-- **Designed on typical days.** Plants are sized on 12 typical days per site. A stress test replays them through ten real years of hourly weather ([`docs/weather-stress.md`](docs/weather-stress.md), `npm run weather`): the frontier holds (94% feasible even with steady units firmed against cloudy runs), while today's feasibility relies on kilns tolerating a few trips a month. Grid backup and inter-site sharing are not modelled.
+- **Designed on typical days.** Plants are sized on 12 typical days per site. A stress test replays them through ten real years of hourly weather ([`docs/weather-stress.md`](docs/weather-stress.md), `npm run weather`): the frontier holds (94% feasible and 91% abundant even with steady units firmed against cloudy runs), while today's feasibility relies on kilns tolerating a few trips a month. Grid backup and inter-site sharing are not modelled.
 - **Design factors are exact only at their reference plant size.** Several designs fall in cost with size faster than the engine's single scale law.
 - **Make-vs-buy is one level deep and per plant.** TiCl₄, Mg, PLS and REE concentrates have no supplier recipe.
 - **Captive markets.** Much ammonia, H₂, O₂ and DRI is captive; the share ceiling is the only guard.

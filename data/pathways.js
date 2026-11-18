@@ -516,7 +516,7 @@
     },
     {
       "id": "cement",
-      "name": "Clinker from purchased limestone + clay",
+      "name": "Clinker from own-quarry limestone + clay",
       "product": "cement",
       "case": {
         "file": "cases/cement.js",
@@ -529,18 +529,18 @@
       "heatKWhPerKg": 0,
       "feeds": [
         {
-          "id": "limestone",
+          "id": "quarried-limestone",
           "kgPerKg": 1.183,
-          "usdPerKg": 0.02,
-          "freightUsdPerKg": 0.01,
+          "usdPerKg": 0.003,
+          "freightUsdPerKg": 0,
           "origin": "crust",
           "purchased": true
         },
         {
-          "id": "kiln-clay",
+          "id": "quarried-clay",
           "kgPerKg": 0.337,
-          "usdPerKg": 0.02,
-          "freightUsdPerKg": 0.01,
+          "usdPerKg": 0.003,
+          "freightUsdPerKg": 0,
           "origin": "crust",
           "purchased": true
         }
@@ -634,7 +634,7 @@
         "storage": 0
       },
       "fixedOmFracPerYear": 0.03204083,
-      "variableOmUsdPerKg": 0.3421037,
+      "variableOmUsdPerKg": 0.227111,
       "assetLifeYears": 15.40545,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
@@ -1665,7 +1665,7 @@
         "storage": 0
       },
       "fixedOmFracPerYear": 0.03228256,
-      "variableOmUsdPerKg": 0.1649125,
+      "variableOmUsdPerKg": 0.1218073,
       "assetLifeYears": 15.71595,
       "infiniteSourceShare": 0.9999884,
       "quality": "screening",
@@ -2044,7 +2044,7 @@
         "storage": 0
       },
       "fixedOmFracPerYear": 0.03229107,
-      "variableOmUsdPerKg": 0.2820468,
+      "variableOmUsdPerKg": 0.1722448,
       "assetLifeYears": 15.4548,
       "infiniteSourceShare": 0.9999883,
       "quality": "screening",
@@ -2435,7 +2435,7 @@
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "7313e16",
+    "gitSha": "c0bbaf9",
     "caseCount": 27,
     "skipped": [
       {

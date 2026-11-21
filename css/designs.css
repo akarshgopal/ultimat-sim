@@ -10,3 +10,4 @@
 .v-designs .ds-tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .v-designs .ds-tabs a.is-active::after { content: " ●"; color: var(--pos); font-size: 10px; }
 .v-designs .ds-panel > p.muted { font-size: 13px; margin: -4px 0 12px; }
+.v-designs .ds-panel p.is-pending { color: var(--warn); }

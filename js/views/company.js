@@ -109,7 +109,7 @@
           el('div', { class: 'field-input' }, [range, input, reset]),
           prominent && f.hint ? el('span', { class: 'field-hint', text: f.hint }) : null,
         ]);
-        if (f.hint && !prominent) field.title = f.hint;
+        if (f.hint && !prominent) { field.title = f.hint; field.classList.add('has-hint'); }
         const commit = raw => {
           const v = Number(raw);
           if (raw === '' || !Number.isFinite(v) || v < f.min || v > f.max) { field.classList.add('is-invalid'); return; }

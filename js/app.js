@@ -13,13 +13,13 @@
   const Store = globalThis.Store;
   const Views = globalThis.Views;
   const NAV = [
-    { id: 'abundance', label: 'Abundance' },
-    { id: 'company', label: 'Company' },
-    { id: 'energy', label: 'Energy' },
-    { id: 'designs', label: 'Designs' },
-    { id: 'pathways', label: 'Pathways' },
-    { id: 'sites', label: 'Sites' },
-    { id: 'markets', label: 'Markets' },
+    { id: 'abundance', label: 'Abundance', hint: 'How much world material can be made below today’s price, and what blocks the rest' },
+    { id: 'company', label: 'Company', hint: 'The 25-year build-out, with every scenario input' },
+    { id: 'energy', label: 'Energy', hint: 'What each electricity price unlocks' },
+    { id: 'designs', label: 'Designs', hint: 'Parametric equipment designs and what they change' },
+    { id: 'pathways', label: 'Pathways', hint: 'Each recipe: cost vs price, best sites, flowsheet' },
+    { id: 'sites', label: 'Sites', hint: 'The 51 candidate sites and what gets built there' },
+    { id: 'markets', label: 'Markets', hint: 'World demand, prices, and the company’s share' },
   ];
 
   function parseHash() {
@@ -100,7 +100,7 @@
 
   function init() {
     const nav = document.querySelector('.app-nav');
-    for (const item of NAV) nav.append(el('a', { href: '#/' + item.id, 'data-view': item.id, text: item.label }));
+    for (const item of NAV) nav.append(el('a', { href: '#/' + item.id, 'data-view': item.id, title: item.hint, text: item.label }));
     initTheme();
     const { query } = parseHash();
     Store.load(query);

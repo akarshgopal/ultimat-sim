@@ -12,7 +12,7 @@
     'no-pathway': { label: 'No pathway', hint: 'nothing in the library makes it yet', color: 'var(--surface-2)' },
   };
   const ORDER = ['abundant', 'feasible', 'blocked', 'coproduct', 'no-pathway'];
-  const KIND = { unit: 'unit', feed: 'feed', energy: 'energy', other: 'O&M' };
+  const KIND = { unit: 'equipment', feed: 'feed', energy: 'energy', other: 'O&M' };
 
   globalThis.Views.abundance = {
     title: 'Abundance',
@@ -24,22 +24,55 @@
       ]));
 
       const kpis = el('div', { class: 'kpis' });
-      const scenarioNote = el('p', { class: 'muted' });
+      const scenarioNote = el('p', { class: 'muted ab-scenario-note' });
       const frontierBtn = el('button', { type: 'button', class: 'button', text: 'Set the scenario to the frontier',
         onclick: () => Store.update(Store.FRONTIER, { immediate: true }) });
-      root.append(UI.card('World material tonnage', 'year 0, best site, plants at 100× reference size, no company market share', [
+      const resetBtn = el('button', { type: 'button', class: 'button', text: 'Reset to today', onclick: () => Store.reset() });
+
+      // The three levers that move this page most, as presets. Every other input is on Company.
+      const cents = v => UI.num(v * 100, 2) + '¢';
+      const seg = (label, presets, pick) => {
+        const group = el('div', { class: 'segmented', role: 'group', 'aria-label': label });
+        for (const p of presets) {
+          group.append(el('button', { type: 'button', title: p.hint || null, text: p.text,
+            onclick: () => Store.update(p.set, { immediate: true }) }));
+        }
+        group.sync = s => { for (const [i, b] of [...group.children].entries()) b.setAttribute('aria-pressed', String(pick(s, presets[i]))); };
+        return group;
+      };
+      const levers = [
+        seg('Solar electricity', Store.ENERGY_PRESETS.map(p => ({ text: `${p.label} · ${cents(p.kwh)}/kWh`, hint: p.hint, set: { kwh: p.kwh, kwhFloor: p.floor }, kwh: p.kwh })),
+          (s, p) => Math.abs(s.kwh - p.kwh) < 1e-6),
+        seg('Equipment cost', Store.EQUIPMENT_PRESETS.map(p => ({ text: p.label, hint: p.hint, set: { equip: p.equip }, equip: p.equip })),
+          (s, p) => Math.abs(s.equip - p.equip) < 1e-6),
+        seg('Cost cap', Store.MARGIN_PRESETS.map(p => ({ text: p.label, hint: p.hint || `every cost capped at ${p.ii}× its raw materials`, set: { ii: p.ii }, ii: p.ii })),
+          (s, p) => s.ii === p.ii),
+      ];
+      const leverRow = (label, sub, group) => el('div', { class: 'field' }, [
+        el('span', { class: 'field-label' }, [el('span', { text: label }), el('small', { text: sub })]), group]);
+      root.append(UI.card('World material tonnage', 'each material’s best recipe at its best site, built today (year 0) at 100× reference size and selling at today’s price', [
         kpis,
         el('div', { class: 'ab-bars' }),
-        el('div', { class: 'ab-actions' }, [scenarioNote, frontierBtn,
-          el('a', { href: href('energy'), text: 'Energy levers →' }), el('a', { href: href('designs'), text: 'Designs →' })]),
+        el('p', { class: 'muted ab-defs' }, [
+          el('strong', { text: 'Feasible' }), ': the plant pays back its capital at today’s price. ',
+          el('strong', { text: 'Abundant' }), ': feasible at half today’s price or less. ',
+          el('strong', { text: 'Frontier' }), ': solar 10× cheaper, every cost capped at 1.5× its raw materials, every equipment design at its lean preset.',
+        ]),
+        el('div', { class: 'ab-levers' }, [
+          leverRow('Solar electricity', 'start-year price', levers[0]),
+          leverRow('Equipment cost', '× electrolyzers, DAC, desal, process plant', levers[1]),
+          leverRow('Cost cap', 'every cost ≤ raw materials × this (idiot index)', levers[2]),
+        ]),
+        el('div', { class: 'ab-actions' }, [scenarioNote, resetBtn, frontierBtn,
+          el('a', { href: href('company'), text: 'All inputs →' }), el('a', { href: href('designs'), text: 'Equipment designs →' })]),
       ]));
       const barsHost = root.querySelector('.ab-bars');
 
       const blockersHost = el('div', { class: 'ab-blockers' });
-      root.append(UI.card('What to solve next', 'blocked world tonnage by its single largest cost item per kg: a unit to design, a feed to make cheaper, or energy', blockersHost));
+      root.append(UI.card('What to solve next', 'tonnage that does not pay back yet, grouped by its largest cost per kg: equipment to design, a bought feed to make cheaper, or energy', blockersHost));
 
       const tableHost = el('div');
-      root.append(UI.card('Materials', 'each world market’s best pathway; cost ÷ today’s price below 1 is feasible', tableHost));
+      root.append(UI.card('Materials', 'each world market’s best recipe (pathway) and site; cost ÷ today’s price below 1× is feasible. Click a material or recipe for detail, a column to sort.', tableHost));
 
       const legend = UI.legend(ORDER.map(k => ({ label: STATUS[k].label, color: STATUS[k].color, title: STATUS[k].hint })));
 
@@ -48,7 +81,7 @@
       const ratio = r => {
         if (!Number.isFinite(r?.costRatio)) return el('span', { class: 'muted', text: '—' });
         if (r.costRatio < 0) return el('span', { class: 'is-pos', text: 'coproducts pay', title: 'coproduct revenue exceeds the plant’s full cost' });
-        return el('span', { class: r.costRatio <= 1 ? 'is-pos' : 'is-neg', text: UI.num(r.costRatio, 2) + '× price' });
+        return el('span', { class: r.costRatio <= 1 ? 'is-pos' : 'is-neg', title: 'cost ÷ today’s price', text: 'cost ' + UI.num(r.costRatio, 2) + '× price' });
       };
       const itemText = it => (it ? `${it.label} ${UI.usdKg(it.usdPerKg)}/kg` : '—');
 
@@ -77,7 +110,8 @@
           top.length ? el('ol', { class: 'ab-blocker-list' }, top.map(b => el('li', {}, [
             el('strong', { text: b.label }), ' ',
             el('span', { class: 'tag', text: KIND[b.kind] || b.kind }), ' ',
-            el('span', { class: 'muted', text: `${mt(b.worldDemandT)}/yr held back · ${b.products.map(p => UI.productName(p)).join(', ')}` }),
+            el('span', { class: 'muted' }, [`${mt(b.worldDemandT)}/yr held back · `,
+              ...b.products.flatMap((p, i) => [i ? ', ' : '', el('a', { href: href('markets', p), text: UI.productName(p) })])]),
           ]))) : el('p', { class: 'muted', text: 'Nothing blocked.' }),
         ]);
       }
@@ -96,7 +130,9 @@
           const frontier = Store.abundance({ ...s, ...Store.FRONTIER });
           const atFrontier = Object.entries(Store.FRONTIER).every(([k, v]) => JSON.stringify(s[k]) === JSON.stringify(v));
           frontierBtn.disabled = atFrontier;
-          scenarioNote.textContent = `Scenario: solar ${UI.num(s.kwh * 100, 2)}¢/kWh · equipment ×${s.equip}`
+          for (const g of levers) g.sync(s);
+          resetBtn.disabled = key === '';
+          scenarioNote.textContent = key === '' ? 'Your scenario matches today. Change a lever to compare.' : `Your scenario: solar ${UI.num(s.kwh * 100, 2)}¢/kWh · equipment ×${s.equip}`
             + (s.ii > 0 ? ` · costs ≤ ${s.ii}× materials` : '') + Object.entries(s.ds || {}).map(([id, d]) => ` · ${d.preset} ${Store.DESIGNS[id]?.name || id}`).join('');
 
           kpis.replaceChildren(
@@ -105,7 +141,7 @@
             UI.kpi('Today → frontier', `${UI.pct(today.totals.feasibleShare, 0)} → ${UI.pct(frontier.totals.feasibleShare, 0)}`, 'share of tonnage feasible'),
             UI.kpi('Not yet covered', mt(now.totals.uncoveredT) + '/yr', 'no pathway, or coproduct only'),
           );
-          barsHost.replaceChildren(legend, bar('Today', today), bar('Scenario', now), bar('Frontier', frontier));
+          barsHost.replaceChildren(legend, bar('Today', today), bar('Your scenario', now), bar('Frontier', frontier));
 
           blockersHost.replaceChildren(blockerList(now, 'In this scenario'), blockerList(frontier, 'At the frontier'));
 
@@ -118,11 +154,11 @@
               render: r => [el('a', { href: href('markets', r.product), text: UI.productName(r.product) }),
                 r.pathwayId ? el('a', { class: 'cell-sub', href: href('pathways', r.pathwayId), text: pathwayName(r.pathwayId) + (r.siteId ? ' · ' + (Store.siteById.get(r.siteId)?.name || r.siteId) : '') }) : null] },
             { key: 'demand', label: 'World demand', num: true, get: r => r.worldDemandT, render: r => UI.tonnes(r.worldDemandT) + '/yr' },
-            { key: 'price', label: 'Price', num: true, get: r => r.priceUsdPerKg, render: r => UI.usdKg(r.priceUsdPerKg) },
+            { key: 'price', label: 'Price', num: true, get: r => r.priceUsdPerKg, render: r => UI.usdKg(r.priceUsdPerKg) + '/kg' },
             { key: 'today', label: 'Today', get: r => ORDER.indexOf(t0.get(r.product)?.status), render: r => [statusTag(t0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(t0.get(r.product)))] },
             { key: 'now', label: 'Scenario', get: r => ORDER.indexOf(r.status), render: r => [statusTag(r.status), el('span', { class: 'cell-sub' }, ratio(r))] },
             { key: 'frontier', label: 'Frontier', get: r => ORDER.indexOf(f0.get(r.product)?.status), render: r => [statusTag(f0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(f0.get(r.product)))] },
-            { key: 'cost', label: 'Cost (scenario)', num: true, get: r => r.lcopUsdPerKg ?? Infinity, render: r => (Number.isFinite(r.lcopUsdPerKg) ? UI.usdKg(r.lcopUsdPerKg) : '—') },
+            { key: 'cost', label: 'Cost/kg (scenario)', num: true, get: r => r.lcopUsdPerKg ?? Infinity, render: r => (Number.isFinite(r.lcopUsdPerKg) ? UI.usdKg(r.lcopUsdPerKg) : '—') },
             { key: 'kwh', label: 'kWh/kg', num: true, get: r => r.energyKWhPerKg ?? -1, render: r => (Number.isFinite(r.energyKWhPerKg) ? UI.num(r.energyKWhPerKg) : '—') },
             { key: 'blocker', label: 'Largest cost item (scenario → frontier)', get: r => r.blocker?.usdPerKg ?? -1,
               render: r => (r.blocker ? [el('span', { text: itemText(r.blocker) }), el('span', { class: 'cell-sub', text: '→ ' + itemText(f0.get(r.product)?.blocker) })] : el('span', { class: 'muted', text: '—' })) },

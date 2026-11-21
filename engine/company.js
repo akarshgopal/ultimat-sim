@@ -1495,7 +1495,8 @@
       const b = ev.costBreakdownUsdPerKg;
       const items = [];
       // 'hydrogen-feed' → 'hydrogen', 'pls-copper' → 'pls copper'.
-      const feedName = id => id.replace(/-feed$/, '').replace(/-/g, ' ');
+      const FEED_NAMES = { 'pls-copper': 'copper leach solution (PLS)' };
+      const feedName = id => FEED_NAMES[id] || id.replace(/-feed$/, '').replace(/-/g, ' ');
       // Feeds made in-house are one item each (the captive unit's full cost per kg of product);
       // equipment, energy and other O&M of the plant itself are what remains.
       let inHouse = 0;

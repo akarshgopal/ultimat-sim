@@ -292,3 +292,6 @@ details.chart-data summary { color: var(--text-3); cursor: pointer; }
   .facts { grid-template-columns: 1fr; gap: 2px; }
   .facts dd { margin-bottom: 6px; }
 }
+
+/* A field whose explanation is in its tooltip: dotted underline + help cursor so the hover is discoverable. */
+.field.has-hint .field-label > span:first-child { text-decoration: underline dotted var(--text-3); text-underline-offset: 3px; cursor: help; }

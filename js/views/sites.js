@@ -196,8 +196,8 @@
       ]),
       el('div', { class: 'stack' }, [
         kpis,
-        UI.card('Where the company builds', 'Circle area ∝ PV capacity built in the current run. Click a site for detail.', map.el),
-        UI.card('All sites', 'PV built vs each site’s ceiling: the scenario’s share of the land suitable for PV in its catchment. Click a row for detail.', tableBox),
+        UI.card('Where the company builds', 'Filled circles: sites with plants, area ∝ solar capacity built in the current run. Small hollow dots: unused sites. Click a site for detail.', map.el),
+        UI.card('All sites', 'Each site may cover only a share of the land suitable for solar around it (the land-use input on Company); that sets its ceiling. Click a row for detail.', tableBox),
       ]),
     );
 
@@ -214,20 +214,20 @@
       const atCeiling = used.filter(s => pv[s.id] >= cap[s.id] * 0.95).length;
       kpis.replaceChildren(
         UI.kpi('Sites used', result ? `${used.length} of ${sites.length}` : '—', 'with at least one plant'),
-        UI.kpi('PV built', result ? UI.num(totalKWp / 1e6, 3) + ' GWp' : '—', 'all plants in the run'),
-        UI.kpi('Sites at ceiling', result ? String(atCeiling) : '—', `≥ 95% of ${UI.num(scenario.land)}% of suitable land`),
-        UI.kpi('Best solar', UI.num(Math.max(...sites.map(s => s.pvKWhPerKWpDay)), 3), 'kWh/kWp·day'),
+        UI.kpi('Solar built', result ? UI.num(totalKWp / 1e6, 3) + ' GWp' : '—', 'all plants in the run'),
+        UI.kpi('Sites out of land', result ? String(atCeiling) : '—', `built ≥ 95% of their allowed solar (${UI.num(scenario.land)}% of suitable land)`),
+        UI.kpi('Best solar', UI.num(Math.max(...sites.map(s => s.pvKWhPerKWpDay)), 3), 'kWh per day per kWp of panels'),
       );
       const columns = [
         { key: 'name', label: 'Site', get: s => s.name, render: s => el('span', {}, [el('a', { href: href('sites', s.id), text: s.name }), el('span', { class: 'cell-sub', text: s.id })]) },
         { key: 'region', label: 'Region', get: s => s.region || '' },
         { key: 'kind', label: 'Kind', get: s => kindLabel(s.kind) },
-        { key: 'solar', label: 'Solar', num: true, title: 'kWh per kWp per day (PVGIS)', get: s => s.pvKWhPerKWpDay, render: s => el('span', {}, [UI.num(s.pvKWhPerKWpDay, 3), el('span', { class: 'cell-sub', text: 'kWh/kWp·d' })]) },
-        { key: 'land', label: 'Land', num: true, get: s => s.landUsdPerHa, render: s => el('span', {}, [landText(UI, s), el('span', { class: 'cell-sub' }, UI.qualityTag(s.landSource?.quality) || 'default')]) },
-        { key: 'res', label: 'Resources', get: s => (s.coastal ? 2 : 0) + (s.brineAssayId ? 1 : 0), render: s => resourceTags(UI, s) },
+        { key: 'solar', label: 'Solar', num: true, title: 'Solar yield: kWh per day from each kWp of panels (PVGIS)', get: s => s.pvKWhPerKWpDay, render: s => el('span', {}, [UI.num(s.pvKWhPerKWpDay, 3), el('span', { class: 'cell-sub', text: 'kWh/kWp·d' })]) },
+        { key: 'land', label: 'Land', num: true, title: 'Land price; grey “default” = no site-specific price, the engine default applies', get: s => s.landUsdPerHa, render: s => el('span', {}, [landText(UI, s), el('span', { class: 'cell-sub' }, UI.qualityTag(s.landSource?.quality) || 'default')]) },
+        { key: 'res', label: 'Resources', title: 'Seawater and/or brine the site can draw on', get: s => (s.coastal ? 2 : 0) + (s.brineAssayId ? 1 : 0), render: s => resourceTags(UI, s) },
         { key: 'plants', label: 'Plants', num: true, get: s => plants[s.id]?.length || 0 },
         { key: 'landKm2', label: 'Suitable land', num: true, title: 'Land suitable for utility PV in the site’s catchment (World Bank/ESMAP Level 1)', get: s => s.suitableLandKm2 || 0, render: s => (s.suitableLandKm2 ? UI.num(s.suitableLandKm2) + ' km²' : '—') },
-        { key: 'pv', label: 'PV GWp / ceiling', num: true, get: s => pv[s.id] || 0, render: s => pvMeter(UI, pv[s.id] || 0, cap[s.id]) },
+        { key: 'pv', label: 'Solar built / allowed', num: true, title: 'GWp of solar built vs the most this site may build',  get: s => pv[s.id] || 0, render: s => pvMeter(UI, pv[s.id] || 0, cap[s.id]) },
         { key: 'paths', label: 'Pathways', num: true, title: 'Pathways whose feeds this site can supply', get: s => hostBySite.get(s.id).length,
           render: s => el('span', { title: hostBySite.get(s.id).map(p => p.name).join('\n') }, String(hostBySite.get(s.id).length)) },
       ];
@@ -272,8 +272,8 @@
         UI.qualityTag(land?.quality),
         el('span', { class: 'cell-sub' }, land ? [land.name + (land.url ? ' · ' : ''), land.url ? el('a', { href: land.url, target: '_blank', rel: 'noopener', text: 'source' }) : null] : 'No site-specific land price: the engine default applies.'),
       ]),
-      el('dt', { text: 'Seawater' }), el('dd', {}, site.coastal ? el('code', { text: site.seawaterAssayId || 'coastal' }) : 'none (inland)'),
-      el('dt', { text: 'Brine' }), el('dd', {}, site.brineAssayId ? el('code', { text: site.brineAssayId }) : 'none'),
+      el('dt', { text: 'Seawater assay' }), el('dd', {}, site.coastal ? el('code', { text: site.seawaterAssayId || 'coastal' }) : 'none (inland)'),
+      el('dt', { text: 'Brine assay' }), el('dd', {}, site.brineAssayId ? el('code', { text: site.brineAssayId }) : 'none'),
     ]);
     root.append(
       el('div', { class: 'crumbs' }, [el('a', { href: href('sites'), text: 'Sites' }), ' / ', site.id]),
@@ -285,10 +285,10 @@
       el('div', { class: 'stack' }, [
         kpis,
         el('div', { class: 'grid site-top' }, [
-          UI.card('Site', null, [facts, site.notes ? el('p', { class: 'site-notes', text: site.notes }) : null]),
-          UI.card('Location', null, map.el),
+          UI.card('Site', null, [facts, site.notes ? el('div', { class: 'site-notes' }, [el('h3', { text: 'Data notes' }), el('p', { text: site.notes })]) : null]),
+          UI.card('Location', 'ringed: this site; filled: other sites with plants', map.el),
         ]),
-        UI.card('Pathways this site can host', 'Year-0 economics of a 10× reference-size plant at this site, in the current scenario. Sorted by margin.', pathBox),
+        UI.card('Pathways this site can host', 'Year-0 economics of a 10× reference-size plant at this site, in the current scenario. Faded rows lose money here (NPV < 0). Click a row for the pathway.', pathBox),
         UI.card('Plants built here', 'In the current run.', plantBox),
       ]),
     );
@@ -311,10 +311,10 @@
       const landHa = plants.reduce((sum, p) => sum + (p.landHa || 0), 0);
       kpis.replaceChildren(
         UI.kpi('Solar yield', UI.num(site.pvKWhPerKWpDay, 3), 'kWh/kWp·day'),
-        UI.kpi('Land', site.landUsdPerHa > 0 ? UI.usd(site.landUsdPerHa) : '—', 'per hectare'),
+        UI.kpi('Land', UI.usd(site.landUsdPerHa > 0 ? site.landUsdPerHa : Company.DEFAULTS.defaultLandUsdPerHa), site.landUsdPerHa > 0 ? 'per hectare' : 'per hectare (default)'),
         UI.kpi('Plants here', result ? String(plants.length) : '—', result ? `${UI.usd(capex)} capex` : ''),
-        UI.kpi('PV built', result ? UI.num((pv[site.id] || 0) / 1e6, 3) + ' GWp' : '—', `ceiling ${UI.num(ceilingKWp / 1e6)} GWp (${UI.num(scenario.land)}% of ${UI.num(site.suitableLandKm2)} km² suitable) · ${UI.pct((pv[site.id] || 0) / ceilingKWp)}`),
-        UI.kpi('Land used', result ? UI.num(landHa) + ' ha' : '—', 'PV field'),
+        UI.kpi('Solar built', result ? UI.num((pv[site.id] || 0) / 1e6, 3) + ' GWp' : '—', `${UI.pct((pv[site.id] || 0) / ceilingKWp, 0)} of the ${UI.num(ceilingKWp / 1e6)} GWp allowed (${UI.num(scenario.land)}% of ${UI.num(site.suitableLandKm2)} km² suitable land)`),
+        UI.kpi('Land used', result ? UI.num(landHa) + ' ha' : '—', 'by the solar field'),
       );
       if (!plants.length) {
         plantBox.replaceChildren(el('p', { class: 'muted', text: result ? 'No plants built here in this run.' : 'Simulating…' }));
@@ -363,12 +363,12 @@
         { key: 'product', label: 'Product', get: r => UI.productName(r.product), render: r => el('a', { href: href('markets', r.product), text: UI.productName(r.product) }) },
         { key: 'size', label: 'Output', num: true, get: r => r.annualKg, render: r => UI.tonnes(r.annualKg / 1000) + '/yr' },
         { key: 'capex', label: 'Capex', num: true, get: r => r.capex.total, render: r => UI.usd(r.capex.total) },
-        { key: 'pv', label: 'PV', num: true, get: r => r.pvKWp, render: r => UI.num(r.pvKWp / 1e3) + ' MWp' },
-        { key: 'lcop', label: 'Cost', num: true, title: 'Levelized cost net of coproduct credit, $/kg', get: r => r.lcopUsdPerKg, render: r => UI.usdKg(r.lcopUsdPerKg) },
+        { key: 'pv', label: 'Solar', num: true, title: 'Solar capacity the plant needs', get: r => r.pvKWp, render: r => UI.num(r.pvKWp / 1e3) + ' MWp' },
+        { key: 'lcop', label: 'Net cost', num: true, title: 'Full cost per kg including capital, after selling co-products', get: r => r.lcopUsdPerKg, render: r => UI.usdKg(r.lcopUsdPerKg) },
         { key: 'price', label: 'Price', num: true, get: r => r.priceUsdPerKg, render: r => UI.usdKg(r.priceUsdPerKg) },
         { key: 'margin', label: 'Margin', num: true, get: r => r.marginUsdPerKg / (r.priceUsdPerKg || 1),
           render: r => el('span', { class: r.marginUsdPerKg >= 0 ? 'is-pos' : 'is-neg', text: marginText(UI, r.marginUsdPerKg / (r.priceUsdPerKg || 1)) }) },
-        { key: 'npv', label: 'NPV', num: true, get: r => r.npv, render: r => el('span', { class: r.npv >= 0 ? 'is-pos' : 'is-neg', text: UI.usd(r.npv) }) },
+        { key: 'npv', label: 'NPV', num: true, title: 'Lifetime value of the plant, discounted at the scenario rate; ≥ 0 means it pays back its capital', get: r => r.npv, render: r => el('span', { class: r.npv >= 0 ? 'is-pos' : 'is-neg', text: UI.usd(r.npv) }) },
       ];
       pathBox.replaceChildren(...[
         rows.length

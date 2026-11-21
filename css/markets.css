@@ -13,3 +13,4 @@
 
 .v-markets .co-more { color: var(--text-3); cursor: help; }
 .v-markets #marketPathways td:first-child { min-width: 180px; }
+.v-markets .market-note p { margin: 0; }

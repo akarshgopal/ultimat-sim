@@ -47,11 +47,11 @@
     root.append(
       el('div', { class: 'view-title' }, [
         el('h1', { text: 'Markets' }),
-        el('p', { text: `${rows.length} world markets. The company’s abundance lever is its share of each, capped by the scenario.` }),
+        el('p', { text: `${rows.length} world markets. How much the company sells into each, its share of world supply (capped on Company), and how far that lowers the price.` }),
       ]),
       el('div', { class: 'stack' }, [
         kpis,
-        UI.card('World markets', 'Final-year output, share of world supply and price relief in the current run. Supplied markets first; click a row for detail.', tableBox),
+        UI.card('World markets', 'Final-year output, share of world supply and price relief (how far the company’s supply pushes the price below today’s) in the current run. Supplied markets first; click a row for detail. In “Made by”, (co) = made as a coproduct of another product’s plant.', tableBox),
       ]),
     );
     let lastResult;
@@ -69,7 +69,7 @@
       kpis.replaceChildren(
         UI.kpi('Markets supplied', result ? `${supplied.length} of ${rows.length}` : '—', last ? `in ${last.year}` : ''),
         UI.kpi('Material sold', result ? UI.tonnes(last.materialTPerYear) + '/yr' : '—', last ? `${UI.usd(revenue)} revenue` : ''),
-        UI.kpi('At share ceiling', result ? String(atCap.length) : '—', `≥ 95% of ${UI.num(scenario.share)}% max share`),
+        UI.kpi('Markets at max share', result ? String(atCap.length) : '—', `≥ 95% of the ${UI.num(scenario.share)}% cap set on Company`),
         UI.kpi('Biggest relief', result && supplied.length ? UI.pct(Math.max(0, ...supplied.map(r => relief(r.key) || 0))) : '—',
           supplied.length ? UI.productName(supplied.slice().sort((a, b) => (relief(b.key) || 0) - (relief(a.key) || 0))[0].key) : ''),
       );
@@ -82,13 +82,13 @@
           render: r => (share(r.key) > 0 ? shareCell(UI, share(r.key), scenario.share / 100) : el('span', { class: 'muted', text: '—' })) },
         { key: 'relief', label: 'Price relief', num: true, title: 'Fall of the realized price below the reference price', get: r => relief(r.key) ?? -1,
           render: r => (relief(r.key) > 0 ? UI.pct(relief(r.key)) : el('span', { class: 'muted', text: '—' })) },
-        { key: 'demand', label: 'World demand', num: true, get: r => r.worldDemandTPerYear,
+        { key: 'demand', label: 'World demand', num: true, title: 'World demand in the year shown below', get: r => r.worldDemandTPerYear,
           render: r => el('span', {}, [UI.tonnes(r.worldDemandTPerYear) + '/yr', el('span', { class: 'cell-sub', text: String(r.demandYear || '') })]) },
-        { key: 'growth', label: 'Growth', num: true, get: r => r.growthPerYear, render: r => UI.pct(r.growthPerYear || 0) + '/yr' },
-        { key: 'price', label: 'Ref. price', num: true, get: r => r.priceUsdPerKg,
+        { key: 'growth', label: 'Growth', num: true, title: 'Assumed demand growth per year', get: r => r.growthPerYear, render: r => UI.pct(r.growthPerYear || 0) + '/yr' },
+        { key: 'price', label: 'Ref. price', num: true, title: 'Today’s reference price; the typical range is below', get: r => r.priceUsdPerKg,
           render: r => el('span', {}, [UI.usdKg(r.priceUsdPerKg) + '/kg', r.priceBandUsdPerKg ? el('span', { class: 'cell-sub', text: r.priceBandUsdPerKg.map(UI.usdKg).join('–') }) : null]) },
-        { key: 'elast', label: 'Elasticity', num: true, title: 'Price falls by elasticity × share', get: r => r.priceElasticity, render: r => (r.priceElasticity ?? 0).toFixed(2) },
-        { key: 'quality', label: 'Data', get: r => r.quality, render: r => UI.qualityTag(r.quality) },
+        { key: 'elast', label: 'Elasticity', num: true, title: 'How strongly the price falls as the company’s share grows: price = reference × (1 − elasticity × share)', get: r => r.priceElasticity, render: r => (r.priceElasticity ?? 0).toFixed(2) },
+        { key: 'quality', label: 'Data', title: 'cited = from a published source; screening = reasoned estimate', get: r => r.quality, render: r => UI.qualityTag(r.quality) },
         { key: 'paths', label: 'Made by', get: r => prodBy.get(r.key).length, render: r => pathwayLinks(UI, href, prodBy.get(r.key)) },
       ];
       tableBox.replaceChildren(UI.sortableTable(columns, rows, {
@@ -151,13 +151,13 @@
         kpis,
         el('div', { class: 'grid grid-2' }, [
           UI.card('Company output', 'Tonnes per year sold to the market (and made in-house for the company’s own plants).', outBox),
-          UI.card('Share of world supply', 'Company output ÷ world demand of the market group; dashed line is the scenario ceiling.', shareBox),
+          UI.card('Share of world supply', 'Company output ÷ world demand (related grades are counted together); dashed line is the max share set on Company.', shareBox),
         ]),
         el('div', { class: 'grid grid-2' }, [
-          UI.card('Realized price', 'Price the company sells at vs the reference price (dashed).', priceBox),
+          UI.card('Realized price', 'Price the company sells at, which falls as its share grows, vs today’s reference price (dashed).', priceBox),
           UI.card('Who makes it', 'Pathways producing this material as primary product or coproduct; plants built in the current run.', [pathBox, captiveBox]),
         ]),
-        UI.card('Market data', null, [facts, m.note ? el('p', { class: 'market-note', text: m.note }) : null, el('h3', { class: 'sources-head', text: 'Sources' }), sources]),
+        UI.card('Market data', null, [facts, m.note ? el('div', { class: 'market-note' }, [el('h3', { class: 'sources-head', text: 'Data notes' }), el('p', { text: m.note })]) : null, el('h3', { class: 'sources-head', text: 'Sources' }), sources]),
       ]),
     );
 
@@ -181,8 +181,8 @@
       const cap = scenario.share / 100;
       kpis.replaceChildren(...[
         UI.kpi(`Output ${last.year}`, UI.tonnes(output.at(-1)), 'per year sold'),
-        UI.kpi('Share', UI.pct(share.at(-1)), `ceiling ${UI.pct(cap)}`),
-        UI.kpi('Price relief', UI.pct(last.priceReliefByMarket[group] || 0), `${UI.usdKg(price.at(-1))} vs ${UI.usdKg(m.priceUsdPerKg)}/kg`),
+        UI.kpi('Share', UI.pct(share.at(-1)), `of world supply · max ${UI.pct(cap)}`),
+        UI.kpi('Price relief', UI.pct(last.priceReliefByMarket[group] || 0), `price ${UI.usdKg(price.at(-1))} vs ${UI.usdKg(m.priceUsdPerKg)}/kg today`),
         UI.kpi(`World demand ${last.year}`, UI.tonnes(Company.marketDemandT(Store.MARKETS[group] || m, last.year)), `${m.demandYear}: ${UI.tonnes(m.worldDemandTPerYear)}`),
         captive.at(-1) > 0 ? UI.kpi('Made in-house', UI.tonnes(captive.at(-1)), 'captive supply, not sold') : null,
       ].filter(Boolean));

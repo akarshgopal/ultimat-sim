@@ -24,6 +24,8 @@
 .v-sites .site-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
 .v-sites .facts .tag { margin-left: 2px; }
 .v-sites .site-notes { margin-top: 12px; color: var(--text-2); font-size: 13px; }
+.v-sites .site-notes h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-3); margin: 0 0 4px; }
+.v-sites .site-notes p { margin: 0; }
 .v-sites .host-note { margin-top: 8px; }
 
 @media (max-width: 1000px) {

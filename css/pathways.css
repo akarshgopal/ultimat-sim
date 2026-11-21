@@ -1,0 +1,107 @@
+/* pathways view — scoped by .v-pathways. */
+.v-pathways .pw-kpis { margin-bottom: var(--gap); }
+
+/* ---------------------------------------------------------------- list */
+.v-pathways .pw-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 10px; }
+.v-pathways .pw-filters input[type="search"] { width: 260px; max-width: 100%; }
+.v-pathways .pw-filters select { width: auto; min-width: 170px; }
+.v-pathways .pw-count { margin-left: auto; }
+.v-pathways .pw-list-card { padding: 12px 12px 4px; }
+.v-pathways .pw-table .data-table td { vertical-align: middle; }
+.v-pathways .pw-name { min-width: 200px; max-width: 340px; }
+.v-pathways .pw-name a { font-weight: 600; color: var(--text); }
+.v-pathways .pw-name .cell-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v-pathways .pw-product { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 130px; max-width: 220px; }
+.v-pathways .pw-table td:last-child, .v-pathways .pw-table td:nth-last-child(3) { white-space: nowrap; }
+.v-pathways .pw-table td:nth-last-child(3) a { display: inline-block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.v-pathways .pw-origins { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; min-width: 120px; max-width: 220px; }
+.v-pathways .pw-origins .cell-sub { flex-basis: 100%; }
+.v-pathways .pw-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-2); white-space: nowrap; }
+
+.v-pathways .pw-status[data-status="built"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.v-pathways .pw-status[data-status="feasible"] { color: var(--pos); }
+.v-pathways .pw-status[data-status="infeasible"] { color: var(--text-3); }
+.v-pathways .pw-status[data-status="excluded"] { color: var(--text-3); border-style: dashed; background: transparent; }
+
+/* ---------------------------------------------------------------- detail head */
+.v-pathways .pw-head { margin-bottom: 14px; }
+.v-pathways .pw-head .view-title { margin-bottom: 2px; align-items: center; }
+.v-pathways .pw-sub { color: var(--text-2); margin-bottom: 8px; }
+.v-pathways .pw-meta { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--text-3); align-items: center; }
+.v-pathways .pw-meta > span { display: inline-flex; align-items: center; gap: 5px; }
+.v-pathways .pw-notes { margin-top: 8px; font-size: 12px; color: var(--text-3); max-width: 110ch; }
+.v-pathways .pw-grid { margin-bottom: var(--gap); }
+.v-pathways .pw-grid > .card { display: flex; flex-direction: column; }
+
+/* recipe */
+.v-pathways .pw-facts { display: grid; grid-template-columns: max-content 1fr; gap: 3px 16px; margin: 0 0 6px; font-size: 13px; }
+.v-pathways .pw-facts dt { color: var(--text-3); }
+.v-pathways .pw-facts dd { margin: 0; font-weight: 550; }
+.v-pathways .pw-h3 { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 4px; }
+.v-pathways .pw-bars { display: flex; flex-direction: column; gap: 6px; }
+.v-pathways .pw-bar { display: grid; grid-template-columns: 82px 1fr auto; align-items: center; gap: 10px; font-size: 12px; }
+.v-pathways .pw-bar-label { color: var(--text-2); text-transform: capitalize; }
+.v-pathways .pw-bar-track { height: 10px; background: var(--surface-2); border-radius: 0 4px 4px 0; overflow: hidden; }
+.v-pathways .pw-bar-fill { display: block; height: 100%; background: var(--series-1); border-radius: 0 4px 4px 0; }
+.v-pathways .pw-bar-value { color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* cost vs year */
+.v-pathways .pw-chart { min-height: 250px; }
+.v-pathways .pw-chart-note { font-size: 13px; color: var(--text-2); margin-top: 8px; line-height: 1.5; }
+.v-pathways .chart-xmark { stroke: var(--pos); stroke-dasharray: 2 3; }
+.v-pathways .pw-foot { margin-top: 6px; }
+
+/* ---------------------------------------------------------------- flowsheet */
+.v-pathways .pw-fs-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin-bottom: 8px; align-items: center; }
+.v-pathways .pw-fs-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.v-pathways .pw-key { display: inline-block; width: 18px; height: 0; border-top: 4px solid var(--border-strong); border-radius: 2px; }
+.v-pathways .pw-key.is-product { border-top-color: var(--accent); }
+.v-pathways .pw-key.is-electricity { border-top: 2px dashed var(--series-4); }
+.v-pathways .pw-key.is-heat { border-top-color: var(--neg); }
+.v-pathways .pw-fs-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+.v-pathways .pw-flowsheet { display: block; margin: 0 auto; max-width: none; font-family: var(--font); }
+
+.v-pathways .pw-edge { fill: none; stroke: var(--border-strong); stroke-opacity: 0.9; stroke-linecap: butt; }
+.v-pathways .pw-edge.is-product { stroke: var(--accent); stroke-opacity: 0.75; }
+.v-pathways .pw-edge.is-heat { stroke: var(--neg); stroke-opacity: 0.6; }
+.v-pathways .pw-edge.is-back { stroke-dasharray: 5 3; }
+.v-pathways .pw-edge:hover { stroke: var(--text-2); stroke-opacity: 1; }
+.v-pathways .pw-arrow { fill: var(--text-3); }
+.v-pathways .pw-edge-label {
+  font-size: 10.5px; fill: var(--text-2); font-variant-numeric: tabular-nums; pointer-events: none;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
+}
+
+.v-pathways .pw-rail-line { stroke: var(--series-4); stroke-width: 2; }
+.v-pathways .pw-rail-dot { fill: var(--series-4); }
+.v-pathways .pw-rail-drop { stroke: var(--series-4); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.v-pathways .pw-rail-label { font-size: 11px; font-weight: 600; fill: var(--text-2); }
+.v-pathways .pw-rail-kwh {
+  font-size: 10px; fill: var(--warn); font-variant-numeric: tabular-nums;
+  paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round;
+}
+
+.v-pathways .pw-node rect { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1; }
+.v-pathways .pw-node.is-converter rect { stroke: var(--text-3); }
+.v-pathways .pw-node.is-source rect { fill: var(--surface-2); }
+.v-pathways .pw-node.is-product rect { stroke: var(--accent); stroke-width: 2; fill: var(--accent-soft); }
+.v-pathways .pw-node.is-coproduct rect { stroke: var(--pos); }
+.v-pathways .pw-node.is-waste rect { stroke-dasharray: 3 2; fill: var(--surface-2); }
+.v-pathways .pw-node-label { font-size: 12px; font-weight: 600; fill: var(--text); }
+.v-pathways .pw-node-kwh { fill: var(--warn); }
+.v-pathways .pw-node-sub { font-size: 10.5px; fill: var(--text-3); font-variant-numeric: tabular-nums; }
+.v-pathways .pw-node.is-waste .pw-node-label { fill: var(--text-2); font-weight: 500; }
+.v-pathways .pw-origin { fill: var(--origin-intermediate); }
+.v-pathways .pw-origin[data-origin="ocean"] { fill: var(--origin-ocean); }
+.v-pathways .pw-origin[data-origin="brine"] { fill: var(--origin-brine); }
+.v-pathways .pw-origin[data-origin="air"] { fill: var(--origin-air); }
+.v-pathways .pw-origin[data-origin="crust"] { fill: var(--origin-crust); }
+.v-pathways .pw-origin[data-origin="water"] { fill: var(--origin-water); }
+
+@media (max-width: 680px) {
+  .v-pathways .pw-filters input[type="search"] { width: 100%; }
+  .v-pathways .pw-filters select { flex: 1; }
+  .v-pathways .pw-count { margin-left: 0; }
+  .v-pathways .pw-bar { grid-template-columns: 70px 1fr auto; }
+  .v-pathways .pw-name { min-width: 160px; }
+}

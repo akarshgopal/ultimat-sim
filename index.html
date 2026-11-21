@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Molecular Foundry</title>
+  <meta name="description" content="Simulate a company that makes the world's materials from sunlight, seawater, air and rock.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css?v=a62a2da1fb67">
+  <link rel="stylesheet" href="css/abundance.css?v=a62a2da1fb67">
+  <link rel="stylesheet" href="css/company.css?v=a62a2da1fb67">
+  <link rel="stylesheet" href="css/energy.css?v=a62a2da1fb67">
+  <link rel="stylesheet" href="css/designs.css?v=a62a2da1fb67">
+  <link rel="stylesheet" href="css/pathways.css?v=a62a2da1fb67">
+  <link rel="stylesheet" href="css/sites.css?v=a62a2da1fb67">
+  <link rel="stylesheet" href="css/markets.css?v=a62a2da1fb67">
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="#/company">Molecular Foundry</a>
+    <nav class="app-nav" aria-label="Views"></nav>
+    <span class="header-spacer"></span>
+    <span class="sim-status" id="simStatus" role="status"></span>
+    <button class="icon-button" id="themeToggle" type="button">Dark</button>
+  </header>
+  <main id="view" class="app-main"></main>
+
+  <!-- data -->
+  <script src="data/pathways.js?v=a62a2da1fb67"></script>
+  <script src="data/markets.js?v=a62a2da1fb67"></script>
+  <script src="data/sites.js?v=a62a2da1fb67"></script>
+  <script src="data/bom.js?v=a62a2da1fb67"></script>
+  <!-- engine -->
+  <script src="engine/utilization.js?v=a62a2da1fb67"></script>
+  <script src="engine/company.js?v=a62a2da1fb67"></script>
+  <script src="engine/designs/electrolyzer.js?v=a62a2da1fb67"></script>
+  <script src="engine/designs/haber-bosch.js?v=a62a2da1fb67"></script>
+  <script src="engine/designs/dri-shaft.js?v=a62a2da1fb67"></script>
+  <script src="engine/designs/pellet-plant.js?v=a62a2da1fb67"></script>
+  <script src="engine/designs/dac.js?v=a62a2da1fb67"></script>
+  <script src="engine/designs/synthesis.js?v=a62a2da1fb67"></script>
+  <script src="engine/designs/urea.js?v=a62a2da1fb67"></script>
+  <script src="engine/designs/smelter.js?v=a62a2da1fb67"></script>
+  <!-- ui -->
+  <script src="js/ui/kit.js?v=a62a2da1fb67"></script>
+  <script src="js/ui/charts.js?v=a62a2da1fb67"></script>
+  <script src="js/store.js?v=a62a2da1fb67"></script>
+  <script>globalThis.Views = {};</script>
+  <!-- views -->
+  <script src="js/views/abundance.js?v=a62a2da1fb67"></script>
+  <script src="js/views/company.js?v=a62a2da1fb67"></script>
+  <script src="js/views/energy.js?v=a62a2da1fb67"></script>
+  <script src="js/views/designs.js?v=a62a2da1fb67"></script>
+  <script src="js/views/pathways.js?v=a62a2da1fb67"></script>
+  <script src="js/views/sites.js?v=a62a2da1fb67"></script>
+  <script src="js/views/markets.js?v=a62a2da1fb67"></script>
+  <!-- shell (last) -->
+  <script src="js/app.js?v=a62a2da1fb67"></script>
+</body>
+</html>

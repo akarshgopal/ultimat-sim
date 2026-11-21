@@ -28,7 +28,7 @@
 
       root.append(el('div', { class: 'view-title' }, [
         el('h1', { text: 'Designs' }),
-        el('p', { text: 'Engineer the equipment that gates abundance. Knobs → bill of materials → $ per kg/day, kWh/kg, idiot index → the company simulation.' }),
+        el('p', { text: 'Engineer the equipment that gates abundance. Pick a unit, turn its knobs, and see the bill of materials, $ per kg/day of capacity, kWh/kg and idiot index. Changes stay on this page until you press “Use this design”; units in use are marked ●.' }),
       ]));
       root.append(el('nav', { class: 'ds-tabs segmented', 'aria-label': 'Designs' }, ids.map(k => el('a', {
         href: href('designs', k), text: Store.DESIGNS[k].name, 'aria-current': k === id ? 'page' : null,
@@ -103,12 +103,12 @@
       const chartHost = el('div');
       const bomHost = el('div');
       const nextHost = el('div');
-      const bomCard = UI.card('Bill of materials', '', bomHost);
+      const bomCard = UI.card('Bill of materials', 'what the unit is made of. Mfg × = cost to make the part ÷ its raw materials; BoP = balance of plant, everything around the core unit.', bomHost);
       const main = el('div', { class: 'stack' }, [
         kpis,
         isElectrolyzer ? UI.card('Cost of hydrogen vs current density', 'solar-only $/kg at the selected site; stack + PV sized together by the utilization model; dot = this design', chartHost) : null,
         bomCard,
-        UI.card('What still blocks world tonnage', 'blocked markets in the current scenario by their largest cost item per kg; units with a design are marked', nextHost),
+        UI.card('What still blocks world tonnage', 'markets that do not pay back in the current scenario, by their largest cost per kg; equipment that has a design here is marked', nextHost),
       ]);
       root.append(el('div', { class: 'grid grid-sidebar' }, [panel, main]));
 
@@ -134,7 +134,7 @@
           !own.has('Energy') && UI.kpi('Energy', UI.num(d.kWhPerKg, 3) + ' kWh/kg', recipe ? `recipe ${UI.num(recipe.kWhPerKg, 3)} kWh/kg` : ''),
         ].filter(Boolean);
         const extra = [...(d.kpis || []).map(k => UI.kpi(k.label, k.value, k.sub)),
-          UI.kpi('In the simulator', 'capex ×' + UI.num(Object.values(o)[0]?.capexFactor, 2), factors)];
+          UI.kpi('Effect if used', 'capex ×' + UI.num(Object.values(o)[0]?.capexFactor, 2), 'vs the recipe unit: ' + factors)];
         if (isElectrolyzer) {
           const site = Store.siteById.get(siteId);
           const pv = pvPrice();
@@ -172,15 +172,21 @@
           // Bought-in rows (no material) have no mass or materials cost of their own.
           { key: 'kg', label: 'kg', num: true, get: r => r.kg ?? -1, render: r => (!r.material || r.kg == null ? '—' : UI.num(r.kg, 3)) },
           { key: 'mat', label: 'Materials $', num: true, get: r => r.usdMaterials ?? -1, render: r => (!r.material || r.usdMaterials == null ? '—' : UI.usd(r.usdMaterials, 3)) },
-          { key: 'factor', label: 'Mfg ×', num: true, get: r => r.manufacturing ?? -1, render: r => (r.manufacturing == null ? '—' : UI.num(r.manufacturing, 2) + '×') },
+          { key: 'factor', label: 'Mfg ×', num: true, title: 'Manufacturing markup: cost to make the part ÷ its raw materials', get: r => r.manufacturing ?? -1, render: r => (r.manufacturing == null ? '—' : UI.num(r.manufacturing, 2) + '×') },
           { key: 'usd', label: '$', num: true, get: r => r.usd, render: r => el('strong', { text: UI.usd(r.usd, 3) }) },
           { key: 'share', label: 'Share', num: true, get: r => r.usd / total, render: r => UI.pct(r.usd / total, 0) },
         ], rows, { sortKey: 'usd', sortDir: 'desc', compact: true }));
 
         const active = Store.scenario.ds?.[id];
-        useNote.textContent = active
-          ? `The company simulation uses: ${active.preset}${Object.keys(active.overrides || {}).length ? ' + edits' : ''} (${UI.usd(D.design(Store.designParams(id, active)).installedUsdPerKgDay)} per kg/day).`
-          : `The company simulation uses the recipe ${D.units.join(', ')}.`;
+        const applied = active && active.preset === preset && JSON.stringify(active.overrides || {}) === JSON.stringify(overrides);
+        useBtn.disabled = !!applied;
+        clearBtn.disabled = !active;
+        useNote.classList.toggle('is-pending', !applied);
+        useNote.textContent = applied
+          ? `In use: the company simulation runs this design (${UI.usd(D.design(Store.designParams(id, active)).installedUsdPerKgDay)} per kg/day).`
+          : active
+            ? `Not applied yet: the simulation still runs an earlier version (${active.preset}${Object.keys(active.overrides || {}).length ? ' + edits' : ''}). Press “Use this design” to apply these knobs.`
+            : `Not applied: the simulation still uses the recipe ${D.units.join(', ')}. Press “Use this design” to apply it.`;
         drawNext();
       }
 

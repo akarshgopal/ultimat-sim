@@ -66,7 +66,7 @@
 
       root.append(el('div', { class: 'view-title' }, [
         el('h1', { text: 'Energy' }),
-        el('p', { text: 'Think in kWh and $/kWh: what each electricity price unlocks, and what else stands in the way.' }),
+        el('p', { text: 'Think in kWh and $/kWh: what each electricity price unlocks, and what else stands in the way. The levers below change the scenario on every page.' }),
       ]));
 
       // ---------------------------------------------------------------- levers
@@ -89,7 +89,7 @@
         el('div', { class: 'en-levers' }, [
           el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Solar electricity' }), energySeg]),
           el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Equipment cost (electrolyzers, DAC, desal, process)' }), equipSeg]),
-          el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Margins: cap every cost at raw materials × (idiot index)' }), marginSeg]),
+          el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Cost cap: every cost ≤ raw materials × this (idiot index)' }), marginSeg]),
         ]),
         el('label', { class: 'check' }, [loopBox, el('span', {}, ['Terraform loop',
           el('small', { text: 'The company’s own steel, glass, aluminium, copper, polysilicon, lithium and cement lower commodity prices, and so the materials floors, year by year.' })])]),
@@ -100,23 +100,23 @@
       // ---------------------------------------------------------------- idiot index by class
       const iiHost = el('div');
       root.append(UI.card('Idiot index by cost class',
-        'installed cost today ÷ raw materials at commodity prices (data/bom.js); the target caps each class at materials × target',
+        'what each piece of equipment costs installed, divided by what its raw materials cost at commodity prices (data/bom.js). A high index means the price is mostly manufacturing and margin, not material: room to get cheaper. The cost cap above clamps each class at materials × cap.',
         iiHost));
 
       // ---------------------------------------------------------------- unlock curve
       const curveHost = el('div');
       root.append(UI.card('World material demand unlocked by cheaper electricity',
-        'Mt/yr of world demand in markets where at least one pathway is feasible at that price (best site, year-0 equipment and feedstock). One line per equipment-cost multiplier.',
+        'Mt/yr of world demand in markets where at least one pathway pays back at that electricity price (best site, year-0 equipment and feedstock). Electricity gets cheaper to the right. One line per equipment-cost multiplier.',
         curveHost));
 
       // ---------------------------------------------------------------- unlock table + cost structure
       const tableHost = el('div');
       root.append(UI.card('Break-even electricity price by pathway',
-        'the $/kWh below which the pathway’s best site pays back its capital (NPV ≥ 0); “never” = infeasible even with free electricity',
+        'the electricity price below which the pathway’s best site pays back its capital (NPV ≥ 0), at each equipment-cost multiplier. “any” = pays back even at the highest price tested; “never” = not even with free electricity. Faded rows never pay back. Click a name for the pathway.',
         tableHost));
       const costHost = el('div');
       root.append(UI.card('Where each kg’s cost goes at the current scenario',
-        'gross cost per kg as a share of the market price, by driver; bars past the price line are not feasible',
+        'cost per kg before co-product sales, split by driver and drawn against the market price (black tick); bars that pass the tick do not pay back unless co-products cover the gap',
         costHost));
 
       const CLASS_LABELS = {
@@ -140,7 +140,7 @@
           { key: 'cls', label: 'Cost class', get: r => CLASS_LABELS[r.cls] || r.cls, render: r => [CLASS_LABELS[r.cls] || r.cls, el('span', { class: 'cell-sub', text: 'per ' + r.c.unit })] },
           { key: 'today', label: 'Today', num: true, get: r => r.c.todayUsdPerUnit, render: r => money(r.c.todayUsdPerUnit, r.c.unit) },
           { key: 'materials', label: 'Raw materials', num: true, get: r => r.materials, render: r => money(r.materials, r.c.unit) },
-          { key: 'ii', label: 'Idiot index', num: true, get: r => r.ii, render: r => el('strong', { text: UI.num(r.ii, 2) + '×' }) },
+          { key: 'ii', label: 'Idiot index', num: true, title: 'Installed cost ÷ raw-material cost', get: r => r.ii, render: r => el('strong', { text: UI.num(r.ii, 2) + '×' }) },
           { key: 'capped', label: s.ii > 0 ? `At ${s.ii}× materials` : 'Scenario price', num: true, get: r => r.capped,
             render: r => el('span', { class: r.capped < r.c.todayUsdPerUnit ? 'is-pos' : '', text: money(r.capped, r.c.unit) + (r.capped < r.c.todayUsdPerUnit ? ` (−${UI.pct(1 - r.capped / r.c.todayUsdPerUnit, 0)})` : '') }) },
           { key: 'top', label: 'Main materials', render: r => el('span', { class: 'muted', text: r.top.map(([m, v]) => `${m} ${money(v, r.c.unit)}`).join(' · ') }) },

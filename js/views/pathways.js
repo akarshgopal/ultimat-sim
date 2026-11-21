@@ -146,15 +146,15 @@
         ]),
       },
       {
-        key: 'feeds', label: 'Feeds', title: 'Feed origins and the share of feed mass from quasi-infinite sources', get: r => r.infinite,
+        key: 'feeds', label: 'Feeds', title: 'Where the feeds come from; % = share of feed mass from effectively unlimited sources (ocean, brine, air, rock, water)', get: r => r.infinite,
         render: r => el('div', { class: 'pw-origins' }, [
           ...r.origins.map(o => el('span', { class: 'pw-chip', title: UI.originLabel(o) }, [UI.originDot(o), el('span', { text: UI.originLabel(o) })])),
-          el('span', { class: 'cell-sub', text: pct0(r.infinite) + ' infinite' }),
+          el('span', { class: 'cell-sub', text: pct0(r.infinite) + ' unlimited' }),
         ]),
       },
-      { key: 'kwh', label: 'kWh/kg', num: true, get: r => r.kWh, render: r => UI.num(r.kWh) },
+      { key: 'kwh', label: 'kWh/kg', num: true, title: 'Electricity plus heat per kg of product', get: r => r.kWh, render: r => UI.num(r.kWh) },
       {
-        key: 'cost', label: 'Cost $/kg', num: true, title: 'Levelized cost net of co-product credit (gross below) at the best site, year 0', get: r => r.cost,
+        key: 'cost', label: 'Net cost $/kg', num: true, title: 'Full cost per kg including capital, after selling co-products (gross, before co-products, below) at the best site, year 0', get: r => r.cost,
         render: r => r.rank ? [UI.usdKg(r.cost), el('span', { class: 'cell-sub', text: r.rank.coproductCreditUsdPerKg > 0 ? 'gross ' + UI.usdKg(r.rank.grossCostUsdPerKg) : '' })] : '—',
       },
       { key: 'price', label: 'Price', num: true, get: r => r.price, render: r => UI.usdKg(r.price) },
@@ -206,7 +206,7 @@
         UI.kpi('Not feasible today', String(counts.infeasible), 'cost above price, year 0'),
         UI.kpi('Excluded', String(counts.excluded), 'by the scenario'),
       );
-      titleNote.textContent = `Per-kg recipes reduced from plant models. Cost and price at each pathway’s cheapest site in ${Company.DEFAULTS.startYear}, ${RANK_SIZE_MULTIPLE}× reference size.`;
+      titleNote.textContent = `Each pathway is one recipe for one product, reduced from a plant model to per-kg inputs. Cost and price are at its cheapest site in ${Company.DEFAULTS.startYear}, at ${RANK_SIZE_MULTIPLE}× reference size. Click a row for the recipe, best sites and flowsheet.`;
     }
 
     // Remember the table's current sort across filter changes and visits.
@@ -613,12 +613,12 @@
       kpis,
       el('div', { class: 'grid grid-2 pw-grid' }, [
         UI.card('Recipe', 'per kg of ' + UI.productName(pathway.product), recipe(UI, Store, pathway, href)),
-        UI.card('Cost vs year', 'at the best site, with this run’s PV price and cost factors', [chartHost, chartNote]),
+        UI.card('Cost vs year', 'at the best site, with this run’s solar price and cost factors; net = after selling co-products, gross = before', [chartHost, chartNote]),
       ]),
       UI.card('Operation on solar', 'how the plant runs on sunlight alone at its best site, year-0 costs', opsHost),
       el('div', { class: 'grid grid-2 pw-grid' }, [
         UI.card('Best sites', `top 5 by net cost, ${Company.DEFAULTS.startYear}`, sitesHost),
-        UI.card('Plants built', 'in the current simulation', plantsHost),
+        UI.card('Plants built', 'in the current simulation, in build order', plantsHost),
       ]),
       UI.card('Flowsheet', `solved plant model, flows per kg of ${UI.productName(pathway.product)}; edge width ∝ √kg`, [
         el('div', { class: 'pw-fs-legend' }, [
@@ -649,9 +649,9 @@
         UI.kpi('Price', UI.usdKg(rank?.priceUsdPerKg ?? market?.priceUsdPerKg) + '/kg', market ? `world market ${UI.tonnes(market.worldDemandTPerYear)}/yr` : ''),
         UI.kpi('Margin', rank ? UI.usdKg(rank.marginUsdPerKg) : '—', rank && rank.priceUsdPerKg > 0 ? UI.pct(rank.marginUsdPerKg / rank.priceUsdPerKg, 0) + ' of price' : ''),
         UI.kpi('Electricity', UI.num(pathway.electricityKWhPerKg) + ' kWh/kg', rank?.utilization
-          ? `${rank.utilization.strategy} · output ${UI.pct(rank.utilization.outputFactor, 0)} of nameplate`
+          ? `${rank.utilization.strategy === 'sun-following' ? 'follows the sun' : 'runs 24 h on PV + storage'} · output ${UI.pct(rank.utilization.outputFactor, 0)} of nameplate`
           : (pathway.heatKWhPerKg > 0 ? `+ ${UI.num(pathway.heatKWhPerKg)} kWh/kg heat` : 'PV-powered')),
-        UI.kpi('Capex ex-PV', UI.usd(capexPerKgDay), `per kg/day · plant ${UI.tonnes(size * 365 / 1000)}/yr`),
+        UI.kpi('Equipment capex', UI.usd(capexPerKgDay), `per kg/day of capacity, excl. solar · plant ${UI.tonnes(size * 365 / 1000)}/yr`),
         UI.kpi('Plants built', result ? String(plants.length) : '…', plants.length ? `${UI.tonnes(plants.reduce((s, p) => s + p.sizeKgPerDay * 365 / 1000, 0))}/yr capacity` : ''),
       );
 
@@ -665,8 +665,8 @@
       } else {
         sitesHost.replaceChildren(UI.sortableTable([
           { key: 'site', label: 'Site', get: r => r.site.name, render: r => [el('a', { href: href('sites', r.site.id), text: r.site.name }), el('span', { class: 'cell-sub', text: r.site.region || '' })] },
-          { key: 'pv', label: 'PV kWh/kWp·d', num: true, get: r => r.site.pvKWhPerKWpDay, render: r => UI.num(r.site.pvKWhPerKWpDay) },
-          { key: 'cost', label: 'Net cost', num: true, get: r => r.ev.lcopUsdPerKg, render: r => UI.usdKg(r.ev.lcopUsdPerKg) },
+          { key: 'pv', label: 'Solar kWh/kWp·d', num: true, title: 'Solar yield: kWh per day from each kWp of panels', get: r => r.site.pvKWhPerKWpDay, render: r => UI.num(r.site.pvKWhPerKWpDay) },
+          { key: 'cost', label: 'Net cost', num: true, title: 'Full cost per kg after selling co-products', get: r => r.ev.lcopUsdPerKg, render: r => UI.usdKg(r.ev.lcopUsdPerKg) },
           { key: 'margin', label: 'Margin', num: true, get: r => r.ev.marginUsdPerKg, render: r => el('span', { class: r.ev.marginUsdPerKg >= 0 ? 'is-pos' : 'is-neg', text: UI.usdKg(r.ev.marginUsdPerKg) }) },
           { key: 'buy', label: 'Make vs buy', render: r => el('span', { class: 'muted', text: UI.inHouseText(r.ev.integration) || (r.ev.purchasedIntermediates.length ? 'buys ' + r.ev.purchasedIntermediates.join(', ') : '—') }) },
         ], sites.slice(0, 5), { sortKey: 'cost', sortDir: 'asc', compact: true }));
@@ -685,9 +685,9 @@
           { key: 'built', label: 'Built', num: true, get: p => p.builtYear, render: p => `${p.builtYear}${p.onlineYear !== p.builtYear ? ' → ' + p.onlineYear : ''}` },
           { key: 'size', label: 't/yr', num: true, get: p => p.sizeKgPerDay, render: p => UI.num(p.sizeKgPerDay * 365 / 1000) },
           { key: 'capex', label: 'Capex', num: true, get: p => p.capexUsd, render: p => UI.usd(p.capexUsd) },
-          { key: 'npv', label: 'NPV at build', num: true, get: p => p.npvAtBuildUsd, render: p => UI.usd(p.npvAtBuildUsd) },
+          { key: 'npv', label: 'NPV at build', num: true, title: 'Lifetime value of the plant when it was built, discounted at the scenario rate', get: p => p.npvAtBuildUsd, render: p => UI.usd(p.npvAtBuildUsd) },
           { key: 'int', label: 'Make vs buy', render: p => el('span', { class: 'muted', text: UI.inHouseText(p.integration) || '—' }) },
-        ], plants, { sortKey: 'id', sortDir: 'asc', compact: true }));
+        ], plants, { sortKey: 'id', sortDir: 'asc', compact: true, limit: 10 }));
       }
 
       // Cost vs year.
@@ -740,7 +740,7 @@
       el('dt', { text: 'Variable O&M' }), el('dd', { text: `${UI.usdKg(pathway.variableOmUsdPerKg)}/kg` }),
       el('dt', { text: 'Asset life' }), el('dd', { text: `${UI.num(pathway.assetLifeYears)} yr` }),
       el('dt', { text: 'Reference output' }), el('dd', { text: `${UI.num(pathway.refOutputKgPerDay)} kg/day` }),
-      el('dt', { text: 'Infinite-source share' }), el('dd', { text: pct0(pathway.infiniteSourceShare) + ' of feed mass' }),
+      el('dt', { text: 'From unlimited sources' }), el('dd', { text: pct0(pathway.infiniteSourceShare) + ' of feed mass (ocean, brine, air, rock, water)' }),
     ]));
 
     out.push(el('h3', { class: 'pw-h3', text: 'Feeds' }));
@@ -773,7 +773,7 @@
       ])));
     }
 
-    out.push(el('h3', { class: 'pw-h3', text: `Capex by technology · ${UI.usd(capexTotal)} per kg/day (ex-PV)` }));
+    out.push(el('h3', { class: 'pw-h3', text: `Capex by technology · ${UI.usd(capexTotal)} per kg/day (excl. solar)` }));
     const max = Math.max(...Object.values(capex), 1e-9);
     out.push(el('div', { class: 'pw-bars' }, Object.entries(capex).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([cls, v]) => {
       const bar = el('span', { class: 'pw-bar-fill' });

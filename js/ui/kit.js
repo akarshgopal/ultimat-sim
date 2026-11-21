@@ -79,7 +79,8 @@
   const originDot = id => el('span', { class: 'origin-dot', 'data-origin': id, title: originLabel(id) });
   function qualityTag(quality) {
     if (!quality) return null;
-    return el('span', { class: 'tag ' + (quality === 'cited' ? 'is-cited' : 'is-screening'), text: quality });
+    return el('span', { class: 'tag ' + (quality === 'cited' ? 'is-cited' : 'is-screening'), text: quality,
+      title: quality === 'cited' ? 'From a published source (see the data file)' : 'Screening estimate: a reasoned guess, not from a specific source' });
   }
   // "makes H₂ in-house ($1.62 vs $2.08 bought)"
   function inHouseText(integration) {
@@ -89,7 +90,8 @@
 
   // ---------------------------------------------------------------- tables
   // columns: [{ key, label, num?: bool, get: row → sortable value, render?: row → Node|string, title? }]
-  // opts: { sortKey, sortDir: 'asc'|'desc', rowHref?: row → '#/…', rowClass?: row → string, compact? }
+  // opts: { sortKey, sortDir: 'asc'|'desc', rowHref?: row → '#/…', rowClass?: row → string, compact?,
+  //         limit?: show the first n rows (after sorting) with a "Show all" button }
   function sortableTable(columns, rows, opts = {}) {
     let sortKey = opts.sortKey || null;
     let sortDir = opts.sortDir || 'desc';
@@ -97,6 +99,9 @@
     const thead = el('thead');
     const tbody = el('tbody');
     table.append(thead, tbody);
+    let expanded = !(opts.limit > 0 && rows.length > opts.limit);
+    const more = expanded ? null : el('button', { type: 'button', class: 'link-button table-more',
+      text: `Show all ${rows.length} rows`, onclick: () => { expanded = true; more.remove(); draw(); } });
     const draw = () => {
       const head = el('tr');
       for (const c of columns) {
@@ -127,7 +132,7 @@
           return String(va ?? '').localeCompare(String(vb ?? '')) * dir;
         });
       }
-      tbody.replaceChildren(...sorted.map(row => {
+      tbody.replaceChildren(...(expanded ? sorted : sorted.slice(0, opts.limit)).map(row => {
         const href = opts.rowHref?.(row);
         const tr = el('tr', { class: opts.rowClass?.(row) || null, 'data-href': href || null });
         if (href) tr.addEventListener('click', ev => { if (!ev.target.closest('a,button,input')) location.hash = href; });
@@ -139,7 +144,8 @@
       }));
     };
     draw();
-    return el('div', { class: 'table-scroll' }, table);
+    const wrap = el('div', { class: 'table-scroll' }, table);
+    return more ? el('div', {}, [wrap, more]) : wrap;
   }
 
   function kpi(label, value, sub) {

@@ -295,3 +295,8 @@ details.chart-data summary { color: var(--text-3); cursor: pointer; }
 
 /* A field whose explanation is in its tooltip: dotted underline + help cursor so the hover is discoverable. */
 .field.has-hint .field-label > span:first-child { text-decoration: underline dotted var(--text-3); text-underline-offset: 3px; cursor: help; }
+
+/* Column headers that explain themselves on hover; clickable rows highlight. */
+.data-table thead th[title] { text-decoration: underline dotted var(--text-3); text-underline-offset: 3px; }
+.data-table tbody tr[data-href]:hover td { background: var(--surface-2); }
+.table-more { margin-top: 8px; font-size: 13px; }

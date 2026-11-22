@@ -65,6 +65,8 @@
       );
 
       const kpiSlot = el('div', { class: 'kpis' });
+      const pinSlot = el('section', { class: 'card pin-compare sim-result', hidden: true });
+      const downloadRow = el('div', { class: 'row download-row' });
       const compareSlot = el('div', { class: 'compare-body' });
       const compare = el('details', { class: 'compare' }, [el('summary'), compareSlot]);
       const abundanceSlot = el('div', { class: 'stack' });
@@ -74,7 +76,7 @@
       mainCol.append(
         el('section', { class: 'section', 'aria-labelledby': 'co-abundance' }, [
           el('div', { class: 'section-head' }, [el('h2', { id: 'co-abundance', text: 'Abundance' }), el('p', { class: 'muted', text: 'What the company makes, and what it does to world supply and prices.' })]),
-          kpiSlot, compare, abundanceSlot,
+          kpiSlot, downloadRow, pinSlot, compare, abundanceSlot,
         ]),
         el('section', { class: 'section', 'aria-labelledby': 'co-feasible' }, [
           el('div', { class: 'section-head' }, [el('h2', { id: 'co-feasible', text: 'Feasibility' }), el('p', { class: 'muted', text: 'The constraint: every plant pays back its capital and the company funds its own growth.' })]),
@@ -235,6 +237,90 @@
         changedCount.textContent = changed ? `${changed} changed` : 'defaults';
       }
 
+      // ------------------------------------------------------------ versus the pinned scenario
+      // Headline and per-material comparison with the scenario pinned from the header.
+      let pinKey = null;
+      function renderPinned() {
+        const pin = Store.pinned;
+        const result = Store.result;
+        const key = pin ? `${pin.query}|${Boolean(pin.result)}|${result ? result.ms + ':' + result.plants.length : ''}|${Store.busy}` : null;
+        if (key === pinKey) return;
+        pinKey = key;
+        if (!pin) { pinSlot.replaceChildren(); pinSlot.hidden = true; return; }
+        pinSlot.hidden = false;
+        const head = el('div', { class: 'card-head' }, [el('div', {}, [
+          el('h3', { text: 'Versus your pinned scenario' }),
+          el('p', { text: Store.describeDiff(pin.scenario, Store.scenario).join(' · ') || 'Same inputs as the pinned scenario: change one to compare.' }),
+        ])]);
+        if (!pin.result || !result) { pinSlot.replaceChildren(head, el('p', { class: 'muted', text: 'Simulating…' })); return; }
+        const a = headline(pin.result);
+        const b = headline(result);
+        const delta = (x, y) => (x > 0 && Number.isFinite(y) ? (y - x) / x : null);
+        const pct = d => (d == null ? '—' : (d > 0 ? '+' : d < 0 ? '−' : '±') + Math.abs(d * 100).toFixed(1) + '%');
+        const rows = [
+          ['Material, final year', a.finalT, b.finalT, tonnesPerYear],
+          ['Cumulative material', a.cumT, b.cumT, mt],
+          ['Materials made', a.materials, b.materials, v => String(v)],
+          ['Biggest price relief', a.relief.v, b.relief.v, UI.pct],
+          ['Plants', a.plants, b.plants, v => String(v)],
+          ['PV', a.pvGWp, b.pvGWp, v => UI.num(v) + ' GWp'],
+          ['Land', a.landHa, b.landHa, km2],
+          ['Net assets, final year', a.netAssets, b.netAssets, UI.usd],
+        ];
+        const headTable = UI.sortableTable([
+          { key: 'label', label: 'Headline', get: r => r[0] },
+          { key: 'pinned', label: 'Pinned', num: true, csv: r => r[3](r[1]), get: r => r[1], render: r => r[3](r[1]) },
+          { key: 'now', label: 'This run', num: true, csv: r => r[3](r[2]), get: r => r[2], render: r => r[3](r[2]) },
+          { key: 'delta', label: 'Δ', num: true, get: r => delta(r[1], r[2]) ?? 0, render: r => el('span', { class: 'muted', text: pct(delta(r[1], r[2])) }) },
+        ], rows, { compact: true, csv: 'versus-pinned-headline' });
+        // Final-year output per market, both runs.
+        const outA = outputByMarket(pin.result.timeline.at(-1) || {}, pin.result.config);
+        const outB = outputByMarket(result.timeline.at(-1) || {}, result.config);
+        const keys = [...new Set([...Object.keys(outA), ...Object.keys(outB)])].filter(k => (outA[k] || 0) + (outB[k] || 0) > 0);
+        const matTable = UI.sortableTable([
+          { key: 'name', label: 'Material', get: k => UI.productName(k), render: k => el('a', { href: href('markets', k), text: label(k) }) },
+          { key: 'a', label: 'Pinned, final year', num: true, get: k => outA[k] || 0, render: k => tonnesPerYear(outA[k] || 0) },
+          { key: 'b', label: 'This run, final year', num: true, get: k => outB[k] || 0, render: k => tonnesPerYear(outB[k] || 0) },
+          { key: 'd', label: 'Change', num: true, get: k => (outB[k] || 0) - (outA[k] || 0), render: k => {
+            const d = (outB[k] || 0) - (outA[k] || 0);
+            return el('span', { class: d > 0 ? 'is-pos' : d < 0 ? 'is-neg' : 'muted', text: (d > 0 ? '+' : d < 0 ? '−' : '') + tonnesPerYear(Math.abs(d)) });
+          } },
+        ], keys, { sortKey: 'd', sortDir: 'desc', compact: true, limit: 12, csv: 'versus-pinned-materials' });
+        pinSlot.replaceChildren(head, el('div', { class: 'grid grid-2' }, [headTable, matTable]));
+      }
+
+      // ------------------------------------------------------------ downloads
+      const slug = () => (Store.toQuery(Store.scenario) || 'defaults').replace(/[^a-z0-9.=-]+/gi, '_').slice(0, 60);
+      // Year-by-year timeline flattened to one row per year: scalars as is, per-product maps as
+      // "<field>.<product>" columns.
+      function timelineCsv(result) {
+        const cols = [];
+        const seen = new Set();
+        const add = c => { if (!seen.has(c)) { seen.add(c); cols.push(c); } };
+        const flat = result.timeline.map(row => {
+          const out = {};
+          for (const [k, v] of Object.entries(row)) {
+            if (v && typeof v === 'object' && !Array.isArray(v)) {
+              for (const [k2, v2] of Object.entries(v)) if (typeof v2 === 'number') { out[k + '.' + k2] = v2; }
+            } else if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') out[k] = v;
+          }
+          return out;
+        });
+        for (const row of flat) for (const k of Object.keys(row)) add(k);
+        cols.sort((x, y) => (x === 'year' ? -1 : y === 'year' ? 1 : (x.includes('.') - y.includes('.')) || x.localeCompare(y)));
+        return UI.toCsv([cols, ...flat.map(row => cols.map(c => row[c]))]);
+      }
+      downloadRow.append(
+        el('span', { class: 'muted', text: 'Download this run:' }),
+        el('button', { type: 'button', class: 'link-button', text: 'year-by-year CSV',
+          onclick: () => Store.result && UI.downloadFile(`company-timeline-${slug()}.csv`, timelineCsv(Store.result), 'text/csv') }),
+        el('button', { type: 'button', class: 'link-button', text: 'full run (JSON)',
+          title: 'Scenario, summary, timeline and every plant built',
+          onclick: () => Store.result && UI.downloadFile(`company-run-${slug()}.json`, JSON.stringify({
+            app: 'Molecular Foundry', link: location.href, scenario: Store.scenario, ...Store.result,
+          }, null, 1), 'application/json') }),
+      );
+
       // ------------------------------------------------------------ compare
       let compareCache = null; // { query, other, head }
       const compareSummary = compare.querySelector('summary');
@@ -378,7 +464,7 @@
           { key: 'share', label: 'Share of world', num: true, get: r => r.share, render: shareCell },
           { key: 'relief', label: 'Price relief', num: true, get: r => r.relief, render: r => (r.relief == null ? '—' : UI.pct(r.relief)) },
           { key: 'demand', label: 'World demand', num: true, get: r => r.demand, render: r => tonnesPerYear(r.demand) },
-        ], rows, { sortKey: 't', sortDir: 'desc', compact: true });
+        ], rows, { sortKey: 't', sortDir: 'desc', compact: true, csv: 'company-materials' });
         table.classList.add('materials-table');
         return UI.card('Materials', `${rows.length} materials in ${last.year}; share bar fills at the ${UI.pct(ceiling)} ceiling`, table);
       }
@@ -454,11 +540,11 @@
             el('span', { class: 'cell-sub', text: label(groupOf(r.product, result.config)) }),
           ]) },
           { key: 'site', label: 'Site', get: r => siteName(r.siteId), render: r => el('a', { href: href('sites', r.siteId), text: siteName(r.siteId) }) },
-          { key: 'size', label: 't/d', num: true, get: r => r.sizeKgPerDay, render: r => UI.num(r.sizeKgPerDay / 1000) },
-          { key: 'capex', label: 'Capex', num: true, get: r => r.capexUsd, render: r => UI.usd(r.capexUsd) },
-          { key: 'npv', label: 'NPV', num: true, get: r => r.npvUsd, render: r => el('span', { class: r.npvUsd >= 0 ? '' : 'is-neg', text: UI.usd(r.npvUsd) }) },
+          { key: 'size', label: 't/d', csv: r => r.sizeKgPerDay / 1000, num: true, get: r => r.sizeKgPerDay, render: r => UI.num(r.sizeKgPerDay / 1000) },
+          { key: 'capex', label: 'Capex', csvLabel: 'Capex ($)', num: true, get: r => r.capexUsd, render: r => UI.usd(r.capexUsd) },
+          { key: 'npv', label: 'NPV', csvLabel: 'NPV ($)', num: true, get: r => r.npvUsd, render: r => el('span', { class: r.npvUsd >= 0 ? '' : 'is-neg', text: UI.usd(r.npvUsd) }) },
           { key: 'inhouse', label: 'In-house', get: r => (r.integration?.length ? 1 : 0), render: r => el('span', { class: 'inhouse', text: UI.inHouseText(r.integration) || '—' }) },
-        ], log, { sortKey: 'year', sortDir: 'asc', compact: true, limit: 25 });
+        ], log, { sortKey: 'year', sortDir: 'asc', compact: true, limit: 25, csv: 'company-build-log' });
         (logTable.querySelector('.table-scroll') || logTable).classList.add('build-log');
 
         buildSlot.replaceChildren(
@@ -509,6 +595,7 @@
       const draw = ({ scenario, result, busy }) => {
         syncPanel(scenario);
         renderCompareSummary();
+        renderPinned();
         if (!result) {
           if (!kpiSlot.childElementCount) kpiSlot.replaceChildren(el('div', { class: 'kpi' }, el('div', { class: 'kpi-label', text: 'Simulating…' })));
           return;

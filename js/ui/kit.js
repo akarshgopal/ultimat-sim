@@ -91,11 +91,35 @@
   // ---------------------------------------------------------------- tables
   // columns: [{ key, label, num?: bool, get: row → sortable value, render?: row → Node|string, title? }]
   // opts: { sortKey, sortDir: 'asc'|'desc', rowHref?: row → '#/…', rowClass?: row → string, compact?,
-  //         limit?: show the first n rows (after sorting) with a "Show all" button }
+  //         limit?: show the first n rows (after sorting) with a "Show all" button,
+  //         csv?: file name → a "Download CSV" button exporting every row in the current order }
+  // Column entries may be null (conditional columns). A column may add csv: row → value for export;
+  // otherwise numeric columns export their raw sort value and the rest their displayed text.
+  // csvLabel overrides the header in the export (to name the unit of a raw number).
   function sortableTable(columns, rows, opts = {}) {
+    columns = columns.filter(Boolean);
     let sortKey = opts.sortKey || null;
     let sortDir = opts.sortDir || 'desc';
     const table = el('table', { class: 'data-table' + (opts.compact ? ' compact' : '') });
+    let sorted = rows;
+    function sortRows() {
+      const col = columns.find(c => c.key === sortKey);
+      const out = rows.slice();
+      if (col?.get) {
+        const dir = sortDir === 'asc' ? 1 : -1;
+        out.sort((a, b) => {
+          const va = col.get(a);
+          const vb = col.get(b);
+          if (typeof va === 'number' || typeof vb === 'number') {
+            const na = Number.isFinite(va) ? va : -Infinity;
+            const nb = Number.isFinite(vb) ? vb : -Infinity;
+            return (na - nb) * dir;
+          }
+          return String(va ?? '').localeCompare(String(vb ?? '')) * dir;
+        });
+      }
+      return out;
+    }
     const thead = el('thead');
     const tbody = el('tbody');
     table.append(thead, tbody);
@@ -117,21 +141,7 @@
         head.append(th);
       }
       thead.replaceChildren(head);
-      const col = columns.find(c => c.key === sortKey);
-      const sorted = rows.slice();
-      if (col?.get) {
-        const dir = sortDir === 'asc' ? 1 : -1;
-        sorted.sort((a, b) => {
-          const va = col.get(a);
-          const vb = col.get(b);
-          if (typeof va === 'number' || typeof vb === 'number') {
-            const na = Number.isFinite(va) ? va : -Infinity;
-            const nb = Number.isFinite(vb) ? vb : -Infinity;
-            return (na - nb) * dir;
-          }
-          return String(va ?? '').localeCompare(String(vb ?? '')) * dir;
-        });
-      }
+      sorted = sortRows();
       tbody.replaceChildren(...(expanded ? sorted : sorted.slice(0, opts.limit)).map(row => {
         const href = opts.rowHref?.(row);
         const tr = el('tr', { class: opts.rowClass?.(row) || null, 'data-href': href || null });
@@ -145,7 +155,63 @@
     };
     draw();
     const wrap = el('div', { class: 'table-scroll' }, table);
-    return more ? el('div', {}, [wrap, more]) : wrap;
+    const csvBtn = opts.csv ? el('button', { type: 'button', class: 'link-button table-csv', text: 'Download CSV',
+      title: 'Every row, in the current sort order; numbers unformatted (shares and ratios as fractions)',
+      onclick: () => downloadFile(opts.csv.replace(/\.csv$/, '') + '.csv', toCsv([
+        columns.map(c => c.csvLabel || c.label),
+        ...sorted.map(row => columns.map(c => csvValue(c, row))),
+      ]), 'text/csv') }) : null;
+    if (!more && !csvBtn) return wrap;
+    return el('div', {}, [wrap, (more || csvBtn) ? el('div', { class: 'table-foot' }, [more, csvBtn]) : null]);
+  }
+
+  // ---------------------------------------------------------------- export
+  // Displayed text of a cell: its separate pieces (name and sub-line, tags, feed origins) joined by
+  // " · ", while a phrase whose text runs on into a link ("buys " + link) stays one piece.
+  function cellText(content) {
+    const td = el('td', {}, content == null ? [] : content);
+    const parts = [];
+    let joinNext = false;
+    const walk = node => {
+      for (const n of node.childNodes) {
+        if (n.nodeType === 3) {
+          const t = n.textContent.replace(/\s+/g, ' ');
+          if (!t.trim()) continue;
+          if (joinNext && parts.length) parts[parts.length - 1] += t; else parts.push(t);
+          joinNext = /\s$/.test(t) || /[,(]\s*$/.test(t);
+        } else if (n.nodeType === 1) {
+          const before = parts.length;
+          walk(n);
+          if (parts.length > before) joinNext = false;
+        }
+      }
+    };
+    walk(td);
+    return parts.map(t => t.trim()).filter(Boolean).join(' · ');
+  }
+  function csvValue(c, row) {
+    if (c.csv) return c.csv(row);
+    if (c.num && c.get) {
+      const v = c.get(row);
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+    }
+    return cellText(c.render ? c.render(row) : c.get ? c.get(row) : '');
+  }
+  function toCsv(rows) {
+    const cell = v => {
+      if (v == null || (typeof v === 'number' && !Number.isFinite(v))) return '';
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    return rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
+  }
+  function downloadFile(name, text, type = 'text/plain') {
+    const url = URL.createObjectURL(new Blob([text], { type: type + ';charset=utf-8' }));
+    const a = el('a', { href: url, download: name, hidden: true });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function kpi(label, value, sub) {
@@ -188,5 +254,6 @@
     num, usd, usdKg, pct, tonnes,
     ORIGINS, productName, shortName, pathwayLabel, originLabel, originDot, qualityTag, inHouseText,
     sortableTable, kpi, legend, meter, card,
+    toCsv, downloadFile,
   });
 })();

@@ -219,7 +219,61 @@
   let timer = 0;
   const listeners = new Set();
   const progressListeners = new Set();
-  const notify = () => { for (const fn of listeners) fn({ scenario, result, busy, progress }); };
+  const notify = () => { for (const fn of listeners) fn({ scenario, result, busy, progress, pinned }); };
+
+  // ---------------------------------------------------------------- pinned scenario (comparison)
+  // A scenario the user pins as a baseline: { scenario, query, result }. It rides in the URL as
+  // vs=<its query> (see urlQuery), and runs in its own worker so it never cancels the current run.
+  let pinned = null;
+  let pinWorker = null;
+  let pinSeq = 0;
+  function runPinned() {
+    const id = ++pinSeq;
+    const config = toConfig(pinned.scenario);
+    const finish = r => {
+      if (id !== pinSeq || !pinned) return;
+      pinned = { ...pinned, result: r };
+      notify();
+    };
+    if (workerOk) {
+      try {
+        pinWorker ||= new Worker('js/sim-worker.js');
+        const onMessage = ev => {
+          if (ev.data.id !== id || ev.data.progress) return;
+          pinWorker.removeEventListener('message', onMessage);
+          if (ev.data.result) finish(ev.data.result);
+        };
+        pinWorker.addEventListener('message', onMessage);
+        pinWorker.postMessage({ id, config });
+        return;
+      } catch { /* fall through to the main thread */ }
+    }
+    setTimeout(() => finish(Company.simulateCompany({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config })), 0);
+  }
+  function setPinned(s, r) {
+    pinned = { scenario: s, query: toQuery(s), result: r || null };
+    if (!pinned.result) runPinned();
+  }
+  // The URL query: the current scenario, plus vs=<pinned scenario's query> when one is pinned.
+  function urlQuery() {
+    const q = toQuery(scenario);
+    if (!pinned) return q;
+    const vs = new URLSearchParams({ vs: pinned.query }).toString();
+    return q ? q + '&' + vs : vs;
+  }
+  // Labelled differences between two scenarios, for "comparing with …" notes.
+  function describeDiff(a, b) {
+    const out = [];
+    for (const f of FIELDS) if (a[f.key] !== b[f.key]) out.push(`${f.label} ${a[f.key]} → ${b[f.key]}${f.unit ? ' ' + f.unit : ''}`);
+    if (a.objective !== b.objective) out.push(`objective ${a.objective} → ${b.objective}`);
+    if (JSON.stringify(a.ds || {}) !== JSON.stringify(b.ds || {})) out.push('equipment designs');
+    if (a.make !== b.make) out.push(b.make ? 'makes intermediates in-house' : 'buys intermediates');
+    if (a.infinite !== b.infinite) out.push(b.infinite ? 'infinite sources only' : 'all sources');
+    if (a.loop !== b.loop) out.push(b.loop ? 'Terraform loop on' : 'Terraform loop off');
+    if (a.origins.join() !== b.origins.join()) out.push('feed origins');
+    if (a.off.join() !== b.off.join()) out.push('pathways switched off');
+    return out;
+  }
 
   function runNow() {
     const id = ++seq;
@@ -309,7 +363,27 @@
     // Progress ticks (one per simulated year) go to these listeners only, not to subscribe(), so
     // views do not re-render on every tick.
     onProgress(fn) { progressListeners.add(fn); return () => progressListeners.delete(fn); },
-    load(query) { scenario = fromQuery(query); runNow(); },
+    load(query) {
+      scenario = fromQuery(query);
+      const vs = new URLSearchParams(query || '').get('vs');
+      if (vs == null) { pinned = null; pinSeq++; }
+      else if (!pinned || pinned.query !== toQuery(fromQuery(vs))) setPinned(fromQuery(vs), null);
+      runNow();
+    },
+    urlQuery,
+    describeDiff,
+    get pinned() { return pinned; },
+    // Pin the current scenario (and its result, if current) as the comparison baseline.
+    pin() { setPinned({ ...scenario }, busy ? null : result); notify(); },
+    unpin() { pinned = null; pinSeq++; notify(); },
+    // Make the pinned scenario current and pin the current one, reusing both results.
+    swap() {
+      if (!pinned) return;
+      const prev = pinned;
+      setPinned({ ...scenario }, busy ? null : result);
+      scenario = prev.scenario;
+      if (prev.result) { clearTimeout(timer); seq++; result = prev.result; busy = false; progress = null; notify(); } else runNow();
+    },
     update,
     reset() { scenario = defaults(); runNow(); },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },

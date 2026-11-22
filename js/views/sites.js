@@ -222,17 +222,17 @@
         { key: 'name', label: 'Site', get: s => s.name, render: s => el('span', {}, [el('a', { href: href('sites', s.id), text: s.name }), el('span', { class: 'cell-sub', text: s.id })]) },
         { key: 'region', label: 'Region', get: s => s.region || '' },
         { key: 'kind', label: 'Kind', get: s => kindLabel(s.kind) },
-        { key: 'solar', label: 'Solar', num: true, title: 'Solar yield: kWh per day from each kWp of panels (PVGIS)', get: s => s.pvKWhPerKWpDay, render: s => el('span', {}, [UI.num(s.pvKWhPerKWpDay, 3), el('span', { class: 'cell-sub', text: 'kWh/kWp·d' })]) },
-        { key: 'land', label: 'Land', num: true, title: 'Land price; grey “default” = no site-specific price, the engine default applies', get: s => s.landUsdPerHa, render: s => el('span', {}, [landText(UI, s), el('span', { class: 'cell-sub' }, UI.qualityTag(s.landSource?.quality) || 'default')]) },
+        { key: 'solar', label: 'Solar', csvLabel: 'Solar (kWh/kWp·day)', num: true, title: 'Solar yield: kWh per day from each kWp of panels (PVGIS)', get: s => s.pvKWhPerKWpDay, render: s => el('span', {}, [UI.num(s.pvKWhPerKWpDay, 3), el('span', { class: 'cell-sub', text: 'kWh/kWp·d' })]) },
+        { key: 'land', label: 'Land', csvLabel: 'Land ($/ha; 0 = engine default)', num: true, title: 'Land price; grey “default” = no site-specific price, the engine default applies', get: s => s.landUsdPerHa, render: s => el('span', {}, [landText(UI, s), el('span', { class: 'cell-sub' }, UI.qualityTag(s.landSource?.quality) || 'default')]) },
         { key: 'res', label: 'Resources', title: 'Seawater and/or brine the site can draw on', get: s => (s.coastal ? 2 : 0) + (s.brineAssayId ? 1 : 0), render: s => resourceTags(UI, s) },
         { key: 'plants', label: 'Plants', num: true, get: s => plants[s.id]?.length || 0 },
-        { key: 'landKm2', label: 'Suitable land', num: true, title: 'Land suitable for utility PV in the site’s catchment (World Bank/ESMAP Level 1)', get: s => s.suitableLandKm2 || 0, render: s => (s.suitableLandKm2 ? UI.num(s.suitableLandKm2) + ' km²' : '—') },
-        { key: 'pv', label: 'Solar built / allowed', num: true, title: 'GWp of solar built vs the most this site may build',  get: s => pv[s.id] || 0, render: s => pvMeter(UI, pv[s.id] || 0, cap[s.id]) },
+        { key: 'landKm2', label: 'Suitable land', csvLabel: 'Suitable land (km²)', num: true, title: 'Land suitable for utility PV in the site’s catchment (World Bank/ESMAP Level 1)', get: s => s.suitableLandKm2 || 0, render: s => (s.suitableLandKm2 ? UI.num(s.suitableLandKm2) + ' km²' : '—') },
+        { key: 'pv', label: 'Solar built / allowed', csvLabel: 'Solar built (GWp); allowed (GWp)', csv: s => `${+((pv[s.id] || 0) / 1e6).toFixed(4)}; ${+(cap[s.id] / 1e6).toFixed(4)}`, num: true, title: 'GWp of solar built vs the most this site may build',  get: s => pv[s.id] || 0, render: s => pvMeter(UI, pv[s.id] || 0, cap[s.id]) },
         { key: 'paths', label: 'Pathways', num: true, title: 'Pathways whose feeds this site can supply', get: s => hostBySite.get(s.id).length,
           render: s => el('span', { title: hostBySite.get(s.id).map(p => p.name).join('\n') }, String(hostBySite.get(s.id).length)) },
       ];
       tableBox.replaceChildren(UI.sortableTable(columns, sites, {
-        sortKey: 'pv', sortDir: 'desc',
+        sortKey: 'pv', sortDir: 'desc', csv: 'sites',
         rowHref: s => href('sites', s.id),
         rowClass: s => (pv[s.id] > 0 ? null : 'is-unbuilt'),
       }));
@@ -341,12 +341,12 @@
         { key: 'product', label: 'Product', get: g => UI.productName(g.product), render: g => el('a', { href: href('markets', g.product), text: UI.productName(g.product) }) },
         { key: 'n', label: 'Plants', num: true, get: g => g.n },
         { key: 'year', label: 'Built', num: true, get: g => g.first, render: g => (g.first === g.last ? String(g.first) : `${g.first}–${g.last}`) },
-        { key: 'size', label: 'Output', num: true, get: g => g.kgPerDay, render: g => UI.tonnes(g.kgPerDay * 0.365) + '/yr' },
+        { key: 'size', label: 'Output', csvLabel: 'Output (t/yr)', csv: g => g.kgPerDay * 0.365, num: true, get: g => g.kgPerDay, render: g => UI.tonnes(g.kgPerDay * 0.365) + '/yr' },
         { key: 'capex', label: 'Capex', num: true, get: g => g.capex, render: g => UI.usd(g.capex) },
-        { key: 'pv', label: 'PV', num: true, get: g => g.pvKWp, render: g => UI.num(g.pvKWp / 1e6, 3) + ' GWp' },
+        { key: 'pv', label: 'PV', csvLabel: 'PV (GWp)', csv: g => g.pvKWp / 1e6, num: true, get: g => g.pvKWp, render: g => UI.num(g.pvKWp / 1e6, 3) + ' GWp' },
         { key: 'npv', label: 'NPV at build', num: true, get: g => g.npv, render: g => UI.usd(g.npv) },
       ];
-      plantBox.replaceChildren(UI.sortableTable(columns, [...groups.values()], { sortKey: 'year', sortDir: 'asc', compact: true }));
+      plantBox.replaceChildren(UI.sortableTable(columns, [...groups.values()], { sortKey: 'year', sortDir: 'asc', compact: true, csv: `${site.id}-plants` }));
       plantBox.querySelector('table').id = 'sitePlants';
     };
 
@@ -362,9 +362,9 @@
             UI.inHouseText(r.integration) ? el('span', { class: 'cell-sub', text: UI.inHouseText(r.integration) }) : null,
           ]) },
         { key: 'product', label: 'Product', get: r => UI.productName(r.product), render: r => el('a', { href: href('markets', r.product), text: UI.productName(r.product) }) },
-        { key: 'size', label: 'Output', num: true, get: r => r.annualKg, render: r => UI.tonnes(r.annualKg / 1000) + '/yr' },
+        { key: 'size', label: 'Output', csvLabel: 'Output (t/yr)', csv: r => r.annualKg / 1000, num: true, get: r => r.annualKg, render: r => UI.tonnes(r.annualKg / 1000) + '/yr' },
         { key: 'capex', label: 'Capex', num: true, get: r => r.capex.total, render: r => UI.usd(r.capex.total) },
-        { key: 'pv', label: 'Solar', num: true, title: 'Solar capacity the plant needs', get: r => r.pvKWp, render: r => UI.num(r.pvKWp / 1e3) + ' MWp' },
+        { key: 'pv', label: 'Solar', csvLabel: 'Solar (MWp)', csv: r => r.pvKWp / 1e3, num: true, title: 'Solar capacity the plant needs', get: r => r.pvKWp, render: r => UI.num(r.pvKWp / 1e3) + ' MWp' },
         { key: 'lcop', label: 'Net cost', num: true, title: 'Full cost per kg including capital, after selling co-products', get: r => r.lcopUsdPerKg, render: r => UI.usdKg(r.lcopUsdPerKg) },
         { key: 'price', label: 'Price', num: true, get: r => r.priceUsdPerKg, render: r => UI.usdKg(r.priceUsdPerKg) },
         { key: 'margin', label: 'Margin', num: true, get: r => r.marginUsdPerKg / (r.priceUsdPerKg || 1),
@@ -373,7 +373,7 @@
       ];
       pathBox.replaceChildren(...[
         rows.length
-          ? UI.sortableTable(columns, rows, { sortKey: 'margin', sortDir: 'desc', compact: true, rowHref: r => href('pathways', r.pathwayId), rowClass: r => (r.npv >= 0 ? null : 'is-dim') })
+          ? UI.sortableTable(columns, rows, { sortKey: 'margin', sortDir: 'desc', compact: true, csv: `${site.id}-pathways`, rowHref: r => href('pathways', r.pathwayId), rowClass: r => (r.npv >= 0 ? null : 'is-dim') })
           : el('p', { class: 'muted', text: 'No pathway can be built here: this site lacks the feeds every pathway needs.' }),
         blocked.length ? el('p', { class: 'muted host-note', text: `Also hostable here but skipped because they still buy an intermediate (infinite sources only): ${blocked.map(p => p.name).join(', ')}.` }) : null,
       ].filter(Boolean));

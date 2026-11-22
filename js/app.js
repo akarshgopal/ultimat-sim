@@ -31,7 +31,7 @@
 
   // Build an in-app link that keeps the current scenario query.
   function href(view, id) {
-    const q = Store.toQuery(Store.scenario);
+    const q = Store.urlQuery();
     return '#/' + [view, id].filter(Boolean).map(encodeURIComponent).join('/') + (q ? '?' + q : '');
   }
 
@@ -41,7 +41,7 @@
 
   function render() {
     const { view, id, query } = parseHash();
-    if (query !== lastQuery && query !== Store.toQuery(Store.scenario)) Store.load(query);
+    if (query !== lastQuery && query !== Store.urlQuery()) Store.load(query);
     lastQuery = query;
     document.querySelector('.brand').setAttribute('href', href('abundance'));
     for (const a of document.querySelectorAll('.app-nav a')) {
@@ -70,7 +70,7 @@
   // Keep the URL's scenario query in sync with the store (without adding history entries).
   Store.subscribe(({ scenario, result, busy }) => {
     const { path } = parseHash();
-    const q = Store.toQuery(scenario);
+    const q = Store.urlQuery();
     const next = '#/' + (path.length ? path.map(encodeURIComponent).join('/') : 'abundance') + (q ? '?' + q : '');
     if (next !== location.hash) {
       history.replaceState(null, '', next);
@@ -88,6 +88,27 @@
       if (busy) n.setAttribute('aria-busy', 'true'); else n.removeAttribute('aria-busy');
     }
   });
+
+  // Comparison bar: shown on every page while a scenario is pinned.
+  function renderCompareBar({ scenario, pinned }) {
+    const bar = document.getElementById('compareBar');
+    const btn = document.getElementById('pinBtn');
+    // Full label on wide screens, short on phones (CSS shows one of the two).
+    btn.replaceChildren(el('span', { class: 'label-long', text: pinned ? 'Unpin' : 'Pin to compare' }), el('span', { class: 'label-short', text: pinned ? 'Unpin' : 'Pin' }));
+    btn.setAttribute('aria-pressed', String(Boolean(pinned)));
+    bar.hidden = !pinned;
+    if (!pinned) { bar.replaceChildren(); return; }
+    const diff = Store.describeDiff(pinned.scenario, scenario);
+    bar.replaceChildren(...[
+      el('strong', { text: 'Comparing with your pinned scenario' }),
+      el('span', { class: 'compare-diff', text: diff.length ? 'Changed since: ' + diff.join(' · ') : 'Nothing changed yet: adjust an input to compare.' }),
+      pinned.result ? null : el('span', { class: 'muted', text: '(pinned run simulating…)' }),
+      el('span', { class: 'header-spacer' }),
+      el('button', { type: 'button', class: 'link-button', text: 'Swap', title: 'Make the pinned scenario current and pin this one', onclick: () => Store.swap() }),
+      el('button', { type: 'button', class: 'link-button', text: 'Unpin', onclick: () => Store.unpin() }),
+    ].filter(Boolean));
+  }
+  Store.subscribe(renderCompareBar);
 
   function progressText(p) {
     return p && p.total ? `Simulating… year ${Math.min(p.done + 1, p.total)} of ${p.total}` : 'Simulating…';
@@ -124,11 +145,17 @@
     });
   }
 
+  function initPin() {
+    document.getElementById('pinBtn').addEventListener('click', () => (Store.pinned ? Store.unpin() : Store.pin()));
+  }
+
   function init() {
     const nav = document.querySelector('.app-nav');
     for (const item of NAV) nav.append(el('a', { href: '#/' + item.id, 'data-view': item.id, title: item.hint, text: item.label }));
     initTheme();
     initCopyLink();
+    initPin();
+    renderCompareBar(Store);
     const { query } = parseHash();
     Store.load(query);
     lastQuery = query;

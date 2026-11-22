@@ -158,7 +158,9 @@
             { key: 'today', label: 'Today', get: r => ORDER.indexOf(t0.get(r.product)?.status), render: r => [statusTag(t0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(t0.get(r.product)))] },
             { key: 'now', label: 'Scenario', get: r => ORDER.indexOf(r.status), render: r => [statusTag(r.status), el('span', { class: 'cell-sub' }, ratio(r))] },
             { key: 'frontier', label: 'Frontier', get: r => ORDER.indexOf(f0.get(r.product)?.status), render: r => [statusTag(f0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(f0.get(r.product)))] },
-            { key: 'cost', label: 'Cost/kg (scenario)', num: true, get: r => r.lcopUsdPerKg ?? Infinity, render: r => (Number.isFinite(r.lcopUsdPerKg) ? UI.usdKg(r.lcopUsdPerKg) : '—') },
+            { key: 'cost', label: 'Cost/kg (scenario)', num: true, get: r => r.lcopUsdPerKg ?? Infinity, render: r => (Number.isFinite(r.lcopUsdPerKg) ? [UI.usdKg(r.lcopUsdPerKg), r.unsellableCoproductUsdPerKg > 0.0005
+              ? el('span', { class: 'cell-sub', title: 'A single plant could sell its coproducts, but making the whole world’s demand this way would flood their markets; that credit is not counted here (so this is higher than the per-plant cost on Pathways).', text: `incl. +${UI.usdKg(r.unsellableCoproductUsdPerKg)} unsold coproducts` })
+              : null] : '—') },
             { key: 'kwh', label: 'kWh/kg', num: true, get: r => r.energyKWhPerKg ?? -1, render: r => (Number.isFinite(r.energyKWhPerKg) ? UI.num(r.energyKWhPerKg) : '—') },
             { key: 'blocker', label: 'Largest cost item (scenario → frontier)', get: r => r.blocker?.usdPerKg ?? -1,
               render: r => (r.blocker ? [el('span', { text: itemText(r.blocker) }), el('span', { class: 'cell-sub', text: '→ ' + itemText(f0.get(r.product)?.blocker) })] : el('span', { class: 'muted', text: '—' })) },

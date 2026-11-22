@@ -10,6 +10,7 @@ self.addEventListener('message', ev => {
       markets: FoundryMarkets.MARKETS,
       sites: FoundrySites.SITES,
       config,
+      onProgress: (done, total) => self.postMessage({ id, progress: { done, total } }),
     });
     self.postMessage({ id, result });
   } catch (error) {

@@ -4,7 +4,7 @@
 (() => {
   'use strict';
   const Company = globalThis.FoundryCompany;
-  const RANK_SIZE_MULTIPLE = 10; // Store.rank default: plants at 10× the case's reference output
+  const RANK_SIZE_MULTIPLE = globalThis.Store.RANK_SIZE_MULTIPLE; // the size every year-0 cost uses
 
   // ------------------------------------------------------------------ shared data
   // The utilization design behind a plant's cost: sun-following vs firmed, equipment oversizing,
@@ -104,7 +104,7 @@
       try { sessionStorage.setItem('foundry.pathways.filters', JSON.stringify(state)); } catch { /* ignore */ }
     };
 
-    const kpis = el('div', { class: 'kpis pw-kpis' });
+    const kpis = el('div', { class: 'kpis pw-kpis sim-result' });
     const search = el('input', { class: 'control', type: 'search', placeholder: 'Search product or pathway', 'aria-label': 'Search pathways', value: state.q });
     const origin = el('select', { class: 'control', 'aria-label': 'Feed origin' }, [
       el('option', { value: '', text: 'All feed origins' }),
@@ -118,7 +118,7 @@
       el('label', { class: 'check' }, [builtOnly, el('span', { text: 'Built only' })]),
       count,
     ]);
-    const tableHost = el('div', { class: 'pw-table' });
+    const tableHost = el('div', { class: 'pw-table sim-result' });
     const titleNote = el('p');
     root.append(
       el('div', { class: 'view-title' }, [el('h1', { text: 'Pathways' }), titleNote]),
@@ -603,11 +603,11 @@
         el('p', { class: 'pw-notes', text: pathway.notes }),
       ]),
     );
-    const kpis = el('div', { class: 'kpis pw-kpis' });
-    const chartHost = el('div', { class: 'pw-chart' });
+    const kpis = el('div', { class: 'kpis pw-kpis sim-result' });
+    const chartHost = el('div', { class: 'pw-chart sim-result' });
     const chartNote = el('div', { class: 'pw-chart-note' });
     const sitesHost = el('div');
-    const plantsHost = el('div');
+    const plantsHost = el('div', { class: 'sim-result' });
     const opsHost = el('div');
     root.append(
       kpis,

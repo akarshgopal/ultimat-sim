@@ -79,8 +79,21 @@
     }
     const status = document.getElementById('simStatus');
     status.classList.toggle('is-busy', busy);
-    status.textContent = busy ? 'Simulating…'
+    status.textContent = busy ? progressText(Store.progress)
       : result ? `${result.summary.years}-year run · ${result.ms} ms` : '';
+    // Views mark what comes from the simulation with .sim-result; it fades while a newer run is in
+    // flight so stale numbers never pass for current ones.
+    document.documentElement.classList.toggle('is-simulating', busy);
+    for (const n of document.querySelectorAll('.sim-result')) {
+      if (busy) n.setAttribute('aria-busy', 'true'); else n.removeAttribute('aria-busy');
+    }
+  });
+
+  function progressText(p) {
+    return p && p.total ? `Simulating… year ${Math.min(p.done + 1, p.total)} of ${p.total}` : 'Simulating…';
+  }
+  Store.onProgress(p => {
+    if (Store.busy) document.getElementById('simStatus').textContent = progressText(p);
   });
 
   function initTheme() {
@@ -99,10 +112,23 @@
     });
   }
 
+  // Copy link: the URL already carries the view and the scenario, so a copy reproduces both.
+  function initCopyLink() {
+    const btn = document.getElementById('copyLink');
+    let timer = 0;
+    btn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(location.href); btn.textContent = 'Copied'; }
+      catch { btn.textContent = 'Copy from the address bar'; }
+      clearTimeout(timer);
+      timer = setTimeout(() => { btn.textContent = 'Copy link'; }, 1500);
+    });
+  }
+
   function init() {
     const nav = document.querySelector('.app-nav');
     for (const item of NAV) nav.append(el('a', { href: '#/' + item.id, 'data-view': item.id, title: item.hint, text: item.label }));
     initTheme();
+    initCopyLink();
     const { query } = parseHash();
     Store.load(query);
     lastQuery = query;

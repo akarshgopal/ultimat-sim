@@ -197,41 +197,59 @@
   }
 
   // ---------------------------------------------------------------- simulation
+  // A run that a newer scenario supersedes is cancelled by replacing the worker, so quick
+  // successive edits do not queue up behind each other.
   let worker = null;
-  try {
-    worker = new Worker('js/sim-worker.js');
-    // If the worker cannot start or crashes, fall back to the main thread and re-run.
-    worker.onerror = () => { worker = null; runNow(); };
-  } catch { /* no workers (e.g. file://): run on the main thread */ }
+  let workerOk = true;
+  function startWorker() {
+    if (!workerOk) return null;
+    try {
+      const w = new Worker('js/sim-worker.js');
+      // If the worker cannot start or crashes, fall back to the main thread and re-run.
+      w.onerror = () => { workerOk = false; worker = null; runNow(); };
+      return w;
+    } catch { workerOk = false; return null; } // no workers (e.g. file://): run on the main thread
+  }
+  worker = startWorker();
   let scenario = defaults();
   let result = null;
   let busy = false;
+  let progress = null; // { done, total } years while a run is in flight
   let seq = 0;
   let timer = 0;
   const listeners = new Set();
-  const notify = () => { for (const fn of listeners) fn({ scenario, result, busy }); };
+  const progressListeners = new Set();
+  const notify = () => { for (const fn of listeners) fn({ scenario, result, busy, progress }); };
 
   function runNow() {
     const id = ++seq;
     const config = toConfig(scenario);
+    if (busy && worker) { worker.terminate(); worker = startWorker(); } // cancel the superseded run
     busy = true;
+    progress = { done: 0, total: config.years };
     notify();
     const started = performance.now();
     const done = r => {
       if (id !== seq) return; // a newer run superseded this one
       result = { ...r, ms: Math.round(performance.now() - started) };
       busy = false;
+      progress = null;
       notify();
     };
     if (worker) {
+      const w = worker;
       const onMessage = ev => {
         if (ev.data.id !== id) return;
-        worker.removeEventListener('message', onMessage);
-        if (ev.data.error) { worker = null; runNow(); return; }
+        if (ev.data.progress) {
+          if (id === seq) { progress = ev.data.progress; for (const fn of progressListeners) fn(progress); }
+          return;
+        }
+        w.removeEventListener('message', onMessage);
+        if (ev.data.error) { workerOk = false; worker = null; runNow(); return; }
         done(ev.data.result);
       };
-      worker.addEventListener('message', onMessage);
-      worker.postMessage({ id, config });
+      w.addEventListener('message', onMessage);
+      w.postMessage({ id, config });
     } else {
       setTimeout(() => done(Company.simulateCompany({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config })), 0);
     }
@@ -250,7 +268,7 @@
       const config = toConfig(scenario);
       config.build.allowPathways = null;
       config.equipmentCostMultiplier = equip;
-      return { equip, rows: Company.energyBreakevens({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }) };
+      return { equip, rows: Company.energyBreakevens({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }, { sizeMultiple: RANK_SIZE_MULTIPLE }) };
     });
   }
 
@@ -265,11 +283,14 @@
   function abundance(s = scenario) {
     const config = toConfig(s);
     config.build.allowPathways = null;
-    return Company.abundanceScoreboard({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config });
+    return Company.abundanceScoreboard({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }, { sizeMultiple: RANK_SIZE_MULTIPLE });
   }
 
   // Year-0 opportunity ranking for the current scenario (fast, main thread).
-  function rank(sizeMultiple = 10) {
+  // One plant size for every year-0 cost the app shows (Abundance, Energy, Pathways, Sites), so the
+  // same recipe at the same site has the same cost on every page: 100× the case's reference output.
+  const RANK_SIZE_MULTIPLE = 100;
+  function rank(sizeMultiple = RANK_SIZE_MULTIPLE) {
     const config = toConfig(scenario);
     config.build.allowPathways = null; // rank every pathway; views mark excluded ones
     return Company.rankOpportunities({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }, { sizeMultiple });
@@ -284,6 +305,10 @@
     get scenario() { return scenario; },
     get result() { return result; },
     get busy() { return busy; },
+    get progress() { return progress; },
+    // Progress ticks (one per simulated year) go to these listeners only, not to subscribe(), so
+    // views do not re-render on every tick.
+    onProgress(fn) { progressListeners.add(fn); return () => progressListeners.delete(fn); },
     load(query) { scenario = fromQuery(query); runNow(); },
     update,
     reset() { scenario = defaults(); runNow(); },
@@ -292,5 +317,6 @@
     breakevens,
     abundance,
     FRONTIER,
+    RANK_SIZE_MULTIPLE,
   });
 })();

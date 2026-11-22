@@ -1072,7 +1072,10 @@
     const candidates = buildCandidates(cfg, pathways, sites, sitesById, suppliers);
     let cumulativeMaterialT = 0;
 
+    // input.onProgress(yearsDone, yearsTotal): optional, for progress reporting (the app's worker).
+    const onProgress = typeof input.onProgress === 'function' ? input.onProgress : null;
     for (let yearIndex = 0; yearIndex < cfg.years; yearIndex += 1) {
+      if (onProgress) onProgress(yearIndex, cfg.years);
       const year = cfg.startYear + yearIndex;
       const raise = (cfg.finance.equityRaises || []).filter(item => item.year === year)
         .reduce((sum, item) => sum + (Number(item.usd) || 0), 0);
@@ -1583,6 +1586,8 @@
         Object.assign(row, {
           siteId: best.siteId,
           lcopUsdPerKg: best.lcopUsdPerKg,
+          // Coproduct credit the plant would earn on its own but that world markets cannot absorb.
+          unsellableCoproductUsdPerKg: best.unsellableCoproductUsdPerKg || 0,
           costRatio: best.lcopUsdPerKg / best.priceUsdPerKg,
           npv: best.npv,
           energyKWhPerKg: best.energyKWhPerKg,

@@ -1,6 +1,5 @@
 /* company view — scoped by .v-company. */
 .v-company .company-main { gap: 28px; min-width: 0; }
-.v-company.is-busy .company-main { opacity: 0.72; transition: opacity 0.2s 0.15s; }
 .v-company .section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .v-company .section-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .v-company .section-head h2 { font-size: 16px; }

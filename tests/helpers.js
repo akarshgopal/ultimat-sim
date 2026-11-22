@@ -102,8 +102,12 @@ function cheapPv(divisor = 10) {
 
 // ---------------------------------------------------------------- browser views
 // Playwright is an optional dev dependency, loaded only by the view tests (it is slow to require).
+// CI sets REQUIRE_VIEW_TESTS=1 so a missing Playwright fails the run instead of skipping the views.
 let hasPlaywright = true;
 try { require.resolve('playwright'); } catch { hasPlaywright = false; }
+if (!hasPlaywright && process.env.REQUIRE_VIEW_TESTS === '1') {
+  throw new Error('REQUIRE_VIEW_TESTS=1 but playwright is not installed: the view tests would be skipped.');
+}
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml' };
 

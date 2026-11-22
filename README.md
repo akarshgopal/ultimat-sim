@@ -34,12 +34,13 @@ data/site-presets.js + PVGIS + engine/land.js ──▶ scripts/build-sites.mjs 
 
 | | Share of world tonnage feasible | Abundant (≤ ½ today's price) |
 |---|---|---|
-| Today | 39% | ~0% |
-| Frontier | 94% | 92% |
+| Today | 37% | ~0% |
+| Frontier | 91% | 89% |
 
-- **Energy alone unlocks little.** 10× cheaper solar by itself lifts the feasible share only from 39% to 40% (cement turns abundant; little else moves): equipment running ~7 sun-hours a day dominates most recipes. Cheap solar plus lean equipment and squeezed margins does.
+- **Energy alone unlocks little.** 10× cheaper solar by itself lifts the feasible share only from 37% to 38% (cement turns abundant; little else moves): equipment running ~7 sun-hours a day dominates most recipes. Cheap solar plus lean equipment and squeezed margins does.
 - **What binds the company is not money: it is land.** The default 25-year run makes ~4.7 Gt today and ~9.3 Gt at the frontier, where it ends with ~$1.9 trillion unspent. Each site may cover a share of the land suitable for utility PV in its catchment (World Bank/ESMAP; default 2%). With 100% market share the frontier company reaches 2.2 Gt/yr by 2051 at 2% land use (filling all 2.3 TW it may build), 6.2 Gt/yr at 10%, 6.8 Gt/yr at 25% (18 TW; there land no longer binds). Coastal sites fill first; inland sites fill when they are within a few hundred km of a port, since they pay overland freight on everything they sell and buy.
-- **Abundance at the frontier is about 70% methane and cement.** Both are made at under a third of today's price (e-methane $0.30/kg against $1, clinker $0.043/kg against $0.16). What is left feasible but not abundant is steel (bought iron ore is $0.21 of its $0.25/kg) and copper (bought leach solution); polysilicon and aluminium lose abundance once their steady units are firmed against cloudy weather.
+- **Abundance at the frontier is about 73% methane and cement.** Both are made at under a third of today's price (e-methane $0.30/kg against $1, clinker $0.043/kg against $0.16). What is left feasible but not abundant is steel (bought iron ore is $0.21 of its $0.25/kg) and copper (bought leach solution); polysilicon and aluminium lose abundance once their steady units are firmed against cloudy weather.
+- **Coproducts cannot carry a whole world market.** The scoreboard asks whether *all* of a material's demand can be made below today's price, so a plant's coproduct credit only counts up to what each coproduct's own world market can absorb. That keeps salt and lithium from brine hubs, and NdPr oxide from chromatography, blocked: at world scale their coproducts would far exceed those markets (NdPr alone would bring ~135 kt/yr of Dy/Tb oxides to a 4 kt/yr market). Hydrogen stays abundant, but at $0.31/kg rather than $0.07, because only 300 Mt/yr of its 790 Mt/yr of oxygen can be sold.
 
 ## How the company simulator works
 
@@ -104,11 +105,11 @@ Runs every check: engine, designs, data staleness, and Playwright tests of each 
 ## Known limits
 
 - **Screening economics.** Constant real prices over a plant's life, no tax or inflation, simple annuity debt. Elasticities, learning rates and many capex packs are screening assumptions.
-- **Designed on typical days.** Plants are sized on 12 typical days per site. A stress test replays them through ten real years of hourly weather ([`docs/weather-stress.md`](docs/weather-stress.md), `npm run weather`): the frontier holds (94% feasible and 91% abundant even with steady units firmed against cloudy runs), while today's feasibility relies on kilns tolerating a few trips a month. Grid backup and inter-site sharing are not modelled.
+- **Designed on typical days.** Plants are sized on 12 typical days per site. A stress test replays them through ten real years of hourly weather ([`docs/weather-stress.md`](docs/weather-stress.md), `npm run weather`): the frontier holds (91% feasible and 89% abundant even with steady units firmed against cloudy runs), while today's feasibility relies on kilns tolerating a few trips a month. Grid backup and inter-site sharing are not modelled.
 - **Design factors are exact only at their reference plant size.** Several designs fall in cost with size faster than the engine's single scale law.
 - **Make-vs-buy is one level deep and per plant.** TiCl₄, Mg, PLS and REE concentrates have no supplier recipe.
 - **Captive markets.** Much ammonia, H₂, O₂ and DRI is captive; the share ceiling is the only guard.
-- **Multi-product plants.** Cost per kg is net of coproduct revenue, so it can be negative for brine hubs.
+- **Multi-product plants.** A single plant's cost per kg is net of coproduct revenue, so it can be negative for brine hubs. The Abundance scoreboard credits coproducts only up to their world markets; the company simulation caps every product it sells, coproducts included, at the market-share ceiling.
 
 ## Repository map
 

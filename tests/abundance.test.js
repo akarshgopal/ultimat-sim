@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../engine/company.js');
-const { companyData, cheapPv } = require('./helpers.js');
+const { companyData, cheapPv, close } = require('./helpers.js');
 
 const board = config => C.abundanceScoreboard({ ...companyData(), config });
 
@@ -37,4 +37,22 @@ test('cheaper electricity and a lean electrolyzer make more of the world\'s tonn
   assert.ok(lean.totals.feasibleT >= cheap.totals.feasibleT);
   const h2 = b => b.rows.find(r => r.product === 'hydrogen');
   assert.ok(h2(lean).lcopUsdPerKg < h2(cheap).lcopUsdPerKg);
+});
+
+test('coproduct credit counts only what the coproduct’s world market can absorb', () => {
+  const SITES = require('../data/sites.js').SITES;
+  const pathway = {
+    id: 'twin', name: 'Twin', product: 'widget', refSiteId: SITES[0].id, refOutputKgPerDay: 1000,
+    electricityKWhPerKg: 1, heatKWhPerKg: 0, feeds: [], capexByTechUsdPerKgDay: { process: 50 },
+    fixedOmFracPerYear: 0.03, variableOmUsdPerKg: 0, assetLifeYears: 25,
+    coproducts: [{ id: 'gizmo', product: 'gizmo', kgPerKg: 4, usdPerKg: 1 }],
+  };
+  const market = (t, price) => ({ worldDemandTPerYear: t, demandYear: 2027, growthPerYear: 0, priceUsdPerKg: price, priceElasticity: 0 });
+  const score = gizmoT => C.abundanceScoreboard({ pathways: [pathway], sites: SITES,
+    markets: { widget: market(1e6, 1), gizmo: market(gizmoT, 1) } }).rows.find(r => r.product === 'widget');
+  // Making 1 Mt of widget yields 4 Mt of gizmo: a 4 Mt gizmo market takes all of it, a 1 Mt market a quarter.
+  const all = score(4e6);
+  const quarter = score(1e6);
+  close(quarter.lcopUsdPerKg - all.lcopUsdPerKg, 3, 1e-6); // $3/kg of credit on 3 kg/kg that cannot be sold
+  assert.ok(all.lcopUsdPerKg < 0, 'with room for its coproduct the plant is paid to make widgets');
 });

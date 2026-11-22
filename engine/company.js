@@ -67,7 +67,7 @@
       // next year keeps at least this share of this year's capacity.
       buildCapacityRetention: 0.8,
       maxPlantsPerYear: null, // optional hard cap on plant count per year (null = none)
-      maxMarketShare: 0.1, // company share of world demand per product
+      maxMarketShare: 0.1, // company share of world demand per product (null = no cap)
       minProfitabilityIndex: 0, // NPV / capex hurdle
       sizeMultiples: Object.freeze([1, 10, 100, 1000, 5000]), // × pathway reference output (capped at maxPlantKgPerDay)
       maxPlantKgPerDay: 5e6,
@@ -827,10 +827,12 @@
     };
     // Share-ceiling cap in kg/year per market group, memoized for the year.
     const caps = new Map();
+    // null/undefined/'' means no share cap, as for the other optional build caps; 0 still means none allowed.
+    const maxShare = cfg.build.maxMarketShare == null || cfg.build.maxMarketShare === '' ? Infinity : Number(cfg.build.maxMarketShare);
     const capKg = group => {
       if (!caps.has(group)) {
         const demandT = marketDemandT(markets[group], year);
-        caps.set(group, Number.isFinite(demandT) ? cfg.build.maxMarketShare * demandT * 1000 : Infinity);
+        caps.set(group, Number.isFinite(demandT) && Number.isFinite(maxShare) ? maxShare * demandT * 1000 : Infinity);
       }
       return caps.get(group);
     };
@@ -1070,7 +1072,10 @@
     const candidates = buildCandidates(cfg, pathways, sites, sitesById, suppliers);
     let cumulativeMaterialT = 0;
 
+    // input.onProgress(yearsDone, yearsTotal): optional, for progress reporting (the app's worker).
+    const onProgress = typeof input.onProgress === 'function' ? input.onProgress : null;
     for (let yearIndex = 0; yearIndex < cfg.years; yearIndex += 1) {
+      if (onProgress) onProgress(yearIndex, cfg.years);
       const year = cfg.startYear + yearIndex;
       const raise = (cfg.finance.equityRaises || []).filter(item => item.year === year)
         .reduce((sum, item) => sum + (Number(item.usd) || 0), 0);
@@ -1531,11 +1536,40 @@
       if (b.other > 0) items.push({ kind: 'other', id: 'other', label: 'Other O&M', usdPerKg: b.other * ownScale });
       return items.sort((x, y) => y.usdPerKg - x.usdPerKg);
     };
+    // The scoreboard asks whether a material's whole world demand can be made this way, so a plant's
+    // coproduct credit is only good up to what the coproduct's own world market can absorb: making
+    // 100 Mt/yr of H2 yields ~790 Mt/yr of O2 against a 300 Mt/yr oxygen market. Credit on the excess
+    // is removed from the plant's net cost (and NPV, at the plant's own scale and life).
+    const worldScale = r => {
+      const demandKg = marketDemandT(markets[groupOf(r.product)], cfg.startYear) * 1000;
+      if (!Number.isFinite(demandKg) || !(r.annualKg > 0) || !r.sales?.length) return r;
+      const kgPerKg = new Map();
+      const creditPerKg = new Map();
+      for (const sale of r.sales.slice(1)) {
+        const g = sale.product ? groupOf(sale.product) : null;
+        if (!g || g === groupOf(r.product) || !markets[g]) continue;
+        const perKg = sale.kgPerYear / r.annualKg;
+        kgPerKg.set(g, (kgPerKg.get(g) || 0) + perKg);
+        creditPerKg.set(g, (creditPerKg.get(g) || 0) + perKg * realizedPrice(cfg, markets[sale.product] || markets[g], sale.fallbackUsdPerKg, 0));
+      }
+      let cut = 0;
+      for (const [g, perKg] of kgPerKg) {
+        const coDemandKg = marketDemandT(markets[g], cfg.startYear) * 1000;
+        if (!Number.isFinite(coDemandKg) || !(perKg > 0)) continue;
+        const sellable = Math.min(1, coDemandKg / (demandKg * perKg));
+        cut += creditPerKg.get(g) * (1 - sellable);
+      }
+      if (!(cut > 0)) return r;
+      const npv = r.npv - (cut * r.annualKg * annuityFactor(cfg.finance.discountRate, r.lifeYears))
+        / (1 + cfg.finance.discountRate) ** (cfg.build.leadTimeYears || 0);
+      return { ...r, lcopUsdPerKg: r.lcopUsdPerKg + cut, coproductCreditUsdPerKg: r.coproductCreditUsdPerKg - cut,
+        marginUsdPerKg: r.marginUsdPerKg - cut, npv, unsellableCoproductUsdPerKg: cut };
+    };
     const pathwayById = new Map(pathways.map(p => [p.id, p]));
     const rows = [];
     for (const [key, market] of Object.entries(markets)) {
       if (groupOf(key) !== key || !(market.worldDemandTPerYear > 0)) continue;
-      const options = ranked.filter(r => groupOf(r.product) === key && r.priceUsdPerKg > 0);
+      const options = ranked.filter(r => groupOf(r.product) === key && r.priceUsdPerKg > 0).map(worldScale);
       const best = options.reduce((a, r) => (!a || r.lcopUsdPerKg / r.priceUsdPerKg < a.lcopUsdPerKg / a.priceUsdPerKg ? r : a), null);
       const row = {
         product: key,
@@ -1552,6 +1586,8 @@
         Object.assign(row, {
           siteId: best.siteId,
           lcopUsdPerKg: best.lcopUsdPerKg,
+          // Coproduct credit the plant would earn on its own but that world markets cannot absorb.
+          unsellableCoproductUsdPerKg: best.unsellableCoproductUsdPerKg || 0,
           costRatio: best.lcopUsdPerKg / best.priceUsdPerKg,
           npv: best.npv,
           energyKWhPerKg: best.energyKWhPerKg,

@@ -42,8 +42,8 @@
     const { el } = UI;
     const rows = marketRows(Store);
     const prodBy = new Map(rows.map(r => [r.key, producers(Store, r.key)]));
-    const kpis = el('div', { class: 'kpis' });
-    const tableBox = el('div');
+    const kpis = el('div', { class: 'kpis sim-result' });
+    const tableBox = el('div', { class: 'sim-result' });
     root.append(
       el('div', { class: 'view-title' }, [
         el('h1', { text: 'Markets' }),
@@ -127,7 +127,7 @@
       return null;
     }
     const group = groupOf(Store, key);
-    const kpis = el('div', { class: 'kpis' });
+    const kpis = el('div', { class: 'kpis sim-result' });
     const outBox = el('div');
     const shareBox = el('div');
     const priceBox = el('div');
@@ -149,11 +149,11 @@
       el('div', { class: 'view-title' }, [el('h1', { text: m.name }), UI.qualityTag(m.quality)]),
       el('div', { class: 'stack' }, [
         kpis,
-        el('div', { class: 'grid grid-2' }, [
+        el('div', { class: 'grid grid-2 sim-result' }, [
           UI.card('Company output', 'Tonnes per year sold to the market (and made in-house for the company’s own plants).', outBox),
           UI.card('Share of world supply', 'Company output ÷ world demand (related grades are counted together); dashed line is the max share set on Company.', shareBox),
         ]),
-        el('div', { class: 'grid grid-2' }, [
+        el('div', { class: 'grid grid-2 sim-result' }, [
           UI.card('Realized price', 'Price the company sells at, which falls as its share grows, vs today’s reference price (dashed).', priceBox),
           UI.card('Who makes it', 'Pathways producing this material as primary product or coproduct; plants built in the current run.', [pathBox, captiveBox]),
         ]),

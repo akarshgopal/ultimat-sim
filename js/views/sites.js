@@ -56,7 +56,7 @@
   // opts: { sites, href(site) → '#/…', highlightId?, compact? }. Returns { el, update(pvKWpBySite, ceilingKWp), destroy }.
   function siteMap({ UI, sites, href, highlightId, compact }) {
     const { el, svg } = UI;
-    const box = el('div', { class: 'site-map' + (compact ? ' is-compact' : '') });
+    const box = el('div', { class: 'site-map sim-result' + (compact ? ' is-compact' : '') });
     const W = 1000;
     const LAT_TOP = 66;
     const LAT_BOT = -54;
@@ -175,7 +175,7 @@
   const marginText = (UI, m) => (m < -1 ? '< −100%' : UI.pct(m, 0));
   function resourceTags(UI, site) {
     return UI.el('span', { class: 'tag-row' }, [
-      site.coastal ? UI.el('span', { class: 'tag', title: site.seawaterAssayId || '' }, [UI.originDot('ocean'), 'Seawater']) : null,
+      site.coastal ? UI.el('span', { class: 'tag', title: site.seawaterAssayId ? `Local assay ${site.seawaterAssayId} (reference only; recipes use their own assay)` : '' }, [UI.originDot('ocean'), 'Seawater']) : null,
       site.brineAssayId ? UI.el('span', { class: 'tag', title: site.brineAssayId }, [UI.originDot('brine'), 'Brine']) : null,
       !site.coastal && !site.brineAssayId ? UI.el('span', { class: 'muted', text: 'Inland' }) : null,
     ]);
@@ -186,9 +186,9 @@
     const { el } = UI;
     const sites = Store.SITES;
     const hostBySite = new Map(sites.map(site => [site.id, hostable(Store, site)]));
-    const kpis = el('div', { class: 'kpis' });
+    const kpis = el('div', { class: 'kpis sim-result' });
     const map = siteMap({ UI, sites, href: site => href('sites', site.id) });
-    const tableBox = el('div');
+    const tableBox = el('div', { class: 'sim-result' });
     root.append(
       el('div', { class: 'view-title' }, [
         el('h1', { text: 'Sites' }),
@@ -248,7 +248,7 @@
     const config = Store.toConfig(Store.scenario);
     config.build.allowPathways = null;
     config.build.allowSites = [site.id];
-    return Company.rankOpportunities({ pathways: Store.PATHWAYS, markets: Store.MARKETS, sites: Store.SITES, config }, { sizeMultiple: 10 });
+    return Company.rankOpportunities({ pathways: Store.PATHWAYS, markets: Store.MARKETS, sites: Store.SITES, config }, { sizeMultiple: Store.RANK_SIZE_MULTIPLE });
   }
 
   function mountDetail(root, { Store, UI, href, params }) {
@@ -258,10 +258,10 @@
       root.append(el('div', { class: 'empty' }, [`No site “${params.id}”. `, el('a', { href: href('sites'), text: 'All sites' })]));
       return null;
     }
-    const kpis = el('div', { class: 'kpis' });
+    const kpis = el('div', { class: 'kpis sim-result' });
     const map = siteMap({ UI, sites: Store.SITES, href: s => href('sites', s.id), highlightId: site.id, compact: true });
     const pathBox = el('div');
-    const plantBox = el('div');
+    const plantBox = el('div', { class: 'sim-result' });
     const land = site.landSource;
     const facts = el('dl', { class: 'facts' }, [
       el('dt', { text: 'Location' }), el('dd', { text: `${site.latitude.toFixed(2)}°, ${site.longitude.toFixed(2)}° · ${site.region || '—'}` }),
@@ -272,7 +272,8 @@
         UI.qualityTag(land?.quality),
         el('span', { class: 'cell-sub' }, land ? [land.name + (land.url ? ' · ' : ''), land.url ? el('a', { href: land.url, target: '_blank', rel: 'noopener', text: 'source' }) : null] : 'No site-specific land price: the engine default applies.'),
       ]),
-      el('dt', { text: 'Seawater assay' }), el('dd', {}, site.coastal ? el('code', { text: site.seawaterAssayId || 'coastal' }) : 'none (inland)'),
+      el('dt', { text: 'Seawater assay' }), el('dd', {}, site.coastal ? [el('code', { text: site.seawaterAssayId || 'coastal' }),
+        el('span', { class: 'cell-sub', text: 'Reference only: each coastal recipe is costed on the assay it was modelled with, not this one.' })] : 'none (inland)'),
       el('dt', { text: 'Brine assay' }), el('dd', {}, site.brineAssayId ? el('code', { text: site.brineAssayId }) : 'none'),
     ]);
     root.append(
@@ -288,7 +289,7 @@
           UI.card('Site', null, [facts, site.notes ? el('div', { class: 'site-notes' }, [el('h3', { text: 'Data notes' }), el('p', { text: site.notes })]) : null]),
           UI.card('Location', 'ringed: this site; filled: other sites with plants', map.el),
         ]),
-        UI.card('Pathways this site can host', 'Year-0 economics of a 10× reference-size plant at this site, in the current scenario. Faded rows lose money here (NPV < 0). Click a row for the pathway.', pathBox),
+        UI.card('Pathways this site can host', `Year-0 economics of a ${Store.RANK_SIZE_MULTIPLE}× reference-size plant at this site, in the current scenario. Faded rows lose money here (NPV < 0). Click a row for the pathway.`, pathBox),
         UI.card('Plants built here', 'In the current run.', plantBox),
       ]),
     );

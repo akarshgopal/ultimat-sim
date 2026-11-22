@@ -58,7 +58,7 @@
       // ------------------------------------------------------------ skeleton
       const subtitle = el('p');
       const panel = el('aside', { class: 'card sticky scenario', 'aria-label': 'Scenario' });
-      const mainCol = el('div', { class: 'stack company-main' });
+      const mainCol = el('div', { class: 'stack company-main sim-result' });
       root.append(
         el('div', { class: 'view-title' }, [el('h1', { text: 'Company' }), subtitle]),
         el('div', { class: 'grid grid-sidebar' }, [panel, mainCol]),
@@ -162,11 +162,6 @@
         el('div', { class: 'pathway-items' }, pathwayBoxes.map(x => x.label)),
       ]);
 
-      const copyBtn = el('button', { type: 'button', class: 'button', text: 'Copy link' });
-      copyBtn.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(location.href); copyBtn.textContent = 'Copied'; } catch { copyBtn.textContent = 'Copy from address bar'; }
-        setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1500);
-      });
       const resetBtn = el('button', { type: 'button', class: 'button', text: 'Reset' });
       resetBtn.addEventListener('click', () => Store.reset());
       const changedCount = el('span', { class: 'muted changed-count' });
@@ -200,7 +195,7 @@
           el('label', { class: 'check', for: 'co-infinite' }, [infiniteBox, el('span', {}, ['Infinite sources only', el('small', { text: 'Only plants fed by ocean, brine, air, rock, water or captive units.' })])]),
         ]),
         el('div', { class: 'form-section' }, [pathwayDetails]),
-        el('div', { class: 'form-section row' }, [resetBtn, copyBtn]),
+        el('div', { class: 'form-section row' }, [resetBtn]),
       );
 
       function syncPanel(s) {
@@ -463,8 +458,8 @@
           { key: 'capex', label: 'Capex', num: true, get: r => r.capexUsd, render: r => UI.usd(r.capexUsd) },
           { key: 'npv', label: 'NPV', num: true, get: r => r.npvUsd, render: r => el('span', { class: r.npvUsd >= 0 ? '' : 'is-neg', text: UI.usd(r.npvUsd) }) },
           { key: 'inhouse', label: 'In-house', get: r => (r.integration?.length ? 1 : 0), render: r => el('span', { class: 'inhouse', text: UI.inHouseText(r.integration) || '—' }) },
-        ], log, { sortKey: 'year', sortDir: 'asc', compact: true });
-        logTable.classList.add('build-log');
+        ], log, { sortKey: 'year', sortDir: 'asc', compact: true, limit: 25 });
+        (logTable.querySelector('.table-scroll') || logTable).classList.add('build-log');
 
         buildSlot.replaceChildren(
           el('div', { class: 'grid grid-2' }, [
@@ -489,7 +484,7 @@
               yFormat: v => UI.num(v), ariaLabel: 'Land in square kilometres',
             }),
           ]),
-          UI.card('Build log', `${log.length} plants; click a column to sort`, log.length ? logTable : el('p', { class: 'empty', text: 'Nothing built in this scenario.' })),
+          UI.card('Build log', `${log.length} plants; click a column to sort (the first 25 show until you expand)`, log.length ? logTable : el('p', { class: 'empty', text: 'Nothing built in this scenario.' })),
         );
       }
 
@@ -513,7 +508,6 @@
       let runs = 0;
       const draw = ({ scenario, result, busy }) => {
         syncPanel(scenario);
-        root.classList.toggle('is-busy', Boolean(busy));
         renderCompareSummary();
         if (!result) {
           if (!kpiSlot.childElementCount) kpiSlot.replaceChildren(el('div', { class: 'kpi' }, el('div', { class: 'kpi-label', text: 'Simulating…' })));
@@ -538,7 +532,6 @@
         unsubscribe();
         delete root.dataset.runs;
         delete root.dataset.objective;
-        root.classList.remove('is-busy');
       };
     },
   };

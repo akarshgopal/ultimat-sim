@@ -117,6 +117,17 @@ test('market share ceiling caps output per product', () => {
   assert.ok(result.timeline.at(-1).shareByProduct.widget > 0.015);
 });
 
+test('an empty market-share cap means no cap, not zero', () => {
+  const capped = run({ build: { maxMarketShare: 0.02 }, finance: { initialEquityUsd: 1e9 } });
+  for (const empty of [null, '']) {
+    const result = run({ build: { maxMarketShare: empty }, finance: { initialEquityUsd: 1e9 } });
+    const share = result.timeline.at(-1).shareByProduct.widget || 0;
+    assert.ok(share > 0.02, `maxMarketShare ${JSON.stringify(empty)}: widget share ${share}`);
+    assert.ok(result.plants.length >= capped.plants.length);
+  }
+  assert.equal(run({ build: { maxMarketShare: 0 } }).plants.length, 0, 'an explicit 0 still allows nothing');
+});
+
 test('lead time delays output and learning lowers later plant cost', () => {
   const result = run({ build: { leadTimeYears: 2 } });
   const first = result.plants[0];

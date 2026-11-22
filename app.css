@@ -172,8 +172,11 @@ code { font-family: var(--mono); font-size: 0.92em; }
   .sticky { position: static; }
 }
 @media (max-width: 680px) {
-  .app-header { gap: 12px; padding: 0 12px; overflow-x: auto; }
-  .sim-status { display: none; }
+  /* Two rows: brand, status and buttons on top; every tab visible below (wrapping if needed). */
+  .app-header { height: auto; flex-wrap: wrap; gap: 4px 10px; padding: 8px 12px 0; }
+  .app-nav { order: 10; width: 100%; height: auto; flex-wrap: wrap; gap: 0; margin: 0 -8px; }
+  .app-nav a { padding: 8px; font-size: 14px; }
+  .sim-status { font-size: 11px; white-space: normal; text-align: right; }
   .app-main { padding: 14px 16px 40px; }
   .grid-2 { grid-template-columns: minmax(0, 1fr); }
 }
@@ -300,3 +303,7 @@ details.chart-data summary { color: var(--text-3); cursor: pointer; }
 .data-table thead th[title] { text-decoration: underline dotted var(--text-3); text-underline-offset: 3px; }
 .data-table tbody tr[data-href]:hover td { background: var(--surface-2); }
 .table-more { margin-top: 8px; font-size: 13px; }
+
+/* Results from the company simulation fade while a newer run is in flight (js/app.js). */
+.sim-result { transition: opacity 0.15s; }
+.is-simulating .sim-result { opacity: 0.4; }

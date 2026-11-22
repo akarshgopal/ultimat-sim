@@ -224,6 +224,33 @@
   // ---------------------------------------------------------------- pinned scenario (comparison)
   // A scenario the user pins as a baseline: { scenario, query, result }. It rides in the URL as
   // vs=<its query> (see urlQuery), and runs in its own worker so it never cancels the current run.
+  // Recent results by their exact config (JSON), so returning to a scenario is instant.
+  const runCache = new Map();
+  const RUN_CACHE_SIZE = 8;
+  function remember(key, r) {
+    runCache.delete(key);
+    runCache.set(key, r);
+    while (runCache.size > RUN_CACHE_SIZE) runCache.delete(runCache.keys().next().value);
+  }
+  // The default scenario's run, precomputed by scripts/build-default-run.mjs into the deployed site
+  // (absent in development). Used only if it was made from exactly this config.
+  let precomputed = null; // null = not looked for yet; then a promise
+  let precomputedSettled = false;
+  let defaultKeyMemo = null;
+  const defaultKey = () => (defaultKeyMemo ??= JSON.stringify(toConfig(defaults())));
+  // The build marks the page with <meta name="foundry-default-run" content="<url>">; without it
+  // (development, tests) there is nothing to fetch.
+  function loadPrecomputed() {
+    const url = typeof document !== 'undefined' && document.querySelector('meta[name="foundry-default-run"]')?.content;
+    if (!url) { precomputedSettled = true; precomputed ??= Promise.resolve(); return precomputed; }
+    precomputed ??= fetch(url)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && d.configKey === defaultKey()) remember(d.configKey, { ...d.result, source: 'precomputed' }); })
+      .catch(() => { /* not deployed with one: simulate */ })
+      .finally(() => { precomputedSettled = true; });
+    return precomputed;
+  }
+
   let pinned = null;
   let pinStale = false;
   let pinWorker = null;
@@ -231,11 +258,15 @@
   function runPinned() {
     const id = ++pinSeq;
     const config = toConfig(pinned.scenario);
+    const key = JSON.stringify(config);
     const finish = r => {
       if (id !== pinSeq || !pinned) return;
+      remember(key, r);
       pinned = { ...pinned, result: r };
       notify();
     };
+    const hit = runCache.get(key);
+    if (hit) { setTimeout(() => finish(hit), 0); return; }
     if (workerOk) {
       try {
         pinWorker ||= new Worker('js/sim-worker.js');
@@ -291,14 +322,33 @@
     stale = false;
     const id = ++seq;
     const config = toConfig(scenario);
+    const key = JSON.stringify(config);
     if (busy && worker) { worker.terminate(); worker = startWorker(); } // cancel the superseded run
+    const cached = runCache.get(key);
+    if (cached) { // same inputs as a recent run (Back, Swap, revisiting a scenario): no need to simulate
+      clearTimeout(timer);
+      result = cached;
+      busy = false;
+      progress = null;
+      notify();
+      return;
+    }
+    // The default scenario may be precomputed at build time; look once before simulating it.
+    if (!precomputedSettled && key === defaultKey()) {
+      busy = true;
+      progress = null;
+      notify();
+      loadPrecomputed().then(() => { if (id === seq) { busy = false; runNow(); } });
+      return;
+    }
     busy = true;
     progress = { done: 0, total: config.years };
     notify();
     const started = performance.now();
     const done = r => {
       if (id !== seq) return; // a newer run superseded this one
-      result = { ...r, ms: Math.round(performance.now() - started) };
+      result = { ...r, ms: Math.round(performance.now() - started), source: 'run' };
+      remember(key, result);
       busy = false;
       progress = null;
       notify();

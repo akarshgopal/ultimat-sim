@@ -8,7 +8,7 @@ const DIST = path.join(ROOT, 'dist');
 const BUILD_ID = getBuildId();
 
 // Ship exactly what the browser loads: the page, its styles and scripts, the simulation
-// worker's imports, and the three generated data files. Plant models, the solver and
+// worker's imports, the generated data files, and the precomputed default run. Plant models, the solver and
 // generators run in Node only (scripts/build-pathways.mjs, scripts/build-sites.mjs).
 const INCLUDE = [
   'index.html', 'app.css', 'css', 'js', 'favicon.svg', 'LICENSE', 'NOTICE',
@@ -21,8 +21,16 @@ for (const entry of INCLUDE) {
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.cp(path.join(ROOT, entry), target, { recursive: true });
 }
+// The default scenario's company run, so the views that show it open without simulating.
+const { buildDefaultRun } = await import('./build-default-run.mjs');
+const run = await buildDefaultRun(path.join(DIST, 'data', 'default-run.json'));
+console.log(`Precomputed the default run (${(run.bytes / 1e6).toFixed(2)} MB)`);
 const indexPath = path.join(DIST, 'index.html');
-await fs.writeFile(indexPath, rewriteLocalAssetUrls(await fs.readFile(indexPath, 'utf8'), BUILD_ID));
+// Point the app at the precomputed run (js/store.js), versioned like the other assets.
+const withRun = (await fs.readFile(indexPath, 'utf8')).replace('</head>',
+  '  <meta name="foundry-default-run" content="data/default-run.json">\n</head>');
+await fs.writeFile(indexPath, rewriteLocalAssetUrls(withRun, BUILD_ID).replace(
+  'content="data/default-run.json"', `content="data/default-run.json?v=${BUILD_ID}"`));
 
 console.log(`Built dist/ with asset version ${BUILD_ID}`);
 

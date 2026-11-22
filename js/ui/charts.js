@@ -29,6 +29,11 @@
     return tip;
   }
   const chartRegistry = new Map(); // container → last spec, for resize re-render
+  // The chart whose tooltip is showing, so a tap elsewhere or a scroll can dismiss it (touch has
+  // no pointerleave that means "done looking").
+  let activeHide = null;
+  document.addEventListener('pointerdown', ev => { if (activeHide && !ev.target.closest?.('.chart-svg')) activeHide(); });
+  window.addEventListener('scroll', () => { if (activeHide) activeHide(); }, { passive: true });
 
   function niceStep(span, target) {
     const raw = span / Math.max(1, target);
@@ -222,6 +227,7 @@
         tip.append(el('div', { class: 'tip-row tip-total' }, [el('span', { class: 'tip-key is-empty' }), el('strong', { text: fmt(total) }), el('span', { text: 'Total' })]));
       }
       tip.hidden = false;
+      activeHide = hide;
       const rect = root.getBoundingClientRect();
       const px = clientX ?? rect.left + (x / width) * rect.width;
       const py = clientY ?? rect.top + rect.height * 0.3;
@@ -234,6 +240,7 @@
       tip.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
     };
     const hide = () => {
+      if (activeHide === hide) activeHide = null;
       current = -1;
       cross.setAttribute('visibility', 'hidden');
       dots.setAttribute('visibility', 'hidden');
@@ -244,10 +251,18 @@
       const x = ((clientX - rect.left) / rect.width) * width;
       return clamp(Math.round(((x - pad.left) / iw) * (n - 1)), 0, n - 1);
     };
+    // Mouse: hover. Touch and pen: tap or drag across the chart (touch-action lets vertical scroll
+    // through); the tooltip stays until a tap elsewhere or a scroll.
+    let pointerFocus = false;
+    root.addEventListener('pointerdown', ev => {
+      pointerFocus = true;
+      if (ev.pointerType !== 'mouse') show(indexAt(ev.clientX), ev.clientX, ev.clientY);
+    });
     root.addEventListener('pointermove', ev => show(indexAt(ev.clientX), ev.clientX, ev.clientY));
-    root.addEventListener('pointerleave', hide);
+    root.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse') hide(); });
     root.addEventListener('blur', hide);
-    root.addEventListener('focus', () => show(n - 1));
+    // Keyboard focus starts at the last year; focus from a tap keeps the tapped year.
+    root.addEventListener('focus', () => { if (!pointerFocus) show(n - 1); pointerFocus = false; });
     root.addEventListener('keydown', ev => {
       if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
         ev.preventDefault();

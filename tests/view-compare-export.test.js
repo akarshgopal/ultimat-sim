@@ -91,3 +91,29 @@ test('only views that show simulation results run the 25-year simulation; Back u
   await page.waitForFunction(() => Store.scenario.share === 20);
   assert.deepEqual(errors, []);
 }));
+
+test('tables sort from the keyboard; chart values show on tap, not only on hover', VIEW_TEST, () => withApp(async ({ page, base, errors }) => {
+  await page.goto(base + '#/pathways');
+  await page.waitForSelector('th[data-sort="price"] .th-sort');
+  await page.focus('th[data-sort="price"] .th-sort');
+  await page.keyboard.press('Enter');
+  assert.equal(await page.$eval('th[data-sort="price"]', th => th.getAttribute('aria-sort')), 'descending');
+  await page.keyboard.press(' ');
+  assert.equal(await page.$eval('th[data-sort="price"]', th => th.getAttribute('aria-sort')), 'ascending');
+  assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Price', 'focus stays on the sort button');
+
+  await page.goto(base + '#/company');
+  await simulationIdle(page);
+  const tapAt = frac => page.$eval('svg.chart-svg', (svg, f) => {
+    const r = svg.getBoundingClientRect();
+    svg.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', clientX: r.left + r.width * f, clientY: r.top + r.height / 2 }));
+    svg.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true, pointerType: 'touch' }));
+    const tip = document.getElementById('chartTooltip');
+    return tip && !tip.hidden ? tip.querySelector('.tip-head').textContent : null;
+  }, frac);
+  const year = await tapAt(0.98);
+  assert.equal(year, String(await page.evaluate(() => Store.result.timeline.at(-1).year)), 'a tap shows the tapped year and survives pointerleave');
+  await page.$eval('h1', h => h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })));
+  assert.ok(await page.$eval('#chartTooltip', t => t.hidden), 'a tap elsewhere hides it');
+  assert.deepEqual(errors, []);
+}));

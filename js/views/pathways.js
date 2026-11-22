@@ -157,9 +157,9 @@
         key: 'cost', label: 'Net cost $/kg', num: true, title: 'Full cost per kg including capital, after selling co-products (gross, before co-products, below) at the best site, year 0', get: r => r.cost,
         render: r => r.rank ? [UI.usdKg(r.cost), el('span', { class: 'cell-sub', text: r.rank.coproductCreditUsdPerKg > 0 ? 'gross ' + UI.usdKg(r.rank.grossCostUsdPerKg) : '' })] : '—',
       },
-      { key: 'price', label: 'Price', num: true, get: r => r.price, render: r => UI.usdKg(r.price) },
+      { key: 'price', label: 'Price', csvLabel: 'Price ($/kg)', num: true, get: r => r.price, render: r => UI.usdKg(r.price) },
       {
-        key: 'margin', label: 'Margin', num: true, title: 'Price minus net cost, as share of price', get: r => r.marginShare,
+        key: 'margin', label: 'Margin', csvLabel: 'Margin (share of price)', num: true, title: 'Price minus net cost, as share of price', get: r => r.marginShare,
         render: r => r.rank ? [
           el('span', { class: r.margin >= 0 ? 'is-pos' : 'is-neg', text: UI.usdKg(r.margin) }),
           el('span', { class: 'cell-sub', text: UI.pct(r.marginShare, 0) }),
@@ -233,7 +233,7 @@
         return;
       }
       tableHost.replaceChildren(UI.sortableTable(columns, shown, {
-        sortKey: state.sortKey, sortDir: state.sortDir,
+        sortKey: state.sortKey, sortDir: state.sortDir, csv: 'pathways',
         rowHref: r => href('pathways', r.id),
         rowClass: r => (r.status === 'excluded' ? 'is-dim' : null),
       }));
@@ -669,7 +669,7 @@
           { key: 'cost', label: 'Net cost', num: true, title: 'Full cost per kg after selling co-products', get: r => r.ev.lcopUsdPerKg, render: r => UI.usdKg(r.ev.lcopUsdPerKg) },
           { key: 'margin', label: 'Margin', num: true, get: r => r.ev.marginUsdPerKg, render: r => el('span', { class: r.ev.marginUsdPerKg >= 0 ? 'is-pos' : 'is-neg', text: UI.usdKg(r.ev.marginUsdPerKg) }) },
           { key: 'buy', label: 'Make vs buy', render: r => el('span', { class: 'muted', text: UI.inHouseText(r.ev.integration) || (r.ev.purchasedIntermediates.length ? 'buys ' + r.ev.purchasedIntermediates.join(', ') : '—') }) },
-        ], sites.slice(0, 5), { sortKey: 'cost', sortDir: 'asc', compact: true }));
+        ], sites.slice(0, 5), { sortKey: 'cost', sortDir: 'asc', compact: true, csv: `${pathway.id}-best-sites` }));
         sitesHost.append(el('p', { class: 'muted pw-foot', text: `${sites.length} compatible sites · plant ${UI.tonnes(size * 365 / 1000)}/yr` }));
       }
 
@@ -683,11 +683,11 @@
           { key: 'id', label: '#', num: true, get: p => p.id },
           { key: 'site', label: 'Site', get: p => Store.siteById.get(p.siteId)?.name || p.siteId, render: p => el('a', { href: href('sites', p.siteId), text: Store.siteById.get(p.siteId)?.name || p.siteId }) },
           { key: 'built', label: 'Built', num: true, get: p => p.builtYear, render: p => `${p.builtYear}${p.onlineYear !== p.builtYear ? ' → ' + p.onlineYear : ''}` },
-          { key: 'size', label: 't/yr', num: true, get: p => p.sizeKgPerDay, render: p => UI.num(p.sizeKgPerDay * 365 / 1000) },
+          { key: 'size', label: 't/yr', csv: p => p.sizeKgPerDay * 365 / 1000, num: true, get: p => p.sizeKgPerDay, render: p => UI.num(p.sizeKgPerDay * 365 / 1000) },
           { key: 'capex', label: 'Capex', num: true, get: p => p.capexUsd, render: p => UI.usd(p.capexUsd) },
           { key: 'npv', label: 'NPV at build', num: true, title: 'Lifetime value of the plant when it was built, discounted at the scenario rate', get: p => p.npvAtBuildUsd, render: p => UI.usd(p.npvAtBuildUsd) },
           { key: 'int', label: 'Make vs buy', render: p => el('span', { class: 'muted', text: UI.inHouseText(p.integration) || '—' }) },
-        ], plants, { sortKey: 'id', sortDir: 'asc', compact: true, limit: 10 }));
+        ], plants, { sortKey: 'id', sortDir: 'asc', compact: true, limit: 10, csv: `${pathway.id}-plants` }));
       }
 
       // Cost vs year.

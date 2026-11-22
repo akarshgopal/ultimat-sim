@@ -75,24 +75,24 @@
       );
       const columns = [
         { key: 'name', label: 'Material', get: r => r.name, render: r => el('span', {}, [el('a', { href: href('markets', r.key), text: r.name }), el('span', { class: 'cell-sub', text: r.basis })]) },
-        { key: 'out', label: `Output ${year}`, num: true, get: r => out(r.key) + (last?.captiveTByProduct[r.key] || 0),
+        { key: 'out', label: `Output ${year}`, csvLabel: `Output ${year} (t, incl. in-house)`, num: true, get: r => out(r.key) + (last?.captiveTByProduct[r.key] || 0),
           render: r => el('span', {}, [out(r.key) > 0 ? UI.tonnes(out(r.key)) : el('span', { class: 'muted', text: '—' }),
             last?.captiveTByProduct[r.key] > 0 ? el('span', { class: 'cell-sub', text: `+${UI.tonnes(last.captiveTByProduct[r.key])} in-house` }) : null]) },
-        { key: 'share', label: 'Share', num: true, title: 'Company share of world supply (market group)', get: r => share(r.key) ?? (out(r.key) > 0 ? 0 : -1),
+        { key: 'share', label: 'Share', csvLabel: 'Share of world supply (fraction)', num: true, title: 'Company share of world supply (market group)', get: r => share(r.key) ?? (out(r.key) > 0 ? 0 : -1),
           render: r => (share(r.key) > 0 ? shareCell(UI, share(r.key), scenario.share / 100) : el('span', { class: 'muted', text: '—' })) },
-        { key: 'relief', label: 'Price relief', num: true, title: 'Fall of the realized price below the reference price', get: r => relief(r.key) ?? -1,
+        { key: 'relief', label: 'Price relief', csvLabel: 'Price relief (fraction)', num: true, title: 'Fall of the realized price below the reference price', get: r => relief(r.key) ?? -1,
           render: r => (relief(r.key) > 0 ? UI.pct(relief(r.key)) : el('span', { class: 'muted', text: '—' })) },
-        { key: 'demand', label: 'World demand', num: true, title: 'World demand in the year shown below', get: r => r.worldDemandTPerYear,
+        { key: 'demand', label: 'World demand', csvLabel: 'World demand (t/yr)', num: true, title: 'World demand in the year shown below', get: r => r.worldDemandTPerYear,
           render: r => el('span', {}, [UI.tonnes(r.worldDemandTPerYear) + '/yr', el('span', { class: 'cell-sub', text: String(r.demandYear || '') })]) },
-        { key: 'growth', label: 'Growth', num: true, title: 'Assumed demand growth per year', get: r => r.growthPerYear, render: r => UI.pct(r.growthPerYear || 0) + '/yr' },
-        { key: 'price', label: 'Ref. price', num: true, title: 'Today’s reference price; the typical range is below', get: r => r.priceUsdPerKg,
+        { key: 'growth', label: 'Growth', csvLabel: 'Growth (fraction/yr)', num: true, title: 'Assumed demand growth per year', get: r => r.growthPerYear, render: r => UI.pct(r.growthPerYear || 0) + '/yr' },
+        { key: 'price', label: 'Ref. price', csvLabel: 'Ref. price ($/kg)', num: true, title: 'Today’s reference price; the typical range is below', get: r => r.priceUsdPerKg,
           render: r => el('span', {}, [UI.usdKg(r.priceUsdPerKg) + '/kg', r.priceBandUsdPerKg ? el('span', { class: 'cell-sub', text: r.priceBandUsdPerKg.map(UI.usdKg).join('–') }) : null]) },
         { key: 'elast', label: 'Elasticity', num: true, title: 'How strongly the price falls as the company’s share grows: price = reference × (1 − elasticity × share)', get: r => r.priceElasticity, render: r => (r.priceElasticity ?? 0).toFixed(2) },
         { key: 'quality', label: 'Data', title: 'cited = from a published source; screening = reasoned estimate', get: r => r.quality, render: r => UI.qualityTag(r.quality) },
         { key: 'paths', label: 'Made by', get: r => prodBy.get(r.key).length, render: r => pathwayLinks(UI, href, prodBy.get(r.key)) },
       ];
       tableBox.replaceChildren(UI.sortableTable(columns, rows, {
-        sortKey: 'out', sortDir: 'desc',
+        sortKey: 'out', sortDir: 'desc', csv: 'markets',
         rowHref: r => href('markets', r.key),
         rowClass: r => (out(r.key) > 0 ? 'is-supplied' : 'is-unsupplied'),
       }));
@@ -227,7 +227,7 @@
           { key: 'inhouse', label: 'In-house units', num: true, title: 'Captive units of this pathway built inside other plants', get: r => (r.role === 'primary' ? suppliers[r.pathway.id]?.units || 0 : 0),
             render: r => (r.role === 'primary' && suppliers[r.pathway.id] ? el('span', { title: 'inside ' + [...suppliers[r.pathway.id].consumers].join(', ') }, String(suppliers[r.pathway.id].units)) : '—') },
         ];
-        pathBox.replaceChildren(UI.sortableTable(columns, prods, { sortKey: 'plants', sortDir: 'desc', compact: true, rowClass: r => (Store.pathwayAllowed(r.pathway, scenario) ? null : 'is-dim') }));
+        pathBox.replaceChildren(UI.sortableTable(columns, prods, { sortKey: 'plants', sortDir: 'desc', compact: true, csv: `${key}-producers`, rowClass: r => (Store.pathwayAllowed(r.pathway, scenario) ? null : 'is-dim') }));
         pathBox.querySelector('table').id = 'marketPathways';
       }
       const sup = Object.entries(suppliers);

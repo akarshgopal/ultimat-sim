@@ -120,7 +120,8 @@
       let timer = 0;
       const draw = () => {
         const s = Store.scenario;
-        const key = Store.toQuery(s);
+        const pin = Store.pinned;
+        const key = Store.toQuery(s) + (pin ? '|vs:' + pin.query : '');
         if (key === lastKey) return;
         lastKey = key;
         clearTimeout(timer);
@@ -128,6 +129,10 @@
           const today = Store.abundance(Store.defaults());
           const now = Store.abundance(s);
           const frontier = Store.abundance({ ...s, ...Store.FRONTIER });
+          const pinnedBoard = pin ? Store.abundance(pin.scenario) : null;
+          // "vs pinned 37% (+2 pts)" under a share KPI while a scenario is pinned.
+          const vsPinned = (now, then, digits) => (pinnedBoard
+            ? ` · pinned ${UI.pct(then, digits)} (${now - then >= 0 ? '+' : '−'}${Math.abs((now - then) * 100).toFixed(digits)} pts)` : '');
           const atFrontier = Object.entries(Store.FRONTIER).every(([k, v]) => JSON.stringify(s[k]) === JSON.stringify(v));
           frontierBtn.disabled = atFrontier;
           for (const g of levers) g.sync(s);
@@ -136,26 +141,30 @@
             + (s.ii > 0 ? ` · costs ≤ ${s.ii}× materials` : '') + Object.entries(s.ds || {}).map(([id, d]) => ` · ${d.preset} ${Store.DESIGNS[id]?.name || id}`).join('');
 
           kpis.replaceChildren(
-            UI.kpi('Feasible below today’s price', UI.pct(now.totals.feasibleShare, 0), `${mt(now.totals.feasibleT)}/yr of ${mt(now.totals.worldDemandT)}/yr tracked`),
-            UI.kpi('Abundant (≤ ½ today’s price)', UI.pct(now.totals.abundantShare, 1), `${mt(now.totals.abundantT)}/yr`),
+            UI.kpi('Feasible below today’s price', UI.pct(now.totals.feasibleShare, 0), `${mt(now.totals.feasibleT)}/yr of ${mt(now.totals.worldDemandT)}/yr tracked`
+              + vsPinned(now.totals.feasibleShare, pinnedBoard?.totals.feasibleShare, 0)),
+            UI.kpi('Abundant (≤ ½ today’s price)', UI.pct(now.totals.abundantShare, 1), `${mt(now.totals.abundantT)}/yr`
+              + vsPinned(now.totals.abundantShare, pinnedBoard?.totals.abundantShare, 1)),
             UI.kpi('Today → frontier', `${UI.pct(today.totals.feasibleShare, 0)} → ${UI.pct(frontier.totals.feasibleShare, 0)}`, 'share of tonnage feasible'),
             UI.kpi('Not yet covered', mt(now.totals.uncoveredT) + '/yr', 'no pathway, or coproduct only'),
           );
-          barsHost.replaceChildren(legend, bar('Today', today), bar('Your scenario', now), bar('Frontier', frontier));
+          barsHost.replaceChildren(legend, bar('Today', today), pinnedBoard ? bar('Pinned', pinnedBoard) : null, bar('Your scenario', now), bar('Frontier', frontier));
 
           blockersHost.replaceChildren(blockerList(now, 'In this scenario'), blockerList(frontier, 'At the frontier'));
 
           const byProduct = b => new Map(b.rows.map(r => [r.product, r]));
           const t0 = byProduct(today);
           const f0 = byProduct(frontier);
+          const p0 = pinnedBoard ? byProduct(pinnedBoard) : null;
           const pathwayName = id => Store.pathwayById.get(id)?.name || id;
           tableHost.replaceChildren(UI.sortableTable([
             { key: 'name', label: 'Material', get: r => UI.productName(r.product),
               render: r => [el('a', { href: href('markets', r.product), text: UI.productName(r.product) }),
                 r.pathwayId ? el('a', { class: 'cell-sub', href: href('pathways', r.pathwayId), text: pathwayName(r.pathwayId) + (r.siteId ? ' · ' + (Store.siteById.get(r.siteId)?.name || r.siteId) : '') }) : null] },
-            { key: 'demand', label: 'World demand', num: true, get: r => r.worldDemandT, render: r => UI.tonnes(r.worldDemandT) + '/yr' },
-            { key: 'price', label: 'Price', num: true, get: r => r.priceUsdPerKg, render: r => UI.usdKg(r.priceUsdPerKg) + '/kg' },
+            { key: 'demand', label: 'World demand', csvLabel: 'World demand (t/yr)', num: true, get: r => r.worldDemandT, render: r => UI.tonnes(r.worldDemandT) + '/yr' },
+            { key: 'price', label: 'Price', csvLabel: 'Price ($/kg)', num: true, get: r => r.priceUsdPerKg, render: r => UI.usdKg(r.priceUsdPerKg) + '/kg' },
             { key: 'today', label: 'Today', get: r => ORDER.indexOf(t0.get(r.product)?.status), render: r => [statusTag(t0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(t0.get(r.product)))] },
+            pinnedBoard ? { key: 'pinned', label: 'Pinned', get: r => ORDER.indexOf(p0.get(r.product)?.status), render: r => [statusTag(p0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(p0.get(r.product)))] } : null,
             { key: 'now', label: 'Scenario', get: r => ORDER.indexOf(r.status), render: r => [statusTag(r.status), el('span', { class: 'cell-sub' }, ratio(r))] },
             { key: 'frontier', label: 'Frontier', get: r => ORDER.indexOf(f0.get(r.product)?.status), render: r => [statusTag(f0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(f0.get(r.product)))] },
             { key: 'cost', label: 'Cost/kg (scenario)', num: true, get: r => r.lcopUsdPerKg ?? Infinity, render: r => (Number.isFinite(r.lcopUsdPerKg) ? [UI.usdKg(r.lcopUsdPerKg), r.unsellableCoproductUsdPerKg > 0.0005
@@ -164,7 +173,7 @@
             { key: 'kwh', label: 'kWh/kg', num: true, get: r => r.energyKWhPerKg ?? -1, render: r => (Number.isFinite(r.energyKWhPerKg) ? UI.num(r.energyKWhPerKg) : '—') },
             { key: 'blocker', label: 'Largest cost item (scenario → frontier)', get: r => r.blocker?.usdPerKg ?? -1,
               render: r => (r.blocker ? [el('span', { text: itemText(r.blocker) }), el('span', { class: 'cell-sub', text: '→ ' + itemText(f0.get(r.product)?.blocker) })] : el('span', { class: 'muted', text: '—' })) },
-          ], now.rows, { sortKey: 'demand', sortDir: 'desc', compact: true,
+          ], now.rows, { sortKey: 'demand', sortDir: 'desc', compact: true, csv: 'abundance-materials',
             rowClass: r => (r.status === 'no-pathway' || r.status === 'coproduct' ? 'is-dim' : '') }));
         }, 30);
       };

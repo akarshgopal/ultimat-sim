@@ -79,3 +79,6 @@
   .v-company .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .v-company .kpi-value { font-size: 18px; }
 }
+.v-company .download-row { font-size: 12px; gap: 12px; }
+.v-company .pin-compare .grid-2 { align-items: start; }
+.v-company .pin-compare[hidden] { display: none; }

@@ -175,7 +175,7 @@
           { key: 'factor', label: 'Mfg ×', num: true, title: 'Manufacturing markup: cost to make the part ÷ its raw materials', get: r => r.manufacturing ?? -1, render: r => (r.manufacturing == null ? '—' : UI.num(r.manufacturing, 2) + '×') },
           { key: 'usd', label: '$', num: true, get: r => r.usd, render: r => el('strong', { text: UI.usd(r.usd, 3) }) },
           { key: 'share', label: 'Share', num: true, get: r => r.usd / total, render: r => UI.pct(r.usd / total, 0) },
-        ], rows, { sortKey: 'usd', sortDir: 'desc', compact: true }));
+        ], rows, { sortKey: 'usd', sortDir: 'desc', compact: true, csv: `bill-of-materials-${id}` }));
 
         const active = Store.scenario.ds?.[id];
         const applied = active && active.preset === preset && JSON.stringify(active.overrides || {}) === JSON.stringify(overrides);
@@ -209,7 +209,7 @@
               ? el('a', { href: href('designs', owner), text: (Store.scenario.ds?.[owner] ? 'designed: ' : 'design available: ') + Store.DESIGNS[owner].name })
               : b.kind === 'unit' ? 'no design yet' : b.kind)];
           } },
-        ], rows, { sortKey: 'demand', sortDir: 'desc', compact: true }));
+        ], rows, { sortKey: 'demand', sortDir: 'desc', compact: true, csv: 'blocked-tonnage' }));
       }
 
       syncControls();

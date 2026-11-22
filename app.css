@@ -176,7 +176,10 @@ code { font-family: var(--mono); font-size: 0.92em; }
   .app-header { height: auto; flex-wrap: wrap; gap: 4px 10px; padding: 8px 12px 0; }
   .app-nav { order: 10; width: 100%; height: auto; flex-wrap: wrap; gap: 0; margin: 0 -8px; }
   .app-nav a { padding: 8px; font-size: 14px; }
-  .sim-status { font-size: 11px; white-space: normal; text-align: right; }
+  .sim-status { order: 11; width: 100%; font-size: 11px; white-space: normal; }
+  .sim-status:empty { display: none; }
+  .header-spacer { flex: 1 0 0; }
+  .icon-button { padding: 0 8px; }
   .app-main { padding: 14px 16px 40px; }
   .grid-2 { grid-template-columns: minmax(0, 1fr); }
 }
@@ -302,8 +305,33 @@ details.chart-data summary { color: var(--text-3); cursor: pointer; }
 /* Column headers that explain themselves on hover; clickable rows highlight. */
 .data-table thead th[title] { text-decoration: underline dotted var(--text-3); text-underline-offset: 3px; }
 .data-table tbody tr[data-href]:hover td { background: var(--surface-2); }
-.table-more { margin-top: 8px; font-size: 13px; }
+.table-more { font-size: 13px; }
 
 /* Results from the company simulation fade while a newer run is in flight (js/app.js). */
 .sim-result { transition: opacity 0.15s; }
 .is-simulating .sim-result { opacity: 0.4; }
+
+/* Comparison bar (js/app.js): under the header while a scenario is pinned. */
+.compare-bar {
+  position: sticky; top: var(--header-h); z-index: 19;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+  padding: 8px 20px; font-size: 13px;
+  background: var(--accent-soft); color: var(--text); border-bottom: 1px solid var(--border);
+}
+.compare-bar[hidden] { display: none; }
+.compare-bar .compare-diff { color: var(--text-2); }
+#pinBtn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+@media (max-width: 680px) {
+  .compare-bar { position: static; padding: 8px 16px; }
+}
+/* Text-style button (Show all rows, Swap, Unpin, Download CSV…), usable in any view. */
+.link-button { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; cursor: pointer; }
+.link-button:hover { text-decoration: underline; }
+.link-button:disabled { color: var(--text-3); cursor: default; text-decoration: none; }
+.table-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 8px; }
+.table-foot .table-csv { margin-left: auto; font-size: 12px; }
+#pinBtn .label-short { display: none; }
+@media (max-width: 680px) {
+  #pinBtn .label-long { display: none; }
+  #pinBtn .label-short { display: inline; }
+}

@@ -144,7 +144,7 @@
           { key: 'capped', label: s.ii > 0 ? `At ${s.ii}× materials` : 'Scenario price', num: true, get: r => r.capped,
             render: r => el('span', { class: r.capped < r.c.todayUsdPerUnit ? 'is-pos' : '', text: money(r.capped, r.c.unit) + (r.capped < r.c.todayUsdPerUnit ? ` (−${UI.pct(1 - r.capped / r.c.todayUsdPerUnit, 0)})` : '') }) },
           { key: 'top', label: 'Main materials', render: r => el('span', { class: 'muted', text: r.top.map(([m, v]) => `${m} ${money(v, r.c.unit)}`).join(' · ') }) },
-        ], rows, { sortKey: 'ii', sortDir: 'desc', compact: true }));
+        ], rows, { sortKey: 'ii', sortDir: 'desc', compact: true, csv: 'idiot-index' }));
         iiHost.append(el('p', { class: 'muted', text: 'Screening estimates: engineering material inventories at 2024–25 commodity prices; sources in data/bom.js.' }));
       }
 
@@ -215,16 +215,18 @@
             { key: 'name', label: 'Pathway', get: x => pathway(x.r.pathwayId)?.name || x.r.pathwayId,
               render: x => [el('a', { href: href('pathways', x.r.pathwayId), text: pathway(x.r.pathwayId)?.name || x.r.pathwayId }), el('span', { class: 'cell-sub', text: UI.productName(x.r.product) })] },
             { key: 'kwh', label: 'kWh/kg', num: true, get: x => x.r.energyKWhPerKg, render: x => UI.num(x.r.energyKWhPerKg) },
-            { key: 'demand', label: 'World demand', num: true, get: x => Store.MARKETS[groupOf(x.r.product)]?.worldDemandTPerYear, render: x => UI.tonnes(Store.MARKETS[groupOf(x.r.product)]?.worldDemandTPerYear) + '/yr' },
+            { key: 'demand', label: 'World demand', csvLabel: 'World demand (t/yr)', num: true, get: x => Store.MARKETS[groupOf(x.r.product)]?.worldDemandTPerYear, render: x => UI.tonnes(Store.MARKETS[groupOf(x.r.product)]?.worldDemandTPerYear) + '/yr' },
             ...sets.map((set, i) => ({
               key: 'e' + set.equip, label: `equip ×${set.equip}`, num: true,
               title: `Break-even electricity price with equipment at ×${set.equip}`,
+              csvLabel: `Break-even $/kWh, equip ×${set.equip}`,
+              csv: x => { const c = x.cells[i]; if (!c) return ''; if (c.limitedBy === 'not-energy') return 'never'; if (c.limitedBy === 'feasible-at-any-price') return 'any'; return c.breakevenUsdPerKWh; },
               get: x => breakevenKey(x.cells[i]),
               render: x => cell(UI, x.cells[i], eff),
             })),
-            { key: 'free', label: 'Cost at 0¢/kWh', num: true, title: 'Net cost per kg with free electricity, at the current equipment multiplier', get: x => x.r.atFreeEnergy.lcopUsdPerKg,
+            { key: 'free', label: 'Cost at 0¢/kWh', csvLabel: 'Net cost at 0¢/kWh ($/kg)', num: true, title: 'Net cost per kg with free electricity, at the current equipment multiplier', get: x => x.r.atFreeEnergy.lcopUsdPerKg,
               render: x => `${UI.usdKg(x.r.atFreeEnergy.lcopUsdPerKg)} vs ${UI.usdKg(x.r.today?.priceUsdPerKg)}` },
-          ], rows, { sortKey: 'e' + s.equip, sortDir: 'desc', rowClass: x => (best(x) < 0 ? 'is-dim' : '') }));
+          ], rows, { sortKey: 'e' + s.equip, sortDir: 'desc', csv: 'breakeven-electricity', rowClass: x => (best(x) < 0 ? 'is-dim' : '') }));
 
           // Cost structure at the current scenario.
           const parts = [

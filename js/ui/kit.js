@@ -129,13 +129,19 @@
     const draw = () => {
       const head = el('tr');
       for (const c of columns) {
-        const th = el('th', { scope: 'col', class: c.num ? 'num' : '', 'data-sort': c.get ? c.key : null, title: c.title || null, text: c.label });
+        // Sortable headers hold a button, so sorting works from the keyboard (Tab, Enter/Space) and
+        // screen readers announce it; aria-sort on the header says the current order.
+        const th = el('th', { scope: 'col', class: c.num ? 'num' : '', 'data-sort': c.get ? c.key : null, title: c.title || null },
+          c.get ? el('button', { type: 'button', class: 'th-sort', text: c.label }) : c.label);
         if (c.key === sortKey) th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
         if (c.get) {
           th.addEventListener('click', () => {
             if (sortKey === c.key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
             else { sortKey = c.key; sortDir = c.num ? 'desc' : 'asc'; }
+            const hadFocus = th.contains(document.activeElement);
             draw();
+            // The header is rebuilt; keep keyboard focus on this column's (new) sort button.
+            if (hadFocus) thead.querySelector(`th[data-sort="${CSS.escape(c.key)}"] .th-sort`)?.focus();
           });
         }
         head.append(th);

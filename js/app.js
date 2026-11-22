@@ -22,6 +22,8 @@
     { id: 'markets', label: 'Markets', hint: 'World demand, prices, and the company’s share' },
   ];
 
+  const METHOD_URL = 'https://github.com/akarshgopal/ultimat-sim#how-the-company-simulator-works';
+
   function parseHash() {
     const raw = location.hash.replace(/^#\/?/, '');
     const [pathPart, query = ''] = raw.split('?');
@@ -56,7 +58,7 @@
     }
     lastQuery = query;
     document.querySelector('.brand').setAttribute('href', href('abundance'));
-    for (const a of document.querySelectorAll('.app-nav a')) {
+    for (const a of document.querySelectorAll('.app-nav a[data-view]')) {
       a.setAttribute('href', href(a.dataset.view));
       if (a.dataset.view === view) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
@@ -90,12 +92,12 @@
       else history.replaceState(null, '', next);
       lastChangeAt = now;
       lastQuery = q;
-      for (const a of document.querySelectorAll('.app-nav a, .brand')) a.setAttribute('href', href(a.dataset.view));
+      for (const a of document.querySelectorAll('.app-nav a[data-view], .brand')) a.setAttribute('href', href(a.dataset.view));
     }
     const status = document.getElementById('simStatus');
     status.classList.toggle('is-busy', busy);
     status.textContent = busy ? progressText(Store.progress)
-      : result && !Store.stale ? `${result.summary.years}-year run · ${result.ms} ms` : '';
+      : result && !Store.stale ? `${result.summary.years}-year run · ${result.source === 'precomputed' ? 'precomputed' : result.ms + ' ms'}` : '';
     // Views mark what comes from the simulation with .sim-result; it fades while a newer run is in
     // flight so stale numbers never pass for current ones.
     document.documentElement.classList.toggle('is-simulating', busy);
@@ -167,6 +169,9 @@
   function init() {
     const nav = document.querySelector('.app-nav');
     for (const item of NAV) nav.append(el('a', { href: '#/' + item.id, 'data-view': item.id, title: item.hint, text: item.label }));
+    // How it works: the README's method, results, data sources and known limits.
+    nav.append(el('a', { class: 'nav-external', href: METHOD_URL, target: '_blank', rel: 'noopener',
+      title: 'How the model works, its data sources and known limits (README on GitHub, opens in a new tab)', text: 'Method ↗' }));
     initTheme();
     initCopyLink();
     initPin();

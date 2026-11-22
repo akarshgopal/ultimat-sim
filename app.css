@@ -14,7 +14,7 @@
   --border-strong: #cfd4dc;
   --text: #161a20;
   --text-2: #4a5260;
-  --text-3: #7a8291;
+  --text-3: #68707f; /* ≥ 4.5:1 on --surface and --bg (WCAG AA for small text) */
   --accent: #2457d6;
   --accent-soft: #e8eefc;
   --pos: #137a4c;
@@ -253,7 +253,7 @@ code { font-family: var(--mono); font-size: 0.92em; }
 .legend-swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--swatch); }
 .legend-swatch.is-line { height: 2px; border-radius: 1px; }
 .chart-body { width: 100%; min-height: 120px; }
-.chart-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart-svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
 .chart-svg:focus { outline: none; }
 .chart-svg:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
 .chart-grid-lines line { stroke: var(--border); stroke-width: 1; }
@@ -335,3 +335,8 @@ details.chart-data summary { color: var(--text-3); cursor: pointer; }
   #pinBtn .label-long { display: none; }
   #pinBtn .label-short { display: inline; }
 }
+.app-nav a.nav-external { color: var(--text-3); }
+.app-nav a.nav-external:hover { color: var(--text); }
+/* Sort buttons fill their header and look like it (js/ui/kit.js sortableTable). */
+.data-table th .th-sort { all: unset; cursor: pointer; display: inline; }
+.data-table th .th-sort:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }

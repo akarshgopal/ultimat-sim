@@ -158,11 +158,9 @@
         loopBox.checked = s.loop;
         loopBox.disabled = !(s.ii > 0);
         drawIdiot(s);
-        const result = Store.result;
-        const tl = result?.timeline || [];
         const kwhNow = effectiveKWh(s);
         leverNote.textContent = `Solar ${cents(kwhNow)}/kWh at start${s.ii > 0 && kwhNow < s.kwh - 1e-9 ? ` (squeezed from ${cents(s.kwh)})` : ''}, falling ${s.kwhDecline}%/yr to a ${cents(s.kwhFloor)} floor · equipment ×${s.equip} · batteries $${s.battery}/kWh${s.ii > 0 ? ` · every cost capped at ${s.ii}× raw materials` : ''}`
-          + (tl.length ? ` · ${tl.at(-1).year}: ${cents(tl.at(-1).solarUsdPerKWh)}/kWh` : '');
+;
       };
 
       const draw = () => {

@@ -5,7 +5,7 @@ const { VIEW_TEST, withApp, simulationIdle } = require('./helpers.js');
 
 test('pin a scenario, change it, compare on Abundance and Company; the link carries both; swap and unpin', VIEW_TEST, () => withApp(async ({ page, base, errors }) => {
   await page.goto(base + '#/abundance');
-  await simulationIdle(page);
+  await page.waitForSelector('#view .kpi-value');
   await page.click('#pinBtn');
   assert.match(await page.textContent('#compareBar'), /Nothing changed yet/);
   assert.ok(!/null/.test(await page.textContent('#compareBar')));
@@ -58,5 +58,36 @@ test('tables download as CSV with raw numbers; Company downloads its run', VIEW_
   const run = await grab('text=full run (JSON)');
   const json = JSON.parse(run.lines.join('\r\n'));
   assert.equal(json.plants.length, await page.evaluate(() => Store.result.plants.length));
+  assert.deepEqual(errors, []);
+}));
+
+test('only views that show simulation results run the 25-year simulation; Back undoes scenario changes', VIEW_TEST, () => withApp(async ({ page, base, errors }) => {
+  // Abundance never starts the company simulation, even when the scenario changes.
+  await page.goto(base + '#/abundance');
+  await page.waitForSelector('#view .kpi-value');
+  await page.click('button:has-text("3× cheaper")');
+  await page.waitForTimeout(600);
+  assert.deepEqual(await page.evaluate(() => ({ busy: Store.busy, result: Boolean(Store.result) })), { busy: false, result: false });
+
+  // Opening Company runs it once for the current scenario.
+  await page.click('.app-nav a[data-view="company"]');
+  await simulationIdle(page);
+  assert.ok(await page.evaluate(() => Store.result.config.pv.capexUsdPerKWp > 0));
+  const kwh = await page.evaluate(() => Store.scenario.kwh);
+
+  // Two separate edits are two Back steps; each Back restores the scenario before it.
+  await page.fill('#co-f-share', '20');
+  await page.waitForTimeout(1300);
+  await page.fill('#co-f-share', '30');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => Store.scenario.share), 30);
+  await page.goBack();
+  await page.waitForFunction(() => Store.scenario.share === 20);
+  await page.goBack();
+  await page.waitForFunction(() => Store.scenario.share === 10);
+  assert.equal(await page.evaluate(() => Store.scenario.kwh), kwh, 'Back stops at the scenario Company opened with');
+  assert.match(await page.evaluate(() => location.hash), /^#\/company/);
+  await page.goForward();
+  await page.waitForFunction(() => Store.scenario.share === 20);
   assert.deepEqual(errors, []);
 }));

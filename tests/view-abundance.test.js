@@ -21,5 +21,9 @@ test('abundance view is the landing page: tonnage bars, blockers, materials; fro
   await page.waitForFunction(() => [...document.querySelectorAll('#view button')]
     .find(b => b.textContent.includes('Set the scenario to the frontier'))?.disabled);
   assert.ok(await share() > before, 'the frontier makes more of the world’s tonnage feasible');
+  // The logo goes home without dropping the scenario.
+  assert.match(await page.$eval('.brand', a => a.getAttribute('href')), /^#\/abundance\?.*ii=1\.5/);
+  await page.click('.brand');
+  assert.match(await page.evaluate(() => location.hash), /ii=1\.5/);
   assert.deepEqual(errors, []);
 }));

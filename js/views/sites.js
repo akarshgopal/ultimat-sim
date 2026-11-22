@@ -175,7 +175,7 @@
   const marginText = (UI, m) => (m < -1 ? '< −100%' : UI.pct(m, 0));
   function resourceTags(UI, site) {
     return UI.el('span', { class: 'tag-row' }, [
-      site.coastal ? UI.el('span', { class: 'tag', title: site.seawaterAssayId || '' }, [UI.originDot('ocean'), 'Seawater']) : null,
+      site.coastal ? UI.el('span', { class: 'tag', title: site.seawaterAssayId ? `Local assay ${site.seawaterAssayId} (reference only; recipes use their own assay)` : '' }, [UI.originDot('ocean'), 'Seawater']) : null,
       site.brineAssayId ? UI.el('span', { class: 'tag', title: site.brineAssayId }, [UI.originDot('brine'), 'Brine']) : null,
       !site.coastal && !site.brineAssayId ? UI.el('span', { class: 'muted', text: 'Inland' }) : null,
     ]);
@@ -272,7 +272,8 @@
         UI.qualityTag(land?.quality),
         el('span', { class: 'cell-sub' }, land ? [land.name + (land.url ? ' · ' : ''), land.url ? el('a', { href: land.url, target: '_blank', rel: 'noopener', text: 'source' }) : null] : 'No site-specific land price: the engine default applies.'),
       ]),
-      el('dt', { text: 'Seawater assay' }), el('dd', {}, site.coastal ? el('code', { text: site.seawaterAssayId || 'coastal' }) : 'none (inland)'),
+      el('dt', { text: 'Seawater assay' }), el('dd', {}, site.coastal ? [el('code', { text: site.seawaterAssayId || 'coastal' }),
+        el('span', { class: 'cell-sub', text: 'Reference only: each coastal recipe is costed on the assay it was modelled with, not this one.' })] : 'none (inland)'),
       el('dt', { text: 'Brine assay' }), el('dd', {}, site.brineAssayId ? el('code', { text: site.brineAssayId }) : 'none'),
     ]);
     root.append(

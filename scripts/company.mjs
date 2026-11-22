@@ -19,7 +19,7 @@ const FLAGS = {
   '--start': (cfg, v) => { cfg.startYear = Number(v); },
   '--equity': (cfg, v) => { (cfg.finance ||= {}).initialEquityUsd = Number(v); },
   '--debt': (cfg, v) => { (cfg.finance ||= {}).debtFraction = Number(v); },
-  '--share': (cfg, v) => { (cfg.build ||= {}).maxMarketShare = Number(v); },
+  '--share': (cfg, v) => { (cfg.build ||= {}).maxMarketShare = v === '' || v == null || v === 'none' ? null : Number(v); },
   '--site-gw': (cfg, v) => { (cfg.build ||= {}).maxPvGWpPerSite = Number(v); },
   '--land-share': (cfg, v) => { (cfg.build ||= {}).landUseShare = Number(v); },
   '--pv': (cfg, v) => { (cfg.pv ||= {}).capexUsdPerKWp = Number(v); },

@@ -43,6 +43,7 @@
     const { view, id, query } = parseHash();
     if (query !== lastQuery && query !== Store.toQuery(Store.scenario)) Store.load(query);
     lastQuery = query;
+    document.querySelector('.brand').setAttribute('href', href('abundance'));
     for (const a of document.querySelectorAll('.app-nav a')) {
       a.setAttribute('href', href(a.dataset.view));
       if (a.dataset.view === view) a.setAttribute('aria-current', 'page');
@@ -74,7 +75,7 @@
     if (next !== location.hash) {
       history.replaceState(null, '', next);
       lastQuery = q;
-      for (const a of document.querySelectorAll('.app-nav a')) a.setAttribute('href', href(a.dataset.view));
+      for (const a of document.querySelectorAll('.app-nav a, .brand')) a.setAttribute('href', href(a.dataset.view));
     }
     const status = document.getElementById('simStatus');
     status.classList.toggle('is-busy', busy);

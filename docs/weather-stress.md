@@ -19,12 +19,12 @@ npm run weather:fetch    # re-fetch the hourly data (PVGIS, ~2 MB)
 | | Feasible share of world tonnage | | |
 |---|---|---|---|
 | | Typical days | Real weather, accepting trips | Real weather, firmed to ≤ 1 trip day a year |
-| Today | 39.5% | 39.5% | **0%** |
-| Frontier | 93.6% | 93.6% | **93.6%** |
+| Today | 36.9% | 36.9% | **0%** |
+| Frontier | 91.0% | 91.0% | **91.0%** |
 
 - **Output barely moves.** Real weather costs firmed plants 1–4% of annual output at Walvis Bay and Dakhla, 4% at the Dead Sea. Sun-following plants (electrolysis, DAC, methane, methanol) lose nothing: they never promised a night.
 - **Trips do.** Steady units trip on 2–5% of days at the sunbelt coasts and on 12.5% at the Dead Sea, where winter brings cloudy runs.
-- **At the frontier, firming is cheap.** Storage at 1.5× its raw materials makes the 4–13× larger stores that ride through cloudy runs affordable: cement 0.27 → 0.33× its price, float glass 0.34 → 0.39×, aluminium 0.35 → 0.82×, polysilicon 0.39 → 0.74×. The 94% feasible headline holds, and 91% of world tonnage stays abundant (≤ ½ today's price; aluminium and polysilicon drop out).
+- **At the frontier, firming is cheap.** Storage at 1.5× its raw materials makes the 4–13× larger stores that ride through cloudy runs affordable: cement 0.27 → 0.33× its price, float glass 0.34 → 0.39×, aluminium 0.35 → 0.82×, polysilicon 0.39 → 0.74×. The 91% feasible headline holds, and 89% of world tonnage stays abundant (≤ ½ today's price; aluminium and polysilicon drop out).
 - **Today, it is not.** At $350/kWh batteries, firming every steady plant against cloudy runs pushes it past its price (cement 0.68 → 2.2× at Taltal, PV modules 0.67 → 1.01×, silicon 0.76 → 1.44× at Walvis Bay). Today's feasibility relies on steady units tolerating a few trips a month: plausible for cement and glass kilns, which can bank hot for a day; not for an aluminium smelter, whose pots freeze.
 
 ## What changed in the model

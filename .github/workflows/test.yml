@@ -16,4 +16,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # Playwright is not a package dependency (the app has none); install it here so the view
+      # tests run instead of skipping, and fail the job if they would skip.
+      - run: npm install --no-save playwright@1.63.0
+      - run: npx playwright install --with-deps chromium
       - run: npm test
+        env:
+          REQUIRE_VIEW_TESTS: '1'

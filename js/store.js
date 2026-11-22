@@ -225,6 +225,7 @@
   // A scenario the user pins as a baseline: { scenario, query, result }. It rides in the URL as
   // vs=<its query> (see urlQuery), and runs in its own worker so it never cancels the current run.
   let pinned = null;
+  let pinStale = false;
   let pinWorker = null;
   let pinSeq = 0;
   function runPinned() {
@@ -252,7 +253,7 @@
   }
   function setPinned(s, r) {
     pinned = { scenario: s, query: toQuery(s), result: r || null };
-    if (!pinned.result) runPinned();
+    if (!pinned.result) { if (wanted) runPinned(); else pinStale = true; }
   }
   // The URL query: the current scenario, plus vs=<pinned scenario's query> when one is pinned.
   function urlQuery() {
@@ -275,7 +276,19 @@
     return out;
   }
 
+  // Only views that show company-simulation results ask for them (Store.want); elsewhere a
+  // scenario change marks the result stale and the run waits until such a view is opened.
+  let wanted = false;
+  let stale = false;
   function runNow() {
+    if (!wanted) {
+      stale = true;
+      clearTimeout(timer);
+      if (busy) { seq++; if (worker) { worker.terminate(); worker = startWorker(); } busy = false; progress = null; }
+      notify();
+      return;
+    }
+    stale = false;
     const id = ++seq;
     const config = toConfig(scenario);
     if (busy && worker) { worker.terminate(); worker = startWorker(); } // cancel the superseded run
@@ -372,6 +385,16 @@
     },
     urlQuery,
     describeDiff,
+    // Views that show simulation results call want(true) when mounted (app.js does this from the
+    // view's needsSimulation flag); a stale result is then brought up to date.
+    want(flag) {
+      wanted = Boolean(flag);
+      if (!wanted) return;
+      if (stale || (!result && !busy)) runNow();
+      if (pinned && !pinned.result && pinStale) { pinStale = false; runPinned(); }
+    },
+    // True when the scenario changed while no view needed the simulation: result is out of date.
+    get stale() { return stale; },
     get pinned() { return pinned; },
     // Pin the current scenario (and its result, if current) as the comparison baseline.
     pin() { setPinned({ ...scenario }, busy ? null : result); notify(); },

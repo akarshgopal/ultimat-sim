@@ -8,6 +8,7 @@
 
   globalThis.Views.company = {
     title: 'Company',
+    needsSimulation: true, // shows company-simulation results (Store.want)
     mount(root, ctx) {
       const { Store, UI, Charts, href } = ctx;
       const { el } = UI;

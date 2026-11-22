@@ -38,10 +38,22 @@
   let cleanup = null;
   let mounted = null;
   let lastQuery = null;
+  // Scenario history: each change the user makes adds a browser history entry, so Back undoes it;
+  // changes less than HISTORY_GAP_MS apart (typing a number, dragging a slider) share one entry.
+  // URL updates caused by loading a URL (a link, Back/Forward) replace instead of adding.
+  const HISTORY_GAP_MS = 1000;
+  let loadingFromUrl = false;
+  let lastChangeAt = 0;
 
   function render() {
     const { view, id, query } = parseHash();
-    if (query !== lastQuery && query !== Store.urlQuery()) Store.load(query);
+    // Ask for the company simulation only on views that show it, before loading a changed
+    // scenario, so a scenario change elsewhere does not start a run nobody looks at.
+    Store.want(Boolean(Views[view]?.needsSimulation));
+    if (query !== lastQuery && query !== Store.urlQuery()) {
+      loadingFromUrl = true;
+      try { Store.load(query); } finally { loadingFromUrl = false; }
+    }
     lastQuery = query;
     document.querySelector('.brand').setAttribute('href', href('abundance'));
     for (const a of document.querySelectorAll('.app-nav a')) {
@@ -67,20 +79,23 @@
     window.scrollTo(0, 0);
   }
 
-  // Keep the URL's scenario query in sync with the store (without adding history entries).
+  // Keep the URL's scenario query in sync with the store.
   Store.subscribe(({ scenario, result, busy }) => {
     const { path } = parseHash();
     const q = Store.urlQuery();
     const next = '#/' + (path.length ? path.map(encodeURIComponent).join('/') : 'abundance') + (q ? '?' + q : '');
     if (next !== location.hash) {
-      history.replaceState(null, '', next);
+      const now = Date.now();
+      if (!loadingFromUrl && now - lastChangeAt > HISTORY_GAP_MS) history.pushState(null, '', next);
+      else history.replaceState(null, '', next);
+      lastChangeAt = now;
       lastQuery = q;
       for (const a of document.querySelectorAll('.app-nav a, .brand')) a.setAttribute('href', href(a.dataset.view));
     }
     const status = document.getElementById('simStatus');
     status.classList.toggle('is-busy', busy);
     status.textContent = busy ? progressText(Store.progress)
-      : result ? `${result.summary.years}-year run · ${result.ms} ms` : '';
+      : result && !Store.stale ? `${result.summary.years}-year run · ${result.ms} ms` : '';
     // Views mark what comes from the simulation with .sim-result; it fades while a newer run is in
     // flight so stale numbers never pass for current ones.
     document.documentElement.classList.toggle('is-simulating', busy);
@@ -156,8 +171,10 @@
     initCopyLink();
     initPin();
     renderCompareBar(Store);
-    const { query } = parseHash();
-    Store.load(query);
+    const { view, query } = parseHash();
+    Store.want(Boolean(Views[view]?.needsSimulation));
+    loadingFromUrl = true;
+    try { Store.load(query); } finally { loadingFromUrl = false; }
     lastQuery = query;
     window.addEventListener('hashchange', render);
     render();

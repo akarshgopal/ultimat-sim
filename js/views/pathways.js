@@ -790,6 +790,7 @@
   // ------------------------------------------------------------------ register
   globalThis.Views.pathways = {
     title: 'Pathways',
+    needsSimulation: true, // shows company-simulation results (Store.want)
     mount(root, ctx) {
       return ctx.params.id ? mountDetail(root, ctx) : mountList(root, ctx);
     },

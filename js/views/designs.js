@@ -34,6 +34,13 @@
         href: href('designs', k), text: Store.DESIGNS[k].name, 'aria-current': k === id ? 'page' : null,
         class: Store.scenario.ds?.[k] ? 'is-active' : '',
       }))));
+      // Phones: the same choice as a dropdown (the tab strip wraps into a tall block there).
+      const picker = el('select', { class: 'control ds-picker', 'aria-label': 'Design' }, ids.map(k => el('option', {
+        value: k, text: Store.DESIGNS[k].name + (Store.scenario.ds?.[k] ? ' ● in use' : ''),
+      })));
+      picker.value = id;
+      picker.addEventListener('change', () => { location.hash = href('designs', picker.value); });
+      root.append(el('label', { class: 'ds-picker-row' }, [el('span', { class: 'field-label', text: 'Design' }), picker]));
 
       // ---------------------------------------------------------------- state
       const fromScenario = Store.scenario.ds?.[id];

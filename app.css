@@ -350,3 +350,10 @@ html.header-wrap .sim-status:empty { display: none; }
 html.header-wrap .header-spacer { flex: 1 0 0; }
 html.header-wrap .icon-button { padding: 0 8px; }
 html.header-wrap .compare-bar { position: static; }
+/* Search box in a card's header (Abundance and Markets tables). */
+.table-search { width: min(280px, 100%); }
+/* Skip link: off-screen until focused by keyboard, then shown over the header. */
+.skip-link { position: absolute; left: 8px; top: -60px; z-index: 100; padding: 8px 12px; border-radius: 6px;
+  background: var(--accent); color: #fff; font-weight: 600; text-decoration: none; }
+.skip-link:focus { top: 8px; }
+#view:focus { outline: none; }

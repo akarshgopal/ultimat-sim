@@ -88,6 +88,36 @@
     return 'makes ' + integration.map(i => `${shortName(i.product)} in-house (${usdKg(i.makeUsdPerKg)} vs ${usdKg(i.buyUsdPerKg)} bought)`).join(', ');
   }
 
+  // ---------------------------------------------------------------- search
+  // Everyday words for each market, so search finds what people call things ("steel" for DRI/HBI,
+  // "fertilizer" for urea, ammonia and potash). Matched alongside the market's name and id.
+  const KEYWORDS = {
+    steel: 'steel iron ironmaking green steel', 'pv-module': 'solar panel solar module photovoltaic',
+    polysilicon: 'solar silicon wafer', silicon: 'silicon metal', 'float-glass': 'window glass solar glass',
+    urea: 'fertilizer fertiliser nitrogen', ammonia: 'fertilizer fertiliser nitrogen', potash: 'fertilizer fertiliser potassium',
+    methane: 'natural gas lng e-methane synthetic gas fuel', methanol: 'e-methanol fuel chemical',
+    diesel: 'fuel e-fuel synthetic fuel jet', hydrogen: 'h2 green hydrogen fuel', ethylene: 'plastic plastics olefin polymer',
+    co2: 'carbon dioxide carbon capture dac', oxygen: 'o2', cement: 'concrete clinker building',
+    'ndpr-oxide': 'rare earth magnet neodymium praseodymium', 'ndpr-oxide-separated': 'rare earth magnet neodymium praseodymium',
+    'dytb-oxide': 'rare earth magnet dysprosium terbium', 'other-reo': 'rare earth', 'light-reo': 'rare earth',
+    lithium: 'battery lithium carbonate', 'copper-cathode': 'copper wire', aluminium: 'aluminum',
+    titanium: 'titanium metal aerospace', salt: 'sodium chloride', caustic: 'sodium hydroxide lye',
+    magnesium: 'magnesium chloride', gluconic: 'food chemical', 'hydrogen-peroxide': 'bleach h2o2',
+  };
+  const searchText = key => `${key} ${productName(key)} ${KEYWORDS[key] || ''}`.toLowerCase();
+  // True when every word of the query appears in the text (case-insensitive).
+  const matches = (query, text) => {
+    const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+    const t = String(text || '').toLowerCase();
+    return words.every(w => t.includes(w));
+  };
+  // A search box: type="search", labelled, with a placeholder; calls onInput(value) as you type.
+  const searchBox = (placeholder, onInput) => {
+    const box = el('input', { class: 'control table-search', type: 'search', placeholder, 'aria-label': placeholder });
+    box.addEventListener('input', () => onInput(box.value));
+    return box;
+  };
+
   // ---------------------------------------------------------------- tables
   // columns: [{ key, label, num?: bool, get: row → sortable value, render?: row → Node|string, title? }]
   // opts: { sortKey, sortDir: 'asc'|'desc', rowHref?: row → '#/…', rowClass?: row → string, compact?,
@@ -261,5 +291,6 @@
     ORIGINS, productName, shortName, pathwayLabel, originLabel, originDot, qualityTag, inHouseText,
     sortableTable, kpi, legend, meter, card,
     toCsv, downloadFile,
+    KEYWORDS, searchText, matches, searchBox,
   });
 })();

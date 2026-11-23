@@ -182,7 +182,10 @@
         expandBtn.textContent = open ? 'Fewer inputs' : 'All inputs';
       });
       panel.append(
-        el('div', { class: 'scenario-head' }, [el('h2', { text: 'Scenario' }), el('span', { class: 'row' }, [changedCount, expandBtn])]),
+        el('div', { class: 'scenario-head' }, [el('h2', { text: 'Scenario' }), el('span', { class: 'row' }, [changedCount, expandBtn,
+          // Single-column layouts put the results below this panel: a shortcut to them.
+          el('button', { type: 'button', class: 'link-button jump-results', text: 'Results ↓',
+            onclick: () => { mainCol.scrollIntoView({ behavior: 'smooth', block: 'start' }); mainCol.querySelector('h2')?.setAttribute('tabindex', '-1'); mainCol.querySelector('h2')?.focus({ preventScroll: true }); } })])]),
         el('div', { class: 'field' }, [el('span', { class: 'field-label', text: 'Build objective' }), objectiveSeg, objectiveHint]),
         ...FIELDS.filter(f => f.group === 'goal').map(f => numberField(f, true)),
         group('Energy & equipment', 'energy'),

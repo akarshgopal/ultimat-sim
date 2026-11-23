@@ -1,0 +1,119 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const Company = require('../engine/company.js');
+const PlantDesign = require('../engine/plant-design.js');
+const { companyData, VIEW_TEST, withApp, pageOverflow } = require('./helpers.js');
+
+const input = companyData();
+const ranks = Company.rankOpportunities(input, { sizeMultiple: 100 });
+const rel = (a, b) => Math.abs(a - b) / Math.max(1, Math.abs(b));
+const sum = (list, f) => list.reduce((s, x) => s + f(x), 0);
+
+test('every recipe: the plant package itemizes the simulator’s own totals exactly', () => {
+  for (const p of input.pathways) {
+    const row = ranks.find(r => r.pathwayId === p.id);
+    if (!row) continue;
+    const { ev, pkg } = PlantDesign.forPlant(Company, input, p.id, row.siteId, row.sizeKgPerDay);
+    const t = pkg.tea;
+    assert.ok(rel(sum(t.capexItems, i => i.usd), ev.capex.total) < 1e-9, `${p.id} capex`);
+    assert.ok(rel(sum(t.opexLines, i => i.usd), ev.opex.total) < 1e-9, `${p.id} opex`);
+    assert.ok(rel(sum(t.revenueLines, i => i.usd), ev.revenue) < 1e-9, `${p.id} revenue`);
+    assert.ok(rel(sum(t.lcop, i => i.usdPerKg), ev.lcopUsdPerKg) < 1e-9, `${p.id} cost per kg`);
+    assert.ok(rel(t.npv, ev.npv) < 1e-9, `${p.id} NPV`);
+    // Co-products are priced as the simulator prices them: no unexplained residue line.
+    if (!ev.integration.length) assert.ok(!t.revenueLines.some(l => /Captive/.test(l.label)), `${p.id} co-product prices`);
+    // Tags are unique; every stream end is a tag or a flowsheet node.
+    const tags = [...pkg.equipment.map(e => e.tag), ...pkg.buffers.map(b => b.tag), ...pkg.captive.map(c => c.tag)];
+    assert.equal(new Set(tags).size, tags.length, `${p.id} unique tags`);
+    assert.equal(new Set(pkg.instruments.map(i => i.tag)).size, pkg.instruments.length, `${p.id} unique instrument tags`);
+    assert.equal(pkg.equipment.length, p.flowsheet.nodes.filter(n => n.kind === 'converter').length, `${p.id} one item per unit`);
+    // Sensitivity at the base reproduces the TEA.
+    assert.ok(rel(t.sensitivity.base.npv, t.npv) < 1e-9 && rel(t.sensitivity.base.lcop, t.lcopUsdPerKg) < 1e-9, `${p.id} sensitivity base`);
+    for (const s of pkg.streams) assert.ok(s.design >= s.average * (1 - 1e-9) - 1e-12 || pkg.basis.outputFactor > 1, `${p.id} stream ${s.no} design ≥ average`);
+  }
+});
+
+test('green ammonia: sun-following electrolyzer, H₂ buffer between it and the steady loop, IRR consistent with NPV', () => {
+  const row = ranks.find(r => r.pathwayId === 'green-ammonia');
+  const { ev, pkg } = PlantDesign.forPlant(Company, input, 'green-ammonia', row.siteId, row.sizeKgPerDay);
+  const el = pkg.equipment.find(e => e.unit === 'electrolyzer');
+  const hb = pkg.equipment.find(e => e.unit === 'ammonia');
+  assert.equal(el.mode, 'sun-following');
+  assert.equal(hb.mode, 'steady');
+  assert.ok(el.tag.startsWith('EL-') && hb.tag.startsWith('R-'));
+  const buf = pkg.buffers.find(b => b.substance === 'H2');
+  assert.ok(buf && buf.capacityKg > 0, 'H₂ buffer');
+  const up = pkg.streams.find(s => s.no === buf.inStream);
+  const down = pkg.streams.find(s => s.no === buf.outStream);
+  assert.equal(up.line.slice(0, 2), 'HY');
+  assert.ok(up.design > down.design * 1.5, 'the buffer takes H₂ in at the sun-following rate and lets it out steadily');
+  assert.ok(Math.abs(up.average - down.average) < 1e-9 * up.average, 'same average flow either side');
+  assert.ok(pkg.instruments.some(i => i.equipment === buf.tag && i.letters === 'PSV'), 'gas buffer has relief');
+  // IRR: NPV of the cash flows at the IRR is zero, and the sign agrees with NPV at the hurdle.
+  const t = pkg.tea;
+  if (t.irr != null) {
+    assert.ok(Math.abs(PlantDesign.npvAt(t.irr, t.cashflow.map(c => c.cash))) < 1e-3 * ev.capex.total);
+    assert.equal(t.irr >= pkg.basis.discountRate, t.npv >= -1e-6 * ev.capex.total);
+  }
+});
+
+test('captive supplier: the bought feed becomes a tagged package on its flowsheet source', () => {
+  const row = ranks.find(r => r.pathwayId === 'silicon');
+  const { ev, pkg } = PlantDesign.forPlant(Company, input, 'silicon', row.siteId, row.sizeKgPerDay);
+  assert.ok(ev.integration.length, 'the default year-0 silicon plant makes its glass');
+  const c = pkg.captive[0];
+  assert.equal(c.nodeId, 'glass');
+  assert.ok(c.tag.startsWith('PK-') && c.capexUsd > 0);
+  assert.ok(pkg.tea.capexItems.some(i => i.group === 'captive' && i.usd === c.capexUsd));
+  assert.ok(!pkg.tea.capexItems.some(i => /Unallocated/.test(i.label)), 'captive capex separates cleanly');
+});
+
+test('irr and the sensitivity levers behave', () => {
+  assert.ok(Math.abs(PlantDesign.irr([-100, 110]) - 0.1) < 1e-9);
+  assert.equal(PlantDesign.irr([-100, -5]), null);
+  const parts = { capex: { equipment: 100, pv: 50, storage: 0, land: 1 }, fixedOm: 5, feed: 10, other: 2, productRevenue: 60, coproductRevenue: 0, kg: 100, rate: 0.08, life: 20, lead: 1 };
+  const s = PlantDesign.sensitivity(parts);
+  const price = s.rows.find(r => r.key === 'price');
+  assert.ok(price.high.npv > s.base.npv && price.low.npv < s.base.npv);
+  assert.equal(price.high.lcop, s.base.lcop, 'price does not move cost');
+  assert.ok(!s.rows.some(r => r.key === 'storage'), 'a lever with nothing behind it is dropped');
+});
+
+// ---------------------------------------------------------------- browser
+test('plant view: P&ID, tables and TEA; site and size selectors; link from pathways', VIEW_TEST, () => withApp(async ({ page, base, errors }) => {
+  await page.goto(`${base}#/pathways/green-ammonia`);
+  await page.click('.v-pathways a.pw-plant-link');
+  await page.waitForFunction(() => location.hash.startsWith('#/plant/green-ammonia'));
+  await page.waitForSelector('.v-plant svg.pid');
+  const counts = await page.evaluate(() => ({
+    units: document.querySelectorAll('.v-plant svg.pid .pid-item.is-equip').length,
+    lines: document.querySelectorAll('.v-plant svg.pid .pid-line').length,
+    bubbles: document.querySelectorAll('.v-plant svg.pid .pid-inst').length,
+    tanks: document.querySelectorAll('.v-plant svg.pid .pid-item.is-tank').length,
+  }));
+  assert.equal(counts.units, 4);
+  assert.ok(counts.lines >= 10 && counts.bubbles >= 15 && counts.tanks === 1, JSON.stringify(counts));
+  assert.match(await page.textContent('.v-plant .kpis'), /NPV/);
+  assert.ok(await page.$('.v-plant .pl-waterfall .pl-wf-row'), 'cost waterfall');
+  assert.ok(await page.$('.v-plant .pl-tornado .pl-tn-row:not(.is-head)'), 'tornado');
+  await page.waitForSelector('.v-plant svg.chart-svg path.chart-line');
+
+  // Change the size: the URL carries it and the plant is redesigned.
+  const before = await page.textContent('.v-plant .kpi-value');
+  await page.selectOption('.v-plant .pl-controls select[aria-label="Plant size"]', '1000');
+  await page.waitForFunction(() => /\/plant\/green-ammonia\/[^/]+\/1000/.test(location.hash));
+  await page.waitForFunction(b => document.querySelector('.v-plant .kpi-value')?.textContent !== b, before);
+  // Change the site.
+  const other = await page.$eval('.v-plant select[aria-label="Site"] option:nth-child(2)', o => o.value);
+  await page.selectOption('.v-plant select[aria-label="Site"]', other);
+  await page.waitForFunction(id => location.hash.includes('/' + id + '/'), other);
+  await page.waitForSelector('.v-plant svg.pid');
+
+  // Captive supplier package links to its own plant design.
+  await page.goto(`${base}#/plant/silicon`);
+  await page.waitForSelector('.v-plant svg.pid .pid-item.is-package');
+  // Phone width: no sideways page scroll (the P&ID scrolls in its own box).
+  await page.setViewportSize({ width: 390, height: 800 });
+  assert.equal(await pageOverflow(page), 0);
+  assert.deepEqual(errors, []);
+}));

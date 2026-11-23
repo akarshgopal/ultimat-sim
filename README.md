@@ -10,7 +10,7 @@ Live: https://akarshgopal.github.io/ultimat-sim/
 
 ## The app
 
-One page (`index.html`), seven views. The scenario lives in the URL, so a link reproduces both the screen and the assumptions.
+One page (`index.html`), eight views. The scenario lives in the URL, so a link reproduces both the screen and the assumptions.
 
 | View | Question |
 |---|---|
@@ -19,6 +19,7 @@ One page (`index.html`), seven views. The scenario lives in the URL, so a link r
 | **Energy** | In kWh and $/kWh: the electricity price below which each recipe becomes feasible, the world demand each price unlocks, and where each kg's cost goes. |
 | **Designs** | Parametric equipment designs (`engine/designs/`): knobs → bill of materials → installed $ per kg/day, kWh/kg, idiot index → the unit's factors in the simulation. |
 | **Pathways** | Each recipe: cost vs price over time, best sites, make-vs-buy, and its plant flowsheet per kg of product. |
+| **Plant** | One recipe at one site and size, designed in detail: a P&ID (tagged equipment, numbered streams, control loops, PV, battery, heat store and buffers from the solar design), equipment list, stream table, instrument index, and its TEA: capex by item, operating account, cost per kg by driver, cash flow with NPV/IRR/payback, a ±25% sensitivity and the same plant at every buildable size. |
 | **Sites** | 51 sites (38 coasts, 13 inland brine hubs): solar, land price, seawater or brine, which recipes they host, what the run builds there. |
 | **Markets** | 32 world markets: demand, price, sources, the company's share and the price relief it delivers. |
 
@@ -66,6 +67,10 @@ Every tunable lives in `FoundryCompany.DEFAULTS` (`engine/company.js`). The defa
 ## Unit designs
 
 `engine/designs/` holds parametric designs of the equipment that gates abundance: electrolyzer, Haber-Bosch loop, urea unit, H₂-DRI shaft, iron-ore pellet plant, direct air capture, methanol/Sabatier/MTO reactors and a modulating aluminium smelter. A design re-prices its own flowsheet unit in every recipe that contains it — capex, energy, raw-materials floor, operating mode, turndown, feeds and O&M — through `config.designs.units` ([contract](engine/designs/README.md)). Each has a design doc and build plan in [`docs/designs/`](docs/designs/).
+
+## Plant design layer
+
+`engine/plant-design.js` turns any recipe at any site and size into a design package (`FoundryPlantDesign.forPlant(Company, input, pathwayId, siteId, kgPerDay)`). It re-presents what the simulator already computed rather than adding a second cost model: each technology class's installed capex is shared among that class's units by recipe capex × solar oversizing, storage and PV come from the site's utilization design, and every capex, opex and revenue line sums to `evaluatePlant`'s totals (a test checks all 28 recipes). Sun-following units are sized at their nameplate factor; a buffer between a sun-following and a steady unit splits the line into a fast upstream and a steady downstream stream. Instrumentation is a typical scheme per unit type (ISA 5.1 letters), indicative rather than engineered; streams carry phase and composition but not temperature or pressure, which the screening cases do not model. The P&ID downloads as SVG and each table as CSV.
 
 ## The data
 
@@ -115,7 +120,7 @@ Runs every check: engine, designs, data staleness, and Playwright tests of each 
 
 - `index.html`, `app.css`, `css/`: the app and its styles (one stylesheet per view).
 - `js/app.js` (router), `js/store.js` (scenario ↔ engine config, worker client), `js/sim-worker.js`, `js/ui/` (kit, charts), `js/views/` (one file per view).
-- `engine/company.js`: the company simulator and abundance scoreboard; `engine/utilization.js`: solar-only plant design; `engine/designs/`: equipment designs. The plant solver (`model`, `units`, `solve`, `heat`), economics, sizing (`size.js`), footprint and land prices (`land.js`) run in Node for the generators.
+- `engine/company.js`: the company simulator and abundance scoreboard; `engine/utilization.js`: solar-only plant design; `engine/plant-design.js`: P&ID package and TEA for one plant; `engine/designs/`: equipment designs. The plant solver (`model`, `units`, `solve`, `heat`), economics, sizing (`size.js`), footprint and land prices (`land.js`) run in Node for the generators.
 - `cases/`: plant models, shared builders (`_shared.js`) and sited brine hubs (`brine-hubs.js`).
 - `data/`: generated `pathways.js` and `sites.js`; cited markets, TEA prices, bills of materials, site presets, assays, PVGIS, land prices.
 - `scripts/`: dev server, build (ships only what the browser loads), deploy, generators, company CLI.

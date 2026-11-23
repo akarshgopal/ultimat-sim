@@ -246,8 +246,11 @@ function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg
     const amount = streamAmount(stream) / kg;
     if (!(amount > FLOW_MIN_PER_KG)) continue;
     const key = `${from}>${to}>${kind}`;
-    const edge = edgesByKey.get(key) || { from, to, kind, amount: 0, subs: new Map() };
+    const edge = edgesByKey.get(key) || { from, to, kind, amount: 0, subs: new Map(), phases: new Map() };
     edge.amount += amount;
+    // Dominant phase, for the plant design's stream table. (Temperature and pressure are not carried:
+    // the screening cases leave every stream at the 25 °C, 1 bar default.)
+    if (kind === 'material' && stream.phase) edge.phases.set(stream.phase, (edge.phases.get(stream.phase) || 0) + amount);
     for (const [sub, m] of topSubstances(stream) || []) edge.subs.set(sub, (edge.subs.get(sub) || 0) + m / kg);
     edgesByKey.set(key, edge);
   }
@@ -258,6 +261,7 @@ function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg
       const subs = [...e.subs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
         .filter(([, m]) => m / e.amount >= 0.001);
       if (subs.length) out.substances = subs.map(([sub, m]) => [sub, roundFlow(m)]);
+      if (e.phases.size) out.phase = [...e.phases.entries()].sort((a, b) => b[1] - a[1])[0][0];
     } else {
       out.kWhPerKg = roundFlow(e.amount);
     }

@@ -18,6 +18,7 @@
     { id: 'energy', label: 'Energy', hint: 'What each electricity price unlocks' },
     { id: 'designs', label: 'Designs', hint: 'Parametric equipment designs and what they change' },
     { id: 'pathways', label: 'Pathways', hint: 'Each recipe: cost vs price, best sites, flowsheet' },
+    { id: 'plant', label: 'Plant', hint: 'One plant designed in detail: P&ID, equipment, streams and its techno-economics' },
     { id: 'sites', label: 'Sites', hint: 'The 51 candidate sites and what gets built there' },
     { id: 'markets', label: 'Markets', hint: 'World demand, prices, and the company’s share' },
   ];
@@ -48,7 +49,7 @@
   let lastChangeAt = 0;
 
   function render() {
-    const { view, id, query } = parseHash();
+    const { view, id, path, query } = parseHash();
     // Ask for the company simulation only on views that show it, before loading a changed
     // scenario, so a scenario change elsewhere does not start a run nobody looks at.
     Store.want(Boolean(Views[view]?.needsSimulation));
@@ -63,7 +64,7 @@
       if (a.dataset.view === view) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     }
-    const key = view + '/' + (id || '');
+    const key = path.join('/') || view;
     if (key === mounted) return; // scenario-only change: views react through Store.subscribe
     if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } }
     cleanup = null;
@@ -77,7 +78,7 @@
       return;
     }
     document.title = `${def.title}${id ? ' · ' + id : ''} — Molecular Foundry`;
-    cleanup = def.mount(root, { params: { id }, Store, UI: globalThis.UI, Charts: globalThis.Charts, href }) || null;
+    cleanup = def.mount(root, { params: { id, path }, Store, UI: globalThis.UI, Charts: globalThis.Charts, href }) || null;
     window.scrollTo(0, 0);
   }
 

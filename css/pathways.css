@@ -105,3 +105,5 @@
   .v-pathways .pw-bar { grid-template-columns: 70px 1fr auto; }
   .v-pathways .pw-name { min-width: 160px; }
 }
+
+.v-pathways .pw-plant-link { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 600; }

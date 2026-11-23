@@ -27,11 +27,20 @@ test('no view renders stray null, undefined or NaN text', { ...VIEW_TEST, timeou
 test('the header fits without sideways scrolling from phone to desktop widths', VIEW_TEST, () => withApp(async ({ page, base, errors }) => {
   await page.goto(base + '#/abundance');
   await page.waitForSelector('.kpi-value');
-  for (const width of [360, 390, 768, 1019, 1021, 1100, 1200, 1440]) {
-    await page.setViewportSize({ width, height: 800 });
-    const over = await page.$eval('.app-header', h => h.scrollWidth - h.clientWidth);
-    assert.equal(over, 0, `header overflows by ${over}px at ${width}px`);
+  const frame = () => page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+  // Whether one row fits depends on the fonts (CI's fallback font is wider than a desktop's), so
+  // check with the page's own fonts and with text forced much wider.
+  for (const wide of [false, true]) {
+    if (wide) await page.addStyleTag({ content: 'html { letter-spacing: 0.08em; }' });
+    for (const width of [360, 390, 768, 1019, 1021, 1100, 1200, 1440]) {
+      await page.setViewportSize({ width, height: 800 });
+      await frame();
+      const over = await page.$eval('.app-header', h => h.scrollWidth - h.clientWidth);
+      assert.equal(over, 0, `header overflows by ${over}px at ${width}px${wide ? ' with wide text' : ''}`);
+    }
   }
+  // Wide screens keep the one-row header.
+  assert.ok(!(await page.evaluate(() => document.documentElement.classList.contains('header-wrap'))), 'one row at 1440px');
   assert.deepEqual(errors, []);
 }));
 

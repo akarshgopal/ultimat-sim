@@ -333,21 +333,20 @@ details.chart-data summary { color: var(--text-3); cursor: pointer; }
 .data-table th .th-sort { all: unset; cursor: pointer; display: inline; }
 .data-table th .th-sort:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
 
-/* Header on narrower screens: tighter spacing below 1180 px; below 1,020 px two rows (brand, status
-   and buttons on top, every tab below, wrapping if needed), so the header never scrolls sideways.
-   The one-row header needs ~1,005 px; 1,020 leaves room for a longer status. */
+/* Header on narrower screens: tighter spacing below 1180 px; and two rows (brand, status and
+   buttons on top, every tab below, wrapping if needed) whenever one row does not fit. Whether it
+   fits depends on the fonts the visitor has, so js/app.js measures and sets html.header-wrap,
+   rather than guessing a breakpoint. */
 @media (max-width: 1180px) {
   .app-header { gap: 12px; padding: 0 14px; }
   .app-nav a { padding: 0 8px; }
   .sim-status { max-width: 130px; white-space: normal; line-height: 1.2; font-size: 11px; }
 }
-@media (max-width: 1020px) {
-  .app-header { height: auto; flex-wrap: wrap; gap: 4px 10px; padding: 8px 12px 0; }
-  .app-nav { order: 10; width: 100%; height: auto; flex-wrap: wrap; gap: 0; margin: 0 -8px; }
-  .app-nav a { padding: 8px; font-size: 14px; }
-  .sim-status { order: 11; width: 100%; max-width: none; font-size: 11px; white-space: normal; }
-  .sim-status:empty { display: none; }
-  .header-spacer { flex: 1 0 0; }
-  .icon-button { padding: 0 8px; }
-  .compare-bar { position: static; }
-}
+html.header-wrap .app-header { height: auto; flex-wrap: wrap; gap: 4px 10px; padding: 8px 12px 0; }
+html.header-wrap .app-nav { order: 10; width: 100%; height: auto; flex-wrap: wrap; gap: 0; margin: 0 -8px; }
+html.header-wrap .app-nav a { padding: 8px; font-size: 14px; }
+html.header-wrap .sim-status { order: 11; width: 100%; max-width: none; font-size: 11px; white-space: normal; }
+html.header-wrap .sim-status:empty { display: none; }
+html.header-wrap .header-spacer { flex: 1 0 0; }
+html.header-wrap .icon-button { padding: 0 8px; }
+html.header-wrap .compare-bar { position: static; }

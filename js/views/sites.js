@@ -212,9 +212,13 @@
       const used = sites.filter(s => pv[s.id] > 0);
       const totalKWp = Object.values(pv).reduce((a, b) => a + b, 0);
       const atCeiling = used.filter(s => pv[s.id] >= cap[s.id] * 0.95).length;
+      // Sites count every plant not yet retired, including ones still being built (they already hold
+      // land); Company's "Solar PV" counts only plants operating in the final year.
+      const finalYear = result?.timeline?.at(-1)?.year;
+      const buildingKWp = (result?.plants || []).filter(p => p.onlineYear > finalYear).reduce((a, p) => a + (p.pvKWp || 0), 0);
       kpis.replaceChildren(
         UI.kpi('Sites used', result ? `${used.length} of ${sites.length}` : '—', 'with at least one plant'),
-        UI.kpi('Solar built', result ? UI.num(totalKWp / 1e6, 3) + ' GWp' : '—', 'all plants in the run'),
+        UI.kpi('Solar built', result ? UI.num(totalKWp / 1e6, 3) + ' GWp' : '—', result ? `by ${finalYear}, incl. ${UI.num(buildingKWp / 1e6, 3)} GWp still under construction` : ''),
         UI.kpi('Sites out of land', result ? String(atCeiling) : '—', `built ≥ 95% of their allowed solar (${UI.num(scenario.land)}% of suitable land)`),
         UI.kpi('Best solar', UI.num(Math.max(...sites.map(s => s.pvKWhPerKWpDay)), 3), 'kWh per day per kWp of panels'),
       );

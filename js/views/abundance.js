@@ -148,7 +148,7 @@
             UI.kpi('Today → frontier', `${UI.pct(today.totals.feasibleShare, 0)} → ${UI.pct(frontier.totals.feasibleShare, 0)}`, 'share of tonnage feasible'),
             UI.kpi('Not yet covered', mt(now.totals.uncoveredT) + '/yr', 'no pathway, or coproduct only'),
           );
-          barsHost.replaceChildren(legend, bar('Today', today), pinnedBoard ? bar('Pinned', pinnedBoard) : null, bar('Your scenario', now), bar('Frontier', frontier));
+          barsHost.replaceChildren(...[legend, bar('Today', today), pinnedBoard ? bar('Pinned', pinnedBoard) : null, bar('Your scenario', now), bar('Frontier', frontier)].filter(Boolean));
 
           blockersHost.replaceChildren(blockerList(now, 'In this scenario'), blockerList(frontier, 'At the frontier'));
 

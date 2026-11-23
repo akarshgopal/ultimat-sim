@@ -409,7 +409,7 @@
           UI.kpi('Cumulative', mt(h.cumT), `over ${tl.length} years`),
           UI.kpi('Materials', String(h.materials), 'products sold'),
           UI.kpi('Biggest price relief', h.relief.key ? UI.pct(h.relief.v) : '0%', h.relief.key ? label(h.relief.key) : 'no market moved'),
-          UI.kpi('Solar PV', UI.num(h.pvGWp) + ' GWp', `${UI.num(tl.at(-1).electricityTWh)} TWh/yr`),
+          UI.kpi('Solar PV', UI.num(h.pvGWp) + ' GWp', `operating in ${h.year} · ${UI.num(tl.at(-1).electricityTWh)} TWh/yr`),
           UI.kpi('Land', km2(h.landHa), `${h.plants} plants`),
         );
 

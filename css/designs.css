@@ -11,3 +11,10 @@
 .v-designs .ds-tabs a.is-active::after { content: " ●"; color: var(--pos); font-size: 10px; }
 .v-designs .ds-panel > p.muted { font-size: 13px; margin: -4px 0 12px; }
 .v-designs .ds-panel p.is-pending { color: var(--warn); }
+/* Design picker: tabs on wide screens, a dropdown on phones. */
+.v-designs .ds-picker-row { display: none; }
+@media (max-width: 680px) {
+  .v-designs .ds-tabs { display: none; }
+  .v-designs .ds-picker-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--gap); }
+  .v-designs .ds-picker { width: 100%; }
+}

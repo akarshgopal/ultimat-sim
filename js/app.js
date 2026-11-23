@@ -101,6 +101,7 @@
     // Views mark what comes from the simulation with .sim-result; it fades while a newer run is in
     // flight so stale numbers never pass for current ones.
     document.documentElement.classList.toggle('is-simulating', busy);
+    refit(); // the status and pin labels change width
     for (const n of document.querySelectorAll('.sim-result')) {
       if (busy) n.setAttribute('aria-busy', 'true'); else n.removeAttribute('aria-busy');
     }
@@ -126,6 +127,16 @@
     ].filter(Boolean));
   }
   Store.subscribe(renderCompareBar);
+
+  // Two-row header whenever one row does not fit (fonts vary, so measure; see app.css).
+  function fitHeader() {
+    const root = document.documentElement;
+    const header = document.querySelector('.app-header');
+    root.classList.remove('header-wrap');
+    if (header.scrollWidth > header.clientWidth + 1) root.classList.add('header-wrap');
+  }
+  let fitFrame = 0;
+  const refit = () => { cancelAnimationFrame(fitFrame); fitFrame = requestAnimationFrame(fitHeader); };
 
   function progressText(p) {
     return p && p.total ? `Simulating… year ${Math.min(p.done + 1, p.total)} of ${p.total}` : 'Simulating…';
@@ -176,6 +187,9 @@
     initCopyLink();
     initPin();
     renderCompareBar(Store);
+    fitHeader();
+    window.addEventListener('resize', refit);
+    document.fonts?.ready.then(refit);
     const { view, query } = parseHash();
     Store.want(Boolean(Views[view]?.needsSimulation));
     loadingFromUrl = true;

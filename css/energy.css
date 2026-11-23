@@ -16,3 +16,6 @@
 @media (max-width: 680px) {
   .v-energy .en-bar-row { grid-template-columns: 1fr; gap: 2px; }
 }
+/* While break-evens solve in the background, the previous numbers fade (js/views/energy.js). */
+.v-energy .kpis, .v-energy .table-scroll, .v-energy .en-bars { transition: opacity 0.15s; }
+.v-energy.is-solving .kpis, .v-energy.is-solving .table-scroll, .v-energy.is-solving .en-bars { opacity: 0.4; transition-delay: 0.15s; }

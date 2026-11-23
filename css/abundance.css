@@ -23,3 +23,6 @@
 @media (max-width: 680px) {
   .v-abundance .ab-bar-row { grid-template-columns: 1fr; gap: 2px; }
 }
+/* While the scoreboards compute in the background, the previous numbers fade (js/views/abundance.js). */
+.v-abundance .kpis, .v-abundance .ab-bars, .v-abundance .ab-blockers, .v-abundance .table-scroll { transition: opacity 0.15s; }
+.v-abundance.is-solving .kpis, .v-abundance.is-solving .ab-bars, .v-abundance.is-solving .ab-blockers, .v-abundance.is-solving .table-scroll { opacity: 0.4; transition-delay: 0.15s; }

@@ -117,28 +117,32 @@
       }
 
       let lastKey = null;
-      let timer = 0;
       const draw = () => {
         const s = Store.scenario;
         const pin = Store.pinned;
         const key = Store.toQuery(s) + (pin ? '|vs:' + pin.query : '');
         if (key === lastKey) return;
         lastKey = key;
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-          const today = Store.abundance(Store.defaults());
-          const now = Store.abundance(s);
-          const frontier = Store.abundance({ ...s, ...Store.FRONTIER });
-          const pinnedBoard = pin ? Store.abundance(pin.scenario) : null;
+        // Lever states and the scenario note follow the click at once; the scoreboards (~0.1 s, ~0.5 s
+        // on a slow phone) come from the background worker, "today" from its cache after the first.
+        const atFrontier = Object.entries(Store.FRONTIER).every(([k, v]) => JSON.stringify(s[k]) === JSON.stringify(v));
+        frontierBtn.disabled = atFrontier;
+        for (const g of levers) g.sync(s);
+        resetBtn.disabled = Store.toQuery(s) === '';
+        scenarioNote.textContent = Store.toQuery(s) === '' ? 'Your scenario matches today. Change a lever to compare.' : `Your scenario: solar ${UI.num(s.kwh * 100, 2)}¢/kWh · equipment ×${s.equip}`
+          + (s.ii > 0 ? ` · costs ≤ ${s.ii}× materials` : '') + Object.entries(s.ds || {}).map(([id, d]) => ` · ${d.preset} ${Store.DESIGNS[id]?.name || id}`).join('');
+        root.classList.add('is-solving');
+        Promise.all([
+          Store.abundanceAsync(Store.defaults()),
+          Store.abundanceAsync(s),
+          Store.abundanceAsync({ ...s, ...Store.FRONTIER }),
+          pin ? Store.abundanceAsync(pin.scenario) : null,
+        ]).then(([today, now, frontier, pinnedBoard]) => {
+          if (key !== lastKey || !root.isConnected) return; // a newer scenario superseded this one
+          root.classList.remove('is-solving');
           // "vs pinned 37% (+2 pts)" under a share KPI while a scenario is pinned.
           const vsPinned = (now, then, digits) => (pinnedBoard
             ? ` · pinned ${UI.pct(then, digits)} (${now - then >= 0 ? '+' : '−'}${Math.abs((now - then) * 100).toFixed(digits)} pts)` : '');
-          const atFrontier = Object.entries(Store.FRONTIER).every(([k, v]) => JSON.stringify(s[k]) === JSON.stringify(v));
-          frontierBtn.disabled = atFrontier;
-          for (const g of levers) g.sync(s);
-          resetBtn.disabled = key === '';
-          scenarioNote.textContent = key === '' ? 'Your scenario matches today. Change a lever to compare.' : `Your scenario: solar ${UI.num(s.kwh * 100, 2)}¢/kWh · equipment ×${s.equip}`
-            + (s.ii > 0 ? ` · costs ≤ ${s.ii}× materials` : '') + Object.entries(s.ds || {}).map(([id, d]) => ` · ${d.preset} ${Store.DESIGNS[id]?.name || id}`).join('');
 
           kpis.replaceChildren(
             UI.kpi('Feasible below today’s price', UI.pct(now.totals.feasibleShare, 0), `${mt(now.totals.feasibleT)}/yr of ${mt(now.totals.worldDemandT)}/yr tracked`
@@ -175,7 +179,7 @@
               render: r => (r.blocker ? [el('span', { text: itemText(r.blocker) }), el('span', { class: 'cell-sub', text: '→ ' + itemText(f0.get(r.product)?.blocker) })] : el('span', { class: 'muted', text: '—' })) },
           ], now.rows, { sortKey: 'demand', sortDir: 'desc', compact: true, csv: 'abundance-materials',
             rowClass: r => (r.status === 'no-pathway' || r.status === 'coproduct' ? 'is-dim' : '') }));
-        }, 30);
+        }).catch(() => { root.classList.remove('is-solving'); kpis.replaceChildren(el('p', { class: 'muted', text: 'Could not compute the scoreboard.' })); });
       };
       draw();
       return Store.subscribe(draw);

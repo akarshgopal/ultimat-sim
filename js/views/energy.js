@@ -171,9 +171,13 @@
         lastKey = key;
         clearTimeout(timer);
         curveHost.replaceChildren(el('p', { class: 'chart-empty', text: 'Solving break-evens…' }));
-        timer = setTimeout(() => {
+        root.classList.add('is-solving'); // fades the previous numbers until the new ones arrive
+        // Break-evens solve in the background worker (they took ~1 s on the main thread).
+        {
           const multipliers = EQUIP.includes(s.equip) ? EQUIP : [...EQUIP, s.equip].sort((a, b) => b - a);
-          const sets = Store.breakevens(multipliers);
+          Store.breakevensAsync(multipliers, s).then(sets => {
+          if (Store.toQuery(Store.scenario) !== key || !root.isConnected) return; // superseded
+          root.classList.remove('is-solving');
           const current = sets.find(x => x.equip === s.equip) || sets[0];
           const byId = sets.map(x => new Map(x.rows.map(r => [r.pathwayId, r])));
           const eff = effectiveKWh(s);
@@ -255,7 +259,8 @@
               ]);
             })),
           );
-        }, 30);
+          }).catch(() => curveHost.replaceChildren(el('p', { class: 'chart-empty', text: 'Could not solve the break-evens.' })));
+        }
       };
       draw();
       return Store.subscribe(draw);

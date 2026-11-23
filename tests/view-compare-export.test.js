@@ -117,3 +117,32 @@ test('tables sort from the keyboard; chart values show on tap, not only on hover
   assert.ok(await page.$eval('#chartTooltip', t => t.hidden), 'a tap elsewhere hides it');
   assert.deepEqual(errors, []);
 }));
+
+test('heavy calculations run off the main thread: no long freezes, same numbers as the synchronous path', VIEW_TEST, () => withApp(async ({ page, base, errors }) => {
+  await page.addInitScript(() => {
+    window.__longest = 0;
+    new PerformanceObserver(list => { for (const e of list.getEntries()) window.__longest = Math.max(window.__longest, e.duration); }).observe({ type: 'longtask', buffered: true });
+  });
+  const longest = async fn => { await page.evaluate(() => { window.__longest = 0; }); await fn(); return page.evaluate(() => window.__longest); };
+  await page.goto(base + '#/abundance');
+  await page.waitForSelector('#view .kpi-value');
+  // The scoreboard from the worker equals the synchronous one.
+  assert.deepEqual(await page.evaluate(async () => (await Store.abundanceAsync()).totals), await page.evaluate(() => Store.abundance().totals));
+
+  // Energy: break-evens for four equipment levels (~1 s of work) must not block the page.
+  const energy = await longest(async () => {
+    await page.click('.app-nav a[data-view="energy"]');
+    await page.waitForSelector('#view .chart-svg', { timeout: 60000 });
+  });
+  assert.ok(energy < 500, `opening Energy froze the page for ${Math.round(energy)} ms`);
+
+  // Company's profit comparison (a full 25-year run) must not block it either.
+  await page.click('.app-nav a[data-view="company"]');
+  await simulationIdle(page);
+  const compare = await longest(async () => {
+    await page.click('summary:has-text("Compare with the")');
+    await page.waitForSelector('.compare-body table', { timeout: 90000 });
+  });
+  assert.ok(compare < 500, `the profit comparison froze the page for ${Math.round(compare)} ms`);
+  assert.deepEqual(errors, []);
+}));

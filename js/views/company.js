@@ -339,12 +339,12 @@
         if (!compareCache || compareCache.query !== query) {
           compareSlot.replaceChildren(el('p', { class: 'muted', text: `Simulating the ${other} objective…` }));
           const scenario = { ...Store.scenario, objective: other };
-          setTimeout(() => {
-            if (!compare.isConnected || !compare.open || Store.toQuery(Store.scenario) !== query) return;
-            const r = Company.simulateCompany({ pathways: Store.PATHWAYS, markets: Store.MARKETS, sites: Store.SITES, config: Store.toConfig(scenario) });
+          // In the background (the full run used to freeze the page for seconds).
+          Store.simulateAsync(scenario).then(r => {
+            if (!compare.isConnected || Store.toQuery(Store.scenario) !== query) return;
             compareCache = { query, other, head: headline(r) };
             renderCompare();
-          }, 30);
+          }).catch(() => compareSlot.replaceChildren(el('p', { class: 'muted', text: 'The comparison run failed.' })));
           return;
         }
         const a = headline(result);

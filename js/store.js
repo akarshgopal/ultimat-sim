@@ -403,6 +403,82 @@
     return Company.abundanceScoreboard({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }, { sizeMultiple: RANK_SIZE_MULTIPLE });
   }
 
+  // ---------------------------------------------------------------- background calculations
+  // Store.compute(task, payload) → Promise: the same calculations as the synchronous helpers above,
+  // run in a worker of their own so the page never freezes (js/sim-worker.js lists the tasks).
+  // Results (and in-flight promises) are cached by task + exact payload, so a repeat is instant.
+  const LOCAL_TASKS = {
+    simulate: ({ config }) => Company.simulateCompany({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }),
+    abundance: ({ config, sizeMultiple }) => Company.abundanceScoreboard({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }, { sizeMultiple }),
+    breakevens: ({ config, sizeMultiple }) => Company.energyBreakevens({ pathways: PATHWAYS, markets: MARKETS, sites: SITES, config }, { sizeMultiple }),
+  };
+  let taskWorker = null;
+  let taskSeq = 0;
+  const taskWaiters = new Map(); // id → { resolve, reject, local }
+  const taskCache = new Map(); // key → Promise
+  const TASK_CACHE_SIZE = 24;
+  function getTaskWorker() {
+    if (!workerOk) return null;
+    if (taskWorker) return taskWorker;
+    try {
+      taskWorker = new Worker('js/sim-worker.js');
+      taskWorker.onmessage = ev => {
+        const waiter = taskWaiters.get(ev.data.id);
+        if (!waiter || ev.data.progress) return;
+        taskWaiters.delete(ev.data.id);
+        if (ev.data.error) waiter.reject(new Error(ev.data.error)); else waiter.resolve(ev.data.result);
+      };
+      // A worker that cannot start: finish what was queued on the main thread, and stop using it.
+      taskWorker.onerror = () => {
+        taskWorker = null;
+        workerOk = false;
+        for (const w of taskWaiters.values()) w.local();
+        taskWaiters.clear();
+      };
+      return taskWorker;
+    } catch { return null; }
+  }
+  function compute(task, payload) {
+    const key = task + ' ' + JSON.stringify(payload);
+    if (taskCache.has(key)) {
+      const hit = taskCache.get(key);
+      taskCache.delete(key);
+      taskCache.set(key, hit); // most recently used
+      return hit;
+    }
+    const promise = new Promise((resolve, reject) => {
+      const local = () => setTimeout(() => { try { resolve(LOCAL_TASKS[task](payload)); } catch (e) { reject(e); } }, 0);
+      const w = getTaskWorker();
+      if (!w) { local(); return; }
+      const id = ++taskSeq;
+      taskWaiters.set(id, { resolve, reject, local });
+      w.postMessage({ id, task, payload });
+    });
+    taskCache.set(key, promise);
+    promise.catch(() => taskCache.delete(key));
+    while (taskCache.size > TASK_CACHE_SIZE) taskCache.delete(taskCache.keys().next().value);
+    return promise;
+  }
+  // Async counterparts of abundance() and breakevens(), and a one-off simulation of any scenario.
+  function abundanceAsync(s = scenario) {
+    const config = toConfig(s);
+    config.build.allowPathways = null;
+    return compute('abundance', { config, sizeMultiple: RANK_SIZE_MULTIPLE });
+  }
+  function breakevensAsync(equipMultipliers = [1, 0.5, 0.25, 0.1], s = scenario) {
+    return Promise.all(equipMultipliers.map(equip => {
+      const config = toConfig(s);
+      config.build.allowPathways = null;
+      config.equipmentCostMultiplier = equip;
+      return compute('breakevens', { config, sizeMultiple: RANK_SIZE_MULTIPLE }).then(rows => ({ equip, rows }));
+    }));
+  }
+  function simulateAsync(s) {
+    const config = toConfig(s);
+    const hit = runCache.get(JSON.stringify(config));
+    return hit ? Promise.resolve(hit) : compute('simulate', { config });
+  }
+
   // Year-0 opportunity ranking for the current scenario (fast, main thread).
   // One plant size for every year-0 cost the app shows (Abundance, Energy, Pathways, Sites), so the
   // same recipe at the same site has the same cost on every page: 100× the case's reference output.
@@ -462,6 +538,7 @@
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     rank,
     breakevens,
+    compute, abundanceAsync, breakevensAsync, simulateAsync,
     abundance,
     FRONTIER,
     RANK_SIZE_MULTIPLE,

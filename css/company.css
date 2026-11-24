@@ -82,3 +82,5 @@
 .v-company .download-row { font-size: 12px; gap: 12px; }
 .v-company .pin-compare .grid-2 { align-items: start; }
 .v-company .pin-compare[hidden] { display: none; }
+.v-company .jump-results { display: none; }
+@media (max-width: 1000px) { .v-company .jump-results { display: inline; } }

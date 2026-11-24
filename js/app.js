@@ -173,6 +173,28 @@
     });
   }
 
+  // Skip link: move focus to the page content without changing the URL (the hash is the route).
+  function initSkipLink() {
+    document.getElementById('skipLink').addEventListener('click', ev => {
+      ev.preventDefault();
+      const main = document.getElementById('view');
+      main.focus({ preventScroll: true });
+      main.scrollIntoView();
+    });
+  }
+
+  // Offline: the deployed build marks the page with <meta name="foundry-offline" content="sw.js">
+  // (tests can set globalThis.FOUNDRY_OFFLINE instead). Registers the service worker (sw.js: network
+  // first, cached copy when offline) and hands it the URLs this page has already loaded.
+  function initOffline() {
+    const url = document.querySelector('meta[name="foundry-offline"]')?.content || globalThis.FOUNDRY_OFFLINE;
+    if (!url || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register(url).then(() => navigator.serviceWorker.ready).then(reg => {
+      const loaded = [location.href.split('#')[0], ...performance.getEntriesByType('resource').map(e => e.name)];
+      reg.active?.postMessage({ cacheUrls: [...new Set(loaded)] });
+    }).catch(() => { /* offline support is best effort */ });
+  }
+
   function initPin() {
     document.getElementById('pinBtn').addEventListener('click', () => (Store.pinned ? Store.unpin() : Store.pin()));
   }
@@ -186,6 +208,8 @@
     initTheme();
     initCopyLink();
     initPin();
+    initSkipLink();
+    initOffline();
     renderCompareBar(Store);
     fitHeader();
     window.addEventListener('resize', refit);

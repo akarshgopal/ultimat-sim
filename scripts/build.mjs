@@ -11,7 +11,7 @@ const BUILD_ID = getBuildId();
 // worker's imports, the generated data files, and the precomputed default run. Plant models, the solver and
 // generators run in Node only (scripts/build-pathways.mjs, scripts/build-sites.mjs).
 const INCLUDE = [
-  'index.html', 'app.css', 'css', 'js', 'favicon.svg', 'og-image.png', 'LICENSE', 'NOTICE',
+  'index.html', 'app.css', 'css', 'js', 'favicon.svg', 'og-image.png', 'sw.js', 'LICENSE', 'NOTICE',
   'engine/utilization.js', 'engine/company.js', 'engine/designs', 'data/pathways.js', 'data/markets.js', 'data/sites.js', 'data/bom.js',
 ];
 await fs.rm(DIST, { recursive: true, force: true });
@@ -28,7 +28,7 @@ console.log(`Precomputed the default run (${(run.bytes / 1e6).toFixed(2)} MB)`);
 const indexPath = path.join(DIST, 'index.html');
 // Point the app at the precomputed run (js/store.js), versioned like the other assets.
 const withRun = (await fs.readFile(indexPath, 'utf8')).replace('</head>',
-  '  <meta name="foundry-default-run" content="data/default-run.json">\n</head>');
+  '  <meta name="foundry-default-run" content="data/default-run.json">\n  <meta name="foundry-offline" content="sw.js">\n</head>');
 await fs.writeFile(indexPath, rewriteLocalAssetUrls(withRun, BUILD_ID).replace(
   'content="data/default-run.json"', `content="data/default-run.json?v=${BUILD_ID}"`));
 

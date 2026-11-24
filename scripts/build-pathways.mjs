@@ -206,7 +206,20 @@ const FORMULA = { nh3: 'NH₃', h2: 'H₂', co2: 'CO₂', o2: 'O₂', n2: 'N₂'
 
 const roundFlow = v => (Math.abs(v) < 1e-12 ? 0 : Number(Number(v).toPrecision(FLOW_SIG_FIGS)));
 
+// Readable names for flowsheet boxes whose ids are abbreviations (the Pathways diagram shows these;
+// boxes fit ~19 characters, and hovering a box shows its unit). Anything not listed is humanized.
+const NODE_LABELS = {
+  chrom: 'Chromatography', sx: 'Solvent extraction', ndpr: 'NdPr oxide', dytb: 'Dy/Tb oxides',
+  'mg-si': 'Silicon smelting', eva: 'EVA encapsulant', kroll: 'Kroll reduction',
+  'iac-leach': 'Ionic-clay leach', liquor: 'Leach liquor', module: 'PV module', 'poly-product': 'Polysilicon',
+  gluconic: 'Gluconic acid', mto: 'Methanol→olefins', 'mto-water': 'MTO water',
+  asu: 'Air separation', swro: 'Desalination', dac: 'Direct air capture',
+  dri: 'DRI shaft furnace', 'ft-liquids': 'Fischer–Tropsch', 'copper-ew': 'Electrowinning',
+  'pls-feed': 'Copper leach (PLS)', minerals: 'Brine minerals', 'chlor-alkali': 'Chlor-alkali',
+};
+
 function humanize(id) {
+  if (NODE_LABELS[id]) return NODE_LABELS[id];
   const words = String(id).replace(/([a-z])([A-Z])/g, '$1-$2').split(/[-_\s]+/).filter(Boolean);
   return words.map((w, i) => {
     const lw = w.toLowerCase();

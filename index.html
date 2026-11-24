@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="css/markets.css">
 </head>
 <body>
+  <a class="skip-link" id="skipLink" href="#view">Skip to content</a>
   <header class="app-header">
     <a class="brand" href="#/abundance" data-view="abundance">Molecular Foundry</a>
     <nav class="app-nav" aria-label="Views"></nav>
@@ -37,7 +38,7 @@
     <button class="icon-button" id="themeToggle" type="button">Dark</button>
   </header>
   <div class="compare-bar" id="compareBar" role="status" hidden></div>
-  <main id="view" class="app-main"></main>
+  <main id="view" class="app-main" tabindex="-1"></main>
 
   <!-- data -->
   <script src="data/pathways.js"></script>

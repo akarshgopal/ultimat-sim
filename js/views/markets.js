@@ -44,6 +44,9 @@
     const prodBy = new Map(rows.map(r => [r.key, producers(Store, r.key)]));
     const kpis = el('div', { class: 'kpis sim-result' });
     const tableBox = el('div', { class: 'sim-result' });
+    let tableQuery = '';
+    let redrawTable = () => {};
+    const tableSearch = UI.searchBox('Search markets (e.g. steel, fertilizer)', q => { tableQuery = q; redrawTable(); });
     root.append(
       el('div', { class: 'view-title' }, [
         el('h1', { text: 'Markets' }),
@@ -51,7 +54,7 @@
       ]),
       el('div', { class: 'stack' }, [
         kpis,
-        UI.card('World markets', 'Final-year output, share of world supply and price relief (how far the company’s supply pushes the price below today’s) in the current run. Supplied markets first; click a row for detail. In “Made by”, (co) = made as a coproduct of another product’s plant.', tableBox),
+        UI.card('World markets', 'Final-year output, share of world supply and price relief (how far the company’s supply pushes the price below today’s) in the current run. Supplied markets first; click a row for detail. In “Made by”, (co) = made as a coproduct of another product’s plant.', tableBox, tableSearch),
       ]),
     );
     let lastResult;
@@ -91,11 +94,16 @@
         { key: 'quality', label: 'Data', title: 'cited = from a published source; screening = reasoned estimate', get: r => r.quality, render: r => UI.qualityTag(r.quality) },
         { key: 'paths', label: 'Made by', get: r => prodBy.get(r.key).length, render: r => pathwayLinks(UI, href, prodBy.get(r.key)) },
       ];
-      tableBox.replaceChildren(UI.sortableTable(columns, rows, {
-        sortKey: 'out', sortDir: 'desc', csv: 'markets',
-        rowHref: r => href('markets', r.key),
-        rowClass: r => (out(r.key) > 0 ? 'is-supplied' : 'is-unsupplied'),
-      }));
+      redrawTable = () => {
+        const shown = rows.filter(r => UI.matches(tableQuery, UI.searchText(r.key) + ' ' + (r.basis || '')));
+        if (!shown.length) { tableBox.replaceChildren(el('p', { class: 'empty', text: `No market matches “${tableQuery}”.` })); return; }
+        tableBox.replaceChildren(UI.sortableTable(columns, shown, {
+          sortKey: 'out', sortDir: 'desc', csv: 'markets',
+          rowHref: r => href('markets', r.key),
+          rowClass: r => (out(r.key) > 0 ? 'is-supplied' : 'is-unsupplied'),
+        }));
+      };
+      redrawTable();
       tableBox.querySelector('table').id = 'marketsTable';
     };
     draw(Store);

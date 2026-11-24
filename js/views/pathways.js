@@ -224,7 +224,7 @@
       const shown = rows.filter(r => {
         if (state.builtOnly && !r.plants) return false;
         if (state.origin && !r.origins.includes(state.origin)) return false;
-        if (q && !`${r.name} ${r.id} ${r.product} ${UI.productName(r.product)}`.toLowerCase().includes(q)) return false;
+        if (q && !UI.matches(q, `${r.name} ${r.id} ${UI.searchText(r.product)}`)) return false;
         return true;
       });
       count.textContent = `${shown.length} of ${rows.length}`;
@@ -529,6 +529,10 @@
         : n.kind === 'sink' ? n.disposition : n.kind === 'source' ? UI.originLabel(sourceOrigin(pathway, n)) : n.kind;
       const g = svg('g', { class: `pw-node is-${n.kind}` + (n.disposition ? ' is-' + n.disposition : ''), transform: `translate(${n.x},${n.y})`, 'data-node': n.id });
       g.append(svg('rect', { width: FS.nodeW, height: FS.nodeH, rx: 6 }));
+      // Hover: the full name (labels longer than the box are cut) and the model unit behind it.
+      const tip = svg('title');
+      tip.textContent = n.label + (n.kind === 'converter' && n.unit ? ` (${n.unit})` : '');
+      g.append(tip);
       let textX = 10;
       if (n.kind === 'source') {
         g.append(svg('circle', { cx: 13, cy: 14, r: 4, class: 'pw-origin', 'data-origin': sourceOrigin(pathway, n) }));

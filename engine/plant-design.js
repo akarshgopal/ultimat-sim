@@ -25,40 +25,44 @@
   // Flowsheet unit → P&ID symbol, tag prefix, equipment type and the control loops it typically carries.
   //   symbol: pump | compressor | electrolyzer | column | membrane | reactor | kiln | furnace | contactor | package
   //   loops:  instrument letter codes (ISA 5.1) with their service.
+  //   T, P:   typical operating temperature and pressure of that equipment type, from the standard
+  //           process literature (screening ranges). The plant models themselves carry no operating
+  //           conditions (every solved stream sits at 25 °C, 1 bar), so these are a design basis to
+  //           read the drawing by, not model outputs.
   const UNIT_TYPES = Object.freeze({
-    'intake-pump': { symbol: 'pump', prefix: 'P', type: 'Centrifugal pump (VFD)', loops: [['FIC', 'intake flow, VFD speed'], ['PI', 'discharge pressure']] },
-    'gas-blower': { symbol: 'compressor', prefix: 'K', type: 'Blower', loops: [['FIC', 'air flow, VFD speed'], ['PI', 'discharge pressure']] },
-    swro: { symbol: 'membrane', prefix: 'M', type: 'Reverse-osmosis train', loops: [['FIC', 'feed flow'], ['PIC', 'HP feed pressure'], ['AIT', 'permeate conductivity']] },
-    electrolyzer: { symbol: 'electrolyzer', prefix: 'EL', type: 'Water electrolyzer stack', loops: [['JIC', 'stack power, tracks available PV'], ['TIC', 'stack temperature'], ['PIC', 'H₂ outlet pressure'], ['AIT', 'H₂ in O₂ (safety)']] },
-    'chlor-alkali': { symbol: 'electrolyzer', prefix: 'EL', type: 'Membrane chlor-alkali cells', loops: [['JIC', 'cell current'], ['TIC', 'cell temperature'], ['AIT', 'caustic strength']] },
-    'copper-ew': { symbol: 'electrolyzer', prefix: 'EL', type: 'Electrowinning tankhouse', loops: [['JIC', 'cell current'], ['TIC', 'electrolyte temperature'], ['LIC', 'cell level']] },
-    'aluminium-smelter': { symbol: 'electrolyzer', prefix: 'EL', type: 'Hall–Héroult potline', loops: [['JIC', 'line current'], ['TIC', 'bath temperature'], ['AIC', 'alumina feed (resistance)']] },
-    asu: { symbol: 'column', prefix: 'C', type: 'Air separation unit', loops: [['FIC', 'air feed'], ['AIC', 'N₂ purity'], ['PIC', 'column pressure']] },
-    dac: { symbol: 'contactor', prefix: 'AB', type: 'Direct air capture contactor', loops: [['FIC', 'air flow'], ['TIC', 'regeneration temperature'], ['AIT', 'CO₂ purity']] },
-    'dac-solid': { symbol: 'contactor', prefix: 'AB', type: 'Solid-sorbent DAC contactor', loops: [['FIC', 'air flow'], ['TIC', 'desorption temperature'], ['AIT', 'CO₂ purity']] },
-    'brine-minerals': { symbol: 'column', prefix: 'C', type: 'Brine mineral separation (DLE, crystallizers)', loops: [['FIC', 'brine feed'], ['LIC', 'crystallizer level'], ['AIT', 'Li⁺ in eluate']] },
-    'bromine-recovery': { symbol: 'column', prefix: 'C', type: 'Bromine stripping tower', loops: [['FIC', 'brine feed'], ['FFIC', 'Cl₂ : brine ratio'], ['TIC', 'stripper temperature']] },
-    'ree-chromatography': { symbol: 'column', prefix: 'C', type: 'Chromatographic separation train', loops: [['FIC', 'eluent flow'], ['AIT', 'fraction cut (online assay)']] },
-    'ree-sx': { symbol: 'column', prefix: 'C', type: 'Solvent-extraction mixer-settlers', loops: [['FFIC', 'aqueous : organic ratio'], ['AIC', 'pH'], ['LIC', 'settler interface']] },
-    'iac-leach': { symbol: 'reactor', prefix: 'R', type: 'Leach tanks', loops: [['AIC', 'pH'], ['TIC', 'leach temperature'], ['LIC', 'tank level']] },
-    'bayer-alumina': { symbol: 'reactor', prefix: 'R', type: 'Bayer digester and calciner', loops: [['TIC', 'digestion temperature'], ['PIC', 'digester pressure'], ['FFIC', 'caustic : bauxite ratio']] },
-    ammonia: { symbol: 'reactor', prefix: 'R', type: 'Haber-Bosch synthesis loop', loops: [['FFIC', 'H₂ : N₂ ratio (3 : 1)'], ['TIC', 'converter bed temperature'], ['PIC', 'loop pressure'], ['LIC', 'NH₃ separator level']] },
-    methanol: { symbol: 'reactor', prefix: 'R', type: 'Methanol synthesis loop', loops: [['FFIC', 'H₂ : CO₂ ratio'], ['TIC', 'reactor temperature'], ['PIC', 'loop pressure'], ['LIC', 'crude methanol level']] },
-    sabatier: { symbol: 'reactor', prefix: 'R', type: 'Sabatier methanation reactor', loops: [['FFIC', 'H₂ : CO₂ ratio (4 : 1)'], ['TIC', 'bed temperature'], ['AIT', 'CH₄ purity']] },
-    'ft-liquids': { symbol: 'reactor', prefix: 'R', type: 'Fischer-Tropsch reactor', loops: [['FFIC', 'H₂ : CO ratio'], ['TIC', 'reactor temperature'], ['PIC', 'reactor pressure']] },
-    mto: { symbol: 'reactor', prefix: 'R', type: 'Methanol-to-olefins reactor', loops: [['FIC', 'methanol feed'], ['TIC', 'reactor temperature'], ['AIT', 'olefin selectivity']] },
-    urea: { symbol: 'reactor', prefix: 'R', type: 'Urea synthesis and granulation', loops: [['FFIC', 'NH₃ : CO₂ ratio (2 : 1)'], ['TIC', 'reactor temperature'], ['PIC', 'synthesis pressure']] },
-    'hydrogen-dri': { symbol: 'furnace', prefix: 'F', type: 'H₂ shaft furnace (DRI)', loops: [['FIC', 'reducing gas flow'], ['TIC', 'gas preheat temperature'], ['AIT', 'top-gas H₂O'], ['WIC', 'pellet feed rate']] },
-    'pellet-plant': { symbol: 'kiln', prefix: 'F', type: 'Pelletizing and induration', loops: [['WIC', 'concentrate feed rate'], ['TIC', 'induration temperature']] },
-    cement: { symbol: 'kiln', prefix: 'F', type: 'Electric clinker kiln', loops: [['WIC', 'raw meal feed rate'], ['TIC', 'burning-zone temperature'], ['AIT', 'free lime']] },
-    'float-glass': { symbol: 'furnace', prefix: 'F', type: 'Electric float-glass furnace', loops: [['WIC', 'batch feed rate'], ['TIC', 'melt temperature'], ['LIC', 'glass level']] },
-    'mg-si': { symbol: 'furnace', prefix: 'F', type: 'Submerged-arc furnace', loops: [['JIC', 'electrode power'], ['WIC', 'charge feed rate'], ['TIC', 'tap temperature']] },
-    polysilicon: { symbol: 'reactor', prefix: 'R', type: 'Siemens CVD reactors', loops: [['JIC', 'rod heating power'], ['FFIC', 'H₂ : TCS ratio'], ['TIC', 'rod temperature']] },
-    'titanium-kroll': { symbol: 'reactor', prefix: 'R', type: 'Kroll reduction retorts', loops: [['FFIC', 'TiCl₄ : Mg feed'], ['TIC', 'retort temperature'], ['PIC', 'argon blanket pressure']] },
-    bioforge: { symbol: 'reactor', prefix: 'R', type: 'Bioreactor train', loops: [['TIC', 'broth temperature'], ['AIC', 'pH'], ['AIC', 'dissolved O₂']] },
-    'pv-module': { symbol: 'package', prefix: 'PK', type: 'PV module line', loops: [['JIC', 'line power']] },
+    'intake-pump': { symbol: 'pump', prefix: 'P', type: 'Centrifugal pump (VFD)', T: 'ambient', P: '2–5 bar discharge', loops: [['FIC', 'intake flow, VFD speed'], ['PI', 'discharge pressure']] },
+    'gas-blower': { symbol: 'compressor', prefix: 'K', type: 'Blower', T: 'ambient', P: '~1.05 bar', loops: [['FIC', 'air flow, VFD speed'], ['PI', 'discharge pressure']] },
+    swro: { symbol: 'membrane', prefix: 'M', type: 'Reverse-osmosis train', T: 'ambient', P: '55–70 bar feed', loops: [['FIC', 'feed flow'], ['PIC', 'HP feed pressure'], ['AIT', 'permeate conductivity']] },
+    electrolyzer: { symbol: 'electrolyzer', prefix: 'EL', type: 'Water electrolyzer stack', T: '50–80 °C', P: '1–30 bar', loops: [['JIC', 'stack power, tracks available PV'], ['TIC', 'stack temperature'], ['PIC', 'H₂ outlet pressure'], ['AIT', 'H₂ in O₂ (safety)']] },
+    'chlor-alkali': { symbol: 'electrolyzer', prefix: 'EL', type: 'Membrane chlor-alkali cells', T: '85–90 °C', P: 'atmospheric', loops: [['JIC', 'cell current'], ['TIC', 'cell temperature'], ['AIT', 'caustic strength']] },
+    'copper-ew': { symbol: 'electrolyzer', prefix: 'EL', type: 'Electrowinning tankhouse', T: '40–50 °C', P: 'atmospheric', loops: [['JIC', 'cell current'], ['TIC', 'electrolyte temperature'], ['LIC', 'cell level']] },
+    'aluminium-smelter': { symbol: 'electrolyzer', prefix: 'EL', type: 'Hall–Héroult potline', T: '940–980 °C', P: 'atmospheric', loops: [['JIC', 'line current'], ['TIC', 'bath temperature'], ['AIC', 'alumina feed (resistance)']] },
+    asu: { symbol: 'column', prefix: 'C', type: 'Air separation unit', T: '−196 to −175 °C', P: '5–6 bar', loops: [['FIC', 'air feed'], ['AIC', 'N₂ purity'], ['PIC', 'column pressure']] },
+    dac: { symbol: 'contactor', prefix: 'AB', type: 'Direct air capture contactor', T: 'ambient; regen. 80–120 °C', P: 'atmospheric', loops: [['FIC', 'air flow'], ['TIC', 'regeneration temperature'], ['AIT', 'CO₂ purity']] },
+    'dac-solid': { symbol: 'contactor', prefix: 'AB', type: 'Solid-sorbent DAC contactor', T: 'ambient; regen. 80–120 °C', P: 'atm.; vacuum desorption', loops: [['FIC', 'air flow'], ['TIC', 'desorption temperature'], ['AIT', 'CO₂ purity']] },
+    'brine-minerals': { symbol: 'column', prefix: 'C', type: 'Brine mineral separation (DLE, crystallizers)', T: '20–60 °C', P: 'atmospheric', loops: [['FIC', 'brine feed'], ['LIC', 'crystallizer level'], ['AIT', 'Li⁺ in eluate']] },
+    'bromine-recovery': { symbol: 'column', prefix: 'C', type: 'Bromine stripping tower', T: '90–100 °C', P: 'atmospheric', loops: [['FIC', 'brine feed'], ['FFIC', 'Cl₂ : brine ratio'], ['TIC', 'stripper temperature']] },
+    'ree-chromatography': { symbol: 'column', prefix: 'C', type: 'Chromatographic separation train', T: 'ambient–60 °C', P: '2–10 bar', loops: [['FIC', 'eluent flow'], ['AIT', 'fraction cut (online assay)']] },
+    'ree-sx': { symbol: 'column', prefix: 'C', type: 'Solvent-extraction mixer-settlers', T: 'ambient–40 °C', P: 'atmospheric', loops: [['FFIC', 'aqueous : organic ratio'], ['AIC', 'pH'], ['LIC', 'settler interface']] },
+    'iac-leach': { symbol: 'reactor', prefix: 'R', type: 'Leach tanks', T: 'ambient', P: 'atmospheric', loops: [['AIC', 'pH'], ['TIC', 'leach temperature'], ['LIC', 'tank level']] },
+    'bayer-alumina': { symbol: 'reactor', prefix: 'R', type: 'Bayer digester and calciner', T: '140–250 °C; calcining ~1000 °C', P: '5–35 bar', loops: [['TIC', 'digestion temperature'], ['PIC', 'digester pressure'], ['FFIC', 'caustic : bauxite ratio']] },
+    ammonia: { symbol: 'reactor', prefix: 'R', type: 'Haber-Bosch synthesis loop', T: '400–500 °C', P: '150–250 bar', loops: [['FFIC', 'H₂ : N₂ ratio (3 : 1)'], ['TIC', 'converter bed temperature'], ['PIC', 'loop pressure'], ['LIC', 'NH₃ separator level']] },
+    methanol: { symbol: 'reactor', prefix: 'R', type: 'Methanol synthesis loop', T: '220–280 °C', P: '50–100 bar', loops: [['FFIC', 'H₂ : CO₂ ratio'], ['TIC', 'reactor temperature'], ['PIC', 'loop pressure'], ['LIC', 'crude methanol level']] },
+    sabatier: { symbol: 'reactor', prefix: 'R', type: 'Sabatier methanation reactor', T: '250–400 °C', P: '1–20 bar', loops: [['FFIC', 'H₂ : CO₂ ratio (4 : 1)'], ['TIC', 'bed temperature'], ['AIT', 'CH₄ purity']] },
+    'ft-liquids': { symbol: 'reactor', prefix: 'R', type: 'Fischer-Tropsch reactor', T: '200–240 °C', P: '20–40 bar', loops: [['FFIC', 'H₂ : CO ratio'], ['TIC', 'reactor temperature'], ['PIC', 'reactor pressure']] },
+    mto: { symbol: 'reactor', prefix: 'R', type: 'Methanol-to-olefins reactor', T: '400–500 °C', P: '1–3 bar', loops: [['FIC', 'methanol feed'], ['TIC', 'reactor temperature'], ['AIT', 'olefin selectivity']] },
+    urea: { symbol: 'reactor', prefix: 'R', type: 'Urea synthesis and granulation', T: '180–200 °C', P: '140–160 bar', loops: [['FFIC', 'NH₃ : CO₂ ratio (2 : 1)'], ['TIC', 'reactor temperature'], ['PIC', 'synthesis pressure']] },
+    'hydrogen-dri': { symbol: 'furnace', prefix: 'F', type: 'H₂ shaft furnace (DRI)', T: '800–1000 °C', P: '1–8 bar', loops: [['FIC', 'reducing gas flow'], ['TIC', 'gas preheat temperature'], ['AIT', 'top-gas H₂O'], ['WIC', 'pellet feed rate']] },
+    'pellet-plant': { symbol: 'kiln', prefix: 'F', type: 'Pelletizing and induration', T: '1250–1350 °C', P: 'atmospheric', loops: [['WIC', 'concentrate feed rate'], ['TIC', 'induration temperature']] },
+    cement: { symbol: 'kiln', prefix: 'F', type: 'Electric clinker kiln', T: '1400–1450 °C', P: 'atmospheric', loops: [['WIC', 'raw meal feed rate'], ['TIC', 'burning-zone temperature'], ['AIT', 'free lime']] },
+    'float-glass': { symbol: 'furnace', prefix: 'F', type: 'Electric float-glass furnace', T: '1500–1600 °C', P: 'atmospheric', loops: [['WIC', 'batch feed rate'], ['TIC', 'melt temperature'], ['LIC', 'glass level']] },
+    'mg-si': { symbol: 'furnace', prefix: 'F', type: 'Submerged-arc furnace', T: '~2000 °C', P: 'atmospheric', loops: [['JIC', 'electrode power'], ['WIC', 'charge feed rate'], ['TIC', 'tap temperature']] },
+    polysilicon: { symbol: 'reactor', prefix: 'R', type: 'Siemens CVD reactors', T: '1100–1150 °C', P: '1–6 bar', loops: [['JIC', 'rod heating power'], ['FFIC', 'H₂ : TCS ratio'], ['TIC', 'rod temperature']] },
+    'titanium-kroll': { symbol: 'reactor', prefix: 'R', type: 'Kroll reduction retorts', T: '800–900 °C', P: 'slight argon overpressure', loops: [['FFIC', 'TiCl₄ : Mg feed'], ['TIC', 'retort temperature'], ['PIC', 'argon blanket pressure']] },
+    bioforge: { symbol: 'reactor', prefix: 'R', type: 'Bioreactor train', T: '30–37 °C', P: 'atmospheric', loops: [['TIC', 'broth temperature'], ['AIC', 'pH'], ['AIC', 'dissolved O₂']] },
+    'pv-module': { symbol: 'package', prefix: 'PK', type: 'PV module line', T: '~150 °C lamination', P: 'atmospheric', loops: [['JIC', 'line power']] },
   });
-  const DEFAULT_TYPE = Object.freeze({ symbol: 'package', prefix: 'PK', type: 'Process package', loops: [['FIC', 'feed flow'], ['TIC', 'process temperature']] });
+  const DEFAULT_TYPE = Object.freeze({ T: null, P: null, symbol: 'package', prefix: 'PK', type: 'Process package', loops: [['FIC', 'feed flow'], ['TIC', 'process temperature']] });
   const typeOf = unit => UNIT_TYPES[unit] || DEFAULT_TYPE;
 
   // Fluid codes for line numbers, by dominant substance.
@@ -161,6 +165,7 @@
       const td = Number(designUnits[n.unit]?.minTurndown);
       equipment.push({
         tag, nodeId: n.id, unit: n.unit, service: n.label, type: t.type, symbol: t.symbol,
+        conditions: t.T || t.P ? { T: t.T, P: t.P } : null,
         cls: Utilization.UNIT_TECH[n.unit] || 'process',
         mode,
         storeKind: mode === 'steady' || mode === 'firmed' ? (thermal.has(n.unit) || designUnits[n.unit]?.thermal === true ? 'heat store' : 'battery') : null,
@@ -539,8 +544,10 @@
   // ------------------------------------------------------------------ convenience
   // The package for one plant from the simulator's inputs, at year `yearIndex` costs (year 0 by default).
   // Company: the FoundryCompany API (passed in to keep this module free of a hard dependency).
-  function forPlant(Company, input, pathwayId, siteId, sizeKgPerDay, yearIndex = 0) {
-    const ev = Company.evaluateAtYear(input, pathwayId, siteId, sizeKgPerDay, yearIndex);
+  // yearOpts: evaluateAtYear's options for that year (a company run's timeline row: costFactors,
+  // rawFactors, storagePrices, pvUsdPerKWp), so a later year carries the run's learning.
+  function forPlant(Company, input, pathwayId, siteId, sizeKgPerDay, yearIndex = 0, yearOpts = {}) {
+    const ev = Company.evaluateAtYear(input, pathwayId, siteId, sizeKgPerDay, yearIndex, yearOpts);
     if (!ev) return null;
     const cfg = Company.mergeConfig(input.config);
     const pathway = input.pathways.find(p => p.id === pathwayId);
@@ -555,8 +562,11 @@
       const share = Number.isFinite(demandT) && demandT > 0 ? kgPerYear / 1000 / demandT : 0;
       return Company.realizedPrice(cfg, product ? markets[product] : null, fallback, share);
     };
-    const evaluate = (id, size) => Company.evaluateAtYear(input, id, siteId, size, yearIndex);
-    return { ev, pkg: designPackage({ pathway, ev, site, cfg, evaluate, priceOf }) };
+    const evaluate = (id, size) => Company.evaluateAtYear(input, id, siteId, size, yearIndex, yearOpts);
+    const pkg = designPackage({ pathway, ev, site, cfg, evaluate, priceOf });
+    pkg.basis.year = year;
+    pkg.basis.yearIndex = yearIndex;
+    return { ev, pkg };
   }
 
   return { forPlant, sourceNodeFor, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };

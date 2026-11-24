@@ -12,9 +12,12 @@
   function simInput(Store) {
     return { pathways: Store.PATHWAYS, markets: Store.MARKETS, sites: Store.SITES, config: Store.toConfig(Store.scenario) };
   }
-  function planHref(Store, pathwayId, siteId, multiple) {
+  function planHref(Store, pathwayId, siteId, multiple, year) {
     const q = Store.urlQuery();
-    return '#/plant/' + [pathwayId, siteId, multiple].filter(v => v != null && v !== '').map(v => encodeURIComponent(String(v))).join('/') + (q ? '?' + q : '');
+    // Positional segments; a skipped one before a given one is '_' (the view's default).
+    const segs = [pathwayId, siteId, multiple, year];
+    while (segs.length && (segs[segs.length - 1] == null || segs[segs.length - 1] === '')) segs.pop();
+    return '#/plant/' + segs.map(v => (v == null || v === '' ? '_' : v)).map(v => encodeURIComponent(String(v))).join('/') + (q ? '?' + q : '');
   }
   const MODE_LABEL = {
     'sun-following': 'sun-following',
@@ -30,7 +33,7 @@
   // ------------------------------------------------------------------ P&ID layout
   const G = {
     colW: 172, gapMin: 64, laneGap: 9, padX: 18, topBand: 112, padBottom: 30,
-    equipH: 150, connH: 44, tankH: 120, packH: 96, dummyH: 16, rowGap: 22,
+    equipH: 162, connH: 44, tankH: 120, packH: 96, dummyH: 16, rowGap: 22,
     symW: 64, symH: 52, bubbleR: 12,
   };
 
@@ -518,9 +521,11 @@
         name.textContent = fit(e.service, 26);
         const mode = svg('text', { x: cx, y: n.sy + n.sh + 41, class: 'pid-note' + (e.mode === 'sun-following' ? ' is-sun' : ''), 'text-anchor': 'middle' });
         mode.textContent = e.mode === 'sun-following' ? `☀ follows sun · ${UI.num(pkg.basis.flexNameplateFactor, 2)}× nameplate` : `${e.mode === 'firmed' ? 'firmed 24 h' : 'steady'} · ≥${Math.round(e.minTurndown * 100)}% turndown`;
+        const cond = svg('text', { x: cx, y: n.sy + n.sh + 53, class: 'pid-note pid-cond', 'text-anchor': 'middle' });
+        cond.textContent = e.conditions ? fit(`${e.conditions.T} · ${e.conditions.P}`, 32) : '';
         const t = svg('title');
-        t.textContent = `${e.tag} ${e.service} · ${e.type} · ${modeText(e)} · design ${UI.num(e.throughputKgPerH.design)} kg/h · ${UI.usd(e.capexUsd)} installed`;
-        g.append(t, tag, name, mode);
+        t.textContent = `${e.tag} ${e.service} · ${e.type} · ${modeText(e)}${e.conditions ? ` · typically ${e.conditions.T}, ${e.conditions.P}` : ''} · design ${UI.num(e.throughputKgPerH.design)} kg/h · ${UI.usd(e.capexUsd)} installed`;
+        g.append(t, tag, name, mode, cond);
         // Instruments in a row above the symbol, signal lines down to it.
         const insts = instByEquip.get(e.tag) || [];
         const span = Math.min(G.colW - 30, insts.length * 27 - 3);
@@ -566,7 +571,7 @@
         name.textContent = fit(`Captive ${UI.shortName(c.product)} supplier`, 26);
         const note = svg('text', { x: n.sx + 8, y: n.sy + 44, class: 'pid-note' });
         note.textContent = fit(`${c.supplierId} · ${UI.usdKg(c.lcopUsdPerKg)}/kg`, 30);
-        const link = svg('a', { href: planHref(Store, c.supplierId, pkg.basis.siteId, null) });
+        const link = svg('a', { href: planHref(Store, c.supplierId, pkg.basis.siteId, null, pkg.basis.yearIndex > 0 ? pkg.basis.year : null) });
         const lt = svg('text', { x: n.sx + 8, y: n.sy + n.sh + 14, class: 'pid-link' });
         lt.textContent = 'open its plant design →';
         link.append(lt);
@@ -642,6 +647,7 @@
       { key: 'tag', label: 'Tag', get: e => e.tag, render: e => UI.el('strong', { text: e.tag }) },
       { key: 'service', label: 'Service', get: e => e.service, render: e => [UI.el('span', { text: e.service }), UI.el('span', { class: 'cell-sub', text: e.type + (e.designed ? ' · engineered design' : '') })] },
       { key: 'mode', label: 'Operation', get: e => modeText(e), render: e => UI.el('span', { class: e.mode === 'sun-following' ? 'pl-sun' : '', text: modeText(e) }) },
+      { key: 'cond', label: 'Typical conditions', title: 'Typical operating temperature and pressure of this equipment type (literature ranges; the plant models do not carry operating conditions)', get: e => (e.conditions ? `${e.conditions.T}, ${e.conditions.P}` : ''), render: e => (e.conditions ? [UI.el('span', { text: e.conditions.T }), UI.el('span', { class: 'cell-sub', text: e.conditions.P })] : '—') },
       { key: 'flow', label: 'Design kg/h', num: true, title: 'Nameplate throughput (largest of total inlet and outlet mass)', get: e => e.throughputKgPerH.design, render: e => [UI.num(e.throughputKgPerH.design), UI.el('span', { class: 'cell-sub', text: 'avg ' + UI.num(e.throughputKgPerH.average) })] },
       { key: 'kw', label: 'Design kW', num: true, title: 'Electrical load at nameplate', get: e => e.powerKW.design, render: e => (e.powerKW.design > 0 ? [UI.num(e.powerKW.design), UI.el('span', { class: 'cell-sub', text: UI.num(e.kWhPerKg) + ' kWh/kg product' })] : '—') },
       { key: 'capex', label: 'Installed $', num: true, get: e => e.capexUsd, render: e => [UI.usd(e.capexUsd), UI.el('span', { class: 'cell-sub', text: UI.pct(e.capexUsd / total, 0) + ' of plant' })] },
@@ -812,6 +818,7 @@
       return null;
     }
     const multiple = Number(path[3]) > 0 ? Number(path[3]) : Store.RANK_SIZE_MULTIPLE;
+    const askedYear = Number(path[4]) > 0 ? Number(path[4]) : null;
 
     const head = el('div', { class: 'view-title' }, [el('h1', { text: 'Plant design: ' + UI.pathwayLabel(pathway) })]);
     const intro = el('p', { class: 'pl-intro' });
@@ -873,16 +880,28 @@
     });
 
     const draw = () => {
-      const key = Store.toQuery(Store.scenario);
-      if (key === lastKey) return;
-      lastKey = key;
       const input = simInput(Store);
       const cfg = Company.mergeConfig(input.config);
+      // Year: the first year needs no company run; a later year takes the run's cost factors that
+      // year (learning on its own deployment, exogenous decline, the idiot-index squeeze).
+      const lastYear = cfg.startYear + cfg.years - 1;
+      const year = askedYear ? Math.min(lastYear, Math.max(cfg.startYear, askedYear)) : cfg.startYear;
+      const yearIndex = year - cfg.startYear;
+      const result = Store.result && !Store.busy && !Store.stale ? Store.result : null;
+      const key = Store.toQuery(Store.scenario) + '|' + year + '|' + (result ? result.ms + ':' + result.plants.length : '');
+      if (key === lastKey) return;
+      lastKey = key;
+      if (yearIndex > 0 && !result?.timeline?.[yearIndex]) {
+        kpis.replaceChildren(el('p', { class: 'empty', text: `Simulating the company run for ${year} costs…` }));
+        return;
+      }
+      const row = yearIndex > 0 ? result.timeline[yearIndex] : null;
+      const yearOpts = row ? { costFactors: row.costFactors, rawFactors: row.rawFactors, storagePrices: row.storagePrices, pvUsdPerKWp: row.pvCapexUsdPerKWp } : {};
       const sizes = cfg.build.sizeMultiples.map(m => ({ m, kg: Math.min(m * pathway.refOutputKgPerDay, cfg.build.maxPlantKgPerDay) }));
       const size = Math.min(multiple * pathway.refOutputKgPerDay, cfg.build.maxPlantKgPerDay);
       const sites = [];
       for (const site of Store.SITES) {
-        const ev = Company.evaluateAtYear(input, pathway.id, site.id, size, 0);
+        const ev = Company.evaluateAtYear(input, pathway.id, site.id, size, yearIndex, yearOpts);
         if (ev) sites.push({ site, ev });
       }
       sites.sort((a, b) => a.ev.lcopUsdPerKg - b.ev.lcopUsdPerKg);
@@ -893,29 +912,47 @@
         return;
       }
       const siteId = sites.some(s => s.site.id === path[2]) ? path[2] : sites[0].site.id;
-      const built = PlantDesign.forPlant(Company, input, pathway.id, siteId, size, 0);
+      const built = PlantDesign.forPlant(Company, input, pathway.id, siteId, size, yearIndex, yearOpts);
       const { pkg, ev } = built;
       current = { pathway, siteId, pkg };
       const site = Store.siteById.get(siteId);
 
       // Controls: pathway, site, size.
       const pwSel = el('select', { 'aria-label': 'Pathway' }, Store.PATHWAYS.map(p => el('option', { value: p.id, selected: p.id === pathway.id ? true : null, text: UI.pathwayLabel(p) + ' · ' + UI.productName(p.product) })));
-      pwSel.addEventListener('change', () => { location.hash = planHref(Store, pwSel.value); });
+      pwSel.addEventListener('change', () => { location.hash = planHref(Store, pwSel.value, null, multiple, askedYear); });
       const siteSel = el('select', { 'aria-label': 'Site' }, sites.map((s, i) => el('option', { value: s.site.id, selected: s.site.id === siteId ? true : null, text: `${s.site.name} · ${UI.usdKg(s.ev.lcopUsdPerKg)}/kg${i === 0 ? ' (cheapest)' : ''}` })));
-      siteSel.addEventListener('change', () => { location.hash = planHref(Store, pathway.id, siteSel.value, multiple); });
+      siteSel.addEventListener('change', () => { location.hash = planHref(Store, pathway.id, siteSel.value, multiple, askedYear); });
       const sizeSel = el('select', { 'aria-label': 'Plant size' }, sizes.map(s => el('option', { value: s.m, selected: s.m === multiple ? true : null, text: `${UI.tonnes(s.kg * 365 / 1000)}/yr (${s.m}× reference)` })));
       if (!sizes.some(s => s.m === multiple)) sizeSel.prepend(el('option', { value: multiple, selected: true, text: `${UI.tonnes(size * 365 / 1000)}/yr (${multiple}× reference)` }));
-      sizeSel.addEventListener('change', () => { location.hash = planHref(Store, pathway.id, siteId, sizeSel.value); });
+      sizeSel.addEventListener('change', () => { location.hash = planHref(Store, pathway.id, siteId, sizeSel.value, askedYear); });
+      // Cost year: net cost at this site and size each year of the run (when the run is in hand),
+      // so the list shows when the plant turns feasible.
+      const yearCosts = new Map();
+      if (result) {
+        result.timeline.forEach((r, i) => {
+          const e = i === yearIndex ? ev : Company.evaluateAtYear(input, pathway.id, siteId, size, i,
+            i === 0 ? {} : { costFactors: r.costFactors, rawFactors: r.rawFactors, storagePrices: r.storagePrices, pvUsdPerKWp: r.pvCapexUsdPerKWp });
+          if (e) yearCosts.set(cfg.startYear + i, e);
+        });
+      }
+      const yearSel = el('select', { 'aria-label': 'Cost year' }, Array.from({ length: cfg.years }, (_, i) => {
+        const y = cfg.startYear + i;
+        const e = yearCosts.get(y);
+        const cost = e ? ` · ${UI.usdKg(e.lcopUsdPerKg)}/kg${e.lcopUsdPerKg <= e.priceUsdPerKg ? ' ✓' : ''}` : '';
+        return el('option', { value: y, selected: y === year ? true : null, text: (i === 0 ? `${y} (today’s costs)` : String(y)) + cost });
+      }));
+      yearSel.addEventListener('change', () => { location.hash = planHref(Store, pathway.id, siteId, multiple, Number(yearSel.value) === cfg.startYear ? null : yearSel.value); });
       controls.replaceChildren(
         el('label', {}, [el('span', { text: 'Recipe' }), pwSel]),
         el('label', {}, [el('span', { text: 'Site' }), siteSel]),
         el('label', {}, [el('span', { text: 'Nameplate' }), sizeSel]),
+        el('label', { title: 'Later years use the company run’s cost factors for that year: learning on its own deployment, exogenous decline and the idiot-index squeeze. ✓ = net cost at or below price.' }, [el('span', { text: 'Cost year' }), yearSel]),
         el('a', { class: 'pl-back', href: href('pathways', pathway.id), text: 'Recipe and best sites →' }),
       );
       const b = pkg.basis;
       intro.replaceChildren(
         `${pathway.name}, designed for `, el('a', { href: href('sites', siteId), text: site?.name || siteId }),
-        ` (${UI.num(site?.pvKWhPerKWpDay)} kWh/kWp·day of sun) at ${UI.tonnes(b.sizeKgPerDay / 1000)}/day nameplate, ${Company.DEFAULTS.startYear} costs. `,
+        ` (${UI.num(site?.pvKWhPerKWpDay)} kWh/kWp·day of sun) at ${UI.tonnes(b.sizeKgPerDay / 1000)}/day nameplate, ${year} costs${yearIndex > 0 ? ' from the company run' : ''}. `,
         b.strategy === 'sun-following'
           ? `Sun-following units run ${UI.num(b.flexFullLoadHoursPerDay, 2)} full-load hours a day at ${UI.num(b.flexNameplateFactor, 2)}× a 24-hour plant’s nameplate; steady units are firmed by storage. `
           : b.strategy === 'firmed' ? 'Every unit runs around the clock on PV plus storage. ' : '',
@@ -943,7 +980,7 @@
       wfHost.replaceChildren(waterfall(UI, pkg));
       tornadoHost.replaceChildren(tornado(UI, pkg));
 
-      const years = t.cashflow.map(c => Company.DEFAULTS.startYear + c.year);
+      const years = t.cashflow.map(c => year + c.year);
       cashHost.replaceChildren(ctx.Charts.chartBlock({
         x: years, kind: 'line', yFormat: UI.usd, endLabels: true,
         series: [
@@ -957,7 +994,7 @@
 
       // Scale table.
       const scaleRows = sizes.map(s => {
-        const e = s.kg === size ? ev : Company.evaluateAtYear(input, pathway.id, siteId, s.kg, 0);
+        const e = s.kg === size ? ev : Company.evaluateAtYear(input, pathway.id, siteId, s.kg, yearIndex, yearOpts);
         return e ? { ...s, ev: e } : null;
       }).filter(Boolean);
       scaleHost.replaceChildren(UI.sortableTable([
@@ -966,7 +1003,7 @@
         { key: 'spec', label: '$ per t/yr', num: true, get: r => r.ev.capex.total / (r.ev.annualKg / 1000), render: r => UI.usd(r.ev.capex.total / (r.ev.annualKg / 1000)) },
         { key: 'cost', label: 'Net cost', num: true, get: r => r.ev.lcopUsdPerKg, render: r => UI.usdKg(r.ev.lcopUsdPerKg) },
         { key: 'npv', label: 'NPV', num: true, get: r => r.ev.npv, render: r => el('span', { class: r.ev.npv >= 0 ? 'is-pos' : 'is-neg', text: UI.usd(r.ev.npv) }) },
-      ], scaleRows, { sortKey: 'cap', sortDir: 'asc', compact: true, rowHref: r => planHref(Store, pathway.id, siteId, r.m), rowClass: r => (r.m === multiple ? 'is-current' : null), csv: `${pathway.id}-scale` }));
+      ], scaleRows, { sortKey: 'cap', sortDir: 'asc', compact: true, rowHref: r => planHref(Store, pathway.id, siteId, r.m, askedYear), rowClass: r => (r.m === multiple ? 'is-current' : null), csv: `${pathway.id}-scale` }));
     };
     draw();
     return Store.subscribe(draw);
@@ -974,7 +1011,8 @@
 
   globalThis.Views.plant = {
     title: 'Plant design',
-    needsSimulation: false,
+    // The first year needs no run; the run (in a worker) fills in later years' costs.
+    needsSimulation: true,
     mount,
   };
 })();

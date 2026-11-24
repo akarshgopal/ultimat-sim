@@ -68,6 +68,27 @@ test('captive supplier: the bought feed becomes a tagged package on its flowshee
   assert.ok(!pkg.tea.capexItems.some(i => /Unallocated/.test(i.label)), 'captive capex separates cleanly');
 });
 
+test('a later cost year takes the company run’s cost factors, and every unit has typical conditions', () => {
+  const result = Company.simulateCompany(input);
+  const i = 10;
+  const row = result.timeline[i];
+  const opts = { costFactors: row.costFactors, rawFactors: row.rawFactors, storagePrices: row.storagePrices, pvUsdPerKWp: row.pvCapexUsdPerKWp };
+  const r0 = ranks.find(r => r.pathwayId === 'green-ammonia');
+  const now = PlantDesign.forPlant(Company, input, 'green-ammonia', r0.siteId, r0.sizeKgPerDay);
+  const later = PlantDesign.forPlant(Company, input, 'green-ammonia', r0.siteId, r0.sizeKgPerDay, i, opts);
+  const direct = Company.evaluateAtYear(input, 'green-ammonia', r0.siteId, r0.sizeKgPerDay, i, opts);
+  assert.equal(later.pkg.basis.year, result.timeline[i].year);
+  assert.ok(rel(later.pkg.tea.lcopUsdPerKg, direct.lcopUsdPerKg) < 1e-12, 'same number as the Pathways cost curve');
+  assert.ok(later.pkg.tea.capexTotal < now.pkg.tea.capexTotal, 'learning and decline make the plant cheaper');
+  assert.ok(rel(sum(later.pkg.tea.capexItems, x => x.usd), later.ev.capex.total) < 1e-9);
+  for (const p of input.pathways) {
+    for (const n of p.flowsheet.nodes.filter(n => n.kind === 'converter')) {
+      const t = PlantDesign.typeOf(n.unit);
+      assert.ok(t.T && t.P, `${p.id}/${n.unit} has typical operating conditions`);
+    }
+  }
+});
+
 test('irr and the sensitivity levers behave', () => {
   assert.ok(Math.abs(PlantDesign.irr([-100, 110]) - 0.1) < 1e-9);
   assert.equal(PlantDesign.irr([-100, -5]), null);
@@ -108,6 +129,17 @@ test('plant view: P&ID, tables and TEA; site and size selectors; link from pathw
   await page.selectOption('.v-plant select[aria-label="Site"]', other);
   await page.waitForFunction(id => location.hash.includes('/' + id + '/'), other);
   await page.waitForSelector('.v-plant svg.pid');
+
+  // A later cost year waits for the company run, then redesigns at that year's costs.
+  const cost0 = await page.textContent('.v-plant .kpi:nth-child(3) .kpi-value');
+  await page.waitForFunction(() => document.querySelectorAll('.v-plant select[aria-label="Cost year"] option').length > 10);
+  await page.waitForFunction(() => /\$/.test(document.querySelector('.v-plant select[aria-label="Cost year"] option:last-child').textContent), null, { timeout: 90000 });
+  const lastYear = await page.$eval('.v-plant select[aria-label="Cost year"] option:last-child', o => o.value);
+  await page.selectOption('.v-plant select[aria-label="Cost year"]', lastYear);
+  await page.waitForFunction(y => location.hash.endsWith('/' + y) || location.hash.includes('/' + y + '?'), lastYear);
+  await page.waitForFunction(c => document.querySelector('.v-plant .kpi:nth-child(3) .kpi-value')?.textContent !== c, cost0, { timeout: 90000 });
+  assert.match(await page.textContent('.v-plant .pl-intro'), new RegExp(lastYear + ' costs from the company run'));
+  assert.ok(await page.$('.v-plant svg.pid .pid-cond'), 'typical conditions on the drawing');
 
   // Captive supplier package links to its own plant design.
   await page.goto(`${base}#/plant/silicon`);

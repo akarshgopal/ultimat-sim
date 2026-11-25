@@ -90,7 +90,7 @@
         { key: 'growth', label: 'Growth', csvLabel: 'Growth (fraction/yr)', num: true, title: 'Assumed demand growth per year', get: r => r.growthPerYear, render: r => UI.pct(r.growthPerYear || 0) + '/yr' },
         { key: 'price', label: 'Ref. price', csvLabel: 'Ref. price ($/kg)', num: true, title: 'Today’s reference price; the typical range is below', get: r => r.priceUsdPerKg,
           render: r => el('span', {}, [UI.usdKg(r.priceUsdPerKg) + '/kg', r.priceBandUsdPerKg ? el('span', { class: 'cell-sub', text: r.priceBandUsdPerKg.map(UI.usdKg).join('–') }) : null]) },
-        { key: 'elast', label: 'Elasticity', num: true, title: 'How strongly the price falls as the company’s share grows: price = reference × (1 − elasticity × share)', get: r => r.priceElasticity, render: r => (r.priceElasticity ?? 0).toFixed(2) },
+        { key: 'elast', label: 'Elasticity', num: true, title: 'How strongly the price falls as the company’s share grows: price = reference × (1 − elasticity × share)', get: r => (r.priceLadder?.length ? -1 : r.priceElasticity), render: r => (r.priceLadder?.length ? el('span', { title: 'Sold down a price ladder of buyer tiers (see the market)', text: 'ladder' }) : (r.priceElasticity ?? 0).toFixed(2)) },
         { key: 'quality', label: 'Data', title: 'cited = from a published source; screening = reasoned estimate', get: r => r.quality, render: r => UI.qualityTag(r.quality) },
         { key: 'paths', label: 'Made by', get: r => prodBy.get(r.key).length, render: r => pathwayLinks(UI, href, prodBy.get(r.key)) },
       ];
@@ -146,8 +146,13 @@
     const facts = el('dl', { class: 'facts' }, [
       el('dt', { text: 'Basis' }), el('dd', { text: m.basis || '—' }),
       el('dt', { text: 'World demand' }), el('dd', { text: `${UI.tonnes(m.worldDemandTPerYear)}/yr (${m.demandYear || '—'}), growing ${UI.pct(m.growthPerYear || 0)}/yr` }),
-      el('dt', { text: 'Reference price' }), el('dd', { text: `${UI.usdKg(m.priceUsdPerKg)}/kg` + (band ? ` (band ${band.map(UI.usdKg).join('–')})` : '') }),
-      el('dt', { text: 'Elasticity' }), el('dd', { text: `${UI.num(m.priceElasticity, 2)} — realized price = reference × (1 − ${UI.num(m.priceElasticity, 2)} × share)` }),
+      el('dt', { text: m.priceLadder?.length ? 'Bulk price' : 'Reference price' }), el('dd', { text: `${UI.usdKg(m.priceUsdPerKg)}/kg` + (band ? ` (band ${band.map(UI.usdKg).join('–')})` : '') }),
+      ...(m.priceLadder?.length
+        ? [el('dt', { text: 'Price ladder' }), el('dd', {}, [
+          'Sold to the highest-paying buyers first; the realized price is the tier of the marginal buyer.',
+          el('ul', { class: 'list-plain' }, m.priceLadder.map(t => el('li', { text: `${t.label}: ${UI.usdKg(t.usdPerKg)}/kg, ${t.share < 1e-4 ? '< 0.01%' : UI.pct(t.share, t.share < 0.01 ? 2 : 0)} of demand` }))),
+        ])]
+        : [el('dt', { text: 'Elasticity' }), el('dd', { text: `${UI.num(m.priceElasticity, 2)} — realized price = reference × (1 − ${UI.num(m.priceElasticity, 2)} × share)` })]),
       el('dt', { text: 'Data quality' }), el('dd', {}, UI.qualityTag(m.quality)),
       group !== key ? el('dt', { text: 'Market group' }) : null,
       group !== key ? el('dd', {}, ['Shares and prices are counted on ', el('a', { href: href('markets', group), text: UI.productName(group) }), '.']) : null,

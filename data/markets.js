@@ -178,6 +178,22 @@ const MARKETS = {
     sources: [{ label: 'USGS MCS 2026 Magnesium Compounds — world magnesite mine production 2025e 21 Mt gross weight', url: USGS_MG_2026 }],
     note: 'Proxy: USGS magnesite tonnage stands in for the Mg-compound market (MgO/MgCl₂/Mg(OH)₂ from magnesite, brine and seawater); not the same basis as the MgCl₂·6H₂O screening price, hence screening. Not Mg metal (~1.1 Mt/y).',
   },
+  chlorine: {
+    name: 'Chlorine (Cl₂)',
+    basis: 'Cl₂',
+    worldDemandTPerYear: 77e6,
+    demandYear: 2025,
+    growthPerYear: 0.025,
+    priceUsdPerKg: 0.3,
+    priceBandUsdPerKg: [0.03, 0.75],
+    priceElasticity: 0.8,
+    quality: 'screening',
+    sources: [
+      { label: 'Euro Chlor, Our industry — European members produced ~8.0 Mt chlorine in a year', url: 'https://www.eurochlor.org/production' },
+      { label: 'Intratec chlorine prices — Europe $503/t, US $723/t (April 2026)', url: 'https://www.intratec.us/solutions/primary-commodity-prices/commodity/chlorine-prices' },
+    ],
+    note: 'World chlorine ~75–80 Mt/yr (secondary market-research estimate; China ~45–50% of capacity), ~77 Mt used. Made 0.89 kg per kg of caustic soda. Price $0.30/kg screening between near-zero Chinese and ~$0.5–0.7/kg European and US prices; chlorine ships poorly, so the reachable market is local (high elasticity). Screening.',
+  },
   caustic: {
     name: 'Caustic soda (NaOH)',
     basis: 'NaOH (100% basis)',

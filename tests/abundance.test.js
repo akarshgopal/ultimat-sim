@@ -77,3 +77,15 @@ test('coproduct credit counts only what the coproduct’s world market can absor
   close(quarter.lcopUsdPerKg - all.lcopUsdPerKg, 3, 1e-6); // $3/kg of credit on 3 kg/kg that cannot be sold
   assert.ok(all.lcopUsdPerKg < 0, 'with room for its coproduct the plant is paid to make widgets');
 });
+
+test('standalone oxygen and solar sea salt cover markets that were coproduct-only or brine-bound', () => {
+  const today = board({});
+  const salt = today.rows.find(r => r.product === 'salt');
+  assert.equal(salt.pathwayId, 'sea-salt');
+  assert.equal(salt.status, 'abundant');
+  const oxygen = today.rows.find(r => r.product === 'oxygen');
+  assert.equal(oxygen.pathwayId, 'oxygen-asu');
+  assert.ok(oxygen.costRatio > 0.5 && oxygen.costRatio < 1.5, String(oxygen.costRatio));
+  const frontier = board({ pv: cheapPv() });
+  assert.ok(frontier.rows.find(r => r.product === 'oxygen').costRatio < oxygen.costRatio);
+});

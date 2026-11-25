@@ -14,13 +14,13 @@ One page (`index.html`), seven views. The scenario lives in the URL, so a link r
 
 | View | Question |
 |---|---|
-| **Abundance** | The landing view. Of ~10.9 Gt/yr of tracked world material demand, how much can be made below today's price — today, in the current scenario, and at the frontier (10× cheaper solar, every cost at 1.5× its raw materials, every design at its lean preset)? For each blocked material, its largest cost item per kg: a unit to design, a feed to make cheaper, or energy. |
+| **Abundance** | The landing view. Of ~11 Gt/yr of tracked world material demand, how much can be made below today's price — today, in the current scenario, and at the frontier (10× cheaper solar, every cost at 1.5× its raw materials, every design at its lean preset)? For each blocked material, its largest cost item per kg: a unit to design, a feed to make cheaper, or energy. |
 | **Company** | What does the company build over the years, how much of world supply is that, and does it stay self-funding? |
 | **Energy** | In kWh and $/kWh: the electricity price below which each recipe becomes feasible, the world demand each price unlocks, and where each kg's cost goes. |
 | **Designs** | Parametric equipment designs (`engine/designs/`): knobs → bill of materials → installed $ per kg/day, kWh/kg, idiot index → the unit's factors in the simulation. |
 | **Pathways** | Each recipe: cost vs price over time, best sites, make-vs-buy, and its plant flowsheet per kg of product. |
 | **Sites** | 51 sites (38 coasts, 13 inland brine hubs): solar, land price, seawater or brine, which recipes they host, what the run builds there. |
-| **Markets** | 32 world markets: demand, price, sources, the company's share and the price relief it delivers. |
+| **Markets** | 33 world markets: demand, price, sources, the company's share and the price relief it delivers. |
 
 The simulation runs in a Web Worker. The browser loads the company engine (`engine/company.js`, `engine/utilization.js`), the design modules and four data files; plant models and the flowsheet solver run in Node when the data is regenerated:
 
@@ -34,12 +34,13 @@ data/site-presets.js + PVGIS + engine/land.js ──▶ scripts/build-sites.mjs 
 
 | | Share of world tonnage feasible | Abundant (≤ ½ today's price) |
 |---|---|---|
-| Today | 37% | ~0% |
-| Frontier | 64% | 62% |
+| Today | 39% | 2.5% |
+| Frontier | 70% | 68% |
 
 - **Energy alone unlocks little.** 10× cheaper solar by itself lifts the feasible share only from 37% to 38% (cement turns abundant; little else moves): equipment running ~7 sun-hours a day dominates most recipes. Cheap solar plus lean equipment and squeezed margins does.
-- **What binds the company is not money: it is land.** The default 25-year run makes ~4.6 Gt today and ~8.8 Gt at the frontier, where it ends with ~$2.5 trillion unspent. Each site may cover a share of the land suitable for utility PV in its catchment (World Bank/ESMAP; default 2%). With 100% market share the frontier company reaches 2.2 Gt/yr by 2051 at 2% land use (filling all 2.3 TW it may build), 6.2 Gt/yr at 10%, 6.9 Gt/yr at 25% (18 TW; there land no longer binds). Coastal sites fill first; inland sites fill when they are within a few hundred km of a port, since they pay overland freight on everything they sell and buy.
-- **Bulk gas is the largest prize still out of reach.** Methane sells down a price ladder of buyer tiers (Terraform Industries' estimates): packaged gas $495/MMBtu, off-grid $45, western-US RNG $35, Asian and European LNG $16–19, and bulk pipeline gas at Henry Hub $3 (≈ $0.16/kg), which is 92% of the 3.1 Gt. Frontier e-methane at $0.30/kg (~$6/MMBtu) is abundant in every premium tier (~250 Mt) but costs 1.9× bulk gas; even with free electricity its equipment alone costs $0.19/kg. Cement (clinker $0.043/kg against $0.16) is the largest abundant market. What else is feasible but not abundant is steel (bought iron ore is $0.21 of its $0.25/kg) and copper (bought leach solution); polysilicon and aluminium lose abundance once their steady units are firmed against cloudy weather.
+- **What binds the company is not money: it is land.** The default 25-year run makes ~5.6 Gt today and ~10.5 Gt at the frontier, where it ends with ~$2.6 trillion unspent. Each site may cover a share of the land suitable for utility PV in its catchment (World Bank/ESMAP; default 2%). With 100% market share the frontier company reaches 3.0 Gt/yr by 2051 at 2% land use (filling all 2.3 TW it may build), 6.7 Gt/yr at 10%, 7.4 Gt/yr at 25% (18 TW; there land no longer binds). Coastal sites fill first; inland sites fill when they are within a few hundred km of a port, since they pay overland freight on everything they sell and buy.
+- **Bulk gas is the largest prize still out of reach.** Methane sells down a price ladder of buyer tiers (Terraform Industries' estimates): packaged gas $495/MMBtu, off-grid $45, western-US RNG $35, Asian and European LNG $16–19, and bulk pipeline gas at Henry Hub $3 (≈ $0.16/kg), which is 92% of the 3.1 Gt. Frontier e-methane at $0.30/kg (~$6/MMBtu) is abundant in every premium tier (~250 Mt) but costs 1.9× bulk gas: its 30 kWh/kg alone cost $0.17/kg at frontier solar (0.56¢/kWh), before any equipment. Cement (clinker $0.043/kg against $0.16) is the largest abundant market. What else is feasible but not abundant is steel (bought iron ore is $0.21 of its $0.25/kg) and copper (bought leach solution); polysilicon and aluminium lose abundance once their steady units are firmed against cloudy weather.
+- **The oldest solar chemistry is already abundant.** Solar sea salt from evaporation ponds (Pilbara, Mardie-scale capex) costs ~$19/t today against a $60/t price. Oxygen by air separation (0.25 kWh/kg) is near-feasible today and nearly free at the frontier, and membrane chlor-alkali makes caustic soda once its chlorine and hydrogen are sold; those markets were previously only coproducts of the brine hubs.
 - **Coproducts cannot carry a whole world market.** The scoreboard asks whether *all* of a material's demand can be made below today's price, so a plant's coproduct credit only counts up to what each coproduct's own world market can absorb. That keeps salt and lithium from brine hubs, and NdPr oxide from chromatography, blocked: at world scale their coproducts would far exceed those markets (NdPr alone would bring ~135 kt/yr of Dy/Tb oxides to a 4 kt/yr market). Hydrogen stays abundant, but at $0.31/kg rather than $0.07, because only 300 Mt/yr of its 790 Mt/yr of oxygen can be sold.
 
 ## How the company simulator works
@@ -69,7 +70,7 @@ Every tunable lives in `FoundryCompany.DEFAULTS` (`engine/company.js`). The defa
 
 ## The data
 
-- **Pathways** (`data/pathways.js`, 28 recipes): generated from `cases/*.js` by `npm run pathways`; a test fails if the file is stale. Each recipe gives electricity and heat per kg, feeds by origin (`ocean`, `brine`, `air`, `crust`, `water`, `consumable`, or a bought `intermediate`), coproducts, capex per kg/day by technology class, and the solved flowsheet.
+- **Pathways** (`data/pathways.js`, 31 recipes): generated from `cases/*.js` by `npm run pathways`; a test fails if the file is stale. Each recipe gives electricity and heat per kg, feeds by origin (`ocean`, `brine`, `air`, `crust`, `water`, `consumable`, or a bought `intermediate`), coproducts, capex per kg/day by technology class, and the solved flowsheet.
 - **Markets** (`data/markets.js`, 32 products): world demand, growth, reference price and a screening elasticity, tagged `cited` (mostly USGS, IEA) or `screening`.
 - **Sites** (`data/sites.js`, generated by `npm run sites` from `data/site-presets.js`): 51 coasts and brine hubs with frozen PVGIS solar, seawater and brine assays, land prices where a source exists, the land suitable for utility PV in each site's 200 km catchment (`data/land-pv.js`, World Bank/ESMAP Level 1 land by country; neighbouring catchments split their overlap, coastal ones are half sea) and, inland, the road distance to a port.
 - **Prices and capex packs** (`data/tea-screening.js`) and **bills of materials** (`data/bom.js`), cited where possible.

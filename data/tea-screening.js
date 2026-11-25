@@ -200,6 +200,12 @@ const prices = {
     'Brine Mg compound / MgCl₂·hexahydrate commodity band far below Mg metal; do not use Mg-metal prices. Mid ~$0.08/kg screening.',
     [{ label: 'USGS MCS magnesium compounds (family; brine compound screening mid $0.08/kg — not Mg-metal)', url: USGS_MG }]
   ),
+  chlorine: row(
+    0.30, '$/kg', 'screening', 'chlorine merchant band',
+    'Chlorine ~$0.30/kg screening: Europe ~$0.45–0.50/kg and the US ~$0.59–0.72/kg (Intratec, IMARC 2026), while China, which holds about half the capacity, often prices chlorine near zero because caustic drives production. Chlorine ships poorly, so most is used next to the cell. Not a contract.',
+    [{ label: 'Intratec chlorine prices — Europe (CIF Germany) $503/t, US $723/t, April 2026', url: 'https://www.intratec.us/solutions/primary-commodity-prices/commodity/chlorine-prices' },
+      { label: 'IMARC chlorine pricing report — Europe $0.45/kg, North America $0.59/kg, March 2026', url: 'https://www.imarcgroup.com/chlorine-pricing-report' }]
+  ),
   caustic: row(
     0.45, '$/kg', 'screening', 'NaOH commodity band',
     'NaOH ~$300–600/t commodity band; mid $0.45/kg screening. Not a caustic contract.',
@@ -641,6 +647,24 @@ const packs = {
     note: 'installedCapex = 800 $/ (kg Br₂/day) × capacity (scale exponent omitted). Bromine-recovery CAPEX intensity screening. Not a vendor quote.',
     evidence: [{ label: 'Bromine-recovery CAPEX intensity screening ~$800/(kg Br₂/day)', url: null }],
   }),
+  'solar-salt-ponds': pack({
+    // Mardie DFS: A$779M for 4.4 Mt/yr salt (+120 kt/yr SOP, port included) → A$177 ≈ US$115 per
+    // t/yr → $42/(kg salt/day); ÷ ~45 kg seawater per kg salt → per kg seawater/day processed.
+    capexIntensity: 42 / 45, intensityUnit: '$/(kg seawater/day)',
+    fixedOmPercent: 3, variableOm: 0.0002, assetLifeYears: 30,
+    quality: 'screening', source: 'Mardie salt project DFS (Pilbara), total capex ÷ salt capacity',
+    note: 'Solar salt ponds, harvesters, wash plant and port: Mardie DFS A$779M total for 4.4 Mt/yr high-purity salt and 120 kt/yr SOP → ~A$177 (US$115) per t/yr → $42/(kg salt/day), quoted per kg seawater/day at ~45 kg seawater per kg salt. Conservative: includes the port and the potash plant. Variable O&M $0.0002/kg seawater ≈ $9/t salt for harvesting and washing (screening).',
+    evidence: [{ label: 'Mardie salt and potash project, Australia — DFS total capex A$779M (direct A$580M + A$199M provisions), 4.4 Mtpa salt + 120 ktpa SOP', url: 'https://www.miningweekly.com/article/mardie-salt-and-potash-project-australia-2020-09-25' }],
+  }),
+  'asu-oxygen': pack({
+    // $73/(kg O₂/day) installed (Thunder Said Energy base case $200 per t/yr of oxygen), quoted per
+    // kg of N₂ processed because the ASU unit is sized on nitrogen: × 0.297 kg O₂ per kg N₂.
+    capexIntensity: 73 * 0.297, intensityUnit: '$/(kg N2/day processed)',
+    fixedOmPercent: 3, variableOm: 0, assetLifeYears: 25,
+    quality: 'screening', source: 'Thunder Said Energy cryogenic ASU base case',
+    note: 'Cryogenic oxygen ASU: installed $200 per t/yr of O₂ ≈ $73/(kg O₂/day), expressed per kg N₂/day processed (0.297 kg O₂ out per kg N₂ at 0.95 O₂ / 0.98 N₂ recovery). Thunder Said Energy base case (oxygen ~$100/t). Screening, not a vendor quote.',
+    evidence: [{ label: 'Thunder Said Energy, Costs of cryogenic air separation — base case $200/Tpa capex', url: 'https://thundersaidenergy.com/downloads/cryogenic-air-separation-the-economics/' }],
+  }),
   asu: pack({
     capexIntensity: 400, intensityUnit: '$/(kg N2/day)',
     fixedOmPercent: 4, variableOm: 0.02, assetLifeYears: 20,
@@ -984,6 +1008,11 @@ const demand = {
     `200 kt/y regional brine-Mg-compound ceiling, not Mg-metal. USGS magnesium-compounds family; Dead Sea brine Mg compounds exist. ${DEMAND_REGION}`,
     [{ label: 'USGS MCS 2025 magnesium compounds (family; brine-compound ceiling, not metal)', url: USGS_MG }]
   ),
+  chlorine: row(
+    5e8, 'kg/year', 'screening', 'regional chlorine offtake',
+    `500 kt/y regional chlorine offtake screening (chlorine ships poorly, so it is a local market). World ~77 Mt; this is a regional ceiling, not a contract.`,
+    [{ label: 'Chlorine regional offtake screening 500 kt/y; not a contract', url: null }]
+  ),
   caustic: row(
     1e9, 'kg/year', 'screening', 'regional chlor-alkali offtake',
     `1 Mt/y regional NaOH chemical offtake screening. World chlor-alkali is tens of Mt; this is a ME regional ceiling, not a contract.`,
@@ -1153,7 +1182,7 @@ const demand = {
 };
 
 const MINERAL_DEMAND_KEYS = Object.freeze(['lithium', 'bromine', 'potash', 'salt', 'gypsum', 'magnesium']);
-const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide', 'urea', 'ethylene', 'diesel']);
+const FUEL_CHEM_DEMAND_KEYS = Object.freeze(['caustic', 'chlorine', 'ammonia', 'oxygen', 'methane', 'methanol', 'hydrogen', 'water', 'gluconic', 'hydrogen-peroxide', 'urea', 'ethylene', 'diesel']);
 
 function cloneDemandRow(item, extraNote, extra = {}) {
   const cloned = {

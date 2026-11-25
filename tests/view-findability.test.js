@@ -51,7 +51,7 @@ test('with the service worker on, the app reloads and works offline after one vi
   try {
     await page.reload();
     await simulationIdle(page);
-    assert.equal(await page.$$eval('#view .data-table tbody tr', r => r.length), 32);
+    assert.equal(await page.$$eval('#view .data-table tbody tr', r => r.length), Object.keys(require('../data/markets.js').MARKETS).length);
   } finally {
     await page.context().setOffline(false);
   }

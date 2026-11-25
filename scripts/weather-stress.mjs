@@ -80,8 +80,10 @@ export function stress(config, sizeMultiple = 100) {
   }
   const total = board.totals.worldDemandT;
   const feasible = rows => rows.filter(r => r.status === 'feasible' || r.status === 'abundant');
-  const weatherFeasibleT = rows.reduce((t, r) => t + ((r.weather ? r.weather.costRatio <= 1 : r.status === 'feasible' || r.status === 'abundant') ? r.worldDemandT : 0), 0);
-  const firmedT = rows.reduce((t, r) => t + ((r.weather ? r.weather.firmedCostRatio <= 1 : r.status === 'feasible' || r.status === 'abundant') ? r.worldDemandT : 0), 0);
+  const ok = r => r.status === 'feasible' || r.status === 'abundant';
+  // Real weather can only take a row away: it must be feasible on typical days too.
+  const weatherFeasibleT = rows.reduce((t, r) => t + (ok(r) && (!r.weather || r.weather.costRatio <= 1) ? r.worldDemandT : 0), 0);
+  const firmedT = rows.reduce((t, r) => t + (ok(r) && (!r.weather || r.weather.firmedCostRatio <= 1) ? r.worldDemandT : 0), 0);
   return {
     rows,
     typicalFeasibleShare: board.totals.feasibleShare,
@@ -136,8 +138,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else {
     for (const [name, s] of Object.entries(out)) {
       console.log(`\n## ${name}: feasible share ${(s.typicalFeasibleShare * 100).toFixed(1)}% on typical days → ${(s.weatherFeasibleShare * 100).toFixed(1)}% on real weather`);
-      const firmedT = s.rows.reduce((t, r) => t + ((r.weather ? r.weather.firmedCostRatio <= 1 : r.status === 'feasible' || r.status === 'abundant') ? r.worldDemandT : 0), 0);
-      const totalT = s.rows.reduce((t, r) => t + r.worldDemandT, 0);
       console.log(`   firmed to ≤ 1 trip day a year: ${(s.weatherFeasibleFirmedShare * 100).toFixed(1)}%`);
       console.log('material'.padEnd(22), 'site'.padEnd(20), 'strategy'.padEnd(14), 'output typ→real', 'trip days', 'cost/price typ→real', 'store × to firm', 'firmed cost/price');
       for (const r of s.rows.filter(x => x.weather).sort((a, b) => b.worldDemandT - a.worldDemandT)) {

@@ -221,9 +221,9 @@ const prices = {
     [{ label: 'IEA 2019 Putting CO₂ to Use — ~230 Mt/y CO₂ used; screening merchant price $0.05/kg, not a contract', url: IEA_CO2_USE }]
   ),
   methane: row(
-    1, '$/kg', 'screening', 'green-premium screening',
-    'Screening green-premium offtake (~$28/MMBtu order), not Henry Hub fossil gas. EIA/Henry Hub is contrast only — not this $1/kg value.',
-    [{ label: 'EIA Henry Hub (fossil-gas contrast only; not the model $1/kg CH₄)', url: EIA_HH }]
+    0.16, '$/kg', 'screening', 'bulk gas at Henry Hub ~$3/MMBtu',
+    'Bulk pipeline gas at Henry Hub ~$3/MMBtu → $0.16/kg (HHV 55.5 MJ/kg, 19 kg/MMBtu). This is the bottom rung of the methane price ladder in data/markets.js, where premium buyers (packaged gas, off-grid, RNG, LNG spot) pay more for a small share of the tonnage.',
+    [{ label: 'EIA Henry Hub natural gas spot price (monthly)', url: EIA_HH }]
   ),
   methanol: row(
     0.4, '$/kg', 'screening', 'commodity MeOH band',

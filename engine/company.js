@@ -250,7 +250,18 @@
     return base * (1 + g) ** (year - (Number(market.demandYear) || year));
   }
 
+  // A market with a price ladder sells at the tier of its marginal buyer: the tier the company's
+  // share has reached, highest-paying buyers first. Otherwise the price falls linearly with share.
+  function ladderPrice(ladder, share) {
+    let cum = 0;
+    for (const tier of ladder) {
+      cum += tier.share;
+      if (share < cum - 1e-12) return tier.usdPerKg;
+    }
+    return ladder[ladder.length - 1].usdPerKg;
+  }
   function realizedPrice(cfg, market, fallbackUsdPerKg, share) {
+    if (market?.priceLadder?.length) return ladderPrice(market.priceLadder, Math.max(0, share));
     const p0 = market && Number(market.priceUsdPerKg) > 0 ? Number(market.priceUsdPerKg) : Number(fallbackUsdPerKg) || 0;
     const elasticity = market ? Number(market.priceElasticity) || 0 : 0;
     return p0 * Math.max(cfg.minPriceFraction, 1 - elasticity * Math.max(0, share));
@@ -1407,6 +1418,11 @@
     const pathways = allowedPathways(base, input.pathways);
     const ids = opts.pathwayIds ? new Set(opts.pathwayIds) : null;
     const suppliers = captiveSuppliers(base, pathways);
+    // A break-even unlocks a market's whole tonnage, so a laddered market is priced at its bulk
+    // (bottom) tier here, not at the premium tier a single plant could sell into.
+    const markets = Object.fromEntries(Object.entries(input.markets || {}).map(([k, m]) => [k, m?.priceLadder?.length
+      ? { ...m, priceLadder: null, priceUsdPerKg: m.priceLadder[m.priceLadder.length - 1].usdPerKg, priceElasticity: 0 }
+      : m]));
     const ctxFor = usdPerKWh => {
       // The electricity price is the scanned variable, so the idiot-index squeeze must not cap PV here
       // (it still applies to equipment and storage).
@@ -1417,7 +1433,7 @@
           bom: base.idiotIndex?.bom ? { ...base.idiotIndex.bom, classes: { ...base.idiotIndex.bom.classes, pv: undefined } } : null,
         },
       });
-      return yearContext(cfg, input.markets || {}, createState(cfg), 0, cfg.startYear, {}, { suppliers, sitesById });
+      return yearContext(cfg, markets, createState(cfg), 0, cfg.startYear, {}, { suppliers, sitesById });
     };
     const bestAt = (pathway, ctx) => bestSite(pathway, allSites,
       Math.min(base.build.maxPlantKgPerDay, pathway.refOutputKgPerDay * sizeMultiple), ctx, (a, b) => a.npv > b.npv);
@@ -1600,6 +1616,24 @@
         });
         if (best.npv >= 0) row.status = row.costRatio <= abundantRatio ? 'abundant' : 'feasible';
       }
+      if (best && market.priceLadder?.length) {
+        // One row per buyer tier, judged at that tier's price.
+        for (const tier of market.priceLadder) {
+          const ratio = best.lcopUsdPerKg / tier.usdPerKg;
+          rows.push({
+            ...row,
+            key: `${key}:${tier.id}`,
+            tier: tier.id,
+            name: `${row.name} — ${tier.label}`,
+            worldDemandT: row.worldDemandT * tier.share,
+            priceUsdPerKg: tier.usdPerKg,
+            costRatio: ratio,
+            status: ratio <= abundantRatio ? 'abundant' : ratio <= 1 ? 'feasible' : 'blocked',
+          });
+        }
+        continue;
+      }
+      row.key = key;
       rows.push(row);
     }
     rows.sort((a, b) => b.worldDemandT - a.worldDemandT);
@@ -1615,7 +1649,7 @@
       const u = r.blocker.kind + ':' + r.blocker.id;
       const e = blockers.get(u) || { kind: r.blocker.kind, id: r.blocker.id, label: r.blocker.label, worldDemandT: 0, products: [] };
       e.worldDemandT += r.worldDemandT;
-      e.products.push(r.product);
+      if (!e.products.includes(r.product)) e.products.push(r.product);
       blockers.set(u, e);
     }
     return {

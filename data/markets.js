@@ -13,6 +13,11 @@
 //   share         = companyTonnes / worldDemandTPerYear
 //   realizedPrice = priceUsdPerKg × (1 − priceElasticity × share)
 //
+// A market with a priceLadder instead sells to buyers in tiers, highest price first: each tier
+// is { id, label, usdPerKg, share } (shares sum to 1). The realized price is the tier of the
+// marginal buyer at the company's share, and the scoreboard counts each tier's tonnage on its
+// own. priceUsdPerKg is then the bulk (bottom) tier, and priceElasticity is unused.
+//
 // priceUsdPerKg copies TeaScreening.prices[key].value so the simulator and the screening
 // TEA agree.
 // `basis` states what the tonnage counts; it is chosen to match what the price is per kg
@@ -73,6 +78,23 @@ const LI_TO_LCE = 5.323; // t Li2CO3 per t Li
 const K2O_IN_MOP = 0.60; // standard muriate of potash grade, t K2O per t product
 const N_TO_NH3 = 17.031 / 14.007; // t NH3 per t N
 const PV_KG_PER_KWP = 52.7; // 11.6 kg/m² ÷ 0.220 kW/m² — same as TeaScreening pv-module price note
+
+const TI_ROADMAP = 'https://roadmap.terraformindustries.com/';
+const KG_CH4_PER_MMBTU = 1055.06 / 55.5; // HHV 55.5 MJ/kg → 19.0 kg/MMBtu
+
+// Terraform Industries' methane price ladder ($/MMBtu, market $/yr), as tiers of world demand.
+function methaneLadder() {
+  const tiers = [
+    ['packaged', 'Pure methane, packaged', 495, 180e6],
+    ['off-grid', 'Remote / off-grid, displacing diesel', 45, 23e9],
+    ['rng', 'Renewable natural gas, western US (RIN + LCFS)', 35, 71e9],
+    ['lng-asia', 'Asian LNG spot (JKM)', 19, 114e9],
+    ['lng-europe', 'European gas (TTF)', 16, 63e9],
+    ['bulk', 'Bulk pipeline gas (Henry Hub)', 3, 427e9],
+  ].map(([id, label, usdPerMMBtu, usdPerYear]) => ({ id, label, usdPerKg: usdPerMMBtu / KG_CH4_PER_MMBTU, t: usdPerYear / usdPerMMBtu * KG_CH4_PER_MMBTU / 1000 }));
+  const total = tiers.reduce((a, x) => a + x.t, 0);
+  return tiers.map(({ t, ...x }) => Object.freeze({ ...x, share: t / total }));
+}
 
 const MARKETS = {
   lithium: {
@@ -222,15 +244,17 @@ const MARKETS = {
     worldDemandTPerYear: 4300e9 * 0.72 / 1000, // ≈ 3.1 Gt
     demandYear: 2024,
     growthPerYear: 0.015,
-    priceUsdPerKg: 1,
+    priceUsdPerKg: 0.16,
     priceBandUsdPerKg: [0.15, 1.5],
     priceElasticity: 0.3,
+    priceLadder: methaneLadder(),
     quality: 'screening',
     sources: [
       { label: 'IEA Global Energy Review 2025 — natural gas demand +2.7% (+115 bcm) in 2024', url: IEA_GAS_2025 },
       { label: 'IEA Gas 2025 — demand growth slowed to <1% in 2025', url: IEA_GAS_2025_ES },
+      { label: 'Terraform Industries scale-up roadmap — methane price ladder ($/MMBtu and market $/yr per buyer tier), company estimates', url: TI_ROADMAP },
     ],
-    note: 'World gas ~4,300 bcm (implied by IEA +115 bcm = +2.7%) × 0.72 kg/m³ ≈ 3.1 Gt. The $1/kg screening price is a green-premium offtake; fossil gas trades ~$0.15–0.40/kg, so the market at $1/kg is a small premium niche of this tonnage.',
+    note: 'World gas ~4,300 bcm (implied by IEA +115 bcm = +2.7%) × 0.72 kg/m³ ≈ 3.1 Gt. Sold down Terraform Industries\' price ladder: packaged pure methane $495/MMBtu, off-grid $45, western-US RNG $35, Asian LNG spot $19, European gas $16, bulk Henry Hub $3 (≈ $0.16/kg); its tier market sizes sum to ~2.9 Gt and are rescaled to this demand. 92% of the tonnage is bulk gas at $3/MMBtu. Company estimates, screening.',
   },
   methanol: {
     name: 'Methanol',

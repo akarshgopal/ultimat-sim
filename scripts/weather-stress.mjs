@@ -117,7 +117,7 @@ function firmUp(blocks, g, ev, cfg) {
 }
 
 function pick(r) {
-  return { product: r.product, worldDemandT: r.worldDemandT, status: r.status, pathwayId: r.pathwayId, siteId: r.siteId, lcopUsdPerKg: r.lcopUsdPerKg, costRatio: r.costRatio };
+  return { key: r.key, product: r.product, worldDemandT: r.worldDemandT, status: r.status, pathwayId: r.pathwayId, siteId: r.siteId, lcopUsdPerKg: r.lcopUsdPerKg, costRatio: r.costRatio };
 }
 
 export function frontierConfig() {
@@ -139,10 +139,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       const firmedT = s.rows.reduce((t, r) => t + ((r.weather ? r.weather.firmedCostRatio <= 1 : r.status === 'feasible' || r.status === 'abundant') ? r.worldDemandT : 0), 0);
       const totalT = s.rows.reduce((t, r) => t + r.worldDemandT, 0);
       console.log(`   firmed to ≤ 1 trip day a year: ${(s.weatherFeasibleFirmedShare * 100).toFixed(1)}%`);
-      console.log('material'.padEnd(18), 'site'.padEnd(20), 'strategy'.padEnd(14), 'output typ→real', 'trip days', 'cost/price typ→real', 'store × to firm', 'firmed cost/price');
+      console.log('material'.padEnd(22), 'site'.padEnd(20), 'strategy'.padEnd(14), 'output typ→real', 'trip days', 'cost/price typ→real', 'store × to firm', 'firmed cost/price');
       for (const r of s.rows.filter(x => x.weather).sort((a, b) => b.worldDemandT - a.worldDemandT)) {
         const w = r.weather;
-        console.log(r.product.padEnd(18), r.siteId.padEnd(20), w.strategy.padEnd(14),
+        console.log((r.key || r.product).padEnd(22), r.siteId.padEnd(20), w.strategy.padEnd(14),
           `${(w.designOutputFactor * 100).toFixed(0)}% → ${(w.realOutputFactor * 100).toFixed(0)}%`.padEnd(15),
           `${(w.tripDayShare * 100).toFixed(1)}%`.padEnd(9),
           `${r.costRatio.toFixed(2)} → ${w.costRatio.toFixed(2)}`.padEnd(19),

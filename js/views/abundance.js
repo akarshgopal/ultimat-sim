@@ -72,7 +72,10 @@
       root.append(UI.card('What to solve next', 'tonnage that does not pay back yet, grouped by its largest cost per kg: equipment to design, a bought feed to make cheaper, or energy', blockersHost));
 
       const tableHost = el('div');
-      root.append(UI.card('Materials', 'each world market’s best recipe (pathway) and site; cost ÷ today’s price below 1× is feasible. Click a material or recipe for detail, a column to sort.', tableHost));
+      let tableQuery = '';
+      let renderTable = () => {};
+      const tableSearch = UI.searchBox('Search materials (e.g. steel, fertilizer)', q => { tableQuery = q; renderTable(); });
+      root.append(UI.card('Materials', 'each world market’s best recipe (pathway) and site; cost ÷ today’s price below 1× is feasible. Click a material or recipe for detail, a column to sort.', tableHost, tableSearch));
 
       const legend = UI.legend(ORDER.map(k => ({ label: STATUS[k].label, color: STATUS[k].color, title: STATUS[k].hint })));
 
@@ -156,29 +159,35 @@
 
           blockersHost.replaceChildren(blockerList(now, 'In this scenario'), blockerList(frontier, 'At the frontier'));
 
-          const byProduct = b => new Map(b.rows.map(r => [r.product, r]));
+          const byProduct = b => new Map(b.rows.map(r => [r.key || r.product, r]));
           const t0 = byProduct(today);
           const f0 = byProduct(frontier);
           const p0 = pinnedBoard ? byProduct(pinnedBoard) : null;
           const pathwayName = id => Store.pathwayById.get(id)?.name || id;
+          renderTable = () => {
+          const shown = now.rows.filter(r => UI.matches(tableQuery, UI.searchText(r.product) + ' ' + (r.pathwayId ? pathwayName(r.pathwayId) : '')));
+          if (!shown.length) { tableHost.replaceChildren(el('p', { class: 'empty', text: `No material matches “${tableQuery}”.` })); return; }
           tableHost.replaceChildren(UI.sortableTable([
-            { key: 'name', label: 'Material', get: r => UI.productName(r.product),
+            { key: 'name', label: 'Material', get: r => UI.productName(r.product) + (r.tier ? ' ' + r.name : ''),
               render: r => [el('a', { href: href('markets', r.product), text: UI.productName(r.product) }),
+                r.tier ? el('span', { class: 'cell-sub', text: r.name.split(' — ').slice(1).join(' — ') }) : null,
                 r.pathwayId ? el('a', { class: 'cell-sub', href: href('pathways', r.pathwayId), text: pathwayName(r.pathwayId) + (r.siteId ? ' · ' + (Store.siteById.get(r.siteId)?.name || r.siteId) : '') }) : null] },
             { key: 'demand', label: 'World demand', csvLabel: 'World demand (t/yr)', num: true, get: r => r.worldDemandT, render: r => UI.tonnes(r.worldDemandT) + '/yr' },
             { key: 'price', label: 'Price', csvLabel: 'Price ($/kg)', num: true, get: r => r.priceUsdPerKg, render: r => UI.usdKg(r.priceUsdPerKg) + '/kg' },
-            { key: 'today', label: 'Today', get: r => ORDER.indexOf(t0.get(r.product)?.status), render: r => [statusTag(t0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(t0.get(r.product)))] },
-            pinnedBoard ? { key: 'pinned', label: 'Pinned', get: r => ORDER.indexOf(p0.get(r.product)?.status), render: r => [statusTag(p0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(p0.get(r.product)))] } : null,
+            { key: 'today', label: 'Today', get: r => ORDER.indexOf(t0.get(r.key || r.product)?.status), render: r => [statusTag(t0.get(r.key || r.product).status), el('span', { class: 'cell-sub' }, ratio(t0.get(r.key || r.product)))] },
+            pinnedBoard ? { key: 'pinned', label: 'Pinned', get: r => ORDER.indexOf(p0.get(r.key || r.product)?.status), render: r => [statusTag(p0.get(r.key || r.product).status), el('span', { class: 'cell-sub' }, ratio(p0.get(r.key || r.product)))] } : null,
             { key: 'now', label: 'Scenario', get: r => ORDER.indexOf(r.status), render: r => [statusTag(r.status), el('span', { class: 'cell-sub' }, ratio(r))] },
-            { key: 'frontier', label: 'Frontier', get: r => ORDER.indexOf(f0.get(r.product)?.status), render: r => [statusTag(f0.get(r.product).status), el('span', { class: 'cell-sub' }, ratio(f0.get(r.product)))] },
+            { key: 'frontier', label: 'Frontier', get: r => ORDER.indexOf(f0.get(r.key || r.product)?.status), render: r => [statusTag(f0.get(r.key || r.product).status), el('span', { class: 'cell-sub' }, ratio(f0.get(r.key || r.product)))] },
             { key: 'cost', label: 'Cost/kg (scenario)', num: true, get: r => r.lcopUsdPerKg ?? Infinity, render: r => (Number.isFinite(r.lcopUsdPerKg) ? [UI.usdKg(r.lcopUsdPerKg), r.unsellableCoproductUsdPerKg > 0.0005
               ? el('span', { class: 'cell-sub', title: 'A single plant could sell its coproducts, but making the whole world’s demand this way would flood their markets; that credit is not counted here (so this is higher than the per-plant cost on Pathways).', text: `incl. +${UI.usdKg(r.unsellableCoproductUsdPerKg)} unsold coproducts` })
               : null] : '—') },
             { key: 'kwh', label: 'kWh/kg', num: true, get: r => r.energyKWhPerKg ?? -1, render: r => (Number.isFinite(r.energyKWhPerKg) ? UI.num(r.energyKWhPerKg) : '—') },
             { key: 'blocker', label: 'Largest cost item (scenario → frontier)', get: r => r.blocker?.usdPerKg ?? -1,
-              render: r => (r.blocker ? [el('span', { text: itemText(r.blocker) }), el('span', { class: 'cell-sub', text: '→ ' + itemText(f0.get(r.product)?.blocker) })] : el('span', { class: 'muted', text: '—' })) },
-          ], now.rows, { sortKey: 'demand', sortDir: 'desc', compact: true, csv: 'abundance-materials',
+              render: r => (r.blocker ? [el('span', { text: itemText(r.blocker) }), el('span', { class: 'cell-sub', text: '→ ' + itemText(f0.get(r.key || r.product)?.blocker) })] : el('span', { class: 'muted', text: '—' })) },
+          ], shown, { sortKey: 'demand', sortDir: 'desc', compact: true, csv: 'abundance-materials',
             rowClass: r => (r.status === 'no-pathway' || r.status === 'coproduct' ? 'is-dim' : '') }));
+          };
+          renderTable();
         }).catch(() => { root.classList.remove('is-solving'); kpis.replaceChildren(el('p', { class: 'muted', text: 'Could not compute the scoreboard.' })); });
       };
       draw();

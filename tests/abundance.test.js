@@ -2,13 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../engine/company.js');
 const { companyData, cheapPv, close } = require('./helpers.js');
+const { MARKETS } = require('../data/markets.js');
 
 const board = config => C.abundanceScoreboard({ ...companyData(), config });
 
 test('abundance scoreboard: every world market once, tonnage adds up, blockers explain blocked tonnage', () => {
   const s = board({});
+  const keys = s.rows.map(r => r.key);
+  assert.equal(new Set(keys).size, keys.length);
   const products = s.rows.map(r => r.product);
-  assert.equal(new Set(products).size, products.length);
   assert.ok(!products.includes('ndpr-oxide-separated'), 'grouped markets are scored under their group');
   const t = s.totals;
   assert.ok(Math.abs(t.feasibleT + t.blockedT + t.uncoveredT - t.worldDemandT) < 1);
@@ -19,12 +21,31 @@ test('abundance scoreboard: every world market once, tonnage adds up, blockers e
     const gross = Object.values(r.costBreakdownUsdPerKg).reduce((a, v) => a + v, 0);
     assert.ok(Math.abs(items - gross) < 1e-6 * Math.max(1, gross), `${r.product}: ${items} vs ${gross}`);
     assert.equal(r.blocker, r.costItems[0]);
-    assert.equal(r.status === 'feasible' || r.status === 'abundant', r.npv >= 0);
+    // A price-ladder tier is judged at its own price; other markets by NPV at today's price.
+    if (r.tier) assert.equal(r.status === 'feasible' || r.status === 'abundant', r.costRatio <= 1);
+    else assert.equal(r.status === 'feasible' || r.status === 'abundant', r.npv >= 0);
   }
   const blockedT = s.blockers.reduce((a, b) => a + b.worldDemandT, 0);
   assert.ok(Math.abs(blockedT - t.blockedT) < 1);
   // Urea made from bought ammonia is held back by the ammonia, not by the urea reactor.
   assert.equal(s.rows.find(r => r.product === 'urea').blocker.kind, 'feed');
+});
+
+test('a laddered market is scored tier by tier and sells at its marginal buyer\'s price', () => {
+  const s = board({});
+  const tiers = s.rows.filter(r => r.product === 'methane');
+  const ladder = MARKETS.methane.priceLadder;
+  assert.equal(tiers.length, ladder.length);
+  const demand = tiers.reduce((a, r) => a + r.worldDemandT, 0);
+  close(demand, C.marketDemandT(MARKETS.methane, C.DEFAULTS.startYear), 1e-9);
+  // Same plant, so a tier is feasible exactly when its price covers the cost.
+  for (const r of tiers) assert.equal(r.status !== 'blocked', r.lcopUsdPerKg <= r.priceUsdPerKg);
+  // The company walks down the ladder as its share grows.
+  const cfg = C.mergeConfig({});
+  close(C.realizedPrice(cfg, MARKETS.methane, null, 0), ladder[0].usdPerKg);
+  close(C.realizedPrice(cfg, MARKETS.methane, null, ladder[0].share + ladder[1].share / 2), ladder[1].usdPerKg);
+  close(C.realizedPrice(cfg, MARKETS.methane, null, 0.5), ladder[ladder.length - 1].usdPerKg);
+  close(C.realizedPrice(cfg, MARKETS.methane, null, 2), ladder[ladder.length - 1].usdPerKg);
 });
 
 test('cheaper electricity and a lean electrolyzer make more of the world\'s tonnage feasible', () => {
@@ -55,4 +76,16 @@ test('coproduct credit counts only what the coproduct’s world market can absor
   const quarter = score(1e6);
   close(quarter.lcopUsdPerKg - all.lcopUsdPerKg, 3, 1e-6); // $3/kg of credit on 3 kg/kg that cannot be sold
   assert.ok(all.lcopUsdPerKg < 0, 'with room for its coproduct the plant is paid to make widgets');
+});
+
+test('standalone oxygen and solar sea salt cover markets that were coproduct-only or brine-bound', () => {
+  const today = board({});
+  const salt = today.rows.find(r => r.product === 'salt');
+  assert.equal(salt.pathwayId, 'sea-salt');
+  assert.equal(salt.status, 'abundant');
+  const oxygen = today.rows.find(r => r.product === 'oxygen');
+  assert.equal(oxygen.pathwayId, 'oxygen-asu');
+  assert.ok(oxygen.costRatio > 0.5 && oxygen.costRatio < 1.5, String(oxygen.costRatio));
+  const frontier = board({ pv: cheapPv() });
+  assert.ok(frontier.rows.find(r => r.product === 'oxygen').costRatio < oxygen.costRatio);
 });

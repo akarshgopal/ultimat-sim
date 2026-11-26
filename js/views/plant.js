@@ -32,9 +32,9 @@
 
   // ------------------------------------------------------------------ P&ID layout
   const G = {
-    colW: 172, gapMin: 64, laneGap: 9, padX: 18, topBand: 112, padBottom: 30,
+    colW: 172, gapMin: 78, laneGap: 9, padX: 18, topBand: 112, padBottom: 30,
     equipH: 162, connH: 44, tankH: 120, packH: 96, dummyH: 16, rowGap: 22,
-    symW: 64, symH: 52, bubbleR: 12,
+    symW: 64, symH: 52, bubbleR: 12, titleH: 66, tbW: 320,
   };
 
   function buildGraph(pathway, pkg) {
@@ -92,16 +92,21 @@
       }
       if (!changed) break;
     }
-    // Feeds hug their first consumer; sinks sit in the last column.
+    // Feeds hug their first consumer. The product leaves at the right edge; co-products and wastes
+    // leave by an off-page connector right after the unit that makes them, as on a real sheet,
+    // instead of running across the drawing.
     let maxLayer = 0;
     for (const id of ids) if (nodes.get(id).kind !== 'sink') maxLayer = Math.max(maxLayer, layer.get(id));
     for (const id of ids) {
-      const k = nodes.get(id).kind;
-      if (k === 'source' || k === 'package') {
+      const n = nodes.get(id);
+      if (n.kind === 'source' || n.kind === 'package') {
         const firsts = dag.filter(e => e.from === id).map(e => layer.get(e.to));
         layer.set(id, firsts.length ? Math.max(0, Math.min(...firsts) - 1) : 0);
       }
-      if (k === 'sink') layer.set(id, maxLayer + 1);
+      if (n.kind === 'sink') {
+        const froms = dag.filter(e => e.to === id).map(e => layer.get(e.from));
+        layer.set(id, n.disposition === 'product' || !froms.length ? maxLayer + 1 : Math.max(...froms) + 1);
+      }
     }
     const used = [...new Set(layer.values())].sort((a, b) => a - b);
     const remap = new Map(used.map((l, i) => [l, i]));
@@ -147,7 +152,13 @@
       }
     }
 
-    const heightOf = n => (n.kind === 'equip' ? G.equipH : n.kind === 'tank' ? G.tankH : n.kind === 'package' ? G.packH : n.kind === 'dummy' ? G.dummyH : G.connH);
+    // Busy units get a taller symbol so their lines keep ≥ 12 px apart.
+    const ports = new Map();
+    const bump = (id, side) => { const p = ports.get(id) || { in: 0, out: 0 }; p[side] += 1; ports.set(id, p); };
+    for (const sg of segs) { bump(sg.from, 'out'); bump(sg.to, 'in'); }
+    for (const e of back) { bump(e.from, 'out'); bump(e.to, 'in'); }
+    const symH = n => Math.max(G.symH, (15 * (Math.max(ports.get(n.id)?.in || 0, ports.get(n.id)?.out || 0) + 1)) / 0.7);
+    const heightOf = n => (n.kind === 'equip' ? G.equipH + symH(n) - G.symH : n.kind === 'tank' ? G.tankH : n.kind === 'package' ? G.packH : n.kind === 'dummy' ? G.dummyH : G.connH);
     const colHeight = col => col.reduce((s, n) => s + heightOf(n), 0) + Math.max(0, col.length - 1) * G.rowGap;
     const bodyH = Math.max(...columns.map(colHeight));
 
@@ -171,7 +182,7 @@
         n.h = heightOf(n);
         n.col = ci;
         // Symbol box: where lines attach.
-        if (n.kind === 'equip') { n.sx = n.x + (G.colW - G.symW) / 2; n.sy = n.y + 40; n.sw = G.symW; n.sh = G.symH; }
+        if (n.kind === 'equip') { n.sx = n.x + (G.colW - G.symW) / 2; n.sy = n.y + 40; n.sw = G.symW; n.sh = symH(n); }
         else if (n.kind === 'tank') { n.sx = n.x + (G.colW - 56) / 2; n.sy = n.y + 34; n.sw = 56; n.sh = 44; }
         else if (n.kind === 'package') { n.sx = n.x + 12; n.sy = n.y + 6; n.sw = G.colW - 24; n.sh = 54; }
         else if (n.kind === 'dummy') { n.sx = n.x; n.sy = n.y + n.h / 2; n.sw = G.colW; n.sh = 0; }
@@ -180,7 +191,7 @@
       }
     }
     const backCount = back.size;
-    const height = top + bodyH + G.padBottom + backCount * 12 + 10;
+    const height = top + bodyH + G.padBottom + backCount * 12 + 10 + G.titleH;
     return { all, nodes, segs, back: [...back], gaps, gapSegs, colX, width, height, cols, bodyBottom: top + bodyH, layer };
   }
 
@@ -200,7 +211,7 @@
         const n = L.all.get(id);
         if (n.kind === 'dummy') { for (const s of list) target.set(s, n.sy); continue; }
         list.sort((a, b) => far(a, key) - far(b, key));
-        list.forEach((s, i) => target.set(s, n.sy + n.sh * (0.2 + 0.6 * ((i + 1) / (list.length + 1)))));
+        list.forEach((s, i) => target.set(s, n.sy + n.sh * (0.15 + 0.7 * ((i + 1) / (list.length + 1)))));
       }
     }
     return { yOut, yIn, backRef };
@@ -342,6 +353,22 @@
     return g;
   }
 
+  // Compressor or pump drawn in line, tagged to the unit whose package it belongs to.
+  function machineSymbol(UI, m, x, y) {
+    const { svg } = UI;
+    const r = 10;
+    const g = svg('g', { class: 'pid-machine', 'data-tag': m.tag });
+    g.append(svg('circle', { cx: x, cy: y, r, class: 'pid-valve-body' }));
+    if (m.kind === 'compressor') g.append(svg('path', { d: `M${x - r * 0.8},${y - r * 0.6} L${x + r * 0.8},${y - r * 0.25} M${x - r * 0.8},${y + r * 0.6} L${x + r * 0.8},${y + r * 0.25}`, class: 'pid-detail' }));
+    else g.append(svg('path', { d: `M${x - r * 0.5},${y + r * 0.6} L${x + r},${y - r * 0.1}`, class: 'pid-detail' }));
+    const t = svg('text', { x, y: y - r - 4, class: 'pid-machine-tag', 'text-anchor': 'middle' });
+    t.textContent = m.tag;
+    const title = svg('title');
+    title.textContent = `${m.tag}: ${m.service}, ${UI.num(m.fromBar)} → ${UI.num(m.toBar)} bar, ${UI.num(m.designKgPerH)} kg/h design · cost and power are in ${m.host}'s package`;
+    g.append(t, title);
+    return g;
+  }
+
   function controlValve(UI, x, y) {
     const { svg } = UI;
     const g = svg('g', { class: 'pid-valve' });
@@ -361,6 +388,16 @@
     const graph = buildGraph(pathway, pkg);
     const L = layoutGraph(graph);
     const { yOut, yIn, backRef } = assignPorts(L);
+    const u = pkg.utilities;
+    const utilList = [
+      ['pv', u.pv.tag, `Solar PV ${UI.num(u.pv.kWp / 1000)} MWp`, `${UI.num(u.pv.landHa)} ha · ${UI.num(u.pv.yieldKWhPerKWpDay)} kWh/kWp·d`],
+      u.battery ? ['battery', u.battery.tag, `Battery ${UI.num(u.battery.kWh / 1000)} MWh`, 'firms steady units overnight'] : null,
+      u.thermal ? ['thermal', u.thermal.tag, `Heat store ${UI.num(u.thermal.kWh / 1000)} MWh(th)`, 'firms heat-dominated units'] : null,
+    ].filter(Boolean);
+    const utilW = ([, , a, b]) => 54 + 8 + Math.max(110, 6.2 * Math.max(a.length, b.length)) + 18;
+    const utilEnd = G.padX + utilList.reduce((t, x) => t + utilW(x), 0);
+    const busLabelText = `Plant bus · peak ${UI.num(u.peakLoadKW / 1000)} MW · ${UI.num(u.electricityKWhPerYear / 1e6)} GWh/yr`;
+    L.width = Math.max(L.width, utilEnd + 250, G.tbW + 2 * G.padX + 300);
     const root = svg('svg', {
       class: 'pid', width: L.width, height: L.height, viewBox: `0 0 ${L.width} ${L.height}`, role: 'img',
       'aria-label': `P&ID of ${pathway.name}: ${pkg.equipment.length} equipment items, ${pkg.streams.length} streams, ${pkg.instruments.length} instruments`,
@@ -374,7 +411,6 @@
     // ---- power: PV field, stores, bus.
     const elec = svg('g', { class: 'pid-elec' });
     const busY = 92;
-    const u = pkg.utilities;
     let ux = G.padX;
     const util = (kind, tag, line1, line2) => {
       const w = 54;
@@ -387,16 +423,14 @@
       const l2 = svg('text', { x: ux + w + 8, y: 57, class: 'pid-note' });
       l2.textContent = line2 || '';
       elec.append(t, l1, l2, svg('line', { x1: ux + w / 2, x2: ux + w / 2, y1: 52, y2: busY, class: 'pid-power' }));
-      ux += w + 8 + Math.max(110, 6.2 * Math.max(line1.length, (line2 || '').length)) + 18;
+      ux += utilW([kind, tag, line1, line2 || '']);
     };
-    util('pv', u.pv.tag, `Solar PV ${UI.num(u.pv.kWp / 1000)} MWp`, `${UI.num(u.pv.landHa)} ha · ${UI.num(u.pv.yieldKWhPerKWpDay)} kWh/kWp·d`);
-    if (u.battery) util('battery', u.battery.tag, `Battery ${UI.num(u.battery.kWh / 1000)} MWh`, 'firms steady units overnight');
-    if (u.thermal) util('thermal', u.thermal.tag, `Heat store ${UI.num(u.thermal.kWh / 1000)} MWh(th)`, 'firms heat-dominated units');
+    for (const x of utilList) util(...x);
     const powered = [...L.nodes.values()].filter(n => n.kind === 'equip' && n.equip.powerKW.design > 0);
-    const busX1 = Math.max(ux + 260, Math.min(L.width - G.padX - 320, ...powered.map(n => n.x + G.colW - 8)));
+    const busX1 = Math.min(L.width - G.padX, Math.max(ux + 230, ...powered.map(n => n.x + G.colW - 8)));
     elec.append(svg('line', { x1: G.padX, x2: busX1, y1: busY, y2: busY, class: 'pid-bus' }));
     const busLabel = svg('text', { x: busX1, y: busY - 6, class: 'pid-note', 'text-anchor': 'end' });
-    busLabel.textContent = `Plant bus: feeds every unit marked with its load · peak ${UI.num(u.peakLoadKW / 1000)} MW · ${UI.num(u.electricityKWhPerYear / 1e6)} GWh/yr`;
+    busLabel.textContent = busLabelText;
     elec.append(busLabel);
     // Each powered unit gets a feeder stub from the bus (one-line diagrams carry the detail).
     for (const n of powered) {
@@ -433,27 +467,59 @@
     }
     // Stream number diamonds: on a line's longest horizontal runs, away from other diamonds.
     const placedTags = [];
-    const placeTag = (st, pts) => {
+    // A point on a horizontal run of the polyline, away from placed tags; the final run loses `endClear`
+    // px at its end (inlet valves), every run `margin` px at both ends.
+    const freeSpot = (pts, endClear, margin, vertical = false) => {
       const runs = [];
       for (let i = 0; i + 1 < pts.length; i += 1) {
         const [ax, ay] = pts[i];
         const [bx, by] = pts[i + 1];
-        if (Math.abs(ay - by) < 0.5 && Math.abs(bx - ax) > 20) runs.push({ x0: Math.min(ax, bx) + 12, x1: Math.max(ax, bx) - 12, y: ay });
+        if (Math.abs(ay - by) > 0.5) continue;
+        const x0 = Math.min(ax, bx) + margin;
+        const x1 = Math.max(ax, bx) - margin - (i + 2 === pts.length ? endClear : 0);
+        if (x1 > x0) runs.push({ x0, x1, y: ay });
       }
       runs.sort((a, b) => (b.x1 - b.x0) - (a.x1 - a.x0));
-      const free = (x, y) => !placedTags.some(p => Math.abs(p.x - x) < 20 && Math.abs(p.y - y) < 17);
+      const free = (x, y) => !placedTags.some(p => Math.abs(p.x - x) < 26 && Math.abs(p.y - y) < 20);
       for (const r of runs) {
         const mid = (r.x0 + r.x1) / 2;
-        for (const off of [0, -22, 22, -44, 44, -66, 66]) {
-          const x = mid + off;
-          if (x < r.x0 || x > r.x1 || !free(x, r.y)) continue;
-          placedTags.push({ x, y: r.y });
-          labels.append(streamTag(UI, st, x, r.y));
-          return;
+        for (const off of [0, -24, 24, -48, 48, -72, 72]) if (mid + off >= r.x0 && mid + off <= r.x1 && free(mid + off, r.y)) return { x: mid + off, y: r.y };
+      }
+      if (vertical) {
+        // Then on a vertical run (a tag reads as well there).
+        for (let i = 0; i + 1 < pts.length; i += 1) {
+          const [ax, ay] = pts[i];
+          const [bx, by] = pts[i + 1];
+          if (Math.abs(ax - bx) > 0.5 || Math.abs(by - ay) < 2 * margin + 16) continue;
+          const y0 = Math.min(ay, by) + margin;
+          const y1 = Math.max(ay, by) - margin;
+          for (let y = (y0 + y1) / 2, k = 0; k < 6; k += 1, y = (y0 + y1) / 2 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 20) {
+            if (y >= y0 && y <= y1 && free(ax, y)) return { x: ax, y };
+          }
         }
       }
-      if (runs.length) labels.append(streamTag(UI, st, (runs[0].x0 + runs[0].x1) / 2, runs[0].y));
+      // Crowded: the point on the line farthest from anything already placed.
+      let best = null;
+      for (let i = 0; i + 1 < pts.length; i += 1) {
+        const [ax, ay] = pts[i];
+        const [bx, by] = pts[i + 1];
+        const len = Math.hypot(bx - ax, by - ay);
+        for (let d = 8; d < len - 8; d += 4) {
+          const x = ax + ((bx - ax) * d) / len;
+          const y = ay + ((by - ay) * d) / len;
+          const near = Math.min(Infinity, ...placedTags.map(p => Math.max(Math.abs(p.x - x) / 26, Math.abs(p.y - y) / 20)));
+          if (!best || near > best.near) best = { x, y, near };
+        }
+      }
+      return best;
     };
+    const placeTag = (st, pts) => {
+      const spot = freeSpot(pts, 46, 12, true);
+      if (!spot) return;
+      placedTags.push({ x: spot.x, y: spot.y });
+      labels.append(streamTag(UI, st, spot.x, spot.y));
+    };
+    const machineByTag = new Map((pkg.machines || []).map(m => [m.tag, m]));
     const lastSegIn = new Map(); // node id → [{ x, y }] of the line's last horizontal entering it (for valves)
     for (const [e, list] of edgeSegs) {
       const pts = [];
@@ -479,6 +545,15 @@
       t.textContent = streamTitle(UI, st);
       path.append(t);
       lines.append(path);
+      if (st.machine) {
+        // On the longest free horizontal run, clear of the control valves at the unit inlet (last 44 px).
+        const m = machineByTag.get(st.machine);
+        const spot = freeSpot(pts, 44, 18);
+        if (spot) {
+          valves.append(machineSymbol(UI, m, spot.x, spot.y));
+          for (const dx of [-24, 0, 24]) placedTags.push({ x: spot.x + dx, y: spot.y }, { x: spot.x + dx, y: spot.y - 14 });
+        }
+      }
       placeTag(st, pts);
     }
     // Recycles: loop under the drawing.
@@ -536,16 +611,20 @@
           g.append(bubble(UI, inst, bx, by));
         });
         // Control valve on the inlet line(s) of flow / ratio loops.
+        // Control valves on the inlets the flow loop sets: the largest feed, or both feeds of a ratio loop.
         const flowLoop = insts.find(i => /^F+IC$/.test(i.letters));
-        const inlet = (lastSegIn.get(n.id) || []).filter(s => s.stream.kind === 'material').sort((a, b) => b.stream.perKgProduct - a.stream.perKgProduct)[0];
-        if (flowLoop && inlet && inlet.x2 - inlet.x1 > 30) {
-          const vx = inlet.x2 - 16;
+        const inlets = (lastSegIn.get(n.id) || []).filter(sg => sg.stream.kind === 'material').sort((a, b) => b.stream.perKgProduct - a.stream.perKgProduct);
+        const valved = flowLoop ? inlets.slice(0, flowLoop.letters === 'FFIC' ? 2 : 1) : [];
+        const bx = n.x + 8 + (G.colW - 30 - span) / 2 + (insts.length === 1 ? span / 2 : 12);
+        valved.forEach((inlet, vi) => {
+          if (!(inlet.x2 - inlet.x1 > 30 + vi * 22)) return;
+          const vx = inlet.x2 - 16 - vi * 22; // a ratio loop's second valve sits one step upstream
           valves.append(controlValve(UI, vx, inlet.y));
-          const bx = n.x + 8 + (G.colW - 30 - span) / 2 + (insts.length === 1 ? span / 2 : 12);
           signal.append(svg('path', { d: `M${bx - G.bubbleR},${n.y + 14} L${vx},${n.y + 14} L${vx},${inlet.y - 16}`, class: 'pid-signal' }));
-        }
+        });
       } else if (n.kind === 'tank') {
         const b = n.buffer;
+        g.setAttribute('data-tag', b.tag);
         const gas = ['H2', 'O2', 'N2', 'CO2', 'CH4'].includes(b.substance);
         g.append(symbol(UI, gas ? 'tank-gas' : 'tank', n.sx, n.sy, n.sw, n.sh));
         const cx = n.x + G.colW / 2;
@@ -564,6 +643,7 @@
         });
       } else if (n.kind === 'package') {
         const c = n.captive;
+        g.setAttribute('data-tag', c.tag);
         g.append(svg('rect', { x: n.sx, y: n.sy, width: n.sw, height: n.sh, rx: 4, class: 'pid-shape is-package' }));
         const tag = svg('text', { x: n.sx + 8, y: n.sy + 16, class: 'pid-tag' });
         tag.textContent = c.tag;
@@ -597,17 +677,20 @@
 
     // Title block.
     const tb = svg('g', { class: 'pid-titleblock' });
-    const tbW = 300;
+    // Title block: bottom right, as on a drawing sheet.
+    const tbW = G.tbW;
     const tx = L.width - tbW - G.padX;
-    tb.append(svg('rect', { x: tx, y: 8, width: tbW, height: 50, class: 'pid-tb' }));
-    const t1 = svg('text', { x: tx + 10, y: 26, class: 'pid-tb-title' });
-    t1.textContent = fit(UI.pathwayLabel(pathway) + ' · P&ID', 40);
-    const t2 = svg('text', { x: tx + 10, y: 41, class: 'pid-note' });
-    t2.textContent = fit(`${Store.siteById.get(pkg.basis.siteId)?.name || pkg.basis.siteId} · ${UI.tonnes(pkg.basis.sizeKgPerDay * 365 / 1000)}/yr nameplate`, 52);
-    const t3 = svg('text', { x: tx + 10, y: 53, class: 'pid-note' });
+    const ty = L.height - G.titleH + 6;
+    tb.append(svg('rect', { x: tx, y: ty, width: tbW, height: G.titleH - 14, class: 'pid-tb' }));
+    tb.append(svg('line', { x1: tx, x2: tx + tbW, y1: ty + 24, y2: ty + 24, class: 'pid-tb-rule' }));
+    const t1 = svg('text', { x: tx + 10, y: ty + 17, class: 'pid-tb-title' });
+    t1.textContent = fit(UI.pathwayLabel(pathway) + ' · P&ID', 44);
+    const t2 = svg('text', { x: tx + 10, y: ty + 36, class: 'pid-note' });
+    t2.textContent = fit(`${Store.siteById.get(pkg.basis.siteId)?.name || pkg.basis.siteId} · ${UI.tonnes(pkg.basis.sizeKgPerDay * 365 / 1000)}/yr nameplate · ${pkg.basis.year} costs`, 58);
+    const t3 = svg('text', { x: tx + 10, y: ty + 49, class: 'pid-note' });
     t3.textContent = 'Screening design · indicative instrumentation · not for construction';
     tb.append(t1, t2, t3);
-    if (L.width > tbW + ux + 40) root.append(tb);
+    root.append(tb);
     return root;
   }
 
@@ -641,17 +724,35 @@
   }
 
   // ------------------------------------------------------------------ tables
+  // Tag number for upstream-to-downstream order: R-104 → '104', K-104A → '104A'.
+  const tagOrder = tag => String(tag).replace(/^[A-Z]+-/, '').padStart(5, '0');
+
   function equipmentTable(UI, pkg, pathwayId) {
     const total = pkg.tea.capexTotal;
+    const hosts = new Map(pkg.equipment.map(e => [e.tag, e]));
+    // Machines the pressure steps imply, listed under the unit whose package carries their cost.
+    const machineRows = (pkg.machines || []).map(m => {
+      const st = pkg.streams.find(x => x.no === m.stream);
+      const host = hosts.get(m.host);
+      return {
+        tag: m.tag, service: m.service, machine: m, host,
+        type: `${m.kind === 'compressor' ? 'Compressor' : 'Pump'}, inside ${m.host}’s package`,
+        mode: host?.mode, storeKind: host?.storeKind, minTurndown: host?.minTurndown,
+        conditions: { T: `stream ${m.stream}`, P: `${UI.num(m.fromBar)} → ${UI.num(m.toBar)} bar` },
+        throughputKgPerH: { design: st?.design ?? m.designKgPerH, average: st?.average ?? NaN },
+        powerKW: { design: 0 }, capexUsd: null,
+      };
+    });
+    const rows = [...pkg.equipment, ...machineRows];
     return UI.sortableTable([
-      { key: 'tag', label: 'Tag', get: e => e.tag, render: e => UI.el('strong', { text: e.tag }) },
+      { key: 'tag', label: 'Tag', get: e => tagOrder(e.tag), csv: e => e.tag, render: e => UI.el('strong', { 'data-tag': e.tag, text: e.tag }) },
       { key: 'service', label: 'Service', get: e => e.service, render: e => [UI.el('span', { text: e.service }), UI.el('span', { class: 'cell-sub', text: e.type + (e.designed ? ' · engineered design' : '') })] },
       { key: 'mode', label: 'Operation', get: e => modeText(e), render: e => UI.el('span', { class: e.mode === 'sun-following' ? 'pl-sun' : '', text: modeText(e) }) },
       { key: 'cond', label: 'Typical conditions', title: 'Typical operating temperature and pressure of this equipment type (literature ranges; the plant models do not carry operating conditions)', get: e => (e.conditions ? `${e.conditions.T}, ${e.conditions.P}` : ''), render: e => (e.conditions ? [UI.el('span', { text: e.conditions.T }), UI.el('span', { class: 'cell-sub', text: e.conditions.P })] : '—') },
       { key: 'flow', label: 'Design kg/h', num: true, title: 'Nameplate throughput (largest of total inlet and outlet mass)', get: e => e.throughputKgPerH.design, render: e => [UI.num(e.throughputKgPerH.design), UI.el('span', { class: 'cell-sub', text: 'avg ' + UI.num(e.throughputKgPerH.average) })] },
-      { key: 'kw', label: 'Design kW', num: true, title: 'Electrical load at nameplate', get: e => e.powerKW.design, render: e => (e.powerKW.design > 0 ? [UI.num(e.powerKW.design), UI.el('span', { class: 'cell-sub', text: UI.num(e.kWhPerKg) + ' kWh/kg product' })] : '—') },
-      { key: 'capex', label: 'Installed $', num: true, get: e => e.capexUsd, render: e => [UI.usd(e.capexUsd), UI.el('span', { class: 'cell-sub', text: UI.pct(e.capexUsd / total, 0) + ' of plant' })] },
-    ], pkg.equipment, { sortKey: 'tag', sortDir: 'asc', compact: true, csv: `${pathwayId}-equipment-list` });
+      { key: 'kw', label: 'Design kW', num: true, title: 'Electrical load at nameplate', get: e => e.powerKW.design, render: e => (e.machine ? UI.el('span', { class: 'muted', text: 'in ' + e.machine.host }) : e.powerKW.design > 0 ? [UI.num(e.powerKW.design), UI.el('span', { class: 'cell-sub', text: UI.num(e.kWhPerKg) + ' kWh/kg product' })] : '—') },
+      { key: 'capex', label: 'Installed $', num: true, get: e => e.capexUsd ?? -1, csv: e => e.capexUsd ?? '', render: e => (e.machine ? UI.el('span', { class: 'muted', text: 'in ' + e.machine.host }) : [UI.usd(e.capexUsd), UI.el('span', { class: 'cell-sub', text: UI.pct(e.capexUsd / total, 0) + ' of plant' })]) },
+    ], rows, { sortKey: 'tag', sortDir: 'asc', compact: true, csv: `${pathwayId}-equipment-list` });
   }
 
   function utilitiesTable(UI, pkg, pathwayId) {
@@ -664,7 +765,7 @@
       ...pkg.captive.map(c => ({ tag: c.tag, item: `Captive ${c.product} supplier`, size: `${UI.num(c.kgPerDay / 1000)} t/day`, note: `${c.supplierId}: ${UI.usdKg(c.makeUsdPerKg)}/kg made vs ${UI.usdKg(c.buyUsdPerKg)} bought` })),
     ].filter(Boolean);
     return UI.sortableTable([
-      { key: 'tag', label: 'Tag', get: r => r.tag, render: r => UI.el('strong', { text: r.tag }) },
+      { key: 'tag', label: 'Tag', get: r => r.tag, render: r => UI.el('strong', { 'data-tag': r.tag, text: r.tag }) },
       { key: 'item', label: 'Item', get: r => r.item },
       { key: 'size', label: 'Size', get: r => r.size },
       { key: 'note', label: 'Duty', get: r => r.note, render: r => UI.el('span', { class: 'muted', text: r.note }) },
@@ -673,7 +774,7 @@
 
   function streamTable(UI, pkg, pathwayId) {
     return UI.sortableTable([
-      { key: 'no', label: 'No.', num: true, get: s => s.no },
+      { key: 'no', label: 'No.', num: true, get: s => s.no, render: s => UI.el('span', { 'data-stream': s.no, text: String(s.no) }) },
       { key: 'line', label: 'Line', get: s => s.line, render: s => UI.el('code', { text: s.line }) },
       { key: 'from', label: 'From → to', get: s => s.fromTag + ' → ' + s.toTag },
       { key: 'phase', label: 'Phase', get: s => s.phase },
@@ -809,7 +910,7 @@
     const { Store, UI, href, params } = ctx;
     const { el } = UI;
     const path = params.path || [];
-    const pathwayId = path[1] || DEFAULT_PATHWAY;
+    const pathwayId = path[1] && path[1] !== '_' ? path[1] : DEFAULT_PATHWAY;
     const pathway = Store.pathwayById.get(pathwayId);
     const crumbs = el('div', { class: 'crumbs' }, [el('a', { href: href('pathways'), text: 'Pathways' }), ' / ',
       pathway ? el('a', { href: href('pathways', pathway.id), text: pathway.id }) : pathwayId, ' / plant design']);
@@ -818,7 +919,7 @@
       return null;
     }
     const multiple = Number(path[3]) > 0 ? Number(path[3]) : Store.RANK_SIZE_MULTIPLE;
-    const askedYear = Number(path[4]) > 0 ? Number(path[4]) : null;
+    const askedYear = Number(path[4]) > 0 ? Math.round(Number(path[4])) : null;
 
     const head = el('div', { class: 'view-title' }, [el('h1', { text: 'Plant design: ' + UI.pathwayLabel(pathway) })]);
     const intro = el('p', { class: 'pl-intro' });
@@ -872,6 +973,37 @@
       el('p', { class: 'muted pl-foot pl-caveat', text: 'Screening-level package. Equipment, PV, storage and land are the simulator’s installed costs at this site, size and year-0 cost factors, itemized; every line sums to the plant evaluation used by the company run. Streams are the solved flowsheet at the screening cases’ ambient conditions (temperature and pressure are not modelled). Instrumentation and interlocks are a typical scheme generated from unit types, for reading the design, not for engineering it.' }),
     );
 
+    // Tables ↔ drawing: hovering a table row lights its item or stream on the P&ID; clicking an item or
+    // line on the P&ID brings its table row into view.
+    const keyOf = node => {
+      const t = node?.closest?.('[data-tag], [data-stream]');
+      if (!t) return null;
+      return t.dataset.tag ? `[data-tag="${CSS.escape(t.dataset.tag)}"]` : `[data-stream="${CSS.escape(t.dataset.stream)}"]`;
+    };
+    const lit = new Set();
+    const unlight = () => { for (const n of lit) n.classList.remove('is-lit'); lit.clear(); };
+    root.addEventListener('mouseover', ev => {
+      const row = ev.target.closest?.('.pl-grid tr');
+      if (!row) return;
+      unlight();
+      const sel = keyOf(row.querySelector('[data-tag], [data-stream]'));
+      if (!sel) return;
+      for (const n of pidHost.querySelectorAll(sel)) { n.classList.add('is-lit'); lit.add(n); }
+    });
+    root.addEventListener('mouseout', ev => { if (ev.target.closest?.('.pl-grid tr') && !ev.relatedTarget?.closest?.('.pl-grid tr')) unlight(); });
+    pidHost.addEventListener('click', ev => {
+      if (ev.target.closest('a')) return;
+      const sel = keyOf(ev.target);
+      if (!sel) return;
+      const cell = root.querySelector('.pl-grid tbody ' + sel);
+      const row = cell?.closest('tr');
+      if (!row) return;
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      row.classList.remove('is-flash');
+      void row.offsetWidth;
+      row.classList.add('is-flash');
+    });
+
     let lastKey = null;
     let current = null;
     dlBtn.addEventListener('click', () => {
@@ -892,9 +1024,12 @@
       if (key === lastKey) return;
       lastKey = key;
       if (yearIndex > 0 && !result?.timeline?.[yearIndex]) {
+        // Keep what is drawn but mark it out of date until the run for this scenario is in.
+        root.classList.add('pl-waiting');
         kpis.replaceChildren(el('p', { class: 'empty', text: `Simulating the company run for ${year} costs…` }));
         return;
       }
+      root.classList.remove('pl-waiting');
       const row = yearIndex > 0 ? result.timeline[yearIndex] : null;
       const yearOpts = row ? { costFactors: row.costFactors, rawFactors: row.rawFactors, storagePrices: row.storagePrices, pvUsdPerKWp: row.pvCapexUsdPerKWp } : {};
       const sizes = cfg.build.sizeMultiples.map(m => ({ m, kg: Math.min(m * pathway.refOutputKgPerDay, cfg.build.maxPlantKgPerDay) }));

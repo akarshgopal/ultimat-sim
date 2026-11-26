@@ -29,6 +29,11 @@ test('every recipe: the plant package itemizes the simulator’s own totals exac
     assert.equal(pkg.equipment.length, p.flowsheet.nodes.filter(n => n.kind === 'converter').length, `${p.id} one item per unit`);
     // Sensitivity at the base reproduces the TEA.
     assert.ok(rel(t.sensitivity.base.npv, t.npv) < 1e-9 && rel(t.sensitivity.base.lcop, t.lcopUsdPerKg) < 1e-9, `${p.id} sensitivity base`);
+    // The discounted cash flows sum to the NPV (fractional lives included).
+    assert.ok(rel(PlantDesign.npvAt(pkg.basis.discountRate, t.cashflow.map(c => c.cash)), ev.npv) < 1e-9, `${p.id} flows match NPV`);
+    assert.ok(rel(t.cashflow.at(-1).cumulativeDiscounted, ev.npv) < 1e-9, `${p.id} discounted curve ends at the NPV`);
+    // Instrument tags: a loop's first instrument carries no suffix (JIC-1, not JIC-1A).
+    assert.ok(pkg.instruments.some(i => i.tag === 'JIC-1'), `${p.id} PV controller tag`);
     for (const s of pkg.streams) assert.ok(s.design >= s.average * (1 - 1e-9) - 1e-12 || pkg.basis.outputFactor > 1, `${p.id} stream ${s.no} design ≥ average`);
   }
 });
@@ -89,6 +94,34 @@ test('a later cost year takes the company run’s cost factors, and every unit h
   }
 });
 
+test('implied machines: pressure step-ups get a compressor or pump in the receiving unit’s package', () => {
+  const row = ranks.find(r => r.pathwayId === 'green-ammonia');
+  const { pkg } = PlantDesign.forPlant(Company, input, 'green-ammonia', row.siteId, row.sizeKgPerDay);
+  const hb = pkg.equipment.find(e => e.unit === 'ammonia');
+  const ro = pkg.equipment.find(e => e.unit === 'swro');
+  const k = pkg.machines.filter(m => m.host === hb.tag);
+  assert.deepEqual(k.map(m => m.kind), ['compressor', 'compressor'], 'H₂ and N₂ syngas compressors');
+  assert.ok(k.every(m => m.tag.startsWith('K-' + hb.tag.split('-')[1]) && m.toBar >= 150));
+  assert.ok(pkg.machines.some(m => m.host === ro.tag && m.kind === 'pump' && m.toBar >= 55), 'RO high-pressure pump');
+  for (const m of pkg.machines) assert.equal(pkg.streams.find(s => s.no === m.stream).machine, m.tag);
+  assert.deepEqual(PlantDesign.pressureRange('150–250 bar'), { lo: 150, hi: 250 });
+  assert.deepEqual(PlantDesign.pressureRange('atmospheric'), { lo: 1, hi: 1 });
+});
+
+test('a design that removes a feed drops it from the opex lines instead of offsetting it', () => {
+  const row = ranks.find(r => r.pathwayId === 'silicon');
+  const base = PlantDesign.forPlant(Company, input, 'silicon', row.siteId, row.sizeKgPerDay);
+  assert.ok(base.pkg.tea.opexLines.some(l => /^quartz/.test(l.label)), 'quartz is bought');
+  const designed = { ...input, config: { designs: { units: { 'mg-si': { feedFactors: { quartz: 0 } } } } } };
+  const { ev, pkg } = PlantDesign.forPlant(Company, designed, 'silicon', row.siteId, row.sizeKgPerDay);
+  assert.ok(ev.costParts.feedCost < base.ev.costParts.feedCost, 'the simulator drops the feed');
+  assert.ok(!pkg.tea.opexLines.some(l => /^quartz/.test(l.label)), 'no quartz line');
+  const rest = pkg.tea.opexLines.find(l => /Captive/.test(l.label));
+  const baseRest = base.pkg.tea.opexLines.find(l => /Captive/.test(l.label));
+  assert.ok(rel(rest?.usd ?? 0, baseRest?.usd ?? 0) < 1e-6, 'only the captive suppliers’ feeds are left unitemized');
+  assert.ok(rel(sum(pkg.tea.opexLines, l => l.usd), ev.opex.total) < 1e-9);
+});
+
 test('irr and the sensitivity levers behave', () => {
   assert.ok(Math.abs(PlantDesign.irr([-100, 110]) - 0.1) < 1e-9);
   assert.equal(PlantDesign.irr([-100, -5]), null);
@@ -115,6 +148,13 @@ test('plant view: P&ID, tables and TEA; site and size selectors; link from pathw
   assert.equal(counts.units, 4);
   assert.ok(counts.lines >= 10 && counts.bubbles >= 15 && counts.tanks === 1, JSON.stringify(counts));
   assert.match(await page.textContent('.v-plant .kpis'), /NPV/);
+  // Tables ↔ drawing: hovering an equipment row lights the unit; the inferred compressors are listed.
+  await page.hover('.v-plant .pl-grid tbody [data-tag^="R-"]');
+  assert.ok(await page.$('.v-plant svg.pid .pid-item.is-lit[data-tag^="R-"]'), 'hovered unit lit');
+  assert.ok(await page.$('.v-plant .pl-grid tbody [data-tag^="K-"]'), 'compressors in the equipment list');
+  assert.ok(await page.$('.v-plant svg.pid .pid-machine[data-tag^="K-"]'), 'compressors on the drawing');
+  await page.click('.v-plant svg.pid .pid-stream-tag[data-stream="1"]');
+  await page.waitForSelector('.v-plant .pl-grid tr.is-flash');
   assert.ok(await page.$('.v-plant .pl-waterfall .pl-wf-row'), 'cost waterfall');
   assert.ok(await page.$('.v-plant .pl-tornado .pl-tn-row:not(.is-head)'), 'tornado');
   await page.waitForSelector('.v-plant svg.chart-svg path.chart-line');
@@ -140,6 +180,12 @@ test('plant view: P&ID, tables and TEA; site and size selectors; link from pathw
   await page.waitForFunction(c => document.querySelector('.v-plant .kpi:nth-child(3) .kpi-value')?.textContent !== c, cost0, { timeout: 90000 });
   assert.match(await page.textContent('.v-plant .pl-intro'), new RegExp(lastYear + ' costs from the company run'));
   assert.ok(await page.$('.v-plant svg.pid .pid-cond'), 'typical conditions on the drawing');
+
+  // '_' segments mean the default, and a fractional year is rounded rather than hanging.
+  await page.goto(`${base}#/plant/_/_/_/2030.4`);
+  await page.waitForSelector('.v-plant svg.pid');
+  assert.match(await page.textContent('.v-plant h1'), /Green ammonia/);
+  await page.waitForFunction(() => /2030 costs from the company run/.test(document.querySelector('.v-plant .pl-intro')?.textContent || ''), null, { timeout: 90000 });
 
   // Captive supplier package links to its own plant design.
   await page.goto(`${base}#/plant/silicon`);

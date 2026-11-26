@@ -1691,6 +1691,7 @@
     siteAllowsPathway,
     marketGroupOf: (product, config) => marketGroupOf(mergeConfig(config), product),
     evaluatePlant,
+    designedOpex,
     evaluateAtYear,
     simulateCompany,
     rankOpportunities,

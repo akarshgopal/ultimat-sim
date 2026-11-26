@@ -109,3 +109,15 @@
 }
 .v-plant .pid-bus-stub { stroke: var(--series-4); stroke-width: 2.5; }
 .v-plant .data-table td:first-child strong, .v-plant .data-table td code, .v-plant .data-table td:first-child { white-space: nowrap; }
+.v-plant .pid-machine-tag { font-size: 9px; font-weight: 700; fill: var(--text-2); }
+.v-plant .pid-tb-rule { stroke: var(--text-3); stroke-width: 0.8; }
+/* A later cost year waiting for the company run: what is drawn is out of date. */
+.v-plant.pl-waiting > .card, .v-plant.pl-waiting > .grid, .v-plant.pl-waiting > .pl-intro { opacity: 0.45; transition: opacity 0.2s; }
+/* Cross-highlighting between the tables and the drawing. */
+.v-plant .pid-item.is-lit .pid-shape, .v-plant .pid-item.is-lit .pid-conn, .v-plant .pid-machine.is-lit .pid-valve-body { stroke: var(--accent); stroke-width: 2.6; fill: var(--accent-soft); }
+.v-plant .pid-line.is-lit { stroke: var(--accent); stroke-width: 3.2; }
+.v-plant .pid-stream-tag.is-lit .pid-diamond { fill: var(--accent); stroke: var(--accent); }
+.v-plant .pid-stream-tag.is-lit .pid-diamond-num { fill: var(--surface); }
+.v-plant svg.pid [data-tag], .v-plant svg.pid .pid-line, .v-plant svg.pid .pid-stream-tag { cursor: pointer; }
+@keyframes pl-flash { from { background: var(--accent-soft); } to { background: transparent; } }
+.v-plant tr.is-flash td { animation: pl-flash 1.6s ease-out; }

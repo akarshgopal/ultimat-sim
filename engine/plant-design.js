@@ -301,11 +301,49 @@
       }
     }
 
+    // ---- implied machines: where a line steps up from one unit's typical pressure to the next unit's,
+    // the drawing needs a compressor (gas) or pump (liquid). Their cost and power are inside the
+    // receiving unit's package in the recipe, so they are tagged to that unit (K-104A: the H₂
+    // compressor of the R-104 Haber-Bosch loop) and listed, not costed again.
+    const machines = [];
+    const outletBar = new Map(); // node / buffer id → outlet pressure
+    const pressureOfNode = id => {
+      if (outletBar.has(id)) return outletBar.get(id);
+      const n = byId.get(id);
+      return n && n.kind === 'converter' ? pressureRange(typeOf(n.unit).P)?.lo ?? 1 : 1;
+    };
+    for (const b of buffers) if (!b.captive) outletBar.set(b.tag, pressureOfNode(b.from));
+    const machineCount = new Map();
+    for (const st of streams) {
+      const toN = byId.get(st.to);
+      if (st.kind !== 'material' || !toN || toN.kind !== 'converter') continue;
+      const t = typeOf(toN.unit);
+      if (t.symbol === 'pump' || t.symbol === 'compressor') continue;
+      const need = pressureRange(t.P)?.lo ?? 1;
+      const have = pressureOfNode(st.from);
+      if (!(need > 2 && need >= 2 * have)) continue;
+      const kind = st.phase === 'gas' ? 'compressor' : st.phase === 'liquid' ? 'pump' : null;
+      if (!kind) continue;
+      const host = tagOf.get(toN.id);
+      const i = machineCount.get(host) || 0;
+      machineCount.set(host, i + 1);
+      const [prefix, num] = host.split('-');
+      const tag = `${kind === 'compressor' ? 'K' : 'P'}-${num}${String.fromCharCode(65 + i)}`;
+      const fluid = { AR: 'Air', SW: 'Seawater', BR: 'Brine', PW: 'Water' }[st.line.split('-')[0]] || st.composition[0]?.[0] || '';
+      machines.push({
+        tag, kind, host, hostPrefix: prefix, stream: st.no,
+        service: `${fluid ? fluid + ' ' : ''}${kind === 'compressor' ? 'compressor' : 'high-pressure pump'} to ${toN.label}`,
+        fromBar: have, toBar: need, designKgPerH: st.design,
+      });
+      st.machine = tag;
+    }
+
     // ---- instruments and loops
     const instruments = [];
     const addInst = (letters, loop, service, equipTag, extra = {}) => {
       const tag = `${letters}-${loop}`;
-      const n = instruments.filter(i => i.tag.startsWith(tag)).length;
+      // Same letters and loop already used: suffix A, B, … (exact tag, not a prefix: JIC-1 ≠ JIC-104).
+      const n = instruments.filter(i => i.tag === tag || (i.tag.length === tag.length + 1 && i.tag.startsWith(tag) && /[A-Z]$/.test(i.tag))).length;
       instruments.push({ tag: n ? `${tag}${String.fromCharCode(64 + n)}` : tag, letters, loop, service, equipment: equipTag, ...extra });
     };
     for (const e of equipment) {
@@ -349,10 +387,19 @@
         flexNameplateFactor: nameplate, flexFullLoadHoursPerDay: u?.flexFullLoadHoursPerDay ?? null,
         lifeYears: ev.lifeYears, discountRate: cfg.finance.discountRate, leadTimeYears: cfg.build.leadTimeYears || 0,
       },
-      equipment, streams, instruments, buffers, captive: captive.map(({ ev: _ev, ...c }) => ({ ...c, capexUsd: _ev?.capex.total ?? null, lcopUsdPerKg: _ev?.lcopUsdPerKg ?? c.makeUsdPerKg })),
+      equipment, machines, streams, instruments, buffers, captive: captive.map(({ ev: _ev, ...c }) => ({ ...c, capexUsd: _ev?.capex.total ?? null, lcopUsdPerKg: _ev?.lcopUsdPerKg ?? c.makeUsdPerKg })),
       utilities, tagOf: Object.fromEntries(tagOf),
-      tea: tea({ pathway, ev, cfg, capexItems, priceOf: opts.priceOf }),
+      tea: tea({ pathway, ev, cfg, capexItems, priceOf: opts.priceOf, feedFactor: opts.feedFactor }),
     };
+  }
+
+  // '150–250 bar' → { lo: 150, hi: 250 }; 'atmospheric' (or no number) → 1 bar.
+  function pressureRange(text) {
+    if (!text) return null;
+    const nums = String(text).replace(/,/g, '').match(/\d+(\.\d+)?/g);
+    if (!/bar/.test(text) || !nums) return { lo: 1, hi: 1 };
+    const v = nums.map(Number);
+    return { lo: v[0], hi: v[v.length - 1] };
   }
 
   // The flowsheet source node a recipe feed enters by: the same id, or one id containing the other
@@ -401,7 +448,7 @@
 
   // ------------------------------------------------------------------ TEA
   // Itemizes evaluatePlant's totals and adds the cash-flow view.
-  function tea({ pathway, ev, cfg, capexItems, priceOf }) {
+  function tea({ pathway, ev, cfg, capexItems, priceOf, feedFactor = () => 1 }) {
     const r = cfg.finance.discountRate;
     const lead = cfg.build.leadTimeYears || 0;
     const life = ev.lifeYears;
@@ -416,14 +463,14 @@
     const integrated = new Set((ev.integration || []).map(i => i.feedId));
     for (const f of pathway.feeds || []) {
       if (!f.purchased || integrated.has(f.id)) continue;
-      const kgYr = (Number(f.kgPerKg) || 0) * kg;
+      const kgYr = (Number(f.kgPerKg) || 0) * feedFactor(f.id) * kg; // a design can cut or remove a feed
       const usd = kgYr * ((Number(f.usdPerKg) || 0) + (Number(f.freightUsdPerKg) || 0));
       if (!(usd > 0)) continue;
       feedLines.push({ group: 'feedstock', label: `${f.id} (${f.origin})`, kgPerYear: kgYr, usdPerKg: (Number(f.usdPerKg) || 0) + (Number(f.freightUsdPerKg) || 0), usd });
       feedListed += usd;
     }
     const feedRest = cp.feedCost - feedListed;
-    if (Math.abs(feedRest) > 1e-6 * Math.max(1, cp.feedCost)) feedLines.push({ group: 'feedstock', label: ev.integration?.length ? 'Captive suppliers’ feeds, design feed changes' : 'Design feed changes', usd: feedRest });
+    if (Math.abs(feedRest) > 1e-6 * Math.max(1, cp.feedCost)) feedLines.push({ group: 'feedstock', label: 'Captive suppliers’ feeds', usd: feedRest });
     const opexLines = [
       { group: 'fixed', label: 'Equipment O&M', usd: cp.equipmentOm },
       { group: 'fixed', label: 'PV O&M', usd: cp.pvOm },
@@ -463,11 +510,14 @@
     const flows = [-ev.capex.total];
     for (let t = 1; t <= lead; t += 1) flows.push(0);
     for (let t = 1; t <= life; t += 1) flows.push(ev.annualCash);
-    // A fractional life: the last year carries its fraction (the simulator's annuity counts it the same way).
+    // A fractional life L = n + f: the last year carries the cash whose value at year n+1 equals the
+    // simulator's annuity for the fraction, cash × a(f) × (1 + r) with a(f) = (1 − (1+r)^−f) / r, so
+    // the discounted flows sum exactly to its NPV.
     const wholeLife = Math.floor(life);
     if (life !== wholeLife) {
       flows.length = 1 + lead + wholeLife;
-      flows.push(ev.annualCash * (life - wholeLife));
+      const f = life - wholeLife;
+      flows.push(ev.annualCash * annuityFactor(r, f) * (1 + r));
     }
     const npv = -ev.capex.total + ev.annualCash * af / (1 + r) ** lead;
     let cum = 0;
@@ -563,11 +613,12 @@
       return Company.realizedPrice(cfg, product ? markets[product] : null, fallback, share);
     };
     const evaluate = (id, size) => Company.evaluateAtYear(input, id, siteId, size, yearIndex, yearOpts);
-    const pkg = designPackage({ pathway, ev, site, cfg, evaluate, priceOf });
+    const feedFactor = Company.designedOpex ? Company.designedOpex(pathway, cfg).feedFactor : undefined;
+    const pkg = designPackage({ pathway, ev, site, cfg, evaluate, priceOf, feedFactor });
     pkg.basis.year = year;
     pkg.basis.yearIndex = yearIndex;
     return { ev, pkg };
   }
 
-  return { forPlant, sourceNodeFor, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };
+  return { forPlant, sourceNodeFor, pressureRange, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };
 });

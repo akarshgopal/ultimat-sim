@@ -391,8 +391,8 @@
     const u = pkg.utilities;
     const utilList = [
       ['pv', u.pv.tag, `Solar PV ${UI.num(u.pv.kWp / 1000)} MWp`, `${UI.num(u.pv.landHa)} ha · ${UI.num(u.pv.yieldKWhPerKWpDay)} kWh/kWp·d`],
-      u.battery ? ['battery', u.battery.tag, `Battery ${UI.num(u.battery.kWh / 1000)} MWh`, 'firms steady units overnight'] : null,
-      u.thermal ? ['thermal', u.thermal.tag, `Heat store ${UI.num(u.thermal.kWh / 1000)} MWh(th)`, 'firms heat-dominated units'] : null,
+      u.battery ? ['battery', u.battery.tag, `Battery ${UI.num(u.battery.kWh / 1000)} MWh · ${UI.num(u.battery.kW / 1000)} MW`, `${UI.num(u.battery.hours, 2)} h · firms steady units overnight`] : null,
+      u.thermal ? ['thermal', u.thermal.tag, `Heat store ${UI.num(u.thermal.kWh / 1000)} MWh(th) · ${UI.num(u.thermal.kW / 1000)} MW(th)`, `${UI.num(u.thermal.hours, 2)} h · firms heat-dominated units`] : null,
     ].filter(Boolean);
     const utilW = ([, , a, b]) => 54 + 8 + Math.max(110, 6.2 * Math.max(a.length, b.length)) + 18;
     const utilEnd = G.padX + utilList.reduce((t, x) => t + utilW(x), 0);
@@ -520,7 +520,16 @@
       labels.append(streamTag(UI, st, spot.x, spot.y));
     };
     const machineByTag = new Map((pkg.machines || []).map(m => [m.tag, m]));
+    const machineSpots = [];
     const lastSegIn = new Map(); // node id → [{ x, y }] of the line's last horizontal entering it (for valves)
+    // Reserve the inlet control-valve positions (drawn later with the units) before placing anything.
+    for (const list of edgeSegs.values()) {
+      const last = list[list.length - 1];
+      const b = L.all.get(last.to);
+      if (b.kind !== 'equip') continue;
+      const y = yIn.get(last);
+      placedTags.push({ x: b.sx - 16, y }, { x: b.sx - 38, y });
+    }
     for (const [e, list] of edgeSegs) {
       const pts = [];
       list.forEach(s => {
@@ -546,10 +555,17 @@
       path.append(t);
       lines.append(path);
       if (st.machine) {
-        // On the longest free horizontal run, clear of the control valves at the unit inlet (last 44 px).
+        // Inside its package: on the last run before the unit's inlet, upstream of the inlet valves
+        // (the last ~50 px); a run too short for that falls back to the longest free run.
         const m = machineByTag.get(st.machine);
-        const spot = freeSpot(pts, 44, 18);
+        const [lx2, ly2] = pts[pts.length - 2];
+        const [ex] = pts[pts.length - 1];
+        const nth = machineSpots.filter(q => q.host === m.host).length; // a unit's next machine steps upstream
+        const near = ex - lx2 >= 74 + nth * 34 ? { x: Math.max(lx2 + 14, ex - 62 - nth * 34), y: ly2 } : null;
+        const clear = near && !placedTags.some(p => Math.abs(p.x - near.x) < 26 && Math.abs(p.y - near.y) < 20);
+        const spot = clear ? near : freeSpot(pts, 50, 18);
         if (spot) {
+          machineSpots.push({ host: m.host, x: spot.x, y: spot.y });
           valves.append(machineSymbol(UI, m, spot.x, spot.y));
           for (const dx of [-24, 0, 24]) placedTags.push({ x: spot.x + dx, y: spot.y }, { x: spot.x + dx, y: spot.y - 14 });
         }
@@ -673,7 +689,28 @@
       }
       items.append(g);
     }
-    root.append(lines, signal, valves, items, labels);
+    // Package boundaries: a unit and the machines inside its package (dash-dot, as on a vendor package).
+    const bounds = svg('g', { class: 'pid-bounds' });
+    for (const n of L.nodes.values()) {
+      if (n.kind !== 'equip') continue;
+      // Only machines drawn next to the unit; one placed further up its line keeps its tag but stays outside.
+      const spots = machineSpots.filter(m => m.host === n.equip.tag && m.x > n.sx - 150 && m.x < n.sx);
+      if (!spots.length) continue;
+      // The unit's whole cell (instrument bubbles to the last label line) plus its machines.
+      const x0 = Math.min(n.x + 2, ...spots.map(m => m.x - 22));
+      const x1 = n.x + G.colW - 2;
+      const y0 = Math.min(n.y - 2, ...spots.map(m => m.y - 30));
+      const y1 = Math.max(n.sy + n.sh + 64, ...spots.map(m => m.y + 16));
+      bounds.append(svg('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, rx: 4, class: 'pid-bound' }));
+      // Label set into the bottom border line (a gap in the dash-dot), clear of the cells around it.
+      const label = `${n.equip.tag} package`;
+      const lw = label.length * 4.9 + 6;
+      bounds.append(svg('rect', { x: x1 - lw - 8, y: y1 - 6, width: lw, height: 10, class: 'pid-bound-gap' }));
+      const t = svg('text', { x: x1 - lw - 5, y: y1 + 2.5, class: 'pid-bound-label' });
+      t.textContent = label;
+      bounds.append(t);
+    }
+    root.append(bounds, lines, signal, valves, items, labels);
 
     // Title block.
     const tb = svg('g', { class: 'pid-titleblock' });
@@ -697,7 +734,7 @@
   function streamTitle(UI, st) {
     const unit = st.kind === 'heat' ? 'kW' : 'kg/h';
     const comp = st.composition.map(([s, f]) => `${s} ${UI.pct(f, 0)}`).join(', ');
-    return `Stream ${st.no} (${st.line}) ${st.fromTag} → ${st.toTag}: ${UI.num(st.design)} ${unit} design, ${UI.num(st.average)} ${unit} average${comp ? ' · ' + comp : ''}${st.phase ? ' · ' + st.phase : ''}`;
+    return `Stream ${st.no} (${st.lineNumber || st.line}${st.pressureBar != null ? ', ' + UI.num(st.pressureBar) + ' bar' : ''}) ${st.fromTag} → ${st.toTag}: ${UI.num(st.design)} ${unit} design, ${UI.num(st.average)} ${unit} average${comp ? ' · ' + comp : ''}${st.phase ? ' · ' + st.phase : ''}`;
   }
   function streamTag(UI, st, x, y) {
     const { svg } = UI;
@@ -759,8 +796,8 @@
     const u = pkg.utilities;
     const rows = [
       { tag: u.pv.tag, item: 'Solar PV field', size: `${UI.num(u.pv.kWp / 1000)} MWp · ${UI.num(u.pv.landHa)} ha`, note: `${UI.num(u.electricityKWhPerYear / 1e6)} GWh/yr to the plant` },
-      u.battery ? { tag: u.battery.tag, item: 'Battery energy storage', size: `${UI.num(u.battery.kWh / 1000)} MWh`, note: 'carries steady units through the night' } : null,
-      u.thermal ? { tag: u.thermal.tag, item: 'Thermal energy store', size: `${UI.num(u.thermal.kWh / 1000)} MWh(th)`, note: 'resistively charged; firms heat-dominated units' } : null,
+      u.battery ? { tag: u.battery.tag, item: 'Battery energy storage', size: `${UI.num(u.battery.kWh / 1000)} MWh / ${UI.num(u.battery.kW / 1000)} MW (${UI.num(u.battery.hours, 2)} h)`, note: 'carries the steady units through the night' } : null,
+      u.thermal ? { tag: u.thermal.tag, item: 'Thermal energy store', size: `${UI.num(u.thermal.kWh / 1000)} MWh(th) / ${UI.num(u.thermal.kW / 1000)} MW(th) (${UI.num(u.thermal.hours, 2)} h)`, note: 'resistively charged; firms heat-dominated units' } : null,
       ...pkg.buffers.map(b => ({ tag: b.tag, item: `${b.substance} buffer`, size: `${UI.num(b.capacityKg / 1000)} t`, note: b.captive ? 'captive supply buffer' : `${b.inStream ? 'stream ' + b.inStream + ' in at the sun-following rate, ' + b.outStream + ' out steady' : ''}` })),
       ...pkg.captive.map(c => ({ tag: c.tag, item: `Captive ${c.product} supplier`, size: `${UI.num(c.kgPerDay / 1000)} t/day`, note: `${c.supplierId}: ${UI.usdKg(c.makeUsdPerKg)}/kg made vs ${UI.usdKg(c.buyUsdPerKg)} bought` })),
     ].filter(Boolean);
@@ -775,7 +812,8 @@
   function streamTable(UI, pkg, pathwayId) {
     return UI.sortableTable([
       { key: 'no', label: 'No.', num: true, get: s => s.no, render: s => UI.el('span', { 'data-stream': s.no, text: String(s.no) }) },
-      { key: 'line', label: 'Line', get: s => s.line, render: s => UI.el('code', { text: s.line }) },
+      { key: 'line', label: 'Line', title: 'Indicative line number: nominal size (standard pipe size from the design flow, density at the line pressure and typical velocity), fluid code, sequence', get: s => s.lineNumber, render: s => [UI.el('code', { text: s.lineNumber }), s.openIntake ? UI.el('span', { class: 'cell-sub', text: 'open air path, no pipe' }) : s.kind === 'material' && s.phase === 'solid' ? UI.el('span', { class: 'cell-sub', text: 'conveyed' }) : null] },
+      { key: 'p', label: 'bar', num: true, title: 'Line pressure: the upstream unit’s typical outlet pressure, or the receiving unit’s after a compressor or pump', get: s => s.pressureBar ?? NaN, render: s => (s.pressureBar != null ? UI.num(s.pressureBar) : '—') },
       { key: 'from', label: 'From → to', get: s => s.fromTag + ' → ' + s.toTag },
       { key: 'phase', label: 'Phase', get: s => s.phase },
       { key: 'avg', label: 'Average', csvLabel: 'Average (kg/h; heat kW)', num: true, get: s => s.average, render: s => UI.num(s.average) + (s.kind === 'heat' ? ' kW' : ' kg/h') },

@@ -32,7 +32,7 @@
   const UNIT_TYPES = Object.freeze({
     'intake-pump': { symbol: 'pump', prefix: 'P', type: 'Centrifugal pump (VFD)', T: 'ambient', P: '2–5 bar discharge', loops: [['FIC', 'intake flow, VFD speed'], ['PI', 'discharge pressure']] },
     'gas-blower': { symbol: 'compressor', prefix: 'K', type: 'Blower', T: 'ambient', P: '~1.05 bar', loops: [['FIC', 'air flow, VFD speed'], ['PI', 'discharge pressure']] },
-    swro: { symbol: 'membrane', prefix: 'M', type: 'Reverse-osmosis train', T: 'ambient', P: '55–70 bar feed', loops: [['FIC', 'feed flow'], ['PIC', 'HP feed pressure'], ['AIT', 'permeate conductivity']] },
+    swro: { symbol: 'membrane', prefix: 'M', type: 'Reverse-osmosis train', T: 'ambient', P: '55–70 bar feed', Pout: 1, loops: [['FIC', 'feed flow'], ['PIC', 'HP feed pressure'], ['AIT', 'permeate conductivity']] },
     electrolyzer: { symbol: 'electrolyzer', prefix: 'EL', type: 'Water electrolyzer stack', T: '50–80 °C', P: '1–30 bar', loops: [['JIC', 'stack power, tracks available PV'], ['TIC', 'stack temperature'], ['PIC', 'H₂ outlet pressure'], ['AIT', 'H₂ in O₂ (safety)']] },
     'chlor-alkali': { symbol: 'electrolyzer', prefix: 'EL', type: 'Membrane chlor-alkali cells', T: '85–90 °C', P: 'atmospheric', loops: [['JIC', 'cell current'], ['TIC', 'cell temperature'], ['AIT', 'caustic strength']] },
     'copper-ew': { symbol: 'electrolyzer', prefix: 'EL', type: 'Electrowinning tankhouse', T: '40–50 °C', P: 'atmospheric', loops: [['JIC', 'cell current'], ['TIC', 'electrolyte temperature'], ['LIC', 'cell level']] },
@@ -174,7 +174,6 @@
         throughputKgPerH: { average: Math.max(inKg, outKg) * size * outputFactor / 24, design: Math.max(inKg, outKg) * size * rateFactor.get(n.id) / 24 },
         powerKW: { average: kWhPerKg * size * outputFactor / 24, design: kWhPerKg * size * rateFactor.get(n.id) / 24 },
         kWhPerKg,
-        weight: (Number(n.capexUsdPerKgDay) || 0) * (Number(designUnits[n.unit]?.capexFactor) > 0 ? designUnits[n.unit].capexFactor : 1) * rateFactor.get(n.id),
         capexUsd: 0,
       });
     }
@@ -206,8 +205,7 @@
       buffers.push({ tag: `TK-${seq}`, loop: seq, from: item.nodeId || item.feedId, to: null, substance: item.product, capacityKg: item.bufferKg, capexUsd: item.bufferUsd, holdHours: null, captive: true });
     }
 
-    // ---- capex allocation: class totals are the simulator's; units share them by recipe capex,
-    // weighted by their solar oversizing.
+    // ---- capex: the simulator's class totals of this plant alone (captive suppliers taken out).
     const byTech = { ...ev.capex.byTech };
     let pvMain = ev.capex.pv;
     let landMain = ev.capex.land;
@@ -219,12 +217,11 @@
     }
     for (const b of buffers) if (b.captive) byTech.storage -= b.capexUsd;
     const capexItems = [];
-    for (const cls of Object.keys(byTech)) {
-      if (cls === 'storage') continue;
-      const members = equipment.filter(e => e.cls === cls);
-      const w = members.reduce((s, e) => s + e.weight, 0);
-      if (w > 0) for (const e of members) e.capexUsd = byTech[cls] * e.weight / w;
-      else if (Math.abs(byTech[cls]) > 1e-6) capexItems.push({ group: 'equipment', tag: '', label: `Balance of plant (${cls})`, usd: byTech[cls] });
+    // The simulator's own per-unit prices (evaluatePlant.unitCapexUsd: designed units on their
+    // materials floor and scale law, sun-following units at the solar design's nameplate factor).
+    for (const e of equipment) e.capexUsd = ev.unitCapexUsd[e.nodeId] || 0;
+    for (const [id, usd] of Object.entries(ev.unitCapexUsd)) {
+      if (id.startsWith('balance:') && Math.abs(usd) > 1e-6) capexItems.push({ group: 'equipment', tag: '', label: `Balance of plant (${id.slice(8)})`, usd });
     }
     for (const e of equipment) capexItems.push({ group: 'equipment', tag: e.tag, label: e.service, usd: e.capexUsd });
     const storage = {
@@ -310,7 +307,9 @@
     const pressureOfNode = id => {
       if (outletBar.has(id)) return outletBar.get(id);
       const n = byId.get(id);
-      return n && n.kind === 'converter' ? pressureRange(typeOf(n.unit).P)?.lo ?? 1 : 1;
+      if (!n || n.kind !== 'converter') return 1;
+      const t = typeOf(n.unit);
+      return t.Pout ?? pressureRange(t.P)?.lo ?? 1; // RO permeate and brine leave near ambient
     };
     for (const b of buffers) if (!b.captive) outletBar.set(b.tag, pressureOfNode(b.from));
     const machineCount = new Map();
@@ -336,6 +335,17 @@
         fromBar: have, toBar: need, designKgPerH: st.design,
       });
       st.machine = tag;
+    }
+
+    // ---- line sizing (indicative): density from composition at the line's pressure, typical design
+    // velocities, rounded up to a standard pipe size; low-pressure gas too big for a 48" pipe is a duct.
+    for (const st of streams) {
+      st.lineNumber = st.line;
+      if (st.kind !== 'material') continue;
+      const toN = byId.get(st.to);
+      st.pressureBar = st.machine ? (pressureRange(typeOf(toN?.unit).P)?.lo ?? 1) : pressureOfNode(st.from);
+      Object.assign(st, sizeLine(st, byId.get(st.from)?.kind === 'source'));
+      st.lineNumber = `${st.size ? st.size + '-' : ''}${st.line}`;
     }
 
     // ---- instruments and loops
@@ -372,14 +382,14 @@
     // ---- utilities
     const utilities = {
       pv: { tag: 'PV-001', kWp: pvKWp, landHa: ev.landHa - captive.reduce((s, c) => s + (c.ev?.landHa || 0), 0), yieldKWhPerKWpDay: site?.pvKWhPerKWpDay ?? null },
-      battery: u?.batteryKWh > 0 ? { tag: 'BESS-001', kWh: u.batteryKWh, usd: u.batteryUsd } : null,
-      thermal: u?.thermalKWh > 0 ? { tag: 'TES-001', kWh: u.thermalKWh, usd: u.thermalUsd } : null,
+      // Power rating: the steady load the store carries through the night at its highest planned rate.
+      battery: u?.batteryKWh > 0 ? storeRating('BESS-001', u.batteryKWh, u.batteryUsd, u.blocks?.elec) : null,
+      thermal: u?.thermalKWh > 0 ? storeRating('TES-001', u.thermalKWh, u.thermalUsd, u.blocks?.heat) : null,
       electricityKWhPerYear: ev.electricityKWhPerYear,
       peakLoadKW: equipment.reduce((s, e) => s + e.powerKW.design, 0),
       averageLoadKW: ev.electricityKWhPerYear / 8760,
     };
 
-    for (const e of equipment) delete e.weight;
     return {
       basis: {
         pathwayId: pathway.id, product: pathway.product, siteId: site?.id ?? ev.siteId,
@@ -391,6 +401,41 @@
       utilities, tagOf: Object.fromEntries(tagOf),
       tea: tea({ pathway, ev, cfg, capexItems, priceOf: opts.priceOf, feedFactor: opts.feedFactor }),
     };
+  }
+
+  function storeRating(tag, kWh, usd, block) {
+    const rate = block?.monthRate ? Math.max(...block.monthRate) : 1;
+    const kW = (block?.loadKW || 0) * rate;
+    return { tag, kWh, usd, kW, hours: kW > 0 ? kWh / kW : null };
+  }
+
+  // Line sizing. Molar masses (g/mol) for gas densities; liquid densities (kg/m³) by dominant substance.
+  const MOLAR = { H2: 2.016, O2: 32.0, N2: 28.01, CO2: 44.01, CO: 28.01, CH4: 16.04, H2O: 18.02, NH3: 17.03, Ar: 39.95, Cl2: 70.9, C2H4: 28.05, C3H6: 42.08, SiHCl3: 135.45, SiCl4: 169.9, HCl: 36.46 };
+  const LIQUID_RHO = { H2O: 1000, NH3: 610, CH3OH: 790, NaOH: 1500, Br2: 3100 };
+  const NPS = [0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 30, 36, 42, 48];
+  const VELOCITY = { gas: 15, liquid: 2 }; // m/s: typical process design velocities
+  function sizeLine(st, fromOutside = false) {
+    const kgPerS = st.design / 3600;
+    if (!(kgPerS > 0) || (st.phase !== 'gas' && st.phase !== 'liquid')) return { size: null, conveyed: st.phase === 'solid' };
+    let rho;
+    if (st.phase === 'gas') {
+      // Ideal gas at 25 °C (the cases carry no temperatures): ρ = P·M / (R·T).
+      const inv = st.composition.reduce((t, [sub, w]) => t + w / (MOLAR[sub] || 29), 0) || 1 / 29;
+      rho = (st.pressureBar * 1e5 * (1 / inv) / 1000) / (8.314 * 298.15);
+    } else {
+      const top = st.composition[0]?.[0];
+      const salts = st.composition.filter(([sub]) => IONS.test(sub)).reduce((t, [, w]) => t + w, 0);
+      rho = LIQUID_RHO[top] ? LIQUID_RHO[top] * (top === 'H2O' ? 1 + 0.75 * salts : 1) : 1000;
+    }
+    const v = VELOCITY[st.phase];
+    const dM = Math.sqrt((4 * kgPerS / rho) / (Math.PI * v));
+    const inch = dM / 0.0254;
+    const nps = NPS.find(n => n >= inch);
+    if (nps) return { size: `${nps}"`, densityKgM3: rho, velocityMS: v, innerDiameterM: dM };
+    // Near-ambient air too big for a 3 m duct (DAC: drawn across contactor faces by fan banks) is an
+    // open air path, not a pipe.
+    if (st.phase === 'gas' && st.pressureBar <= 1.1 && (fromOutside || dM > 3)) return { size: null, openIntake: true, densityKgM3: rho, velocityMS: v, innerDiameterM: dM };
+    return { size: st.phase === 'gas' ? `duct ⌀${dM.toFixed(1)} m` : `${Math.ceil(inch / 48)}×48"`, densityKgM3: rho, velocityMS: v, innerDiameterM: dM };
   }
 
   // '150–250 bar' → { lo: 150, hi: 250 }; 'atmospheric' (or no number) → 1 bar.
@@ -620,5 +665,5 @@
     return { ev, pkg };
   }
 
-  return { forPlant, sourceNodeFor, pressureRange, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };
+  return { forPlant, sourceNodeFor, pressureRange, sizeLine, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };
 });

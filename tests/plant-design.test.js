@@ -122,6 +122,61 @@ test('a design that removes a feed drops it from the opex lines instead of offse
   assert.ok(rel(sum(pkg.tea.opexLines, l => l.usd), ev.opex.total) < 1e-9);
 });
 
+test('per-unit capex is the simulator’s own, designed units included, and sums exactly', () => {
+  // Every repository design on, at its last (leanest) preset.
+  const units = {};
+  for (const f of ['electrolyzer', 'haber-bosch', 'dri-shaft', 'pellet-plant', 'dac', 'synthesis', 'urea', 'smelter']) {
+    const m = require(`../engine/designs/${f}.js`);
+    Object.assign(units, m.simulatorOverride({ ...(Object.values(m.PRESETS).at(-1).params || {}) }));
+  }
+  const designed = { ...input, config: { designs: { units } } };
+  const dRanks = Company.rankOpportunities(designed, { sizeMultiple: 100 });
+  for (const p of input.pathways) {
+    const row = dRanks.find(r => r.pathwayId === p.id);
+    if (!row) continue;
+    const { ev, pkg } = PlantDesign.forPlant(Company, designed, p.id, row.siteId, row.sizeKgPerDay);
+    // Units + balance = this plant's equipment classes (captive suppliers' own capex taken out).
+    let own = 0;
+    for (const [cls, v] of Object.entries(ev.capex.byTech)) if (cls !== 'storage') own += v;
+    for (const c of pkg.captive) for (const [cls, v] of Object.entries(Company.evaluateAtYear(designed, c.supplierId, row.siteId, c.kgPerDay, 0).capex.byTech)) if (cls !== 'storage') own -= v;
+    assert.ok(rel(sum(Object.values(ev.unitCapexUsd), x => x), own) < 1e-9, `${p.id} units sum to the classes`);
+    for (const e of pkg.equipment) assert.equal(e.capexUsd, ev.unitCapexUsd[e.nodeId] || 0, `${p.id} ${e.tag}`);
+    assert.ok(!pkg.tea.capexItems.some(i => /Unallocated/.test(i.label)), `${p.id} nothing unallocated`);
+    assert.ok(rel(sum(pkg.tea.capexItems, i => i.usd), ev.capex.total) < 1e-9, `${p.id} capex`);
+  }
+  // A designed electrolyzer is priced on its own: its share of the class differs from recipe × capexFactor.
+  const row = dRanks.find(r => r.pathwayId === 'green-ammonia');
+  const { pkg } = PlantDesign.forPlant(Company, designed, 'green-ammonia', row.siteId, row.sizeKgPerDay);
+  assert.ok(pkg.equipment.find(e => e.unit === 'electrolyzer').capexUsd > 0);
+});
+
+test('stores carry a power rating; lines carry an indicative size, pressure and number', () => {
+  const row = ranks.find(r => r.pathwayId === 'green-ammonia');
+  const { ev, pkg } = PlantDesign.forPlant(Company, input, 'green-ammonia', row.siteId, row.sizeKgPerDay);
+  const b = pkg.utilities.battery;
+  assert.ok(b.kW > 0 && Math.abs(b.kW - ev.utilization.blocks.elec.loadKW) < 1e-6 * b.kW, 'battery power = the steady load it carries');
+  assert.ok(Math.abs(b.hours - b.kWh / b.kW) < 1e-9 && b.hours > 4 && b.hours < 24);
+  for (const st of pkg.streams.filter(x => x.kind === 'material' && (x.phase === 'gas' || x.phase === 'liquid'))) {
+    assert.ok(st.pressureBar >= 1, `stream ${st.no} pressure`);
+    assert.ok(st.openIntake || st.size, `stream ${st.no} sized`);
+    if (st.size && /"$/.test(st.size)) assert.ok(st.lineNumber.startsWith(st.size + '-' + st.line.split('-')[0]));
+  }
+  // The H₂ after the 150-bar compressor runs at loop pressure in a far smaller pipe than the ~1 bar H₂ before it.
+  const k = pkg.machines.find(m => m.host === pkg.equipment.find(e => e.unit === 'ammonia').tag && /H2/.test(m.service));
+  const after = pkg.streams.find(x => x.no === k.stream);
+  const before = pkg.streams.find(x => x.to === after.from && x.composition[0][0] === 'H2');
+  assert.equal(after.pressureBar, 150);
+  assert.ok(after.innerDiameterM < before.innerDiameterM / 3);
+  // RO permeate leaves near ambient, not at the 55 bar feed pressure.
+  const ro = pkg.equipment.find(e => e.unit === 'swro');
+  assert.ok(pkg.streams.filter(x => x.from === ro.nodeId).every(x => x.pressureBar === 1));
+  // DAC air is an open air path, not a 14 m duct.
+  const dr = ranks.find(r => r.pathwayId === 'dac-co2');
+  const dac = PlantDesign.forPlant(Company, input, 'dac-co2', dr.siteId, dr.sizeKgPerDay).pkg;
+  assert.ok(dac.streams.some(x => x.openIntake), 'open intake');
+  assert.ok(!dac.streams.some(x => /duct/.test(x.size || '')), 'no absurd ducts');
+});
+
 test('irr and the sensitivity levers behave', () => {
   assert.ok(Math.abs(PlantDesign.irr([-100, 110]) - 0.1) < 1e-9);
   assert.equal(PlantDesign.irr([-100, -5]), null);

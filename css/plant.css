@@ -121,3 +121,6 @@
 .v-plant svg.pid [data-tag], .v-plant svg.pid .pid-line, .v-plant svg.pid .pid-stream-tag { cursor: pointer; }
 @keyframes pl-flash { from { background: var(--accent-soft); } to { background: transparent; } }
 .v-plant tr.is-flash td { animation: pl-flash 1.6s ease-out; }
+.v-plant .pid-bound { fill: none; stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 9 3 2 3; }
+.v-plant .pid-bound-label { font-size: 9px; fill: var(--text-3); font-style: italic; }
+.v-plant .pid-bound-gap { fill: var(--surface); }

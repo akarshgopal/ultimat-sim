@@ -34,7 +34,7 @@
   const G = {
     colW: 172, gapMin: 78, laneGap: 9, padX: 18, topBand: 112, padBottom: 30,
     equipH: 162, connH: 44, tankH: 120, packH: 96, dummyH: 16, rowGap: 22,
-    symW: 64, symH: 52, bubbleR: 12, titleH: 66, tbW: 320,
+    symW: 64, symH: 52, bubbleR: 12, fitStep: 44, fitHalf: 30, titleH: 66, tbW: 320,
   };
 
   function buildGraph(pathway, pkg) {
@@ -157,7 +157,17 @@
     const bump = (id, side) => { const p = ports.get(id) || { in: 0, out: 0 }; p[side] += 1; ports.set(id, p); };
     for (const sg of segs) { bump(sg.from, 'out'); bump(sg.to, 'in'); }
     for (const e of back) { bump(e.from, 'out'); bump(e.to, 'in'); }
-    const symH = n => Math.max(G.symH, (15 * (Math.max(ports.get(n.id)?.in || 0, ports.get(n.id)?.out || 0) + 1)) / 0.7);
+    // A side whose lines carry in-line items (compressors, exchangers) spaces them 36 px apart so items on
+    // neighbouring lines can share a position; otherwise 15 px.
+    const carriesIn = new Set();
+    const carriesOut = new Set();
+    for (const sg of segs) {
+      const st = sg.edge.stream;
+      if (st.machine || st.feedExchanger) carriesIn.add(sg.to);
+      if (st.productExchanger) carriesOut.add(sg.from);
+    }
+    const sideH = (n, side) => ((carriesIn.has(n.id) && side === 'in') || (carriesOut.has(n.id) && side === 'out') ? 36 : 15) * ((ports.get(n.id)?.[side] || 0) + 1) / 0.7;
+    const symH = n => Math.max(G.symH, sideH(n, 'in'), sideH(n, 'out'));
     const heightOf = n => (n.kind === 'equip' ? G.equipH + symH(n) - G.symH : n.kind === 'tank' ? G.tankH : n.kind === 'package' ? G.packH : n.kind === 'dummy' ? G.dummyH : G.connH);
     const colHeight = col => col.reduce((s, n) => s + heightOf(n), 0) + Math.max(0, col.length - 1) * G.rowGap;
     const bodyH = Math.max(...columns.map(colHeight));
@@ -165,7 +175,22 @@
     // Gap widths from the number of vertical lanes each needs.
     const gapSegs = Array.from({ length: Math.max(0, cols - 1) }, () => []);
     for (const s of segs) gapSegs[layer.get(s.from)].push(s);
-    const gaps = gapSegs.map(list => Math.max(G.gapMin, 36 + list.length * G.laneGap));
+    // …and from the in-line items its lines carry (compressor/pump and feed exchanger before the next
+    // unit, product exchanger after this one), so each sits on a straight run with its stream number.
+    // A unit's fittings are staggered along its lines one after another, so a gap holds all the inlet
+    // fittings of each unit it feeds plus all the outlet fittings of each unit it leaves.
+    const gaps = gapSegs.map(list => {
+      // Room per line: its own items one step apart, a half step for alternating neighbours, the inlet
+      // valves and the stream number.
+      let most = 0;
+      for (const sg of list) {
+        const st = sg.edge.stream;
+        const n = (!dummies.has(sg.to) ? (st.machine ? 1 : 0) + (st.feedExchanger ? 1 : 0) : 0)
+          + (!dummies.has(sg.from) && st.productExchanger ? 1 : 0);
+        most = Math.max(most, n);
+      }
+      return Math.max(G.gapMin, 36 + list.length * G.laneGap, most ? 80 + G.fitStep * most : 0);
+    });
     const colX = [];
     let x = G.padX;
     for (let c = 0; c < cols; c += 1) {
@@ -369,6 +394,22 @@
     return g;
   }
 
+  // Heat exchanger (shell-and-tube, simplified: circle with the tube pass drawn through it).
+  function exchangerSymbol(UI, x0, x, y) {
+    const { svg } = UI;
+    const xc = x0;
+    const r = 10;
+    const g = svg('g', { class: 'pid-machine pid-exchanger is-' + xc.duty, 'data-tag': xc.tag });
+    g.append(svg('circle', { cx: x, cy: y, r, class: 'pid-valve-body' }));
+    g.append(svg('path', { d: `M${x - r - 3},${y + 4} L${x - 5},${y + 4} L${x - 2},${y - 5} L${x + 2},${y + 5} L${x + 5},${y - 4} L${x + r + 3},${y - 4}`, class: 'pid-detail' }));
+    const t = svg('text', { x, y: y - r - 4, class: 'pid-machine-tag', 'text-anchor': 'middle' });
+    t.textContent = xc.tag;
+    const title = svg('title');
+    title.textContent = `${xc.tag}: ${xc.service} · cost and energy are in ${xc.host}'s package`;
+    g.append(t, title);
+    return g;
+  }
+
   function controlValve(UI, x, y) {
     const { svg } = UI;
     const g = svg('g', { class: 'pid-valve' });
@@ -456,8 +497,25 @@
     for (const [gi, list] of L.gapSegs.entries()) {
       const x0 = L.colX[gi] + G.colW;
       const gw = L.gaps[gi];
-      const sorted = list.slice().sort((a, b) => yOut.get(a) - yOut.get(b));
-      sorted.forEach((s, i) => laneX.set(s, x0 + 22 + ((gw - 44) * (i + 0.5)) / Math.max(1, sorted.length)));
+      // Lines with items before their next unit turn early (left lanes) so the run into the unit is long;
+      // lines with a product exchanger turn late (right lanes) so the run out of the unit is long.
+      const group = sg => {
+        const st = sg.edge.stream;
+        const inItems = !L.all.get(sg.to) || L.all.get(sg.to).kind === 'dummy' ? 0 : (st.machine ? 1 : 0) + (st.feedExchanger ? 1 : 0);
+        const outItems = L.all.get(sg.from)?.kind === 'dummy' ? 0 : (st.productExchanger ? 1 : 0);
+        return inItems ? 0 : outItems ? 2 : 1;
+      };
+      const sorted = list.slice().sort((a, b) => group(a) - group(b) || yOut.get(a) - yOut.get(b));
+      // Turns packed from the left (from the right for product-exchanger lines), 14 px apart, so the
+      // straight runs that carry items stay long; with nothing to carry, spread evenly as before.
+      const step = Math.min(14, (gw - 44) / Math.max(1, sorted.length));
+      const carries = sorted.some(sg => group(sg) !== 1);
+      const right = sorted.filter(sg => group(sg) === 2);
+      sorted.forEach((sg, i) => {
+        if (!carries) { laneX.set(sg, x0 + 22 + ((gw - 44) * (i + 0.5)) / sorted.length); return; }
+        const r = right.indexOf(sg);
+        laneX.set(sg, r >= 0 ? x0 + gw - 22 - (right.length - 1 - r) * step : x0 + 22 + i * step);
+      });
     }
     const productTo = new Set([...L.nodes.values()].filter(n => n.disposition === 'product').map(n => n.id));
     const edgeSegs = new Map();
@@ -520,7 +578,9 @@
       labels.append(streamTag(UI, st, spot.x, spot.y));
     };
     const machineByTag = new Map((pkg.machines || []).map(m => [m.tag, m]));
+    const exchangerByTag = new Map((pkg.exchangers || []).map(x => [x.tag, x]));
     const machineSpots = [];
+    const pendingTags = [];
     const lastSegIn = new Map(); // node id → [{ x, y }] of the line's last horizontal entering it (for valves)
     // Reserve the inlet control-valve positions (drawn later with the units) before placing anything.
     for (const list of edgeSegs.values()) {
@@ -530,6 +590,21 @@
       const y = yIn.get(last);
       placedTags.push({ x: b.sx - 16, y }, { x: b.sx - 38, y });
     }
+    // Each line's rank among the lines into its unit (by inlet height) and out of its unit (by outlet height).
+    const inRank = new Map();
+    const outRank = new Map();
+    const rankBy = (key, ys, target) => {
+      const groups = new Map();
+      for (const [e, list] of edgeSegs) {
+        const sg = key === 'to' ? list[list.length - 1] : list[0];
+        const id = sg[key];
+        if (!groups.has(id)) groups.set(id, []);
+        groups.get(id).push([e, ys.get(sg)]);
+      }
+      for (const g of groups.values()) g.sort((a, b) => a[1] - b[1]).forEach(([e], i) => target.set(e, i));
+    };
+    rankBy('to', yIn, inRank);
+    rankBy('from', yOut, outRank);
     for (const [e, list] of edgeSegs) {
       const pts = [];
       list.forEach(s => {
@@ -554,24 +629,39 @@
       t.textContent = streamTitle(UI, st);
       path.append(t);
       lines.append(path);
-      if (st.machine) {
-        // Inside its package: on the last run before the unit's inlet, upstream of the inlet valves
-        // (the last ~50 px); a run too short for that falls back to the longest free run.
-        const m = machineByTag.get(st.machine);
-        const [lx2, ly2] = pts[pts.length - 2];
-        const [ex] = pts[pts.length - 1];
-        const nth = machineSpots.filter(q => q.host === m.host).length; // a unit's next machine steps upstream
-        const near = ex - lx2 >= 74 + nth * 34 ? { x: Math.max(lx2 + 14, ex - 62 - nth * 34), y: ly2 } : null;
+      // In-line items inside a unit's package. Inlet side, upstream of the inlet valves (last ~50 px):
+      // compressor or pump, then feed exchanger. Outlet side, just after the sending unit: product exchanger.
+      const fit = (item, draw, end) => {
+        // Step along this line for each item already on it; alternate lines into (or out of) the same
+        // unit sit half a step apart so items on neighbouring lines do not touch.
+        const k = machineSpots.filter(q => q.stream === st.no && q.end === end).length;
+        const half = 0;
+        let near = null;
+        if (end === 'in') {
+          const [lx2, ly2] = pts[pts.length - 2];
+          const [ex] = pts[pts.length - 1];
+          const off = 72 + k * G.fitStep + half; // clear of the valves reserved at ex−16 / ex−38
+          if (ex - lx2 >= off + 14) near = { x: ex - off, y: ly2 };
+        } else {
+          const [sx0, sy0] = pts[0];
+          const [sx1] = pts[1];
+          const off = 24 + k * G.fitStep + half;
+          if (sx1 - sx0 >= off + 20) near = { x: sx0 + off, y: sy0 };
+        }
         const clear = near && !placedTags.some(p => Math.abs(p.x - near.x) < 26 && Math.abs(p.y - near.y) < 20);
         const spot = clear ? near : freeSpot(pts, 50, 18);
-        if (spot) {
-          machineSpots.push({ host: m.host, x: spot.x, y: spot.y });
-          valves.append(machineSymbol(UI, m, spot.x, spot.y));
-          for (const dx of [-24, 0, 24]) placedTags.push({ x: spot.x + dx, y: spot.y }, { x: spot.x + dx, y: spot.y - 14 });
-        }
-      }
-      placeTag(st, pts);
+        if (!spot) return;
+        machineSpots.push({ host: item.host, stream: st.no, end, x: spot.x, y: spot.y });
+        valves.append(draw(UI, item, spot.x, spot.y));
+        placedTags.push({ x: spot.x, y: spot.y }, { x: spot.x, y: spot.y - 14 }); // the symbol and its tag
+      };
+      if (st.productExchanger) fit(exchangerByTag.get(st.productExchanger), exchangerSymbol, 'out');
+      if (st.feedExchanger) fit(exchangerByTag.get(st.feedExchanger), exchangerSymbol, 'in');
+      if (st.machine) fit(machineByTag.get(st.machine), machineSymbol, 'in');
+      pendingTags.push([st, pts]);
     }
+    // Stream numbers after every fitting is down: fittings have fixed places, numbers can move.
+    for (const [st, pts] of pendingTags) placeTag(st, pts);
     // Recycles: loop under the drawing.
     L.back.forEach((e, i) => {
       const a = L.all.get(e.from);
@@ -694,11 +784,11 @@
     for (const n of L.nodes.values()) {
       if (n.kind !== 'equip') continue;
       // Only machines drawn next to the unit; one placed further up its line keeps its tag but stays outside.
-      const spots = machineSpots.filter(m => m.host === n.equip.tag && m.x > n.sx - 150 && m.x < n.sx);
+      const spots = machineSpots.filter(m => m.host === n.equip.tag && m.x > n.sx - 150 && m.x < n.sx + n.sw + 150);
       if (!spots.length) continue;
       // The unit's whole cell (instrument bubbles to the last label line) plus its machines.
       const x0 = Math.min(n.x + 2, ...spots.map(m => m.x - 22));
-      const x1 = n.x + G.colW - 2;
+      const x1 = Math.max(n.x + G.colW - 2, ...spots.map(m => m.x + 22));
       const y0 = Math.min(n.y - 2, ...spots.map(m => m.y - 30));
       const y1 = Math.max(n.sy + n.sh + 64, ...spots.map(m => m.y + 16));
       bounds.append(svg('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, rx: 4, class: 'pid-bound' }));
@@ -734,7 +824,7 @@
   function streamTitle(UI, st) {
     const unit = st.kind === 'heat' ? 'kW' : 'kg/h';
     const comp = st.composition.map(([s, f]) => `${s} ${UI.pct(f, 0)}`).join(', ');
-    return `Stream ${st.no} (${st.lineNumber || st.line}${st.pressureBar != null ? ', ' + UI.num(st.pressureBar) + ' bar' : ''}) ${st.fromTag} → ${st.toTag}: ${UI.num(st.design)} ${unit} design, ${UI.num(st.average)} ${unit} average${comp ? ' · ' + comp : ''}${st.phase ? ' · ' + st.phase : ''}`;
+    return `Stream ${st.no} (${st.lineNumber || st.line}${st.T_C != null ? ', ' + UI.num(st.T_C) + ' °C' : ''}${st.pressureBar != null ? ', ' + UI.num(st.pressureBar) + ' bar' : ''}) ${st.fromTag} → ${st.toTag}: ${UI.num(st.design)} ${unit} design, ${UI.num(st.average)} ${unit} average${comp ? ' · ' + comp : ''}${st.phase ? ' · ' + st.phase : ''}`;
   }
   function streamTag(UI, st, x, y) {
     const { svg } = UI;
@@ -780,7 +870,19 @@
         powerKW: { design: 0 }, capexUsd: null,
       };
     });
-    const rows = [...pkg.equipment, ...machineRows];
+    const exchangerRows = (pkg.exchangers || []).map(x => {
+      const st = pkg.streams.find(y => y.no === x.stream);
+      const host = hosts.get(x.host);
+      return {
+        tag: x.tag, service: x.service, machine: x, host,
+        type: `Heat exchanger (${x.duty}), inside ${x.host}’s package`,
+        mode: host?.mode, storeKind: host?.storeKind, minTurndown: host?.minTurndown,
+        conditions: { T: `${Math.round(x.fromC)} → ${Math.round(x.toC)} °C`.replace(/-/g, '−'), P: `stream ${x.stream}` },
+        throughputKgPerH: { design: st?.design ?? NaN, average: st?.average ?? NaN },
+        powerKW: { design: 0 }, capexUsd: null,
+      };
+    });
+    const rows = [...pkg.equipment, ...machineRows, ...exchangerRows];
     return UI.sortableTable([
       { key: 'tag', label: 'Tag', get: e => tagOrder(e.tag), csv: e => e.tag, render: e => UI.el('strong', { 'data-tag': e.tag, text: e.tag }) },
       { key: 'service', label: 'Service', get: e => e.service, render: e => [UI.el('span', { text: e.service }), UI.el('span', { class: 'cell-sub', text: e.type + (e.designed ? ' · engineered design' : '') })] },
@@ -813,6 +915,7 @@
     return UI.sortableTable([
       { key: 'no', label: 'No.', num: true, get: s => s.no, render: s => UI.el('span', { 'data-stream': s.no, text: String(s.no) }) },
       { key: 'line', label: 'Line', title: 'Indicative line number: nominal size (standard pipe size from the design flow, density at the line pressure and typical velocity), fluid code, sequence', get: s => s.lineNumber, render: s => [UI.el('code', { text: s.lineNumber }), s.openIntake ? UI.el('span', { class: 'cell-sub', text: 'open air path, no pipe' }) : s.kind === 'material' && s.phase === 'solid' ? UI.el('span', { class: 'cell-sub', text: 'conveyed' }) : null] },
+      { key: 't', label: '°C', num: true, title: 'Temperature as the stream leaves its unit (after that unit’s own cooler or condenser)', get: s => s.T_C ?? NaN, render: s => (s.T_C != null ? UI.num(s.T_C) : '—') },
       { key: 'p', label: 'bar', num: true, title: 'Line pressure: the upstream unit’s typical outlet pressure, or the receiving unit’s after a compressor or pump', get: s => s.pressureBar ?? NaN, render: s => (s.pressureBar != null ? UI.num(s.pressureBar) : '—') },
       { key: 'from', label: 'From → to', get: s => s.fromTag + ' → ' + s.toTag },
       { key: 'phase', label: 'Phase', get: s => s.phase },

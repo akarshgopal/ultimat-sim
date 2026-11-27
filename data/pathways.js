@@ -152,11 +152,11 @@
           {"id":"offgas","unit":"material-sink","kind":"sink","label":"Offgas","disposition":"waste"}
         ],
         "edges": [
-          {"from":"brine","to":"brine-pump","kind":"material","kgPerKg":12500,"substances":[["H2O",9100],["Cl-",2270],["Mg+2",441]],"phase":"liquid"},
-          {"from":"brine-pump","to":"minerals","kind":"material","kgPerKg":12500,"substances":[["H2O",9100],["Cl-",2270],["Mg+2",441]],"phase":"liquid"},
-          {"from":"salt-feed","to":"chlor-alkali","kind":"material","kgPerKg":34.6,"substances":[["NaCl",34.6]],"phase":"solid"},
-          {"from":"water","to":"chlor-alkali","kind":"material","kgPerKg":10.7,"substances":[["H2O",10.7]],"phase":"liquid"},
-          {"from":"air","to":"asu","kind":"material","kgPerKg":3.69,"substances":[["N2",2.82],["O2",0.865]],"phase":"gas"},
+          {"from":"brine","to":"brine-pump","kind":"material","kgPerKg":12500,"substances":[["H2O",9100],["Cl-",2270],["Mg+2",441]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"brine-pump","to":"minerals","kind":"material","kgPerKg":12500,"substances":[["H2O",9100],["Cl-",2270],["Mg+2",441]],"phase":"liquid","T_C":25,"P_bar":3},
+          {"from":"salt-feed","to":"chlor-alkali","kind":"material","kgPerKg":34.6,"substances":[["NaCl",34.6]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"water","to":"chlor-alkali","kind":"material","kgPerKg":10.7,"substances":[["H2O",10.7]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":3.69,"substances":[["N2",2.82],["O2",0.865]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":702},
           {"from":"power-bus","to":"brine-pump","kind":"electricity","kWhPerKg":4.04},
           {"from":"power-bus","to":"minerals","kind":"electricity","kWhPerKg":627},
@@ -164,22 +164,22 @@
           {"from":"power-bus","to":"bromine-recovery","kind":"electricity","kWhPerKg":9.47},
           {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.692},
           {"from":"power-bus","to":"ammonia","kind":"electricity","kWhPerKg":2.02},
-          {"from":"minerals","to":"lithium","kind":"material","kgPerKg":1,"substances":[["LiCl",1]],"phase":"solid"},
-          {"from":"minerals","to":"magnesium","kind":"material","kgPerKg":864,"substances":[["MgCl2",864]],"phase":"solid"},
-          {"from":"minerals","to":"potash","kind":"material","kgPerKg":104,"substances":[["KCl",104]],"phase":"solid"},
-          {"from":"minerals","to":"gypsum","kind":"material","kgPerKg":4.97,"substances":[["CaSO4",4.97]],"phase":"solid"},
-          {"from":"minerals","to":"salt","kind":"material","kgPerKg":500,"substances":[["NaCl",500]],"phase":"solid"},
-          {"from":"minerals","to":"raffinate","kind":"material","kgPerKg":11000,"substances":[["H2O",9100],["Cl-",1280],["Mg+2",221]],"phase":"liquid"},
-          {"from":"minerals","to":"bromine-recovery","kind":"material","kgPerKg":61,"substances":[["NaBr",61]],"phase":"solid"},
-          {"from":"chlor-alkali","to":"bromine-recovery","kind":"material","kgPerKg":21,"substances":[["Cl2",21]],"phase":"gas"},
-          {"from":"chlor-alkali","to":"caustic","kind":"material","kgPerKg":23.7,"substances":[["NaOH",23.7]],"phase":"liquid"},
-          {"from":"chlor-alkali","to":"ammonia","kind":"material","kgPerKg":0.598,"substances":[["H2",0.598]],"phase":"gas"},
-          {"from":"bromine-recovery","to":"bromine","kind":"material","kgPerKg":47.4,"substances":[["Br2",47.4]],"phase":"liquid"},
-          {"from":"bromine-recovery","to":"recovered-salt","kind":"material","kgPerKg":34.6,"substances":[["NaCl",34.6]],"phase":"solid"},
-          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":2.77,"substances":[["N2",2.77]],"phase":"gas"},
-          {"from":"asu","to":"oxygen","kind":"material","kgPerKg":0.821,"substances":[["O2",0.821]],"phase":"gas"},
-          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0997,"substances":[["N2",0.0565],["O2",0.0432]],"phase":"gas"},
-          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":3.37,"substances":[["NH3",3.37]],"phase":"liquid"}
+          {"from":"minerals","to":"lithium","kind":"material","kgPerKg":1,"substances":[["LiCl",1]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"magnesium","kind":"material","kgPerKg":864,"substances":[["MgCl2",864]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"potash","kind":"material","kgPerKg":104,"substances":[["KCl",104]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"gypsum","kind":"material","kgPerKg":4.97,"substances":[["CaSO4",4.97]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"salt","kind":"material","kgPerKg":500,"substances":[["NaCl",500]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"raffinate","kind":"material","kgPerKg":11000,"substances":[["H2O",9100],["Cl-",1280],["Mg+2",221]],"phase":"liquid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"bromine-recovery","kind":"material","kgPerKg":61,"substances":[["NaBr",61]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"chlor-alkali","to":"bromine-recovery","kind":"material","kgPerKg":21,"substances":[["Cl2",21]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"chlor-alkali","to":"caustic","kind":"material","kgPerKg":23.7,"substances":[["NaOH",23.7]],"phase":"liquid","T_C":40,"P_bar":1},
+          {"from":"chlor-alkali","to":"ammonia","kind":"material","kgPerKg":0.598,"substances":[["H2",0.598]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"bromine-recovery","to":"bromine","kind":"material","kgPerKg":47.4,"substances":[["Br2",47.4]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"bromine-recovery","to":"recovered-salt","kind":"material","kgPerKg":34.6,"substances":[["NaCl",34.6]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":2.77,"substances":[["N2",2.77]],"phase":"gas","T_C":20,"P_bar":5},
+          {"from":"asu","to":"oxygen","kind":"material","kgPerKg":0.821,"substances":[["O2",0.821]],"phase":"gas","T_C":20,"P_bar":1.2},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0997,"substances":[["N2",0.0565],["O2",0.0432]],"phase":"gas","T_C":20,"P_bar":1},
+          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":3.37,"substances":[["NH3",3.37]],"phase":"liquid","T_C":-33,"P_bar":1}
         ]
       }
     },
@@ -321,11 +321,11 @@
           {"id":"offgas","unit":"material-sink","kind":"sink","label":"Offgas","disposition":"waste"}
         ],
         "edges": [
-          {"from":"brine","to":"brine-pump","kind":"material","kgPerKg":23.4,"substances":[["H2O",17],["Cl-",4.25],["Mg+2",0.825]],"phase":"liquid"},
-          {"from":"brine-pump","to":"minerals","kind":"material","kgPerKg":23.4,"substances":[["H2O",17],["Cl-",4.25],["Mg+2",0.825]],"phase":"liquid"},
-          {"from":"salt-feed","to":"chlor-alkali","kind":"material","kgPerKg":0.0648,"substances":[["NaCl",0.0648]],"phase":"solid"},
-          {"from":"water","to":"chlor-alkali","kind":"material","kgPerKg":0.02,"substances":[["H2O",0.02]],"phase":"liquid"},
-          {"from":"air","to":"asu","kind":"material","kgPerKg":0.0069,"substances":[["N2",0.00528],["O2",0.00162]],"phase":"gas"},
+          {"from":"brine","to":"brine-pump","kind":"material","kgPerKg":23.4,"substances":[["H2O",17],["Cl-",4.25],["Mg+2",0.825]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"brine-pump","to":"minerals","kind":"material","kgPerKg":23.4,"substances":[["H2O",17],["Cl-",4.25],["Mg+2",0.825]],"phase":"liquid","T_C":25,"P_bar":3},
+          {"from":"salt-feed","to":"chlor-alkali","kind":"material","kgPerKg":0.0648,"substances":[["NaCl",0.0648]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"water","to":"chlor-alkali","kind":"material","kgPerKg":0.02,"substances":[["H2O",0.02]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":0.0069,"substances":[["N2",0.00528],["O2",0.00162]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":1.31},
           {"from":"power-bus","to":"brine-pump","kind":"electricity","kWhPerKg":0.00756},
           {"from":"power-bus","to":"minerals","kind":"electricity","kWhPerKg":1.17},
@@ -333,22 +333,22 @@
           {"from":"power-bus","to":"bromine-recovery","kind":"electricity","kWhPerKg":0.0177},
           {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.00129},
           {"from":"power-bus","to":"ammonia","kind":"electricity","kWhPerKg":0.00377},
-          {"from":"minerals","to":"lithium","kind":"material","kgPerKg":0.00187,"substances":[["LiCl",0.00187]],"phase":"solid"},
-          {"from":"minerals","to":"magnesium","kind":"material","kgPerKg":1.61,"substances":[["MgCl2",1.61]],"phase":"solid"},
-          {"from":"minerals","to":"potash","kind":"material","kgPerKg":0.194,"substances":[["KCl",0.194]],"phase":"solid"},
-          {"from":"minerals","to":"gypsum","kind":"material","kgPerKg":0.0093,"substances":[["CaSO4",0.0093]],"phase":"solid"},
-          {"from":"minerals","to":"salt","kind":"material","kgPerKg":0.935,"substances":[["NaCl",0.935]],"phase":"solid"},
-          {"from":"minerals","to":"raffinate","kind":"material","kgPerKg":20.6,"substances":[["H2O",17],["Cl-",2.39],["Mg+2",0.412]],"phase":"liquid"},
-          {"from":"minerals","to":"bromine-recovery","kind":"material","kgPerKg":0.114,"substances":[["NaBr",0.114]],"phase":"solid"},
-          {"from":"chlor-alkali","to":"bromine-recovery","kind":"material","kgPerKg":0.0393,"substances":[["Cl2",0.0393]],"phase":"gas"},
-          {"from":"chlor-alkali","to":"caustic","kind":"material","kgPerKg":0.0443,"substances":[["NaOH",0.0443]],"phase":"liquid"},
-          {"from":"chlor-alkali","to":"ammonia","kind":"material","kgPerKg":0.00112,"substances":[["H2",0.00112]],"phase":"gas"},
-          {"from":"bromine-recovery","to":"bromine","kind":"material","kgPerKg":0.0885,"substances":[["Br2",0.0885]],"phase":"liquid"},
-          {"from":"bromine-recovery","to":"recovered-salt","kind":"material","kgPerKg":0.0648,"substances":[["NaCl",0.0648]],"phase":"solid"},
-          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.00517,"substances":[["N2",0.00517]],"phase":"gas"},
-          {"from":"asu","to":"oxygen","kind":"material","kgPerKg":0.00154,"substances":[["O2",0.00154]],"phase":"gas"},
-          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.000186,"substances":[["N2",0.000106],["O2",0.0000808]],"phase":"gas"},
-          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":0.00629,"substances":[["NH3",0.00629]],"phase":"liquid"}
+          {"from":"minerals","to":"lithium","kind":"material","kgPerKg":0.00187,"substances":[["LiCl",0.00187]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"magnesium","kind":"material","kgPerKg":1.61,"substances":[["MgCl2",1.61]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"potash","kind":"material","kgPerKg":0.194,"substances":[["KCl",0.194]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"gypsum","kind":"material","kgPerKg":0.0093,"substances":[["CaSO4",0.0093]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"salt","kind":"material","kgPerKg":0.935,"substances":[["NaCl",0.935]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"raffinate","kind":"material","kgPerKg":20.6,"substances":[["H2O",17],["Cl-",2.39],["Mg+2",0.412]],"phase":"liquid","T_C":30,"P_bar":1},
+          {"from":"minerals","to":"bromine-recovery","kind":"material","kgPerKg":0.114,"substances":[["NaBr",0.114]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"chlor-alkali","to":"bromine-recovery","kind":"material","kgPerKg":0.0393,"substances":[["Cl2",0.0393]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"chlor-alkali","to":"caustic","kind":"material","kgPerKg":0.0443,"substances":[["NaOH",0.0443]],"phase":"liquid","T_C":40,"P_bar":1},
+          {"from":"chlor-alkali","to":"ammonia","kind":"material","kgPerKg":0.00112,"substances":[["H2",0.00112]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"bromine-recovery","to":"bromine","kind":"material","kgPerKg":0.0885,"substances":[["Br2",0.0885]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"bromine-recovery","to":"recovered-salt","kind":"material","kgPerKg":0.0648,"substances":[["NaCl",0.0648]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.00517,"substances":[["N2",0.00517]],"phase":"gas","T_C":20,"P_bar":5},
+          {"from":"asu","to":"oxygen","kind":"material","kgPerKg":0.00154,"substances":[["O2",0.00154]],"phase":"gas","T_C":20,"P_bar":1.2},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.000186,"substances":[["N2",0.000106],["O2",0.0000808]],"phase":"gas","T_C":20,"P_bar":1},
+          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":0.00629,"substances":[["NH3",0.00629]],"phase":"liquid","T_C":-33,"P_bar":1}
         ]
       }
     },
@@ -419,16 +419,16 @@
           {"id":"redMud","unit":"material-sink","kind":"sink","label":"Red mud","disposition":"waste"}
         ],
         "edges": [
-          {"from":"bauxite","to":"bayer-alumina","kind":"material","kgPerKg":3.78,"substances":[["Bauxite",3.78]],"phase":"solid"},
-          {"from":"caustic","to":"bayer-alumina","kind":"material","kgPerKg":0.151,"substances":[["NaOH",0.151]],"phase":"liquid"},
-          {"from":"bayer-alumina","to":"aluminium-smelter","kind":"material","kgPerKg":1.89,"substances":[["Al2O3",1.89]],"phase":"solid"},
-          {"from":"anode","to":"aluminium-smelter","kind":"material","kgPerKg":0.334,"substances":[["C",0.334]],"phase":"solid"},
+          {"from":"bauxite","to":"bayer-alumina","kind":"material","kgPerKg":3.78,"substances":[["Bauxite",3.78]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"caustic","to":"bayer-alumina","kind":"material","kgPerKg":0.151,"substances":[["NaOH",0.151]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"bayer-alumina","to":"aluminium-smelter","kind":"material","kgPerKg":1.89,"substances":[["Al2O3",1.89]],"phase":"solid","T_C":80,"P_bar":1},
+          {"from":"anode","to":"aluminium-smelter","kind":"material","kgPerKg":0.334,"substances":[["C",0.334]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":20.6},
           {"from":"power-bus","to":"bayer-alumina","kind":"electricity","kWhPerKg":6.61},
           {"from":"power-bus","to":"aluminium-smelter","kind":"electricity","kWhPerKg":14},
-          {"from":"aluminium-smelter","to":"aluminium","kind":"material","kgPerKg":1,"substances":[["Al",1]],"phase":"solid"},
-          {"from":"aluminium-smelter","to":"carbonDioxide","kind":"material","kgPerKg":1.22,"substances":[["CO2",1.22]],"phase":"gas"},
-          {"from":"bayer-alumina","to":"redMud","kind":"material","kgPerKg":1.89,"substances":[["Bauxite",1.89]],"phase":"solid"}
+          {"from":"aluminium-smelter","to":"aluminium","kind":"material","kgPerKg":1,"substances":[["Al",1]],"phase":"solid","T_C":40,"P_bar":1},
+          {"from":"aluminium-smelter","to":"carbonDioxide","kind":"material","kgPerKg":1.22,"substances":[["CO2",1.22]],"phase":"gas","T_C":100,"P_bar":1},
+          {"from":"bayer-alumina","to":"redMud","kind":"material","kgPerKg":1.89,"substances":[["Bauxite",1.89]],"phase":"solid","T_C":60,"P_bar":1}
         ]
       }
     },
@@ -504,13 +504,13 @@
           {"id":"hydrogenPeroxide","unit":"material-sink","kind":"sink","label":"Hydrogen peroxide","disposition":"coproduct"}
         ],
         "edges": [
-          {"from":"dextrose","to":"bioforge","kind":"material","kgPerKg":0.918,"substances":[["C6H12O6",0.918]],"phase":"solid"},
-          {"from":"water","to":"bioforge","kind":"material","kgPerKg":0.0918,"substances":[["H2O",0.0918]],"phase":"liquid"},
-          {"from":"oxygen","to":"bioforge","kind":"material","kgPerKg":0.163,"substances":[["O2",0.163]],"phase":"gas"},
+          {"from":"dextrose","to":"bioforge","kind":"material","kgPerKg":0.918,"substances":[["C6H12O6",0.918]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"water","to":"bioforge","kind":"material","kgPerKg":0.0918,"substances":[["H2O",0.0918]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"oxygen","to":"bioforge","kind":"material","kgPerKg":0.163,"substances":[["O2",0.163]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"power","to":"electrical-bus","kind":"electricity","kWhPerKg":0.05},
           {"from":"electrical-bus","to":"bioforge","kind":"electricity","kWhPerKg":0.05},
-          {"from":"bioforge","to":"gluconic","kind":"material","kgPerKg":1,"substances":[["C6H12O7",1]],"phase":"liquid"},
-          {"from":"bioforge","to":"hydrogenPeroxide","kind":"material","kgPerKg":0.173,"substances":[["H2O2",0.173]],"phase":"liquid"}
+          {"from":"bioforge","to":"gluconic","kind":"material","kgPerKg":1,"substances":[["C6H12O7",1]],"phase":"liquid","T_C":30,"P_bar":1},
+          {"from":"bioforge","to":"hydrogenPeroxide","kind":"material","kgPerKg":0.173,"substances":[["H2O2",0.173]],"phase":"liquid","T_C":30,"P_bar":1}
         ]
       }
     },
@@ -570,12 +570,12 @@
           {"id":"process-co2","unit":"material-sink","kind":"sink","label":"Process CO₂","disposition":"waste"}
         ],
         "edges": [
-          {"from":"limestone-feed","to":"cement","kind":"material","kgPerKg":1.18,"substances":[["CaCO3",1.18]],"phase":"solid"},
-          {"from":"clay-feed","to":"cement","kind":"material","kgPerKg":0.337,"substances":[["SiO2",0.337]],"phase":"solid"},
+          {"from":"limestone-feed","to":"cement","kind":"material","kgPerKg":1.18,"substances":[["CaCO3",1.18]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"clay-feed","to":"cement","kind":"material","kgPerKg":0.337,"substances":[["SiO2",0.337]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":1.05},
           {"from":"power-bus","to":"cement","kind":"electricity","kWhPerKg":1.05},
-          {"from":"cement","to":"cement-product","kind":"material","kgPerKg":1,"substances":[["PortlandCement",1]],"phase":"solid"},
-          {"from":"cement","to":"process-co2","kind":"material","kgPerKg":0.52,"substances":[["CO2",0.52]],"phase":"gas"}
+          {"from":"cement","to":"cement-product","kind":"material","kgPerKg":1,"substances":[["PortlandCement",1]],"phase":"solid","T_C":100,"P_bar":1},
+          {"from":"cement","to":"process-co2","kind":"material","kgPerKg":0.52,"substances":[["CO2",0.52]],"phase":"gas","T_C":350,"P_bar":1}
         ]
       }
     },
@@ -649,13 +649,13 @@
           {"id":"hydrogen-product","unit":"material-sink","kind":"sink","label":"Hydrogen product","disposition":"coproduct"}
         ],
         "edges": [
-          {"from":"salt-feed","to":"chlor-alkali","kind":"material","kgPerKg":1.46,"substances":[["NaCl",1.46]],"phase":"solid"},
-          {"from":"water","to":"chlor-alkali","kind":"material","kgPerKg":0.45,"substances":[["H2O",0.45]],"phase":"liquid"},
+          {"from":"salt-feed","to":"chlor-alkali","kind":"material","kgPerKg":1.46,"substances":[["NaCl",1.46]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"water","to":"chlor-alkali","kind":"material","kgPerKg":0.45,"substances":[["H2O",0.45]],"phase":"liquid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":2.5},
           {"from":"power-bus","to":"chlor-alkali","kind":"electricity","kWhPerKg":2.5},
-          {"from":"chlor-alkali","to":"caustic-product","kind":"material","kgPerKg":1,"substances":[["NaOH",1]],"phase":"liquid"},
-          {"from":"chlor-alkali","to":"chlorine-product","kind":"material","kgPerKg":0.886,"substances":[["Cl2",0.886]],"phase":"gas"},
-          {"from":"chlor-alkali","to":"hydrogen-product","kind":"material","kgPerKg":0.0252,"substances":[["H2",0.0252]],"phase":"gas"}
+          {"from":"chlor-alkali","to":"caustic-product","kind":"material","kgPerKg":1,"substances":[["NaOH",1]],"phase":"liquid","T_C":40,"P_bar":1},
+          {"from":"chlor-alkali","to":"chlorine-product","kind":"material","kgPerKg":0.886,"substances":[["Cl2",0.886]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"chlor-alkali","to":"hydrogen-product","kind":"material","kgPerKg":0.0252,"substances":[["H2",0.0252]],"phase":"gas","T_C":40,"P_bar":1}
         ]
       }
     },
@@ -742,12 +742,12 @@
           {"id":"spent-media","unit":"consumable-sink","kind":"sink","label":"Spent media","disposition":"waste"}
         ],
         "edges": [
-          {"from":"air","to":"air-blower","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]],"phase":"gas"},
-          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]],"phase":"gas"},
+          {"from":"air","to":"air-blower","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]],"phase":"gas","T_C":25,"P_bar":1.05},
           {"from":"heat","to":"dac","kind":"heat","kWhPerKg":4.11},
           {"from":"consumables","to":"dac","kind":"material","kgPerKg":0.0549},
-          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":10.2,"substances":[["H2O",9.87],["Cl-",0.207],["Na+",0.115]],"phase":"liquid"},
-          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":10.2,"substances":[["H2O",9.87],["Cl-",0.207],["Na+",0.115]],"phase":"liquid"},
+          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":10.2,"substances":[["H2O",9.87],["Cl-",0.207],["Na+",0.115]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":10.2,"substances":[["H2O",9.87],["Cl-",0.207],["Na+",0.115]],"phase":"liquid","T_C":25,"P_bar":3},
           {"from":"electricity","to":"electrical-bus","kind":"electricity","kWhPerKg":33.7},
           {"from":"electrical-bus","to":"air-blower","kind":"electricity","kWhPerKg":3.67},
           {"from":"electrical-bus","to":"seawater-pump","kind":"electricity","kWhPerKg":0.00399},
@@ -755,16 +755,16 @@
           {"from":"electrical-bus","to":"swro","kind":"electricity","kWhPerKg":0.0139},
           {"from":"electrical-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":27.6},
           {"from":"electrical-bus","to":"sabatier","kind":"electricity","kWhPerKg":1},
-          {"from":"dac","to":"sabatier","kind":"material","kgPerKg":2.74,"substances":[["CO2",2.74]],"phase":"gas"},
-          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]],"phase":"gas"},
+          {"from":"dac","to":"sabatier","kind":"material","kgPerKg":2.74,"substances":[["CO2",2.74]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":4730,"substances":[["N2",3620],["O2",1110]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"dac","to":"waste-heat","kind":"heat","kWhPerKg":4.11},
           {"from":"sabatier","to":"waste-heat","kind":"heat","kWhPerKg":2.86},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.49,"substances":[["H2O",4.49]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.75,"substances":[["H2O",5.38],["Cl-",0.207],["Na+",0.115]],"phase":"liquid"},
-          {"from":"electrolyzer","to":"sabatier","kind":"material","kgPerKg":0.503,"substances":[["H2",0.503]],"phase":"gas"},
-          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":3.99,"substances":[["O2",3.99]],"phase":"gas"},
-          {"from":"sabatier","to":"methane","kind":"material","kgPerKg":1,"substances":[["CH4",1]],"phase":"gas"},
-          {"from":"sabatier","to":"sabatier-water","kind":"material","kgPerKg":2.25,"substances":[["H2O",2.25]],"phase":"liquid"},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.49,"substances":[["H2O",4.49]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.75,"substances":[["H2O",5.38],["Cl-",0.207],["Na+",0.115]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"sabatier","kind":"material","kgPerKg":0.503,"substances":[["H2",0.503]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":3.99,"substances":[["O2",3.99]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"sabatier","to":"methane","kind":"material","kgPerKg":1,"substances":[["CH4",1]],"phase":"gas","T_C":40,"P_bar":10},
+          {"from":"sabatier","to":"sabatier-water","kind":"material","kgPerKg":2.25,"substances":[["H2O",2.25]],"phase":"liquid","T_C":40,"P_bar":10},
           {"from":"dac","to":"spent-media","kind":"material","kgPerKg":0.0549}
         ]
       }
@@ -815,10 +815,10 @@
           {"id":"cathode-product","unit":"material-sink","kind":"sink","label":"Cathode product","disposition":"product"}
         ],
         "edges": [
-          {"from":"pls-feed","to":"copper-ew","kind":"material","kgPerKg":1,"substances":[["Cu",1]],"phase":"liquid"},
+          {"from":"pls-feed","to":"copper-ew","kind":"material","kgPerKg":1,"substances":[["Cu",1]],"phase":"liquid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":2.2},
           {"from":"power-bus","to":"copper-ew","kind":"electricity","kWhPerKg":2.2},
-          {"from":"copper-ew","to":"cathode-product","kind":"material","kgPerKg":1,"substances":[["Cu",1]],"phase":"solid"}
+          {"from":"copper-ew","to":"cathode-product","kind":"material","kgPerKg":1,"substances":[["Cu",1]],"phase":"solid","T_C":25,"P_bar":1}
         ]
       }
     },
@@ -872,14 +872,14 @@
           {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"}
         ],
         "edges": [
-          {"from":"air","to":"air-blower","kind":"material","kgPerKg":1720,"substances":[["N2",1320],["O2",404]],"phase":"gas"},
-          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":1720,"substances":[["N2",1320],["O2",404]],"phase":"gas"},
+          {"from":"air","to":"air-blower","kind":"material","kgPerKg":1720,"substances":[["N2",1320],["O2",404]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":1720,"substances":[["N2",1320],["O2",404]],"phase":"gas","T_C":25,"P_bar":1.05},
           {"from":"heat","to":"dac","kind":"heat","kWhPerKg":1.5},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":1.84},
           {"from":"power-bus","to":"air-blower","kind":"electricity","kWhPerKg":1.34},
           {"from":"power-bus","to":"dac","kind":"electricity","kWhPerKg":0.5},
-          {"from":"dac","to":"co2-product","kind":"material","kgPerKg":1,"substances":[["CO2",1]],"phase":"gas"},
-          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":1720,"substances":[["N2",1320],["O2",404]],"phase":"gas"},
+          {"from":"dac","to":"co2-product","kind":"material","kgPerKg":1,"substances":[["CO2",1]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":1720,"substances":[["N2",1320],["O2",404]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"dac","to":"waste-heat","kind":"heat","kWhPerKg":1.5}
         ]
       }
@@ -949,13 +949,13 @@
           {"id":"process-co2","unit":"material-sink","kind":"sink","label":"Process CO₂","disposition":"waste"}
         ],
         "edges": [
-          {"from":"sand-feed","to":"float-glass","kind":"material","kgPerKg":0.65,"substances":[["SiO2",0.65]],"phase":"solid"},
-          {"from":"soda-feed","to":"float-glass","kind":"material","kgPerKg":0.2,"substances":[["Na2CO3",0.2]],"phase":"solid"},
-          {"from":"limestone-feed","to":"float-glass","kind":"material","kgPerKg":0.21,"substances":[["CaCO3",0.21]],"phase":"solid"},
+          {"from":"sand-feed","to":"float-glass","kind":"material","kgPerKg":0.65,"substances":[["SiO2",0.65]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"soda-feed","to":"float-glass","kind":"material","kgPerKg":0.2,"substances":[["Na2CO3",0.2]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"limestone-feed","to":"float-glass","kind":"material","kgPerKg":0.21,"substances":[["CaCO3",0.21]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":2.5},
           {"from":"power-bus","to":"float-glass","kind":"electricity","kWhPerKg":2.5},
-          {"from":"float-glass","to":"glass","kind":"material","kgPerKg":1,"substances":[["FloatGlass",1]],"phase":"solid"},
-          {"from":"float-glass","to":"process-co2","kind":"material","kgPerKg":0.06,"substances":[["CO2",0.06]],"phase":"gas"}
+          {"from":"float-glass","to":"glass","kind":"material","kgPerKg":1,"substances":[["FloatGlass",1]],"phase":"solid","T_C":50,"P_bar":1},
+          {"from":"float-glass","to":"process-co2","kind":"material","kgPerKg":0.06,"substances":[["CO2",0.06]],"phase":"gas","T_C":250,"P_bar":1}
         ]
       }
     },
@@ -1015,12 +1015,12 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"hydrogen-feed","to":"ft-liquids","kind":"material","kgPerKg":0.438,"substances":[["H2",0.438]],"phase":"gas"},
-          {"from":"co2-feed","to":"ft-liquids","kind":"material","kgPerKg":3.1,"substances":[["CO2",3.1]],"phase":"gas"},
+          {"from":"hydrogen-feed","to":"ft-liquids","kind":"material","kgPerKg":0.438,"substances":[["H2",0.438]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"co2-feed","to":"ft-liquids","kind":"material","kgPerKg":3.1,"substances":[["CO2",3.1]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.22},
           {"from":"power-bus","to":"ft-liquids","kind":"electricity","kWhPerKg":0.22},
-          {"from":"ft-liquids","to":"diesel-product","kind":"material","kgPerKg":1,"substances":[["C12H26",1]],"phase":"liquid"},
-          {"from":"ft-liquids","to":"process-water","kind":"material","kgPerKg":2.54,"substances":[["H2O",2.54]],"phase":"liquid"}
+          {"from":"ft-liquids","to":"diesel-product","kind":"material","kgPerKg":1,"substances":[["C12H26",1]],"phase":"liquid","T_C":40,"P_bar":1},
+          {"from":"ft-liquids","to":"process-water","kind":"material","kgPerKg":2.54,"substances":[["H2O",2.54]],"phase":"liquid","T_C":40,"P_bar":1}
         ]
       }
     },
@@ -1094,17 +1094,17 @@
           {"id":"waterReject","unit":"material-sink","kind":"sink","label":"Water reject","disposition":"waste"}
         ],
         "edges": [
-          {"from":"seawater","to":"swro","kind":"material","kgPerKg":3.79,"substances":[["H2O",3.66],["Cl-",0.0739],["Na+",0.0411]],"phase":"liquid"},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":1.67,"substances":[["H2O",1.67]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":2.13,"substances":[["H2O",2],["Cl-",0.0735],["Na+",0.041]],"phase":"liquid"},
-          {"from":"air","to":"asu","kind":"material","kgPerKg":1.1,"substances":[["N2",0.839],["O2",0.257]],"phase":"gas"},
-          {"from":"electrolyzer","to":"ammonia","kind":"material","kgPerKg":0.178,"substances":[["H2",0.178]],"phase":"gas"},
-          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":1.41,"substances":[["O2",1.41]],"phase":"gas"},
-          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.0793,"substances":[["H2O",0.0787],["Cl-",0.000332],["Na+",0.000185]],"phase":"liquid"},
-          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.822,"substances":[["N2",0.822]],"phase":"gas"},
-          {"from":"asu","to":"asu-oxygen","kind":"material","kgPerKg":0.244,"substances":[["O2",0.244]],"phase":"gas"},
-          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0304,"substances":[["N2",0.0168],["O2",0.0129],["CO2",0.000716]],"phase":"gas"},
-          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":1,"substances":[["NH3",1]],"phase":"liquid"},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":3.79,"substances":[["H2O",3.66],["Cl-",0.0739],["Na+",0.0411]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":1.67,"substances":[["H2O",1.67]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":2.13,"substances":[["H2O",2],["Cl-",0.0735],["Na+",0.041]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":1.1,"substances":[["N2",0.839],["O2",0.257]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"ammonia","kind":"material","kgPerKg":0.178,"substances":[["H2",0.178]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":1.41,"substances":[["O2",1.41]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.0793,"substances":[["H2O",0.0787],["Cl-",0.000332],["Na+",0.000185]],"phase":"liquid","T_C":60,"P_bar":1},
+          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.822,"substances":[["N2",0.822]],"phase":"gas","T_C":20,"P_bar":5},
+          {"from":"asu","to":"asu-oxygen","kind":"material","kgPerKg":0.244,"substances":[["O2",0.244]],"phase":"gas","T_C":20,"P_bar":1.2},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0304,"substances":[["N2",0.0168],["O2",0.0129],["CO2",0.000716]],"phase":"gas","T_C":20,"P_bar":1},
+          {"from":"ammonia","to":"ammonia-product","kind":"material","kgPerKg":1,"substances":[["NH3",1]],"phase":"liquid","T_C":-33,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":10},
           {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":9.23},
           {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.206},
@@ -1181,15 +1181,15 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"co2-feed","to":"ft-liquids","kind":"material","kgPerKg":3.1,"substances":[["CO2",3.1]],"phase":"gas"},
-          {"from":"seawater","to":"swro","kind":"material","kgPerKg":9.36,"substances":[["H2O",9.03],["Cl-",0.181],["Na+",0.101]],"phase":"liquid"},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.11,"substances":[["H2O",4.11]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.25,"substances":[["H2O",4.93],["Cl-",0.18],["Na+",0.1]],"phase":"liquid"},
-          {"from":"electrolyzer","to":"ft-liquids","kind":"material","kgPerKg":0.438,"substances":[["H2",0.438]],"phase":"gas"},
-          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":3.48,"substances":[["O2",3.48]],"phase":"gas"},
-          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.196,"substances":[["H2O",0.194],["Cl-",0.000813],["Na+",0.000453]],"phase":"liquid"},
-          {"from":"ft-liquids","to":"diesel-product","kind":"material","kgPerKg":1,"substances":[["C12H26",1]],"phase":"liquid"},
-          {"from":"ft-liquids","to":"process-water","kind":"material","kgPerKg":2.54,"substances":[["H2O",2.54]],"phase":"liquid"},
+          {"from":"co2-feed","to":"ft-liquids","kind":"material","kgPerKg":3.1,"substances":[["CO2",3.1]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":9.36,"substances":[["H2O",9.03],["Cl-",0.181],["Na+",0.101]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.11,"substances":[["H2O",4.11]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.25,"substances":[["H2O",4.93],["Cl-",0.18],["Na+",0.1]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"ft-liquids","kind":"material","kgPerKg":0.438,"substances":[["H2",0.438]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":3.48,"substances":[["O2",3.48]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.196,"substances":[["H2O",0.194],["Cl-",0.000813],["Na+",0.000453]],"phase":"liquid","T_C":60,"P_bar":1},
+          {"from":"ft-liquids","to":"diesel-product","kind":"material","kgPerKg":1,"substances":[["C12H26",1]],"phase":"liquid","T_C":40,"P_bar":1},
+          {"from":"ft-liquids","to":"process-water","kind":"material","kgPerKg":2.54,"substances":[["H2O",2.54]],"phase":"liquid","T_C":40,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":23},
           {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":22.8},
           {"from":"power-bus","to":"ft-liquids","kind":"electricity","kWhPerKg":0.22},
@@ -1267,18 +1267,18 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"iron-ore","to":"pellet-plant","kind":"material","kgPerKg":1.48,"substances":[["Fe2O3",1.43],["SiO2",0.0517]],"phase":"solid"},
-          {"from":"pellet-plant","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]],"phase":"solid"},
-          {"from":"pellet-plant","to":"pellet-gangue","kind":"material","kgPerKg":0.0517,"substances":[["SiO2",0.0517]],"phase":"solid"},
+          {"from":"iron-ore","to":"pellet-plant","kind":"material","kgPerKg":1.48,"substances":[["Fe2O3",1.43],["SiO2",0.0517]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"pellet-plant","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]],"phase":"solid","T_C":100,"P_bar":1},
+          {"from":"pellet-plant","to":"pellet-gangue","kind":"material","kgPerKg":0.0517,"substances":[["SiO2",0.0517]],"phase":"solid","T_C":40,"P_bar":1},
           {"from":"power-bus","to":"pellet-plant","kind":"electricity","kWhPerKg":0.207},
-          {"from":"seawater","to":"swro","kind":"material","kgPerKg":1.16,"substances":[["H2O",1.12],["Cl-",0.0223],["Na+",0.0124]],"phase":"liquid"},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":0.508,"substances":[["H2O",0.508]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":0.649,"substances":[["H2O",0.609],["Cl-",0.0222],["Na+",0.0124]],"phase":"liquid"},
-          {"from":"electrolyzer","to":"dri","kind":"material","kgPerKg":0.0541,"substances":[["H2",0.0541]],"phase":"gas"},
-          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":0.43,"substances":[["O2",0.43]],"phase":"gas"},
-          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.0242,"substances":[["H2O",0.024],["Cl-",0.000101],["Na+",0.000056]],"phase":"liquid"},
-          {"from":"dri","to":"steel","kind":"material","kgPerKg":1,"substances":[["Fe",1]],"phase":"solid"},
-          {"from":"dri","to":"process-water","kind":"material","kgPerKg":0.484,"substances":[["H2O",0.484]],"phase":"liquid"},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":1.16,"substances":[["H2O",1.12],["Cl-",0.0223],["Na+",0.0124]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":0.508,"substances":[["H2O",0.508]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":0.649,"substances":[["H2O",0.609],["Cl-",0.0222],["Na+",0.0124]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"dri","kind":"material","kgPerKg":0.0541,"substances":[["H2",0.0541]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":0.43,"substances":[["O2",0.43]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.0242,"substances":[["H2O",0.024],["Cl-",0.000101],["Na+",0.000056]],"phase":"liquid","T_C":60,"P_bar":1},
+          {"from":"dri","to":"steel","kind":"material","kgPerKg":1,"substances":[["Fe",1]],"phase":"solid","T_C":50,"P_bar":1},
+          {"from":"dri","to":"process-water","kind":"material","kgPerKg":0.484,"substances":[["H2O",0.484]],"phase":"liquid","T_C":40,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":3.72},
           {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":2.82},
           {"from":"power-bus","to":"dri","kind":"electricity","kWhPerKg":0.7},
@@ -1343,12 +1343,12 @@
           {"id":"waterReject","unit":"material-sink","kind":"sink","label":"Water reject","disposition":"waste"}
         ],
         "edges": [
-          {"from":"seawater","to":"swro","kind":"material","kgPerKg":21.4,"substances":[["H2O",20.6],["Cl-",0.416],["Na+",0.232]],"phase":"liquid"},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":9.38,"substances":[["H2O",9.38]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":12,"substances":[["H2O",11.2],["Cl-",0.414],["Na+",0.231]],"phase":"liquid"},
-          {"from":"electrolyzer","to":"hydrogen-product","kind":"material","kgPerKg":1,"substances":[["H2",1]],"phase":"gas"},
-          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":7.94,"substances":[["O2",7.94]],"phase":"gas"},
-          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.447,"substances":[["H2O",0.443],["Cl-",0.00187],["Na+",0.00104]],"phase":"liquid"},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":21.4,"substances":[["H2O",20.6],["Cl-",0.416],["Na+",0.232]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":9.38,"substances":[["H2O",9.38]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":12,"substances":[["H2O",11.2],["Cl-",0.414],["Na+",0.231]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"hydrogen-product","kind":"material","kgPerKg":1,"substances":[["H2",1]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":7.94,"substances":[["O2",7.94]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.447,"substances":[["H2O",0.443],["Cl-",0.00187],["Na+",0.00104]],"phase":"liquid","T_C":60,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":52},
           {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":52},
           {"from":"power-bus","to":"swro","kind":"electricity","kWhPerKg":0.0328}
@@ -1426,18 +1426,18 @@
           {"id":"waste-heat","unit":"heat-sink","kind":"sink","label":"Waste heat","disposition":"waste"}
         ],
         "edges": [
-          {"from":"co2-feed","to":"methanol","kind":"material","kgPerKg":3.14,"substances":[["CO2",3.14]],"phase":"gas"},
-          {"from":"seawater","to":"swro","kind":"material","kgPerKg":9.22,"substances":[["H2O",8.89],["Cl-",0.178],["Na+",0.0991]],"phase":"liquid"},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.05,"substances":[["H2O",4.04]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.17,"substances":[["H2O",4.85],["Cl-",0.177],["Na+",0.0986]],"phase":"liquid"},
-          {"from":"electrolyzer","to":"methanol","kind":"material","kgPerKg":0.431,"substances":[["H2",0.431]],"phase":"gas"},
-          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":3.42,"substances":[["O2",3.42]],"phase":"gas"},
-          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.193,"substances":[["H2O",0.191],["Cl-",0.0008],["Na+",0.000446]],"phase":"liquid"},
-          {"from":"methanol","to":"mto","kind":"material","kgPerKg":2.28,"substances":[["CH3OH",2.28]],"phase":"liquid"},
-          {"from":"methanol","to":"methanol-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]],"phase":"liquid"},
+          {"from":"co2-feed","to":"methanol","kind":"material","kgPerKg":3.14,"substances":[["CO2",3.14]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":9.22,"substances":[["H2O",8.89],["Cl-",0.178],["Na+",0.0991]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.05,"substances":[["H2O",4.04]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.17,"substances":[["H2O",4.85],["Cl-",0.177],["Na+",0.0986]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"methanol","kind":"material","kgPerKg":0.431,"substances":[["H2",0.431]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":3.42,"substances":[["O2",3.42]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.193,"substances":[["H2O",0.191],["Cl-",0.0008],["Na+",0.000446]],"phase":"liquid","T_C":60,"P_bar":1},
+          {"from":"methanol","to":"mto","kind":"material","kgPerKg":2.28,"substances":[["CH3OH",2.28]],"phase":"liquid","T_C":40,"P_bar":1},
+          {"from":"methanol","to":"methanol-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]],"phase":"liquid","T_C":40,"P_bar":1},
           {"from":"methanol","to":"waste-heat","kind":"heat","kWhPerKg":0.982},
-          {"from":"mto","to":"ethylene-product","kind":"material","kgPerKg":1,"substances":[["C2H4",1]],"phase":"gas"},
-          {"from":"mto","to":"mto-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]],"phase":"liquid"},
+          {"from":"mto","to":"ethylene-product","kind":"material","kgPerKg":1,"substances":[["C2H4",1]],"phase":"gas","T_C":20,"P_bar":20},
+          {"from":"mto","to":"mto-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]],"phase":"liquid","T_C":40,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":27.6},
           {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":22.4},
           {"from":"power-bus","to":"methanol","kind":"electricity","kWhPerKg":1.14},
@@ -1527,20 +1527,20 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"seawater","to":"swro","kind":"material","kgPerKg":2.15,"substances":[["H2O",2.08],["Cl-",0.0419],["Na+",0.0233]],"phase":"liquid"},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":0.945,"substances":[["H2O",0.945]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":1.21,"substances":[["H2O",1.13],["Cl-",0.0417],["Na+",0.0232]],"phase":"liquid"},
-          {"from":"air","to":"asu","kind":"material","kgPerKg":0.622,"substances":[["N2",0.476],["O2",0.146]],"phase":"gas"},
-          {"from":"electrolyzer","to":"ammonia","kind":"material","kgPerKg":0.101,"substances":[["H2",0.101]],"phase":"gas"},
-          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":0.799,"substances":[["O2",0.799]],"phase":"gas"},
-          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.045,"substances":[["H2O",0.0447],["Cl-",0.000189],["Na+",0.000105]],"phase":"liquid"},
-          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.466,"substances":[["N2",0.466]],"phase":"gas"},
-          {"from":"asu","to":"asu-oxygen","kind":"material","kgPerKg":0.139,"substances":[["O2",0.139]],"phase":"gas"},
-          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0172,"substances":[["N2",0.00952],["O2",0.00729],["CO2",0.000406]],"phase":"gas"},
-          {"from":"ammonia","to":"urea","kind":"material","kgPerKg":0.567,"substances":[["NH3",0.567]],"phase":"liquid"},
-          {"from":"co2-feed","to":"urea","kind":"material","kgPerKg":0.733,"substances":[["CO2",0.733]],"phase":"gas"},
-          {"from":"urea","to":"urea-product","kind":"material","kgPerKg":1,"substances":[["Urea",1]],"phase":"solid"},
-          {"from":"urea","to":"process-water","kind":"material","kgPerKg":0.3,"substances":[["H2O",0.3]],"phase":"liquid"},
+          {"from":"seawater","to":"swro","kind":"material","kgPerKg":2.15,"substances":[["H2O",2.08],["Cl-",0.0419],["Na+",0.0233]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":0.945,"substances":[["H2O",0.945]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":1.21,"substances":[["H2O",1.13],["Cl-",0.0417],["Na+",0.0232]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":0.622,"substances":[["N2",0.476],["O2",0.146]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"ammonia","kind":"material","kgPerKg":0.101,"substances":[["H2",0.101]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"electrolyzer-oxygen","kind":"material","kgPerKg":0.799,"substances":[["O2",0.799]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"electrolyzer","to":"waterReject","kind":"material","kgPerKg":0.045,"substances":[["H2O",0.0447],["Cl-",0.000189],["Na+",0.000105]],"phase":"liquid","T_C":60,"P_bar":1},
+          {"from":"asu","to":"ammonia","kind":"material","kgPerKg":0.466,"substances":[["N2",0.466]],"phase":"gas","T_C":20,"P_bar":5},
+          {"from":"asu","to":"asu-oxygen","kind":"material","kgPerKg":0.139,"substances":[["O2",0.139]],"phase":"gas","T_C":20,"P_bar":1.2},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.0172,"substances":[["N2",0.00952],["O2",0.00729],["CO2",0.000406]],"phase":"gas","T_C":20,"P_bar":1},
+          {"from":"ammonia","to":"urea","kind":"material","kgPerKg":0.567,"substances":[["NH3",0.567]],"phase":"liquid","T_C":-33,"P_bar":1},
+          {"from":"co2-feed","to":"urea","kind":"material","kgPerKg":0.733,"substances":[["CO2",0.733]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"urea","to":"urea-product","kind":"material","kgPerKg":1,"substances":[["Urea",1]],"phase":"solid","T_C":60,"P_bar":1},
+          {"from":"urea","to":"process-water","kind":"material","kgPerKg":0.3,"substances":[["H2O",0.3]],"phase":"liquid","T_C":40,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":6.5},
           {"from":"power-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":5.24},
           {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.117},
@@ -1608,15 +1608,15 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"iron-ore","to":"pellet-plant","kind":"material","kgPerKg":1.48,"substances":[["Fe2O3",1.43],["SiO2",0.0517]],"phase":"solid"},
-          {"from":"pellet-plant","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]],"phase":"solid"},
-          {"from":"pellet-plant","to":"pellet-gangue","kind":"material","kgPerKg":0.0517,"substances":[["SiO2",0.0517]],"phase":"solid"},
+          {"from":"iron-ore","to":"pellet-plant","kind":"material","kgPerKg":1.48,"substances":[["Fe2O3",1.43],["SiO2",0.0517]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"pellet-plant","to":"dri","kind":"material","kgPerKg":1.43,"substances":[["Fe2O3",1.43]],"phase":"solid","T_C":100,"P_bar":1},
+          {"from":"pellet-plant","to":"pellet-gangue","kind":"material","kgPerKg":0.0517,"substances":[["SiO2",0.0517]],"phase":"solid","T_C":40,"P_bar":1},
           {"from":"power-bus","to":"pellet-plant","kind":"electricity","kWhPerKg":0.207},
-          {"from":"hydrogen-feed","to":"dri","kind":"material","kgPerKg":0.0541,"substances":[["H2",0.0541]],"phase":"gas"},
+          {"from":"hydrogen-feed","to":"dri","kind":"material","kgPerKg":0.0541,"substances":[["H2",0.0541]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.907},
           {"from":"power-bus","to":"dri","kind":"electricity","kWhPerKg":0.7},
-          {"from":"dri","to":"steel","kind":"material","kgPerKg":1,"substances":[["Fe",1]],"phase":"solid"},
-          {"from":"dri","to":"process-water","kind":"material","kgPerKg":0.484,"substances":[["H2O",0.484]],"phase":"liquid"}
+          {"from":"dri","to":"steel","kind":"material","kgPerKg":1,"substances":[["Fe",1]],"phase":"solid","T_C":50,"P_bar":1},
+          {"from":"dri","to":"process-water","kind":"material","kgPerKg":0.484,"substances":[["H2O",0.484]],"phase":"liquid","T_C":40,"P_bar":1}
         ]
       }
     },
@@ -1681,12 +1681,12 @@
           {"id":"raffinate","unit":"material-sink","kind":"sink","label":"Raffinate","disposition":"waste"}
         ],
         "edges": [
-          {"from":"concentrate","to":"chrom","kind":"material","kgPerKg":17.2,"substances":[["Y2O3",11.1],["Dy2O3",1.32],["Nd2O3",0.9]],"phase":"solid"},
+          {"from":"concentrate","to":"chrom","kind":"material","kgPerKg":17.2,"substances":[["Y2O3",11.1],["Dy2O3",1.32],["Nd2O3",0.9]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"chrom","kind":"electricity","kWhPerKg":78.4},
-          {"from":"chrom","to":"ndpr","kind":"material","kgPerKg":1,"substances":[["Nd2O3",0.823],["Pr6O11",0.177]],"phase":"solid"},
-          {"from":"chrom","to":"dytb","kind":"material","kgPerKg":1.39,"substances":[["Dy2O3",1.21],["Tb4O7",0.182]],"phase":"solid"},
-          {"from":"chrom","to":"light-reo","kind":"material","kgPerKg":13.3,"substances":[["Y2O3",10.1],["Er2O3",0.687],["Yb2O3",0.539]],"phase":"solid"},
-          {"from":"chrom","to":"raffinate","kind":"material","kgPerKg":1.48,"substances":[["Y2O3",0.955],["Dy2O3",0.114],["Nd2O3",0.0774]],"phase":"solid"}
+          {"from":"chrom","to":"ndpr","kind":"material","kgPerKg":1,"substances":[["Nd2O3",0.823],["Pr6O11",0.177]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"chrom","to":"dytb","kind":"material","kgPerKg":1.39,"substances":[["Dy2O3",1.21],["Tb4O7",0.182]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"chrom","to":"light-reo","kind":"material","kgPerKg":13.3,"substances":[["Y2O3",10.1],["Er2O3",0.687],["Yb2O3",0.539]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"chrom","to":"raffinate","kind":"material","kgPerKg":1.48,"substances":[["Y2O3",0.955],["Dy2O3",0.114],["Nd2O3",0.0774]],"phase":"solid","T_C":35,"P_bar":1}
         ]
       }
     },
@@ -1773,12 +1773,12 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"coproduct"}
         ],
         "edges": [
-          {"from":"air","to":"air-blower","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]],"phase":"gas"},
-          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]],"phase":"gas"},
+          {"from":"air","to":"air-blower","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]],"phase":"gas","T_C":25,"P_bar":1.05},
           {"from":"heat","to":"dac","kind":"heat","kWhPerKg":2.06},
           {"from":"consumables","to":"dac","kind":"material","kgPerKg":0.0275},
-          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":3.84,"substances":[["H2O",3.71],["Cl-",0.0741],["Na+",0.0413]],"phase":"liquid"},
-          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":3.84,"substances":[["H2O",3.71],["Cl-",0.0741],["Na+",0.0413]],"phase":"liquid"},
+          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":3.84,"substances":[["H2O",3.71],["Cl-",0.0741],["Na+",0.0413]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":3.84,"substances":[["H2O",3.71],["Cl-",0.0741],["Na+",0.0413]],"phase":"liquid","T_C":25,"P_bar":3},
           {"from":"electricity","to":"electrical-bus","kind":"electricity","kWhPerKg":13.4},
           {"from":"electrical-bus","to":"air-blower","kind":"electricity","kWhPerKg":1.84},
           {"from":"electrical-bus","to":"seawater-pump","kind":"electricity","kWhPerKg":0.0015},
@@ -1786,16 +1786,16 @@
           {"from":"electrical-bus","to":"swro","kind":"electricity","kWhPerKg":0.00523},
           {"from":"electrical-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":10.4},
           {"from":"electrical-bus","to":"methanol","kind":"electricity","kWhPerKg":0.5},
-          {"from":"dac","to":"methanol","kind":"material","kgPerKg":1.37,"substances":[["CO2",1.37]],"phase":"gas"},
-          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]],"phase":"gas"},
+          {"from":"dac","to":"methanol","kind":"material","kgPerKg":1.37,"substances":[["CO2",1.37]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":2370,"substances":[["N2",1810],["O2",555]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"dac","to":"waste-heat","kind":"heat","kWhPerKg":2.06},
           {"from":"dac","to":"spent-media","kind":"material","kgPerKg":0.0275},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":1.69,"substances":[["H2O",1.69]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":2.16,"substances":[["H2O",2.02],["Cl-",0.0741],["Na+",0.0413]],"phase":"liquid"},
-          {"from":"electrolyzer","to":"methanol","kind":"material","kgPerKg":0.189,"substances":[["H2",0.189]],"phase":"gas"},
-          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":1.5,"substances":[["O2",1.5]],"phase":"gas"},
-          {"from":"methanol","to":"methanol-product","kind":"material","kgPerKg":1,"substances":[["CH3OH",1]],"phase":"liquid"},
-          {"from":"methanol","to":"process-water","kind":"material","kgPerKg":0.562,"substances":[["H2O",0.562]],"phase":"liquid"},
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":1.69,"substances":[["H2O",1.69]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":2.16,"substances":[["H2O",2.02],["Cl-",0.0741],["Na+",0.0413]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"methanol","kind":"material","kgPerKg":0.189,"substances":[["H2",0.189]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":1.5,"substances":[["O2",1.5]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"methanol","to":"methanol-product","kind":"material","kgPerKg":1,"substances":[["CH3OH",1]],"phase":"liquid","T_C":40,"P_bar":1},
+          {"from":"methanol","to":"process-water","kind":"material","kgPerKg":0.562,"substances":[["H2O",0.562]],"phase":"liquid","T_C":40,"P_bar":1},
           {"from":"methanol","to":"waste-heat","kind":"heat","kWhPerKg":0.43}
         ]
       }
@@ -1847,11 +1847,11 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"methanol-feed","to":"mto","kind":"material","kgPerKg":2.28,"substances":[["CH3OH",2.28]],"phase":"liquid"},
+          {"from":"methanol-feed","to":"mto","kind":"material","kgPerKg":2.28,"substances":[["CH3OH",2.28]],"phase":"liquid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":4},
           {"from":"power-bus","to":"mto","kind":"electricity","kWhPerKg":4},
-          {"from":"mto","to":"ethylene-product","kind":"material","kgPerKg":1,"substances":[["C2H4",1]],"phase":"gas"},
-          {"from":"mto","to":"process-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]],"phase":"liquid"}
+          {"from":"mto","to":"ethylene-product","kind":"material","kgPerKg":1,"substances":[["C2H4",1]],"phase":"gas","T_C":20,"P_bar":20},
+          {"from":"mto","to":"process-water","kind":"material","kgPerKg":1.28,"substances":[["H2O",1.28]],"phase":"liquid","T_C":40,"P_bar":1}
         ]
       }
     },
@@ -1903,12 +1903,12 @@
           {"id":"offgas","unit":"material-sink","kind":"sink","label":"Offgas","disposition":"waste"}
         ],
         "edges": [
-          {"from":"air","to":"asu","kind":"material","kgPerKg":4.49,"substances":[["N2",3.44],["O2",1.05]],"phase":"gas"},
+          {"from":"air","to":"asu","kind":"material","kgPerKg":4.49,"substances":[["N2",3.44],["O2",1.05]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.25},
           {"from":"power-bus","to":"asu","kind":"electricity","kWhPerKg":0.25},
-          {"from":"asu","to":"oxygen-product","kind":"material","kgPerKg":1,"substances":[["O2",1]],"phase":"gas"},
-          {"from":"asu","to":"nitrogen","kind":"material","kgPerKg":3.37,"substances":[["N2",3.37]],"phase":"gas"},
-          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.124,"substances":[["N2",0.0687],["O2",0.0526],["CO2",0.00293]],"phase":"gas"}
+          {"from":"asu","to":"oxygen-product","kind":"material","kgPerKg":1,"substances":[["O2",1]],"phase":"gas","T_C":20,"P_bar":1.2},
+          {"from":"asu","to":"nitrogen","kind":"material","kgPerKg":3.37,"substances":[["N2",3.37]],"phase":"gas","T_C":20,"P_bar":5},
+          {"from":"asu","to":"offgas","kind":"material","kgPerKg":0.124,"substances":[["N2",0.0687],["O2",0.0526],["CO2",0.00293]],"phase":"gas","T_C":20,"P_bar":1}
         ]
       }
     },
@@ -1970,15 +1970,15 @@
           {"id":"siliconBleed","unit":"material-sink","kind":"sink","label":"Silicon bleed","disposition":"waste"}
         ],
         "edges": [
-          {"from":"quartz","to":"mg-si","kind":"material","kgPerKg":2.25,"substances":[["SiO2",2.25]],"phase":"solid"},
-          {"from":"reductant","to":"mg-si","kind":"material","kgPerKg":0.898,"substances":[["C",0.898]],"phase":"solid"},
+          {"from":"quartz","to":"mg-si","kind":"material","kgPerKg":2.25,"substances":[["SiO2",2.25]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"reductant","to":"mg-si","kind":"material","kgPerKg":0.898,"substances":[["C",0.898]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":77.6},
           {"from":"power-bus","to":"mg-si","kind":"electricity","kWhPerKg":12.6},
-          {"from":"mg-si","to":"carbonMonoxide","kind":"material","kgPerKg":2.09,"substances":[["CO",2.09]],"phase":"gas"},
+          {"from":"mg-si","to":"carbonMonoxide","kind":"material","kgPerKg":2.09,"substances":[["CO",2.09]],"phase":"gas","T_C":200,"P_bar":1},
           {"from":"power-bus","to":"polysilicon","kind":"electricity","kWhPerKg":65},
-          {"from":"mg-si","to":"polysilicon","kind":"material","kgPerKg":1.05,"substances":[["Si",1.05]],"phase":"solid"},
-          {"from":"polysilicon","to":"poly-product","kind":"material","kgPerKg":1,"substances":[["Si",1]],"phase":"solid"},
-          {"from":"polysilicon","to":"siliconBleed","kind":"material","kgPerKg":0.05,"substances":[["Si",0.05]],"phase":"solid"}
+          {"from":"mg-si","to":"polysilicon","kind":"material","kgPerKg":1.05,"substances":[["Si",1.05]],"phase":"solid","T_C":40,"P_bar":1},
+          {"from":"polysilicon","to":"poly-product","kind":"material","kgPerKg":1,"substances":[["Si",1]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"polysilicon","to":"siliconBleed","kind":"material","kgPerKg":0.05,"substances":[["Si",0.05]],"phase":"solid","T_C":40,"P_bar":6}
         ]
       }
     },
@@ -2046,13 +2046,13 @@
           {"id":"liquor","unit":"material-sink","kind":"sink","label":"Leach liquor","disposition":"waste"}
         ],
         "edges": [
-          {"from":"clay","to":"iac-leach","kind":"material","kgPerKg":1260,"substances":[["Al2Si2O5OH4",1260]],"phase":"solid"},
-          {"from":"lixiviant","to":"iac-leach","kind":"material","kgPerKg":7.48,"substances":[["NH42SO4",7.48]],"phase":"solid"},
+          {"from":"clay","to":"iac-leach","kind":"material","kgPerKg":1260,"substances":[["Al2Si2O5OH4",1260]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"lixiviant","to":"iac-leach","kind":"material","kgPerKg":7.48,"substances":[["NH42SO4",7.48]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"iac-leach","kind":"electricity","kWhPerKg":9.4},
-          {"from":"iac-leach","to":"ndpr","kind":"material","kgPerKg":0.0681,"substances":[["Nd2O3",0.056],["Pr6O11",0.0121]],"phase":"solid"},
-          {"from":"iac-leach","to":"other-reo","kind":"material","kgPerKg":1,"substances":[["Y2O3",0.691],["Dy2O3",0.0821],["Er2O3",0.0468]],"phase":"solid"},
-          {"from":"iac-leach","to":"residue","kind":"material","kgPerKg":1260,"substances":[["Al2Si2O5OH4",1260]],"phase":"solid"},
-          {"from":"iac-leach","to":"liquor","kind":"material","kgPerKg":7.48,"substances":[["NH42SO4",7.48]],"phase":"liquid"}
+          {"from":"iac-leach","to":"ndpr","kind":"material","kgPerKg":0.0681,"substances":[["Nd2O3",0.056],["Pr6O11",0.0121]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"iac-leach","to":"other-reo","kind":"material","kgPerKg":1,"substances":[["Y2O3",0.691],["Dy2O3",0.0821],["Er2O3",0.0468]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"iac-leach","to":"residue","kind":"material","kgPerKg":1260,"substances":[["Al2Si2O5OH4",1260]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"iac-leach","to":"liquor","kind":"material","kgPerKg":7.48,"substances":[["NH42SO4",7.48]],"phase":"liquid","T_C":35,"P_bar":1}
         ]
       }
     },
@@ -2117,12 +2117,12 @@
           {"id":"raffinate","unit":"material-sink","kind":"sink","label":"Raffinate","disposition":"waste"}
         ],
         "edges": [
-          {"from":"concentrate","to":"sx","kind":"material","kgPerKg":16.5,"substances":[["Y2O3",10.7],["Dy2O3",1.27],["Nd2O3",0.866]],"phase":"solid"},
+          {"from":"concentrate","to":"sx","kind":"material","kgPerKg":16.5,"substances":[["Y2O3",10.7],["Dy2O3",1.27],["Nd2O3",0.866]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"sx","kind":"electricity","kWhPerKg":83.2},
-          {"from":"sx","to":"ndpr","kind":"material","kgPerKg":1,"substances":[["Nd2O3",0.823],["Pr6O11",0.177]],"phase":"solid"},
-          {"from":"sx","to":"dytb","kind":"material","kgPerKg":1.39,"substances":[["Dy2O3",1.21],["Tb4O7",0.182]],"phase":"solid"},
-          {"from":"sx","to":"light-reo","kind":"material","kgPerKg":13.3,"substances":[["Y2O3",10.1],["Er2O3",0.687],["Yb2O3",0.539]],"phase":"solid"},
-          {"from":"sx","to":"raffinate","kind":"material","kgPerKg":0.826,"substances":[["Y2O3",0.534],["Dy2O3",0.0635],["Nd2O3",0.0433]],"phase":"solid"}
+          {"from":"sx","to":"ndpr","kind":"material","kgPerKg":1,"substances":[["Nd2O3",0.823],["Pr6O11",0.177]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"sx","to":"dytb","kind":"material","kgPerKg":1.39,"substances":[["Dy2O3",1.21],["Tb4O7",0.182]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"sx","to":"light-reo","kind":"material","kgPerKg":13.3,"substances":[["Y2O3",10.1],["Er2O3",0.687],["Yb2O3",0.539]],"phase":"solid","T_C":35,"P_bar":1},
+          {"from":"sx","to":"raffinate","kind":"material","kgPerKg":0.826,"substances":[["Y2O3",0.534],["Dy2O3",0.0635],["Nd2O3",0.0433]],"phase":"solid","T_C":35,"P_bar":1}
         ]
       }
     },
@@ -2208,12 +2208,12 @@
           {"id":"sabatier-water","unit":"material-sink","kind":"sink","label":"Sabatier water","disposition":"coproduct"}
         ],
         "edges": [
-          {"from":"air","to":"air-blower","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]],"phase":"gas"},
-          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]],"phase":"gas"},
+          {"from":"air","to":"air-blower","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]],"phase":"gas","T_C":25,"P_bar":1},
+          {"from":"air-blower","to":"dac","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]],"phase":"gas","T_C":25,"P_bar":1.05},
           {"from":"heat","to":"dac","kind":"heat","kWhPerKg":4.11},
           {"from":"consumables","to":"dac","kind":"material","kgPerKg":0.0549},
-          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":9.98,"substances":[["H2O",9.66],["Cl-",0.195],["Na+",0.126]],"phase":"liquid"},
-          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":9.98,"substances":[["H2O",9.66],["Cl-",0.195],["Na+",0.126]],"phase":"liquid"},
+          {"from":"seawater","to":"seawater-pump","kind":"material","kgPerKg":9.98,"substances":[["H2O",9.66],["Cl-",0.195],["Na+",0.126]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"seawater-pump","to":"swro","kind":"material","kgPerKg":9.98,"substances":[["H2O",9.66],["Cl-",0.195],["Na+",0.126]],"phase":"liquid","T_C":25,"P_bar":3},
           {"from":"electricity","to":"electrical-bus","kind":"electricity","kWhPerKg":32.2},
           {"from":"electrical-bus","to":"air-blower","kind":"electricity","kWhPerKg":3.63},
           {"from":"electrical-bus","to":"seawater-pump","kind":"electricity","kWhPerKg":0.00399},
@@ -2221,16 +2221,16 @@
           {"from":"electrical-bus","to":"swro","kind":"electricity","kWhPerKg":0.0139},
           {"from":"electrical-bus","to":"electrolyzer","kind":"electricity","kWhPerKg":26.1},
           {"from":"electrical-bus","to":"sabatier","kind":"electricity","kWhPerKg":1},
-          {"from":"dac","to":"sabatier","kind":"material","kgPerKg":2.74,"substances":[["CO2",2.74]],"phase":"gas"},
-          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]],"phase":"gas"},
+          {"from":"dac","to":"sabatier","kind":"material","kgPerKg":2.74,"substances":[["CO2",2.74]],"phase":"gas","T_C":40,"P_bar":1},
+          {"from":"dac","to":"depleted-air","kind":"material","kgPerKg":4670,"substances":[["N2",3570],["O2",1090]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"dac","to":"waste-heat","kind":"heat","kWhPerKg":4.11},
           {"from":"sabatier","to":"waste-heat","kind":"heat","kWhPerKg":2.86},
-          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.49,"substances":[["H2O",4.49]],"phase":"liquid"},
-          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.49,"substances":[["H2O",5.17],["Cl-",0.195],["Na+",0.126]],"phase":"liquid"},
-          {"from":"electrolyzer","to":"sabatier","kind":"material","kgPerKg":0.503,"substances":[["H2",0.503]],"phase":"gas"},
-          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":3.99,"substances":[["O2",3.99]],"phase":"gas"},
-          {"from":"sabatier","to":"methane","kind":"material","kgPerKg":1,"substances":[["CH4",1]],"phase":"gas"},
-          {"from":"sabatier","to":"sabatier-water","kind":"material","kgPerKg":2.25,"substances":[["H2O",2.25]],"phase":"liquid"}
+          {"from":"swro","to":"electrolyzer","kind":"material","kgPerKg":4.49,"substances":[["H2O",4.49]],"phase":"liquid","T_C":25,"P_bar":1.5},
+          {"from":"swro","to":"brine","kind":"material","kgPerKg":5.49,"substances":[["H2O",5.17],["Cl-",0.195],["Na+",0.126]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"electrolyzer","to":"sabatier","kind":"material","kgPerKg":0.503,"substances":[["H2",0.503]],"phase":"gas","T_C":40,"P_bar":30},
+          {"from":"electrolyzer","to":"oxygen","kind":"material","kgPerKg":3.99,"substances":[["O2",3.99]],"phase":"gas","T_C":40,"P_bar":1.2},
+          {"from":"sabatier","to":"methane","kind":"material","kgPerKg":1,"substances":[["CH4",1]],"phase":"gas","T_C":40,"P_bar":10},
+          {"from":"sabatier","to":"sabatier-water","kind":"material","kgPerKg":2.25,"substances":[["H2O",2.25]],"phase":"liquid","T_C":40,"P_bar":10}
         ]
       }
     },
@@ -2289,12 +2289,12 @@
           {"id":"bittern","unit":"material-sink","kind":"sink","label":"Bittern","disposition":"waste"}
         ],
         "edges": [
-          {"from":"seawater","to":"ponds","kind":"material","kgPerKg":45,"substances":[["H2O",43.4],["Cl-",0.883],["Na+",0.492]],"phase":"liquid"},
+          {"from":"seawater","to":"ponds","kind":"material","kgPerKg":45,"substances":[["H2O",43.4],["Cl-",0.883],["Na+",0.492]],"phase":"liquid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.018},
           {"from":"power-bus","to":"ponds","kind":"electricity","kWhPerKg":0.018},
-          {"from":"ponds","to":"salt-product","kind":"material","kgPerKg":1,"substances":[["NaCl",1]],"phase":"solid"},
-          {"from":"ponds","to":"gypsum-product","kind":"material","kgPerKg":0.0447,"substances":[["CaSO4",0.0447]],"phase":"solid"},
-          {"from":"ponds","to":"bittern","kind":"material","kgPerKg":43.9,"substances":[["H2O",43.4],["Cl-",0.276],["Na+",0.0983]],"phase":"liquid"}
+          {"from":"ponds","to":"salt-product","kind":"material","kgPerKg":1,"substances":[["NaCl",1]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"ponds","to":"gypsum-product","kind":"material","kgPerKg":0.0447,"substances":[["CaSO4",0.0447]],"phase":"solid","T_C":30,"P_bar":1},
+          {"from":"ponds","to":"bittern","kind":"material","kgPerKg":43.9,"substances":[["H2O",43.4],["Cl-",0.276],["Na+",0.0983]],"phase":"liquid","T_C":30,"P_bar":1}
         ]
       }
     },
@@ -2414,28 +2414,28 @@
           {"id":"redMud","unit":"material-sink","kind":"sink","label":"Red mud","disposition":"waste"}
         ],
         "edges": [
-          {"from":"quartz","to":"mg-si","kind":"material","kgPerKg":0.0613,"substances":[["SiO2",0.0613]],"phase":"solid"},
-          {"from":"reductant","to":"mg-si","kind":"material","kgPerKg":0.0245,"substances":[["C",0.0245]],"phase":"solid"},
-          {"from":"bauxite","to":"bayer-alumina","kind":"material","kgPerKg":0.481,"substances":[["Bauxite",0.481]],"phase":"solid"},
-          {"from":"caustic","to":"bayer-alumina","kind":"material","kgPerKg":0.0192,"substances":[["NaOH",0.0192]],"phase":"liquid"},
-          {"from":"bayer-alumina","to":"aluminium-smelter","kind":"material","kgPerKg":0.241,"substances":[["Al2O3",0.241]],"phase":"solid"},
-          {"from":"anode","to":"aluminium-smelter","kind":"material","kgPerKg":0.0425,"substances":[["C",0.0425]],"phase":"solid"},
-          {"from":"silver","to":"pv-module","kind":"material","kgPerKg":0.0003,"substances":[["Ag",0.0003]],"phase":"solid"},
-          {"from":"glass","to":"pv-module","kind":"material","kgPerKg":0.674,"substances":[["FloatGlass",0.674]],"phase":"solid"},
-          {"from":"eva","to":"pv-module","kind":"material","kgPerKg":0.0669,"substances":[["EVA",0.0669]],"phase":"solid"},
+          {"from":"quartz","to":"mg-si","kind":"material","kgPerKg":0.0613,"substances":[["SiO2",0.0613]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"reductant","to":"mg-si","kind":"material","kgPerKg":0.0245,"substances":[["C",0.0245]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"bauxite","to":"bayer-alumina","kind":"material","kgPerKg":0.481,"substances":[["Bauxite",0.481]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"caustic","to":"bayer-alumina","kind":"material","kgPerKg":0.0192,"substances":[["NaOH",0.0192]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"bayer-alumina","to":"aluminium-smelter","kind":"material","kgPerKg":0.241,"substances":[["Al2O3",0.241]],"phase":"solid","T_C":80,"P_bar":1},
+          {"from":"anode","to":"aluminium-smelter","kind":"material","kgPerKg":0.0425,"substances":[["C",0.0425]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"silver","to":"pv-module","kind":"material","kgPerKg":0.0003,"substances":[["Ag",0.0003]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"glass","to":"pv-module","kind":"material","kgPerKg":0.674,"substances":[["FloatGlass",0.674]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"eva","to":"pv-module","kind":"material","kgPerKg":0.0669,"substances":[["EVA",0.0669]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":4.79},
           {"from":"power-bus","to":"mg-si","kind":"electricity","kWhPerKg":0.344},
           {"from":"power-bus","to":"polysilicon","kind":"electricity","kWhPerKg":1.77},
           {"from":"power-bus","to":"bayer-alumina","kind":"electricity","kWhPerKg":0.842},
           {"from":"power-bus","to":"aluminium-smelter","kind":"electricity","kWhPerKg":1.78},
           {"from":"power-bus","to":"pv-module","kind":"electricity","kWhPerKg":0.05},
-          {"from":"mg-si","to":"polysilicon","kind":"material","kgPerKg":0.0287,"substances":[["Si",0.0287]],"phase":"solid"},
-          {"from":"polysilicon","to":"pv-module","kind":"material","kgPerKg":0.0273,"substances":[["Si",0.0273]],"phase":"solid"},
-          {"from":"aluminium-smelter","to":"pv-module","kind":"material","kgPerKg":0.127,"substances":[["Al",0.127]],"phase":"solid"},
-          {"from":"pv-module","to":"module","kind":"material","kgPerKg":1,"substances":[["PVmodule",1]],"phase":"solid"},
-          {"from":"mg-si","to":"carbonMonoxide","kind":"material","kgPerKg":0.0572,"substances":[["CO",0.0572]],"phase":"gas"},
-          {"from":"aluminium-smelter","to":"carbonDioxide","kind":"material","kgPerKg":0.156,"substances":[["CO2",0.156]],"phase":"gas"},
-          {"from":"bayer-alumina","to":"redMud","kind":"material","kgPerKg":0.241,"substances":[["Bauxite",0.241]],"phase":"solid"}
+          {"from":"mg-si","to":"polysilicon","kind":"material","kgPerKg":0.0287,"substances":[["Si",0.0287]],"phase":"solid","T_C":40,"P_bar":1},
+          {"from":"polysilicon","to":"pv-module","kind":"material","kgPerKg":0.0273,"substances":[["Si",0.0273]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"aluminium-smelter","to":"pv-module","kind":"material","kgPerKg":0.127,"substances":[["Al",0.127]],"phase":"solid","T_C":40,"P_bar":1},
+          {"from":"pv-module","to":"module","kind":"material","kgPerKg":1,"substances":[["PVmodule",1]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"mg-si","to":"carbonMonoxide","kind":"material","kgPerKg":0.0572,"substances":[["CO",0.0572]],"phase":"gas","T_C":200,"P_bar":1},
+          {"from":"aluminium-smelter","to":"carbonDioxide","kind":"material","kgPerKg":0.156,"substances":[["CO2",0.156]],"phase":"gas","T_C":100,"P_bar":1},
+          {"from":"bayer-alumina","to":"redMud","kind":"material","kgPerKg":0.241,"substances":[["Bauxite",0.241]],"phase":"solid","T_C":60,"P_bar":1}
         ]
       }
     },
@@ -2495,12 +2495,12 @@
           {"id":"carbonMonoxide","unit":"material-sink","kind":"sink","label":"Carbon monoxide","disposition":"waste"}
         ],
         "edges": [
-          {"from":"quartz","to":"mg-si","kind":"material","kgPerKg":2.14,"substances":[["SiO2",2.14]],"phase":"solid"},
-          {"from":"reductant","to":"mg-si","kind":"material","kgPerKg":0.855,"substances":[["C",0.855]],"phase":"solid"},
+          {"from":"quartz","to":"mg-si","kind":"material","kgPerKg":2.14,"substances":[["SiO2",2.14]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"reductant","to":"mg-si","kind":"material","kgPerKg":0.855,"substances":[["C",0.855]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":12},
           {"from":"power-bus","to":"mg-si","kind":"electricity","kWhPerKg":12},
-          {"from":"mg-si","to":"carbonMonoxide","kind":"material","kgPerKg":1.99,"substances":[["CO",1.99]],"phase":"gas"},
-          {"from":"mg-si","to":"silicon","kind":"material","kgPerKg":1,"substances":[["Si",1]],"phase":"solid"}
+          {"from":"mg-si","to":"carbonMonoxide","kind":"material","kgPerKg":1.99,"substances":[["CO",1.99]],"phase":"gas","T_C":200,"P_bar":1},
+          {"from":"mg-si","to":"silicon","kind":"material","kgPerKg":1,"substances":[["Si",1]],"phase":"solid","T_C":40,"P_bar":1}
         ]
       }
     },
@@ -2560,12 +2560,12 @@
           {"id":"magnesium-chloride","unit":"material-sink","kind":"sink","label":"Magnesium chloride","disposition":"waste"}
         ],
         "edges": [
-          {"from":"ticl4-feed","to":"kroll","kind":"material","kgPerKg":3.96,"substances":[["TiCl4",3.96]],"phase":"liquid"},
-          {"from":"magnesium-feed","to":"kroll","kind":"material","kgPerKg":1.02,"substances":[["Mg",1.02]],"phase":"solid"},
+          {"from":"ticl4-feed","to":"kroll","kind":"material","kgPerKg":3.96,"substances":[["TiCl4",3.96]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"magnesium-feed","to":"kroll","kind":"material","kgPerKg":1.02,"substances":[["Mg",1.02]],"phase":"solid","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":8},
           {"from":"power-bus","to":"kroll","kind":"electricity","kWhPerKg":8},
-          {"from":"kroll","to":"titanium","kind":"material","kgPerKg":1,"substances":[["Ti",1]],"phase":"solid"},
-          {"from":"kroll","to":"magnesium-chloride","kind":"material","kgPerKg":3.98,"substances":[["MgCl2",3.98]],"phase":"solid"}
+          {"from":"kroll","to":"titanium","kind":"material","kgPerKg":1,"substances":[["Ti",1]],"phase":"solid","T_C":25,"P_bar":1},
+          {"from":"kroll","to":"magnesium-chloride","kind":"material","kgPerKg":3.98,"substances":[["MgCl2",3.98]],"phase":"liquid","T_C":750,"P_bar":1}
         ]
       }
     },
@@ -2625,18 +2625,18 @@
           {"id":"process-water","unit":"material-sink","kind":"sink","label":"Process water","disposition":"waste"}
         ],
         "edges": [
-          {"from":"ammonia-feed","to":"urea","kind":"material","kgPerKg":0.567,"substances":[["NH3",0.567]],"phase":"liquid"},
-          {"from":"co2-feed","to":"urea","kind":"material","kgPerKg":0.733,"substances":[["CO2",0.733]],"phase":"gas"},
+          {"from":"ammonia-feed","to":"urea","kind":"material","kgPerKg":0.567,"substances":[["NH3",0.567]],"phase":"liquid","T_C":25,"P_bar":1},
+          {"from":"co2-feed","to":"urea","kind":"material","kgPerKg":0.733,"substances":[["CO2",0.733]],"phase":"gas","T_C":25,"P_bar":1},
           {"from":"power","to":"power-bus","kind":"electricity","kWhPerKg":0.8},
           {"from":"power-bus","to":"urea","kind":"electricity","kWhPerKg":0.8},
-          {"from":"urea","to":"urea-product","kind":"material","kgPerKg":1,"substances":[["Urea",1]],"phase":"solid"},
-          {"from":"urea","to":"process-water","kind":"material","kgPerKg":0.3,"substances":[["H2O",0.3]],"phase":"liquid"}
+          {"from":"urea","to":"urea-product","kind":"material","kgPerKg":1,"substances":[["Urea",1]],"phase":"solid","T_C":60,"P_bar":1},
+          {"from":"urea","to":"process-water","kind":"material","kgPerKg":0.3,"substances":[["H2O",0.3]],"phase":"liquid","T_C":40,"P_bar":1}
         ]
       }
     }
   ],
   "GENERATED_FROM": {
-    "gitSha": "7dde41d",
+    "gitSha": "8f41808",
     "caseCount": 30,
     "skipped": [
       {

@@ -32,7 +32,7 @@
   const UNIT_TYPES = Object.freeze({
     'intake-pump': { symbol: 'pump', prefix: 'P', type: 'Centrifugal pump (VFD)', T: 'ambient', P: '2–5 bar discharge', loops: [['FIC', 'intake flow, VFD speed'], ['PI', 'discharge pressure']] },
     'gas-blower': { symbol: 'compressor', prefix: 'K', type: 'Blower', T: 'ambient', P: '~1.05 bar', loops: [['FIC', 'air flow, VFD speed'], ['PI', 'discharge pressure']] },
-    swro: { symbol: 'membrane', prefix: 'M', type: 'Reverse-osmosis train', T: 'ambient', P: '55–70 bar feed', Pout: 1, loops: [['FIC', 'feed flow'], ['PIC', 'HP feed pressure'], ['AIT', 'permeate conductivity']] },
+    swro: { symbol: 'membrane', prefix: 'M', type: 'Reverse-osmosis train', T: 'ambient', P: '55–70 bar feed', loops: [['FIC', 'feed flow'], ['PIC', 'HP feed pressure'], ['AIT', 'permeate conductivity']] },
     electrolyzer: { symbol: 'electrolyzer', prefix: 'EL', type: 'Water electrolyzer stack', T: '50–80 °C', P: '1–30 bar', loops: [['JIC', 'stack power, tracks available PV'], ['TIC', 'stack temperature'], ['PIC', 'H₂ outlet pressure'], ['AIT', 'H₂ in O₂ (safety)']] },
     'chlor-alkali': { symbol: 'electrolyzer', prefix: 'EL', type: 'Membrane chlor-alkali cells', T: '85–90 °C', P: 'atmospheric', loops: [['JIC', 'cell current'], ['TIC', 'cell temperature'], ['AIT', 'caustic strength']] },
     'copper-ew': { symbol: 'electrolyzer', prefix: 'EL', type: 'Electrowinning tankhouse', T: '40–50 °C', P: 'atmospheric', loops: [['JIC', 'cell current'], ['TIC', 'electrolyte temperature'], ['LIC', 'cell level']] },
@@ -298,52 +298,91 @@
       }
     }
 
-    // ---- implied machines: where a line steps up from one unit's typical pressure to the next unit's,
-    // the drawing needs a compressor (gas) or pump (liquid). Their cost and power are inside the
-    // receiving unit's package in the recipe, so they are tagged to that unit (K-104A: the H₂
-    // compressor of the R-104 Haber-Bosch loop) and listed, not costed again.
+    // ---- stream conditions: each line at the temperature, pressure and phase it leaves its unit
+    // (engine/units.js OUTLET_CONDITIONS, solved into data/pathways.js); a buffer stores at line conditions.
+    const edgeOf = new Map(flowEdges.map(e => [e.from + '>' + e.to, e]));
+    for (const st of streams) {
+      st.lineNumber = st.line;
+      if (st.kind !== 'material') continue;
+      const e = edgeOf.get(st.from + '>' + st.to) || (st.buffer ? flowEdges.find(x => bufferOn.get(x.from + '>' + x.to)?.tag === st.buffer) : null);
+      st.T_C = Number.isFinite(e?.T_C) ? e.T_C : 25;
+      st.P_bar = Number.isFinite(e?.P_bar) ? e.P_bar : 1;
+    }
+
+    // ---- implied machines and exchangers. Where a line reaches a unit below the unit's typical
+    // operating pressure it needs a compressor (gas) or pump (liquid); where its temperature is far from
+    // the unit's operating temperature, a feed heater or cooler; where a unit's fluid product leaves
+    // far below its operating temperature, a product cooler or condenser. Their cost and energy are
+    // inside the unit's package in the recipe, so they are tagged to that unit (K-104A: the H₂
+    // compressor of the R-104 Haber-Bosch loop; E-104B: its product chiller) and listed, not costed again.
     const machines = [];
-    const outletBar = new Map(); // node / buffer id → outlet pressure
-    const pressureOfNode = id => {
-      if (outletBar.has(id)) return outletBar.get(id);
-      const n = byId.get(id);
-      if (!n || n.kind !== 'converter') return 1;
-      const t = typeOf(n.unit);
-      return t.Pout ?? pressureRange(t.P)?.lo ?? 1; // RO permeate and brine leave near ambient
+    const exchangers = [];
+    const letters = new Map(); // host tag + prefix → next letter
+    const nextTag = (host, prefix) => {
+      const k = host + prefix;
+      const i = letters.get(k) || 0;
+      letters.set(k, i + 1);
+      return `${prefix}-${host.split('-')[1]}${String.fromCharCode(65 + i)}`;
     };
-    for (const b of buffers) if (!b.captive) outletBar.set(b.tag, pressureOfNode(b.from));
-    const machineCount = new Map();
+    const fluidName = st => ({ AR: 'Air', SW: 'Seawater', BR: 'Brine', PW: 'Water' }[st.line.split('-')[0]] || st.composition[0]?.[0] || '');
+    const isFluid = st => st.phase === 'gas' || st.phase === 'liquid';
     for (const st of streams) {
       const toN = byId.get(st.to);
       if (st.kind !== 'material' || !toN || toN.kind !== 'converter') continue;
       const t = typeOf(toN.unit);
       if (t.symbol === 'pump' || t.symbol === 'compressor') continue;
-      const need = pressureRange(t.P)?.lo ?? 1;
-      const have = pressureOfNode(st.from);
-      if (!(need > 2 && need >= 2 * have)) continue;
-      const kind = st.phase === 'gas' ? 'compressor' : st.phase === 'liquid' ? 'pump' : null;
-      if (!kind) continue;
       const host = tagOf.get(toN.id);
-      const i = machineCount.get(host) || 0;
-      machineCount.set(host, i + 1);
-      const [prefix, num] = host.split('-');
-      const tag = `${kind === 'compressor' ? 'K' : 'P'}-${num}${String.fromCharCode(65 + i)}`;
-      const fluid = { AR: 'Air', SW: 'Seawater', BR: 'Brine', PW: 'Water' }[st.line.split('-')[0]] || st.composition[0]?.[0] || '';
-      machines.push({
-        tag, kind, host, hostPrefix: prefix, stream: st.no,
-        service: `${fluid ? fluid + ' ' : ''}${kind === 'compressor' ? 'compressor' : 'high-pressure pump'} to ${toN.label}`,
-        fromBar: have, toBar: need, designKgPerH: st.design,
+      const need = pressureRange(t.P)?.lo ?? 1;
+      const kind = st.phase === 'gas' ? 'compressor' : st.phase === 'liquid' ? 'pump' : null;
+      if (kind && need > 2 && need > 1.3 * st.P_bar && need - st.P_bar > 2) {
+        const tag = nextTag(host, kind === 'compressor' ? 'K' : 'P');
+        machines.push({
+          tag, kind, host, stream: st.no,
+          service: `${fluidName(st)} ${kind === 'compressor' ? 'compressor' : 'high-pressure pump'} to ${toN.label}`.trim(),
+          fromBar: st.P_bar, toBar: need, designKgPerH: st.design,
+        });
+        st.machine = tag;
+      }
+      const unitT = temperatureOf(t.T);
+      if (isFluid(st) && unitT != null && Math.abs(unitT - st.T_C) > 100) {
+        const heat = unitT > st.T_C;
+        const tag = nextTag(host, 'E');
+        // Cooling a feed to cryogenic temperature is the cold box's main heat exchanger.
+        const what = heat ? 'feed preheater' : unitT < -50 ? 'main heat exchanger (cold box)' : 'feed cooler';
+        exchangers.push({
+          tag, host, stream: st.no, side: 'feed', duty: heat ? 'heater' : 'cooler',
+          service: `${fluidName(st)} ${what} (${fmtT(st.T_C)} → ${fmtT(unitT)})`,
+          fromC: st.T_C, toC: unitT,
+        });
+        st.feedExchanger = tag;
+      }
+    }
+    for (const st of streams) {
+      const fromN = byId.get(st.from);
+      if (st.kind !== 'material' || !fromN || fromN.kind !== 'converter' || !isFluid(st)) continue;
+      const t = typeOf(fromN.unit);
+      const unitT = temperatureOf(t.T);
+      if (unitT == null || unitT - st.T_C <= 100) continue;
+      const host = tagOf.get(fromN.id);
+      const tag = nextTag(host, 'E');
+      const condense = st.phase === 'liquid';
+      // A kiln's or furnace's hot gas gives its heat back to the charge (preheater cyclones, regenerators).
+      const offGas = st.phase === 'gas' && (t.symbol === 'kiln' || t.symbol === 'furnace');
+      const what = offGas ? 'off-gas heat recovery' : `product ${condense ? 'condenser' : 'cooler'}`;
+      exchangers.push({
+        tag, host, stream: st.no, side: 'product', duty: offGas ? 'recovery' : condense ? 'condenser' : 'cooler',
+        service: `${fluidName(st)} ${what} (${fmtT(unitT)} → ${fmtT(st.T_C)})`,
+        fromC: unitT, toC: st.T_C,
       });
-      st.machine = tag;
+      st.productExchanger = tag;
     }
 
-    // ---- line sizing (indicative): density from composition at the line's pressure, typical design
-    // velocities, rounded up to a standard pipe size; low-pressure gas too big for a 48" pipe is a duct.
+    // ---- line sizing (indicative): density from composition at the line's real temperature and
+    // pressure (after its compressor or pump), typical design velocities, rounded up to a standard pipe size.
     for (const st of streams) {
-      st.lineNumber = st.line;
       if (st.kind !== 'material') continue;
       const toN = byId.get(st.to);
-      st.pressureBar = st.machine ? (pressureRange(typeOf(toN?.unit).P)?.lo ?? 1) : pressureOfNode(st.from);
+      st.pressureBar = st.machine ? (pressureRange(typeOf(toN?.unit).P)?.lo ?? st.P_bar) : st.P_bar;
       Object.assign(st, sizeLine(st, byId.get(st.from)?.kind === 'source'));
       st.lineNumber = `${st.size ? st.size + '-' : ''}${st.line}`;
     }
@@ -397,7 +436,7 @@
         flexNameplateFactor: nameplate, flexFullLoadHoursPerDay: u?.flexFullLoadHoursPerDay ?? null,
         lifeYears: ev.lifeYears, discountRate: cfg.finance.discountRate, leadTimeYears: cfg.build.leadTimeYears || 0,
       },
-      equipment, machines, streams, instruments, buffers, captive: captive.map(({ ev: _ev, ...c }) => ({ ...c, capexUsd: _ev?.capex.total ?? null, lcopUsdPerKg: _ev?.lcopUsdPerKg ?? c.makeUsdPerKg })),
+      equipment, machines, exchangers, streams, instruments, buffers, captive: captive.map(({ ev: _ev, ...c }) => ({ ...c, capexUsd: _ev?.capex.total ?? null, lcopUsdPerKg: _ev?.lcopUsdPerKg ?? c.makeUsdPerKg })),
       utilities, tagOf: Object.fromEntries(tagOf),
       tea: tea({ pathway, ev, cfg, capexItems, priceOf: opts.priceOf, feedFactor: opts.feedFactor }),
     };
@@ -419,9 +458,9 @@
     if (!(kgPerS > 0) || (st.phase !== 'gas' && st.phase !== 'liquid')) return { size: null, conveyed: st.phase === 'solid' };
     let rho;
     if (st.phase === 'gas') {
-      // Ideal gas at 25 °C (the cases carry no temperatures): ρ = P·M / (R·T).
+      // Ideal gas at the line's temperature and pressure: ρ = P·M / (R·T).
       const inv = st.composition.reduce((t, [sub, w]) => t + w / (MOLAR[sub] || 29), 0) || 1 / 29;
-      rho = (st.pressureBar * 1e5 * (1 / inv) / 1000) / (8.314 * 298.15);
+      rho = (st.pressureBar * 1e5 * (1 / inv) / 1000) / (8.314 * ((Number.isFinite(st.T_C) ? st.T_C : 25) + 273.15));
     } else {
       const top = st.composition[0]?.[0];
       const salts = st.composition.filter(([sub]) => IONS.test(sub)).reduce((t, [, w]) => t + w, 0);
@@ -437,6 +476,15 @@
     if (st.phase === 'gas' && st.pressureBar <= 1.1 && (fromOutside || dM > 3)) return { size: null, openIntake: true, densityKgM3: rho, velocityMS: v, innerDiameterM: dM };
     return { size: st.phase === 'gas' ? `duct ⌀${dM.toFixed(1)} m` : `${Math.ceil(inch / 48)}×48"`, densityKgM3: rho, velocityMS: v, innerDiameterM: dM };
   }
+
+  // Lower end of a typical temperature: 'ambient…' → 25, '400–500 °C' → 400, '−196 to −175 °C' → −196.
+  function temperatureOf(text) {
+    if (!text) return null;
+    if (/^\s*ambient/i.test(text)) return 25;
+    const m = String(text).replace(/\u2212/g, '-').match(/-?\d+(\.\d+)?/);
+    return m ? Number(m[0]) : null;
+  }
+  const fmtT = c => `${Math.round(c)} °C`.replace('-', '−');
 
   // '150–250 bar' → { lo: 150, hi: 250 }; 'atmospheric' (or no number) → 1 bar.
   function pressureRange(text) {
@@ -665,5 +713,5 @@
     return { ev, pkg };
   }
 
-  return { forPlant, sourceNodeFor, pressureRange, sizeLine, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };
+  return { forPlant, sourceNodeFor, pressureRange, temperatureOf, sizeLine, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };
 });

@@ -167,14 +167,50 @@ test('stores carry a power rating; lines carry an indicative size, pressure and 
   const before = pkg.streams.find(x => x.to === after.from && x.composition[0][0] === 'H2');
   assert.equal(after.pressureBar, 150);
   assert.ok(after.innerDiameterM < before.innerDiameterM / 3);
-  // RO permeate leaves near ambient, not at the 55 bar feed pressure.
+  // RO permeate and brine leave near ambient, not at the 55 bar feed pressure.
   const ro = pkg.equipment.find(e => e.unit === 'swro');
-  assert.ok(pkg.streams.filter(x => x.from === ro.nodeId).every(x => x.pressureBar === 1));
+  assert.ok(pkg.streams.filter(x => x.from === ro.nodeId).every(x => x.pressureBar <= 1.5));
   // DAC air is an open air path, not a 14 m duct.
   const dr = ranks.find(r => r.pathwayId === 'dac-co2');
   const dac = PlantDesign.forPlant(Company, input, 'dac-co2', dr.siteId, dr.sizeKgPerDay).pkg;
   assert.ok(dac.streams.some(x => x.openIntake), 'open intake');
   assert.ok(!dac.streams.some(x => /duct/.test(x.size || '')), 'no absurd ducts');
+});
+
+test('real stream conditions drive the machines, exchangers and line sizes', () => {
+  const at = id => { const r = ranks.find(x => x.pathwayId === id); return PlantDesign.forPlant(Company, input, id, r.siteId, r.sizeKgPerDay).pkg; };
+  // Green ammonia: electrolyzer H₂ leaves at 30 bar and needs a 30 → 150 bar booster; both syngas
+  // feeds are preheated to the loop; the product is condensed to −33 °C; air is cooled in the cold box.
+  const nh3 = at('green-ammonia');
+  const hb = nh3.equipment.find(e => e.unit === 'ammonia').tag;
+  const h2k = nh3.machines.find(m => m.host === hb && /H2/.test(m.service));
+  assert.deepEqual([h2k.fromBar, h2k.toBar], [30, 150]);
+  assert.equal(nh3.exchangers.filter(x => x.host === hb && x.duty === 'heater').length, 2, 'H₂ and N₂ preheaters');
+  const cond = nh3.exchangers.find(x => x.host === hb && x.side === 'product');
+  assert.equal(cond.duty, 'condenser');
+  assert.equal(cond.toC, -33);
+  const asu = nh3.equipment.find(e => e.unit === 'asu').tag;
+  assert.match(nh3.exchangers.find(x => x.host === asu).service, /cold box/);
+  // Every stream carries the conditions it leaves its unit with.
+  const product = nh3.streams.find(x => x.from === nh3.equipment.find(e => e.unit === 'ammonia').nodeId);
+  assert.deepEqual([product.T_C, product.P_bar, product.phase], [-33, 1, 'liquid']);
+  // Methanol: a 30 → 50 bar H₂ booster that a guess from typical pressures missed.
+  const meoh = at('methanol');
+  assert.ok(meoh.machines.some(m => /H2/.test(m.service) && m.fromBar === 30 && m.toBar === 50));
+  // Cement: the kiln's hot gas is heat recovery, not a "product cooler"; at 350 °C it needs a bigger
+  // line than the same flow at 25 °C would.
+  const cem = at('cement');
+  const gas = cem.streams.find(x => x.phase === 'gas');
+  assert.equal(gas.T_C, 350);
+  assert.equal(cem.exchangers.find(x => x.stream === gas.no).duty, 'recovery');
+  const cold = PlantDesign.sizeLine({ ...gas, T_C: 25 });
+  assert.ok(gas.innerDiameterM > cold.innerDiameterM * 1.4, 'hot gas is less dense');
+  // In-line items are listed under their unit and never costed twice.
+  for (const id of ['green-ammonia', 'methanol', 'urea']) {
+    const pkg = at(id);
+    const tags = new Set(pkg.tea.capexItems.map(i => i.tag));
+    for (const x of [...pkg.machines, ...pkg.exchangers]) assert.ok(!tags.has(x.tag), `${id} ${x.tag} not in the capex list`);
+  }
 });
 
 test('irr and the sensitivity levers behave', () => {

@@ -15,10 +15,16 @@
 // Every capex, opex and revenue line sums exactly to the evaluatePlant totals, so the TEA is the
 // simulator's own number, itemized. Pure functions; no DOM.
 (function exposePlantDesign(root, factory) {
-  const api = factory(typeof require === 'function' ? require('./utilization') : root.FoundryUtilization);
+  const node = typeof require === 'function';
+  const api = factory(
+    node ? require('./utilization') : root.FoundryUtilization,
+    node ? require('./feed-conditions') : root.FoundryFeedConditions,
+    // Site climate for feed conditions: always in Node; in the browser when data/site-climate.js is loaded.
+    () => (node ? require('../data/site-climate.js').PLACES : root.FoundrySiteClimate?.PLACES),
+  );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FoundryPlantDesign = api;
-})(globalThis, Utilization => {
+})(globalThis, (Utilization, FeedConditions, climatePlaces) => {
   'use strict';
 
   // ------------------------------------------------------------------ unit catalogue
@@ -307,6 +313,33 @@
       const e = edgeOf.get(st.from + '>' + st.to) || (st.buffer ? flowEdges.find(x => bufferOn.get(x.from + '>' + x.to)?.tag === st.buffer) : null);
       st.T_C = Number.isFinite(e?.T_C) ? e.T_C : 25;
       st.P_bar = Number.isFinite(e?.P_bar) ? e.P_bar : 1;
+      st.followsFeed = Boolean(e?.followsFeed);
+    }
+    // At a site other than the recipe's own, feeds take that site's climate (opts.feedConditions:
+    // resource id → { T_C, P_bar }) and outlets that pass their feed's temperature through follow it.
+    if (opts.feedConditions) {
+      for (const st of streams) {
+        const src = byId.get(st.from);
+        if (st.kind !== 'material' || src?.kind !== 'source') continue;
+        const c = opts.feedConditions(src.resource || src.id);
+        st.T_C = c.T_C;
+        st.P_bar = c.P_bar;
+      }
+      for (let pass = 0; pass < streams.length; pass += 1) {
+        let changed = false;
+        for (const st of streams) {
+          if (st.kind !== 'material') continue;
+          const up = st.followsFeed
+            ? streams.find(x => x.kind === 'material' && x.to === st.from)
+            : st.buffer && st.from === st.buffer ? streams.find(x => x.to === st.buffer) : null;
+          if (up && (up.T_C !== st.T_C || (st.buffer && up.P_bar !== st.P_bar))) {
+            st.T_C = up.T_C;
+            if (st.buffer) st.P_bar = up.P_bar;
+            changed = true;
+          }
+        }
+        if (!changed) break;
+      }
     }
 
     // ---- implied machines and exchangers. Where a line reaches a unit below the unit's typical
@@ -707,7 +740,20 @@
     };
     const evaluate = (id, size) => Company.evaluateAtYear(input, id, siteId, size, yearIndex, yearOpts);
     const feedFactor = Company.designedOpex ? Company.designedOpex(pathway, cfg).feedFactor : undefined;
-    const pkg = designPackage({ pathway, ev, site, cfg, evaluate, priceOf, feedFactor });
+    // Feed conditions at this site (the recipe was solved at its own reference site).
+    const places = climatePlaces();
+    let feedConditions = null;
+    let climate = null;
+    if (FeedConditions && places && site && site.id !== pathway.refSiteId) {
+      try {
+        climate = FeedConditions.siteClimate(site, places);
+        feedConditions = id => FeedConditions.feedConditions(id, climate);
+      } catch { climate = null; } // a site without climate data keeps the recipe's conditions
+    } else if (FeedConditions && places && site) {
+      try { climate = FeedConditions.siteClimate(site, places); } catch { climate = null; }
+    }
+    const pkg = designPackage({ pathway, ev, site, cfg, evaluate, priceOf, feedFactor, feedConditions });
+    pkg.basis.climate = climate;
     pkg.basis.year = year;
     pkg.basis.yearIndex = yearIndex;
     return { ev, pkg };

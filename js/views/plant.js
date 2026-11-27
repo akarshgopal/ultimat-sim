@@ -1232,7 +1232,8 @@
         b.strategy === 'sun-following'
           ? `Sun-following units run ${UI.num(b.flexFullLoadHoursPerDay, 2)} full-load hours a day at ${UI.num(b.flexNameplateFactor, 2)}× a 24-hour plant’s nameplate; steady units are firmed by storage. `
           : b.strategy === 'firmed' ? 'Every unit runs around the clock on PV plus storage. ' : '',
-        `Output averages ${UI.pct(b.outputFactor, 0)} of nameplate.`,
+        `Output averages ${UI.pct(b.outputFactor, 0)} of nameplate. `,
+        b.climate ? el('span', { class: 'muted', text: `Feeds at site conditions: ${b.climate.source.replace(/^[^:]*: /, '')}${b.climate.pBar && Math.abs(b.climate.pBar - 1.01325) > 0.005 ? `, ${UI.num(b.climate.pBar)} bar` : ''}.` }) : null,
       );
 
       const t = pkg.tea;

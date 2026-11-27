@@ -14,6 +14,7 @@
     "og-image": "node scripts/build-og-image.mjs",
     "pathways": "node scripts/build-pathways.mjs",
     "sites": "node scripts/build-sites.mjs",
+    "climate": "node scripts/build-site-climate.mjs",
     "weather": "node scripts/weather-stress.mjs",
     "weather:fetch": "node scripts/build-weather.mjs"
   }

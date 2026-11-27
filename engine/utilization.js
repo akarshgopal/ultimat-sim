@@ -184,6 +184,8 @@
     }
     const profile = {
       flexKWh, baseKWh, baseThermalKWh, flexShareByClass, buffers, energyDeltaKWhPerKg: energyDelta,
+      // Converter id → 'flex' | 'base', for callers that price units one by one.
+      modes: Object.freeze(Object.fromEntries(modeById)),
       // Energy-weighted minimum turndown of the baseload block (null: the config default applies).
       baseMinTurndown: baseKWh > 0 && designUnits ? baseTurndownKWh / baseKWh : null,
       thermalMinTurndown: baseThermalKWh > 0 && designUnits ? thermalTurndownKWh / baseThermalKWh : null,
@@ -436,7 +438,9 @@
     const candidates = [];
     // Strategy A: sun-following flexible units, firmed baseload, buffered intermediates.
     {
-      const { flex, base } = split(cls => profile.flexShareByClass[cls] || 0);
+      // costs.flexShareByClass: the sun-following share of each class from units priced one by one
+      // (designed units on their own floor and scale law); else the recipe-capex share.
+      const { flex, base } = split(cls => (costs.flexShareByClass?.[cls] ?? profile.flexShareByClass[cls]) || 0);
       const baseUsd = sum(base);
       const baseTotalKWh = Math.max(profile.baseKWh + profile.baseThermalKWh, 1e-12);
       const baseElec = baseDesign(solar, (profile.baseKWh * sizeKgPerDay) / 24, baseUsd * (profile.baseKWh / baseTotalKWh), costs.pvUsdPerKWp, battery, profile.baseMinTurndown ?? cfg.baseloadMinTurndown);

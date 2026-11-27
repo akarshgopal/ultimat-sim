@@ -35,6 +35,10 @@ const { evaluateEconomics } = require(path.join(ROOT, 'engine/economics.js'));
 const { streamMassKg, SUBSTANCES } = require(path.join(ROOT, 'engine/model.js'));
 const { sizeToProduct } = require(path.join(ROOT, 'engine/size.js'));
 const tea = require(path.join(ROOT, 'data/tea-screening.js'));
+const { withFeedConditions } = require(path.join(ROOT, 'cases/_shared.js'));
+const { OUTLET_CONDITIONS } = require(path.join(ROOT, 'engine/units.js'));
+let sitesCache = null;
+const sitesById = () => (sitesCache ||= new Map(require(path.join(ROOT, 'data/sites.js')).SITES.map(s => [s.id, s])));
 const pvgisSites = fs.readFileSync(path.join(ROOT, 'data/pvgis-sites.js'), 'utf8');
 
 const SKIP = {
@@ -262,18 +266,33 @@ function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg
     const amount = streamAmount(stream) / kg;
     if (!(amount > FLOW_MIN_PER_KG)) continue;
     const key = `${from}>${to}>${kind}`;
-    const edge = edgesByKey.get(key) || { from, to, kind, amount: 0, subs: new Map() };
+    // An outlet whose temperature is its feed's (pumps, blowers, RO): the plant design re-derives it
+    // when the recipe is redesigned at another site.
+    const fromUnit = nodes.find(n => n.id === from)?.unit;
+    const followsFeed = OUTLET_CONDITIONS[fromUnit]?.[item.from.port]?.T_C === 'feed';
+    const edge = edgesByKey.get(key) || { from, to, kind, amount: 0, subs: new Map(), phases: new Map(), tw: 0, pMax: null, followsFeed };
     edge.amount += amount;
+    // Stream conditions for the plant design: dominant phase, mass-weighted temperature, highest
+    // pressure (units set their outlet conditions; see OUTLET_CONDITIONS in engine/units.js).
+    if (kind === 'material') {
+      if (stream.phase) edge.phases.set(stream.phase, (edge.phases.get(stream.phase) || 0) + amount);
+      edge.tw = Number.isFinite(stream.T_C) ? edge.tw + stream.T_C * amount : NaN;
+      if (Number.isFinite(stream.P_bar)) edge.pMax = Math.max(edge.pMax ?? -Infinity, stream.P_bar);
+    }
     for (const [sub, m] of topSubstances(stream) || []) edge.subs.set(sub, (edge.subs.get(sub) || 0) + m / kg);
     edgesByKey.set(key, edge);
   }
   const edges = [...edgesByKey.values()].map(e => {
     const out = { from: e.from, to: e.to, kind: e.kind };
+    if (e.followsFeed && e.kind === 'material') out.followsFeed = true;
     if (e.kind === 'material') {
       out.kgPerKg = roundFlow(e.amount);
       const subs = [...e.subs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
         .filter(([, m]) => m / e.amount >= 0.001);
       if (subs.length) out.substances = subs.map(([sub, m]) => [sub, roundFlow(m)]);
+      if (e.phases.size) out.phase = [...e.phases.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      if (Number.isFinite(e.tw) && e.amount > 0) out.T_C = roundFlow(e.tw / e.amount);
+      if (Number.isFinite(e.pMax)) out.P_bar = roundFlow(e.pMax);
     } else {
       out.kWhPerKg = roundFlow(e.amount);
     }
@@ -285,6 +304,7 @@ function flowsheetFor(definition, solved, nodeCapex, primarySinks, saleSinks, kg
     const kind = nodeKind(node.unit);
     if (!linked.has(node.id) && kind !== 'converter') continue;
     const out = { id: node.id, unit: node.unit, kind, label: humanize(node.id) };
+    if (kind === 'source' && node.siteResource) out.resource = node.siteResource; // its feed conditions' key
     if (kind === 'sink') out.disposition = primarySinks.has(node.id) ? 'product' : saleSinks.has(node.id) ? 'coproduct' : 'waste';
     if (kind === 'converter') {
       const kWh = Number(solved.nodes[node.id]?.consumed?.electricity?.kWh) || 0;
@@ -312,6 +332,9 @@ function analyseCase(file, factoryName, factory) {
   const { result: definition, regions } = withTeaInstrumentation(() => (sizing
     ? sizeToProduct({ ...sizing, definition: factory() }).definition
     : factory()));
+  // Feeds at their battery-limit conditions: the case's site climate, or its reference site's.
+  const fallback = CASE_SITE_FALLBACK[file] ? sitesById().get(CASE_SITE_FALLBACK[file]) : null;
+  withFeedConditions(definition, Number.isFinite(definition.site?.latitude) ? definition.site : fallback);
   const solved = solveOperation(definition);
   if (!solved?.convergence?.converged) throw new Error('baseline solve did not converge');
   const econ = evaluateEconomics(definition, solved);

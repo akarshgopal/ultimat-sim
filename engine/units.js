@@ -1431,7 +1431,101 @@ function gasBlower({ inlets, requestedActivity, capacity, params = {} }) {
   };
 }
 
-const UNITS = Object.freeze({
+// ---------------------------------------------------------------------------------------------
+// Outlet conditions: the temperature (°C), pressure (bar) and, where the real product differs from
+// what a unit model passes through, the phase of each material outlet as it leaves the unit's
+// battery limit (after the unit's own product cooler, separator or condenser). The unit models
+// above conserve mass and energy with plant-level specific energies that already include their
+// internal heating, cooling and compression, so these conditions describe the streams (for line
+// sizing, compressors, pumps and exchangers between units) and change no energy or cost.
+// Values: standard process-design practice for each technology (screening); a node can override
+// any port with params.outletConditions = { <port>: { T_C, P_bar, phase } }.
+// `feed` keeps the temperature of the unit's first material inlet (pumps, membranes, blowers).
+const FEED = 'feed';
+const OUTLET_CONDITIONS = Object.freeze({
+  'intake-pump': { out: { T_C: FEED, P_bar: 3 } }, // centrifugal intake/transfer pump, 2–5 bar discharge
+  'gas-blower': { out: { T_C: FEED, P_bar: 1.05 } }, // fan/blower: ~5 kPa
+  swro: { product: { T_C: FEED, P_bar: 1.5 }, brine: { T_C: FEED, P_bar: 1 } }, // permeate ~1–2 bar; brine let down through the ERD
+  med: { product: { T_C: 40, P_bar: 1 }, brine: { T_C: 40, P_bar: 1 } }, // last-effect distillate and blowdown ~35–45 °C
+  msf: { product: { T_C: 40, P_bar: 1 }, brine: { T_C: 40, P_bar: 1 } },
+  // PEM / pressurized alkaline systems deliver dried H₂ at ~30 bar; O₂ at the low-pressure side.
+  electrolyzer: { hydrogen: { T_C: 40, P_bar: 30 }, oxygen: { T_C: 40, P_bar: 1.2 }, waterReject: { T_C: 60, P_bar: 1 } },
+  // Sorbent DAC: CO₂ desorbed under vacuum/steam, condensed and delivered ~1 bar; air leaves at ambient.
+  dac: { capturedCo2: { T_C: 40, P_bar: 1 }, depletedAir: { T_C: FEED, P_bar: 1 } },
+  'dac-solid': { capturedCo2: { T_C: 40, P_bar: 1 }, depletedAir: { T_C: FEED, P_bar: 1 } },
+  'dac-liquid': { capturedCo2: { T_C: 40, P_bar: 1 }, depletedAir: { T_C: FEED, P_bar: 1 } }, // calciner off-gas, cooled
+  'dac-electroswing': { capturedCo2: { T_C: FEED, P_bar: 1 }, depletedAir: { T_C: FEED, P_bar: 1 } },
+  // Methanation at ~10 bar; product gas and water knocked out after the condenser.
+  sabatier: { methane: { T_C: 40, P_bar: 10 }, water: { T_C: 40, P_bar: 10 } },
+  // Crude methanol flashed and distilled at ~atmospheric pressure; distillate and bottoms cooled.
+  methanol: { methanol: { T_C: 40, P_bar: 1, phase: 'liquid' }, water: { T_C: 40, P_bar: 1, phase: 'liquid' } },
+  // Cryogenic ASU: products warmed in the main heat exchanger to near ambient; pressurized GAN for synthesis.
+  asu: { nitrogen: { T_C: 20, P_bar: 5 }, oxygen: { T_C: 20, P_bar: 1.2 }, offgas: { T_C: 20, P_bar: 1 } },
+  // Haber-Bosch product condensed and let down to refrigerated atmospheric storage.
+  ammonia: { ammonia: { T_C: -33, P_bar: 1, phase: 'liquid' } },
+  urea: { urea: { T_C: 60, P_bar: 1 }, water: { T_C: 40, P_bar: 1, phase: 'liquid' } }, // prills off the tower; process condensate
+  mto: { ethylene: { T_C: 20, P_bar: 20 }, water: { T_C: 40, P_bar: 1, phase: 'liquid' } }, // ethylene from the product compressor
+  'ft-liquids': { diesel: { T_C: 40, P_bar: 1, phase: 'liquid' }, water: { T_C: 40, P_bar: 1, phase: 'liquid' } },
+  'brine-minerals': Object.fromEntries(['lithium', 'bromide', 'magnesium', 'potash', 'gypsum', 'salt', 'raffinate'].map(k => [k, { T_C: 30, P_bar: 1 }])),
+  'chlor-alkali': { caustic: { T_C: 40, P_bar: 1 }, chlorine: { T_C: 40, P_bar: 1 }, hydrogen: { T_C: 40, P_bar: 1 } }, // cells at 85–90 °C; products cooled
+  'bromine-recovery': { bromine: { T_C: 25, P_bar: 1, phase: 'liquid' }, salt: { T_C: 30, P_bar: 1 } },
+  'bayer-alumina': { alumina: { T_C: 80, P_bar: 1 }, redMud: { T_C: 60, P_bar: 1 } }, // calcined alumina after the cooler; washed mud
+  // Metal is tapped molten (~960 °C / ~1500 °C) and cast in the unit's casthouse: it leaves as ingot or lump.
+  'aluminium-smelter': { aluminium: { T_C: 40, P_bar: 1, phase: 'solid' }, carbonDioxide: { T_C: 100, P_bar: 1 } }, // potline gas after the fume treatment plant
+  'mg-si': { silicon: { T_C: 40, P_bar: 1, phase: 'solid' }, carbonMonoxide: { T_C: 200, P_bar: 1 } }, // furnace gas after the baghouse
+  polysilicon: { polysilicon: { T_C: 25, P_bar: 1 }, bleed: { T_C: 40, P_bar: 6 } }, // rods cooled in the bell jar; chlorosilane vent recovery
+  'pv-module': { module: { T_C: 25, P_bar: 1 } },
+  'float-glass': { glass: { T_C: 50, P_bar: 1 }, carbonDioxide: { T_C: 250, P_bar: 1 } }, // ribbon off the annealing lehr; batch CO₂ in the flue
+  cement: { cement: { T_C: 100, P_bar: 1 }, carbonDioxide: { T_C: 350, P_bar: 1 } }, // clinker off the cooler; preheater exhaust
+  'copper-ew': { cathode: { T_C: 25, P_bar: 1 } },
+  'hydrogen-dri': { steel: { T_C: 50, P_bar: 1 }, water: { T_C: 40, P_bar: 1, phase: 'liquid' } }, // cold-discharged DRI; top-gas condensate
+  'pellet-plant': { pellets: { T_C: 100, P_bar: 1 }, gangue: { T_C: 40, P_bar: 1 } }, // pellets off the cooler
+  'titanium-kroll': { titanium: { T_C: 25, P_bar: 1 }, magnesiumChloride: { T_C: 750, P_bar: 1, phase: 'liquid' } }, // sponge cooled under argon; MgCl₂ tapped molten
+  'iac-leach': Object.fromEntries(['ndpr', 'otherReo', 'residue', 'liquor'].map(k => [k, { T_C: 35, P_bar: 1 }])),
+  'ree-chromatography': Object.fromEntries(['ndpr', 'dytb', 'lightReo', 'raffinate'].map(k => [k, { T_C: 35, P_bar: 1 }])),
+  'ree-sx': Object.fromEntries(['ndpr', 'dytb', 'lightReo', 'raffinate'].map(k => [k, { T_C: 35, P_bar: 1 }])),
+  bioforge: { gluconic: { T_C: 30, P_bar: 1, phase: 'liquid' }, hydrogenPeroxide: { T_C: 30, P_bar: 1, phase: 'liquid' } }, // fermentation broth products
+});
+
+// Apply a unit's outlet conditions to an evaluate() result (mass and energy untouched). What a
+// unit draws from an inlet port is part of that inlet stream, so its consumed and requested streams
+// keep that inlet's temperature, pressure and phase (some models rebuild them from the first feed).
+function withOutletConditions(unitId, evaluate) {
+  const table = OUTLET_CONDITIONS[unitId] || {};
+  return args => {
+    const result = evaluate(args);
+    for (const key of ['consumed', 'requestedInputs']) {
+      const drawn = result?.[key];
+      if (!drawn) continue;
+      for (const [port, stream] of Object.entries(drawn)) {
+        const inlet = args.inlets?.[port];
+        if (stream?.kind !== 'material' || inlet?.kind !== 'material') continue;
+        if (stream.T_C !== inlet.T_C || stream.P_bar !== inlet.P_bar || stream.phase !== inlet.phase) {
+          drawn[port] = { ...stream, T_C: inlet.T_C, P_bar: inlet.P_bar, phase: inlet.phase };
+        }
+      }
+    }
+    const outlets = result?.outlets;
+    if (!outlets) return result;
+    const feedT = Object.values(args.inlets || {}).find(s => s?.kind === 'material')?.T_C;
+    const overrides = args.params?.outletConditions || {};
+    for (const [port, stream] of Object.entries(outlets)) {
+      if (stream?.kind !== 'material') continue;
+      const c = { ...(table[port] || {}), ...(overrides[port] || {}) };
+      if (!Object.keys(c).length) continue;
+      const T = c.T_C === FEED ? feedT : c.T_C;
+      outlets[port] = {
+        ...stream,
+        ...(Number.isFinite(T) ? { T_C: T } : {}),
+        ...(Number.isFinite(c.P_bar) ? { P_bar: c.P_bar } : {}),
+        ...(c.phase ? { phase: c.phase } : {}),
+      };
+    }
+    return result;
+  };
+}
+
+const UNIT_DEFS = {
   'material-source': {
     kind: 'source',
     ports: { out: { direction: 'out', kind: 'material', required: true } },
@@ -1844,10 +1938,14 @@ const UNITS = Object.freeze({
     },
     evaluate: bioforge,
   },
-});
+};
+
+const UNITS = Object.freeze(Object.fromEntries(Object.entries(UNIT_DEFS).map(([id, def]) => [id,
+  def.kind === 'converter' && def.evaluate ? { ...def, evaluate: withOutletConditions(id, def.evaluate) } : def])));
 
 return {
   UNITS,
+  OUTLET_CONDITIONS,
   resolveLiquidPumpSec,
   resolveGasBlowerSec,
   pumpPartLoad,

@@ -605,6 +605,7 @@
             : el('code', { text: pathway.refSiteId })]) : null,
         ]),
         el('p', { class: 'pw-notes', text: pathway.notes }),
+        el('a', { class: 'pw-plant-link', href: href('plant', pathway.id), text: 'Plant design: P&ID, equipment list and techno-economics →' }),
       ]),
     );
     const kpis = el('div', { class: 'kpis pw-kpis sim-result' });

@@ -78,6 +78,34 @@ function airFromNitrogenKg(nitrogenKg) {
   };
 }
 
+// ---------------------------------------------------------------------------------------------
+// Feed conditions at the battery limit. Site feeds take the site's climate (data/site-climate.js:
+// ERA5 air temperature and elevation, NOAA OISST sea temperature); bought fluids arrive at standard
+// delivery conditions. Applied to every material source of a case and to the site resource it draws
+// on (the solver requires the two to match). Conditions change no mass, energy or cost: they are the
+// starting point of the stream conditions the plant design reads.
+const FeedConditions = require('../engine/feed-conditions.js');
+const { DELIVERED, feedConditions } = FeedConditions;
+const siteClimate = location => FeedConditions.siteClimate(location, require('../data/site-climate.js').PLACES);
+
+// Set every material source of a case definition (and the site resource it draws on) to its feed
+// conditions. location: { latitude, longitude } (default: the case's own site).
+function withFeedConditions(definition, location = definition.site) {
+  const climate = siteClimate(location);
+  const resources = definition.site?.resources || {};
+  for (const node of definition.graph?.nodes || []) {
+    const stream = node.params?.stream;
+    if (!/source$/.test(node.unit) || stream?.kind !== 'material') continue;
+    // The plant model takes the annual mean; seasonal ranges are for the plant design layer.
+    const { T_summer_C: _s, T_winter_C: _w, ...c } = feedConditions(node.siteResource || node.id, climate);
+    node.params.stream = { ...stream, ...c };
+    const resource = node.siteResource ? resources[node.siteResource] : null;
+    if (resource?.stream?.kind === 'material') resource.stream = { ...resource.stream, ...c };
+  }
+  definition.feedConditions = climate.source;
+  return definition;
+}
+
 function right(kind, status, note, evidence) {
   return {
     kind,
@@ -121,4 +149,8 @@ module.exports = {
   clone,
   solarPowerNode,
   powerToBusEdge,
+  siteClimate,
+  feedConditions,
+  withFeedConditions,
+  DELIVERED,
 };

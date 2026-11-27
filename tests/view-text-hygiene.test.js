@@ -5,7 +5,7 @@ const { VIEW_TEST, withApp } = require('./helpers.js');
 // Every view, plain and with a pinned comparison: no stray "null"/"undefined"/"NaN" text, which is
 // what a null passed to replaceChildren/append (instead of being filtered out) renders as.
 test('no view renders stray null, undefined or NaN text', { ...VIEW_TEST, timeout: 240000 }, () => withApp(async ({ page, base, errors }) => {
-  const views = ['abundance', 'company', 'energy', 'designs', 'pathways', 'pathways/green-hydrogen', 'sites', 'sites/namibia-walvis-bay', 'markets', 'markets/hydrogen'];
+  const views = ['abundance', 'company', 'energy', 'designs', 'pathways', 'pathways/green-hydrogen', 'plant', 'plant/silicon', 'sites', 'sites/namibia-walvis-bay', 'markets', 'markets/hydrogen'];
   for (const query of ['', '?kwh=0.01&vs=']) {
     for (const view of views) {
       await page.goto(`${base}#/${view}${query}`);

@@ -99,10 +99,11 @@ test('seasonal design: hottest-month coolers, coldest-month RO, freeze protectio
   assert.ok(urea.cooling.some(c => c.toC === 40 && c.status === 'ok'));
   // An ammonia product condensed to −33 °C is refrigerated anywhere.
   assert.ok(at('green-ammonia', 'namibia-walvis-bay').seasonal.cooling.some(c => c.toC === -33 && c.status === 'refrigeration'));
-  // RO membrane area follows the coldest feed: more margin where winter and annual mean differ more.
+  // RO membrane area follows the coldest feed against the 25 °C rating the recipe is priced at: the cold
+  // Benguela (13 °C winter) needs more margin than the Gulf (≈20 °C winter).
   const roGulf = at('green-ammonia', 'qatar-ras-laffan').seasonal.ro[0];
   const roWalvis = at('green-ammonia', 'namibia-walvis-bay').seasonal.ro[0];
-  assert.ok(roGulf.extraArea > roWalvis.extraArea && roWalvis.extraArea > 0);
+  assert.ok(roWalvis.extraArea > roGulf.extraArea && roGulf.extraArea > 0);
   // Freeze protection only where the coldest month is near freezing, and only on water-bearing liquids.
   const cold = at('ft-liquids', 'us-great-salt-lake');
   assert.ok(cold.seasonal.air.winterC < 0 && cold.seasonal.freeze.length > 0);
@@ -115,4 +116,41 @@ test('seasonal design: hottest-month coolers, coldest-month RO, freeze protectio
   // Air machines are sized for the hottest month: more volume than at the annual mean.
   const k = at('green-ammonia', 'qatar-ras-laffan').seasonal.gas.find(g => g.margin > 0);
   assert.ok(k && k.inletT_C > k.meanT_C && k.margin > 0.02);
+});
+
+test('seasonal fixes are priced into the simulator, itemized exactly, and only where needed', () => {
+  const input = companyData();
+  const off = { ...input, config: { seasonal: { enabled: false } } };
+  const size = id => 100 * PATHWAYS.find(p => p.id === id).refOutputKgPerDay;
+  const rel = (a, b) => Math.abs(a - b) / Math.max(1, Math.abs(b));
+  const sum = (xs, f) => xs.reduce((t, x) => t + f(x), 0);
+  for (const [id, site] of [['methanol', 'qatar-ras-laffan'], ['ft-liquids', 'us-great-salt-lake'], ['green-ammonia', 'namibia-walvis-bay']]) {
+    const ev = Company.evaluateAtYear(input, id, site, size(id), 0);
+    const base = Company.evaluateAtYear(off, id, site, size(id), 0);
+    const s = ev.seasonal;
+    assert.ok(s.chillerUsd + s.roUsd + s.tracingUsd > 0, `${id}@${site} has something to price`);
+    assert.ok(ev.capex.total > base.capex.total && ev.lcopUsdPerKg > base.lcopUsdPerKg, `${id}@${site} costs more`);
+    // Per-unit capex (seasonal keys included) still sums to the plant's equipment classes.
+    const own = sum(Object.values(ev.unitCapexUsd), x => x);
+    const cls = sum(Object.entries(ev.capex.byTech).filter(([c]) => c !== 'storage'), ([, v]) => v);
+    assert.ok(rel(own, cls) < 1e-9, `${id}@${site} units ${own} vs classes ${cls}`);
+    // The plant design itemizes it exactly, and reports the same delta.
+    const { pkg } = PlantDesign.forPlant(Company, input, id, site, size(id));
+    assert.ok(rel(sum(pkg.tea.capexItems, i => i.usd), ev.capex.total) < 1e-9, `${id}@${site} capex items`);
+    assert.ok(!pkg.tea.capexItems.some(i => /Unallocated/.test(i.label)));
+    assert.ok(rel(sum(pkg.tea.capexItems.filter(i => i.group === 'seasonal'), i => i.usd), sum(Object.entries(ev.unitCapexUsd).filter(([k]) => k.startsWith('seasonal:')), ([, v]) => v)) < 1e-9);
+    assert.ok(rel(sum(pkg.tea.opexLines, l => l.usd), ev.opex.total) < 1e-9, `${id}@${site} opex`);
+    assert.ok(rel(sum(pkg.tea.lcop, l => l.usdPerKg), ev.lcopUsdPerKg) < 1e-9, `${id}@${site} cost per kg`);
+    assert.ok(Math.abs(pkg.seasonalCost.lcopDeltaUsdPerKg - (ev.lcopUsdPerKg - base.lcopUsdPerKg)) < 1e-12);
+    // The coolers priced are exactly the coolers the drawing flags for summer trim.
+    const drawn = pkg.seasonal.cooling.filter(c => c.status === 'summer').map(c => pkg.exchangers.find(x => x.tag === c.tag))
+      .map(x => { const st = pkg.streams.find(y => y.no === x.stream); return `${st.from}>${st.to}`; }).sort();
+    const climate = FeedConditions.siteClimate(SITES.find(x => x.id === site), PLACES);
+    const priced = PlantDesign.seasonalNeeds(PATHWAYS.find(p => p.id === id), climate).coolers.map(c => `${c.from}>${c.to}`).sort();
+    assert.deepEqual(priced, drawn, `${id}@${site} coolers`);
+  }
+  // Methanol's summer trim exists at Ras Laffan but not on the cold Chilean coast.
+  const mej = Company.evaluateAtYear(input, 'methanol', 'chile-mejillones', size('methanol'), 0).seasonal;
+  assert.equal(mej.chillerUsd, 0);
+  assert.equal(mej.tracingUsd, 0);
 });

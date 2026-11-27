@@ -20,10 +20,16 @@
 // inflation, no seasonal storage (daily-average energy as in the source cases),
 // purchased intermediates stay purchased. Not a bankable forecast.
 (function exposeCompany(root, factory) {
-  const api = factory(typeof require === 'function' ? require('./utilization') : root.FoundryUtilization);
+  const node = typeof require === 'function';
+  const api = factory(
+    node ? require('./utilization') : root.FoundryUtilization,
+    node ? require('./plant-design') : root.FoundryPlantDesign,
+    node ? require('./feed-conditions') : root.FoundryFeedConditions,
+    () => (node ? require('../data/site-climate.js').PLACES : root.FoundrySiteClimate?.PLACES),
+  );
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.FoundryCompany = api;
-})(globalThis, Utilization => {
+})(globalThis, (Utilization, PlantDesign, FeedConditions, climatePlaces) => {
   const TECH_CLASSES = Object.freeze(['process', 'electrolyzer', 'dac', 'desal', 'storage']);
   const INFINITE_ORIGINS = Object.freeze(['ocean', 'brine', 'air', 'crust', 'water']);
 
@@ -148,6 +154,20 @@
     // for the hours the sun shines, baseload units are firmed with batteries / thermal stores,
     // intermediates between them are buffered. Recipes without a flowsheet keep 24 h costing.
     utilization: Utilization.DEFAULTS,
+    // Seasonal fixes (engine/plant-design.js seasonalNeeds, from each site's monthly air and sea
+    // temperatures), priced into every plant: chilled-water trim for coolers the hottest months' cooling
+    // medium cannot reach, extra RO membrane area for the coldest feed (vs the recipes' 25 °C rating), and
+    // heat tracing on water lines where the coldest month is ≤ 2 °C. Capex takes the process class's
+    // cost factor; electricity is priced at the plant's own levelized $/kWh. Screening prices:
+    seasonal: Object.freeze({
+      enabled: true,
+      chillerUsdPerKWth: 300, // packaged industrial water chillers, installed ~$900–1,200 per ton of refrigeration
+      chillerCop: 4, // water-cooled chiller at hot-month condensing conditions
+      roAreaShareOfRoCapex: 0.15, // membranes, pressure vessels and their skids as a share of an SWRO train's installed cost
+      tracedRunM: 50, // assumed run per traced line between units (pipe lengths are not modelled)
+      tracingUsdPerM: 150, // self-regulating electric tracing + insulation, installed
+      tracingWPerM: 30, // tracing power while running (months with mean air ≤ 5 °C)
+    }),
     // Make-vs-buy for purchased intermediates (see planIntegration). feedProducts maps a
     // recipe's purchased feed id to the product key a captive supplier pathway makes.
     // CO₂ is made by the DAC recipe (dac-co2) once it undercuts $0.05–0.13/kg purchased CO₂.
@@ -460,9 +480,25 @@
   }
 
   // NPV at build: capex now, constant annual cash from first operation (after the lead time).
+  // A site's climate (null when it has none: the recipe's annual-mean conditions stand) and the seasonal
+  // fixes a recipe needs there.
+  const climateBySite = new Map();
+  function seasonalNeedsAt(pathway, site) {
+    if (!PlantDesign?.seasonalNeeds || !FeedConditions) return null;
+    if (!climateBySite.has(site.id)) {
+      let climate = null;
+      const places = climatePlaces();
+      if (places) { try { climate = FeedConditions.siteClimate(site, places); } catch { climate = null; } }
+      climateBySite.set(site.id, climate?.seasonal ? climate : null);
+    }
+    const climate = climateBySite.get(site.id);
+    return climate ? PlantDesign.seasonalNeeds(pathway, climate) : null;
+  }
+
   // Sun-following share of each class from per-unit installed $ (unit id → $) and unit modes.
-  function flexShares(pathway, unitUsd, modes) {
+  function flexShares(pathway, unitUsd, modes, extraClass = {}) {
     const unitClassOf = new Map((pathway.flowsheet?.nodes || []).map(n => [n.id, Utilization.UNIT_TECH[n.unit] || 'process']));
+    for (const [id, cls] of Object.entries(extraClass)) unitClassOf.set(id, cls);
     const flex = {};
     const all = {};
     for (const [id, usd] of Object.entries(unitUsd)) {
@@ -544,9 +580,39 @@
       refCapexByTech[cls] = perKgDay[cls] * sizeKgPerDay;
       processCapex += value;
     }
+    // Seasonal fixes at this site, priced as equipment before the solar resize (so a sun-following RO
+    // train's margin is oversized with it). Keys 'seasonal:…' sit beside the units in unitCapex24.
+    const sc = cfg.seasonal;
+    const needs = sc?.enabled ? seasonalNeedsAt(pathway, site) : null;
+    const seasonalClass = {};
+    const seasonalModes = {};
+    const seasonal = { chillerKWth: 0, chillerUsd: 0, roUsd: 0, tracingUsd: 0, tracedLines: 0, energyKWhPerYear: 0, energyUsdPerYear: 0 };
+    if (needs) {
+      const f = (ctx.costFactors.process ?? 1) * siteMult;
+      const add = (id, cls, usd, mode) => {
+        if (!(usd > 0)) return;
+        unitCapex24[id] = (unitCapex24[id] || 0) + usd;
+        processByTech[cls] += usd;
+        processCapex += usd;
+        seasonalClass[id] = cls;
+        seasonalModes[id] = mode;
+      };
+      seasonal.chillerKWth = needs.chillerKWthPerKgDay * sizeKgPerDay;
+      seasonal.chillerUsd = seasonal.chillerKWth * sc.chillerUsdPerKWth * f;
+      add('seasonal:chiller', 'process', seasonal.chillerUsd, 'base');
+      for (const r of needs.ro) {
+        const usd = (unitCapex24[r.nodeId] || 0) * r.extraArea * sc.roAreaShareOfRoCapex;
+        seasonal.roUsd += usd;
+        add('seasonal:ro:' + r.nodeId, Utilization.UNIT_TECH.swro || 'desal', usd, 'flex');
+      }
+      seasonal.tracedLines = needs.tracedLines;
+      seasonal.tracingUsd = needs.tracedLines * sc.tracedRunM * sc.tracingUsdPerM * f;
+      add('seasonal:tracing', 'process', seasonal.tracingUsd, 'base');
+    }
     // Solar-only utilization: resize equipment for sun hours, add storage, derate output.
     const util = utilFor(cfg);
     const profile = util.enabled ? Utilization.operatingProfile(pathway, util, cfg.designs?.units) : null;
+    const unitModes = profile ? { ...profile.modes, ...Object.fromEntries(Object.entries(seasonalModes).filter(([id]) => !id.startsWith('seasonal:ro:') || profile.modes?.[id.slice(12)] === 'flex')) } : seasonalModes;
     // A designed unit (e.g. electrolyzer) can change the recipe's kWh/kg (utilization.unitEnergyScale).
     const kWhPerKg = (Number(pathway.electricityKWhPerKg) || 0) + (Number(pathway.heatKWhPerKg) || 0)
       + (profile ? profile.energyDeltaKWhPerKg : 0);
@@ -571,7 +637,7 @@
           capex24ByClass,
           // With designed units, split each class between sun-following and steady units by the
           // units' own prices, not by recipe capex × capexFactor.
-          flexShareByClass: perKgDay.designed ? flexShares(pathway, unitCapex24, profile.modes) : null,
+          flexShareByClass: perKgDay.designed || Object.keys(seasonalClass).length ? flexShares(pathway, unitCapex24, unitModes, seasonalClass) : null,
         }, util);
         ctx.designCache?.set(designKey, design);
       }
@@ -589,7 +655,7 @@
       pvKWp = design.pvKWp;
       // Each unit after the solar resize: sun-following units at the design's nameplate factor.
       for (const [id, usd] of Object.entries(unitCapex24)) {
-        unitCapexUsd[id] = usd * (design.strategy === 'sun-following' && profile.modes?.[id] === 'flex' ? design.flexNameplateFactor : 1);
+        unitCapexUsd[id] = usd * (design.strategy === 'sun-following' && unitModes[id] === 'flex' ? design.flexNameplateFactor : 1);
       }
     } else {
       pvKWp = site.pvKWhPerKWpDay > 0 ? (kWhPerKg * sizeKgPerDay) / site.pvKWhPerKWpDay : 0;
@@ -691,6 +757,15 @@
       ? design.batteryUsd * Math.max(0, 1 / design.batteryLifeYears - 1 / life)
         + design.thermalUsd * Math.max(0, 1 / design.thermalLifeYears - 1 / life)
       : 0;
+    // Seasonal electricity (chiller trim, heat tracing) at the plant's own levelized $/kWh, as variable O&M.
+    if (needs && electricityKWhPerYear > 0) {
+      const crf0 = 1 / Math.max(annuityFactor(cfg.finance.discountRate, life), 1e-12);
+      const usdPerKWh = ((pvCapex + landCapex + processByTech.storage) * crf0 + pvOm + storageOm + storageReplacementUsdPerYear) / electricityKWhPerYear;
+      seasonal.energyKWhPerYear = needs.chillerKWhThPerKg / sc.chillerCop * annualKg
+        + needs.tracedLines * sc.tracedRunM * sc.tracingWPerM * needs.tracingHoursPerYear / 1000;
+      seasonal.energyUsdPerYear = seasonal.energyKWhPerYear * usdPerKWh;
+      otherVariable += seasonal.energyUsdPerYear;
+    }
     const fixedOm = pvOm + storageOm + equipmentOm + storageReplacementUsdPerYear;
     const variableOm = feedCost + otherVariable;
     const opex = fixedOm + variableOm;
@@ -728,6 +803,8 @@
       // Installed $ per flowsheet unit (id → $), summing with 'balance:<class>' entries to the process
       // classes of this plant alone (captive suppliers and storage excluded).
       unitCapexUsd,
+      // Seasonal fixes priced into this plant (also in unitCapexUsd as 'seasonal:…' and in other O&M).
+      seasonal: needs ? { ...seasonal, medium: needs.medium.kind } : null,
       pvKWp,
       landHa,
       electricityKWhPerYear,

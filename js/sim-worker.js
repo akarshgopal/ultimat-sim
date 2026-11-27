@@ -7,7 +7,7 @@
 //     task 'breakevens' payload { config, sizeMultiple }   energy break-evens
 // Errors come back as { id, error }.
 /* global importScripts, FoundryCompany, FoundryPathways, FoundryMarkets, FoundrySites */
-importScripts('../engine/utilization.js', '../engine/company.js', '../data/pathways.js', '../data/markets.js', '../data/sites.js');
+importScripts('../engine/utilization.js', '../engine/feed-conditions.js', '../data/site-climate.js', '../engine/plant-design.js', '../engine/company.js', '../data/pathways.js', '../data/markets.js', '../data/sites.js');
 
 const data = () => ({ pathways: FoundryPathways.PATHWAYS, markets: FoundryMarkets.MARKETS, sites: FoundrySites.SITES });
 const TASKS = {

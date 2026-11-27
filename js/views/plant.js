@@ -973,12 +973,23 @@
       ].filter(Boolean),
       ariaLabel: 'Monthly mean air and sea temperature at the site',
     }));
+    const C = pkg.seasonalCost;
+    if (C) {
+      out.push(el('p', { class: 'pl-season-cost' }, C.capexUsd > 0 || C.energyUsdPerYear > 0 ? [
+        el('strong', { text: 'Priced into this plant: ' }),
+        [C.chillerUsd > 0 ? `chilled-water trim ${UI.num(C.chillerKWth)} kW, ${UI.usd(C.chillerUsd)}` : null,
+          C.roUsd > 0 ? `RO membrane margin ${UI.usd(C.roUsd)}` : null,
+          C.tracingUsd > 0 ? `heat tracing ${UI.usd(C.tracingUsd)}` : null,
+          C.energyUsdPerYear > 0 ? `${UI.num(C.energyKWhPerYear)} kWh/yr of electricity, ${UI.usd(C.energyUsdPerYear)}/yr` : null].filter(Boolean).join(' · '),
+        `. Net cost +${UI.usdKg(C.lcopDeltaUsdPerKg).replace('$', '$')}/kg (${UI.pct(C.lcopDeltaUsdPerKg / Math.max(1e-12, pkg.tea.lcopUsdPerKg - C.lcopDeltaUsdPerKg), 3)}), NPV ${UI.usd(C.npvDeltaUsd)}.`,
+      ] : [el('strong', { text: 'Nothing to price at this site: ' }), 'no cooler falls short in summer, no RO feed below its rating, no freezing month.']));
+    }
     const checks = [
-      ...S.cooling.map(c => ({ item: c.tag, check: `Cooler / condenser to ${deg(c.toC)}`, result: COOL_TEXT[c.status], status: c.status === 'summer' ? 'warn' : 'ok', detail: c.service })),
-      ...S.ro.map(r => ({ item: r.tag, check: `RO feed ${deg(r.feedWinterC)}–${deg(r.feedSummerC)}`, result: `membrane area for the coldest month: +${UI.pct(r.extraArea, 0)} over the annual mean`, status: r.extraArea > 0.15 ? 'warn' : 'ok', detail: 'FilmTec temperature correction factor' })),
+      ...S.cooling.map(c => ({ item: c.tag, check: `Cooler / condenser to ${deg(c.toC)}`, result: COOL_TEXT[c.status] + (c.status === 'summer' ? ' (priced)' : ''), status: c.status === 'summer' ? 'warn' : 'ok', detail: c.service })),
+      ...S.ro.map(r => ({ item: r.tag, check: `RO feed ${deg(r.feedWinterC)}–${deg(r.feedSummerC)}`, result: r.extraArea > 0 ? `membrane area for the coldest month: +${UI.pct(r.extraArea, 0)} over the 25 °C rating (priced)` : 'no margin needed (feed at or above the 25 °C rating all year)', status: r.extraArea > 0.15 ? 'warn' : 'ok', detail: 'FilmTec temperature correction factor' })),
       ...S.gas.filter(g => g.margin > 0.005).map(g => ({ item: g.tag, check: `Inlet ${deg(g.inletT_C)} in the hottest month`, result: `${UI.num(g.designM3PerH)} m³/h, +${UI.pct(g.margin, 1)} volume over the annual mean`, status: 'ok', detail: 'sized for the least dense air' })),
       S.freeze.length
-        ? { item: S.freeze.map(f => f.line).join(', '), check: `Coldest month ${deg(S.air.winterC)}`, result: `heat tracing and insulation on ${S.freeze.length} water-bearing line${S.freeze.length > 1 ? 's' : ''} (ET): water standing in them (overnight turndown, trips, shutdowns) would freeze`, status: 'warn', detail: 'freeze protection' }
+        ? { item: S.freeze.map(f => f.line).join(', '), check: `Coldest month ${deg(S.air.winterC)}`, result: `heat tracing and insulation on ${S.freeze.length} water-bearing line${S.freeze.length > 1 ? 's' : ''} (ET), priced: water standing in them (overnight turndown, trips, shutdowns) would freeze`, status: 'warn', detail: 'freeze protection' }
         : { item: '—', check: `Coldest month ${deg(S.air.winterC)}`, result: 'no freeze protection needed', status: 'ok', detail: '' },
     ];
     out.push(UI.sortableTable([
@@ -990,8 +1001,8 @@
   }
 
   // ------------------------------------------------------------------ TEA blocks
-  const GROUP_LABEL = { equipment: 'Process equipment', storage: 'Storage', energy: 'Solar PV', land: 'Land', captive: 'Captive suppliers' };
-  const GROUP_COLOR = { equipment: 'var(--series-1)', storage: 'var(--series-7)', energy: 'var(--series-4)', land: 'var(--series-3)', captive: 'var(--series-5)' };
+  const GROUP_LABEL = { equipment: 'Process equipment', storage: 'Storage', energy: 'Solar PV', land: 'Land', captive: 'Captive suppliers', seasonal: 'Seasonal fixes' };
+  const GROUP_COLOR = { equipment: 'var(--series-1)', storage: 'var(--series-7)', energy: 'var(--series-4)', land: 'var(--series-3)', captive: 'var(--series-5)', seasonal: 'var(--series-2)' };
 
   function capexBlock(UI, pkg, pathwayId) {
     const { el } = UI;

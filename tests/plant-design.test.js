@@ -203,7 +203,7 @@ test('real stream conditions drive the machines, exchangers and line sizes', () 
   const gas = cem.streams.find(x => x.phase === 'gas');
   assert.equal(gas.T_C, 350);
   assert.equal(cem.exchangers.find(x => x.stream === gas.no).duty, 'recovery');
-  const cold = PlantDesign.sizeLine({ ...gas, T_C: 25 });
+  const cold = PlantDesign.sizeLine({ ...gas, T_C: 25, sizingT_C: 25 });
   assert.ok(gas.innerDiameterM > cold.innerDiameterM * 1.4, 'hot gas is less dense');
   // In-line items are listed under their unit and never costed twice.
   for (const id of ['green-ammonia', 'methanol', 'urea']) {

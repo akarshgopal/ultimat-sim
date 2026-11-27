@@ -96,7 +96,8 @@ function withFeedConditions(definition, location = definition.site) {
   for (const node of definition.graph?.nodes || []) {
     const stream = node.params?.stream;
     if (!/source$/.test(node.unit) || stream?.kind !== 'material') continue;
-    const c = feedConditions(node.siteResource || node.id, climate);
+    // The plant model takes the annual mean; seasonal ranges are for the plant design layer.
+    const { T_summer_C: _s, T_winter_C: _w, ...c } = feedConditions(node.siteResource || node.id, climate);
     node.params.stream = { ...stream, ...c };
     const resource = node.siteResource ? resources[node.siteResource] : null;
     if (resource?.stream?.kind === 'material') resource.stream = { ...resource.stream, ...c };

@@ -399,13 +399,13 @@
     const { svg } = UI;
     const xc = x0;
     const r = 10;
-    const g = svg('g', { class: 'pid-machine pid-exchanger is-' + xc.duty, 'data-tag': xc.tag });
+    const g = svg('g', { class: 'pid-machine pid-exchanger is-' + xc.duty + (xc.cooling ? ' cool-' + xc.cooling.status : ''), 'data-tag': xc.tag });
     g.append(svg('circle', { cx: x, cy: y, r, class: 'pid-valve-body' }));
     g.append(svg('path', { d: `M${x - r - 3},${y + 4} L${x - 5},${y + 4} L${x - 2},${y - 5} L${x + 2},${y + 5} L${x + 5},${y - 4} L${x + r + 3},${y - 4}`, class: 'pid-detail' }));
     const t = svg('text', { x, y: y - r - 4, class: 'pid-machine-tag', 'text-anchor': 'middle' });
     t.textContent = xc.tag;
     const title = svg('title');
-    title.textContent = `${xc.tag}: ${xc.service} · cost and energy are in ${xc.host}'s package`;
+    title.textContent = `${xc.tag}: ${xc.service}${xc.cooling ? ` · ${COOL_TEXT[xc.cooling.status]} (${xc.cooling.medium} reaches ${Math.round(xc.cooling.summerLimitC)} °C in the hottest month)` : ''} · cost and energy are in ${xc.host}'s package`;
     g.append(t, title);
     return g;
   }
@@ -575,8 +575,10 @@
       const spot = freeSpot(pts, 46, 12, true);
       if (!spot) return;
       placedTags.push({ x: spot.x, y: spot.y });
+      tagAt.set(st.no, spot);
       labels.append(streamTag(UI, st, spot.x, spot.y));
     };
+    const tagAt = new Map(); // stream no → its number's position
     const machineByTag = new Map((pkg.machines || []).map(m => [m.tag, m]));
     const exchangerByTag = new Map((pkg.exchangers || []).map(x => [x.tag, x]));
     const machineSpots = [];
@@ -623,7 +625,7 @@
       });
       const d = 'M' + pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' L');
       const st = e.stream;
-      const cls = 'pid-line is-' + st.kind + (productTo.has(e.to) ? ' is-product' : '') + (st.phase === 'gas' ? ' is-gas' : '');
+      const cls = 'pid-line is-' + st.kind + (productTo.has(e.to) ? ' is-product' : '') + (st.phase === 'gas' ? ' is-gas' : '') + (st.heatTrace ? ' is-traced' : '');
       const path = svg('path', { d, class: cls, 'marker-end': 'url(#pidArrow)', 'data-stream': st.no });
       const t = svg('title');
       t.textContent = streamTitle(UI, st);
@@ -662,6 +664,17 @@
     }
     // Stream numbers after every fitting is down: fittings have fixed places, numbers can move.
     for (const [st, pts] of pendingTags) placeTag(st, pts);
+    // Heat-traced lines (freeze protection): an ET tag on the line's own stream number, as on a P&ID.
+    for (const [st] of pendingTags) {
+      if (!st.heatTrace || !tagAt.has(st.no)) continue;
+      const spot = tagAt.get(st.no);
+      const t = svg('text', { x: spot.x, y: spot.y - 10, class: 'pid-et', 'text-anchor': 'middle', 'data-stream': st.no });
+      t.textContent = 'ET';
+      const title = svg('title');
+      title.textContent = `Stream ${st.no}: electric heat tracing and insulation (coldest month below freezing)`;
+      t.append(title);
+      labels.append(t);
+    }
     // Recycles: loop under the drawing.
     L.back.forEach((e, i) => {
       const a = L.all.get(e.from);
@@ -915,7 +928,7 @@
     return UI.sortableTable([
       { key: 'no', label: 'No.', num: true, get: s => s.no, render: s => UI.el('span', { 'data-stream': s.no, text: String(s.no) }) },
       { key: 'line', label: 'Line', title: 'Indicative line number: nominal size (standard pipe size from the design flow, density at the line pressure and typical velocity), fluid code, sequence', get: s => s.lineNumber, render: s => [UI.el('code', { text: s.lineNumber }), s.openIntake ? UI.el('span', { class: 'cell-sub', text: 'open air path, no pipe' }) : s.kind === 'material' && s.phase === 'solid' ? UI.el('span', { class: 'cell-sub', text: 'conveyed' }) : null] },
-      { key: 't', label: '°C', num: true, title: 'Temperature as the stream leaves its unit (after that unit’s own cooler or condenser)', get: s => s.T_C ?? NaN, render: s => (s.T_C != null ? UI.num(s.T_C) : '—') },
+      { key: 't', label: '°C', num: true, title: 'Temperature as the stream leaves its unit (after that unit’s own cooler or condenser)', get: s => s.T_C ?? NaN, render: s => (s.T_C != null ? [UI.num(s.T_C), s.T_winter_C != null && s.T_summer_C - s.T_winter_C > 0.05 ? UI.el('span', { class: 'cell-sub', title: 'Coldest to hottest monthly mean', text: `${UI.num(s.T_winter_C)}–${UI.num(s.T_summer_C)}` }) : null, s.heatTrace ? UI.el('span', { class: 'cell-sub pl-warn', text: 'heat traced' }) : null] : '—') },
       { key: 'p', label: 'bar', num: true, title: 'Line pressure: the upstream unit’s typical outlet pressure, or the receiving unit’s after a compressor or pump', get: s => s.pressureBar ?? NaN, render: s => (s.pressureBar != null ? UI.num(s.pressureBar) : '—') },
       { key: 'from', label: 'From → to', get: s => s.fromTag + ' → ' + s.toTag },
       { key: 'phase', label: 'Phase', get: s => s.phase },
@@ -934,6 +947,46 @@
       { key: 'service', label: 'Service', get: i => i.service },
       { key: 'eq', label: 'On', get: i => i.equipment || (i.stream ? 'stream ' + i.stream : '') },
     ], pkg.instruments, { compact: true, limit: 12, csv: `${pathwayId}-instrument-index` });
+  }
+
+  // ------------------------------------------------------------------ seasonal design
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const COOL_TEXT = { ok: 'OK all year', summer: 'needs chilled-water trim in summer', refrigeration: 'refrigerated (below the cooling medium all year)' };
+  function seasonalBlock(UI, Charts, pkg, pathwayId) {
+    const { el } = UI;
+    const S = pkg.seasonal;
+    if (!S) return [el('p', { class: 'muted', text: 'No site climate for this site: the plant is designed at a 25 °C design ambient.' })];
+    const deg = v => `${UI.num(v, 3)} °C`;
+    const out = [];
+    out.push(el('div', { class: 'pl-season-facts' }, [
+      el('span', {}, [el('strong', { text: 'Air ' }), `${deg(S.air.winterC)} to ${deg(S.air.summerC)} (mean ${deg(S.air.meanC)})`]),
+      S.sea ? el('span', {}, [el('strong', { text: 'Sea ' }), `${deg(S.sea.winterC)} to ${deg(S.sea.summerC)} (mean ${deg(S.sea.meanC)})`]) : el('span', { class: 'muted', text: 'No sea within 50 km' }),
+      el('span', {}, [el('strong', { text: 'Cooling ' }), `${S.medium.kind === 'seawater' ? 'once-through seawater' : 'air coolers'}, ${S.medium.approachK} K approach: a cooler reaches ${deg(S.medium.summerC + S.medium.approachK)} in the hottest month`]),
+    ]));
+    out.push(Charts.chartBlock({
+      x: MONTHS, kind: 'line', yFormat: v => `${UI.num(v, 3)} °C`,
+      // Below-freezing months need the axis to go below zero.
+      yMin: Math.min(0, Math.floor(Math.min(...S.airMonthlyC, ...(S.seaMonthlyC || [])) / 5) * 5),
+      series: [
+        { key: 'air', label: 'Air (ERA5 2014–2023)', color: 'var(--series-2)', values: S.airMonthlyC },
+        S.seaMonthlyC ? { key: 'sea', label: 'Sea (OISST 1991–2020)', color: 'var(--series-1)', values: S.seaMonthlyC } : null,
+      ].filter(Boolean),
+      ariaLabel: 'Monthly mean air and sea temperature at the site',
+    }));
+    const checks = [
+      ...S.cooling.map(c => ({ item: c.tag, check: `Cooler / condenser to ${deg(c.toC)}`, result: COOL_TEXT[c.status], status: c.status === 'summer' ? 'warn' : 'ok', detail: c.service })),
+      ...S.ro.map(r => ({ item: r.tag, check: `RO feed ${deg(r.feedWinterC)}–${deg(r.feedSummerC)}`, result: `membrane area for the coldest month: +${UI.pct(r.extraArea, 0)} over the annual mean`, status: r.extraArea > 0.15 ? 'warn' : 'ok', detail: 'FilmTec temperature correction factor' })),
+      ...S.gas.filter(g => g.margin > 0.005).map(g => ({ item: g.tag, check: `Inlet ${deg(g.inletT_C)} in the hottest month`, result: `${UI.num(g.designM3PerH)} m³/h, +${UI.pct(g.margin, 1)} volume over the annual mean`, status: 'ok', detail: 'sized for the least dense air' })),
+      S.freeze.length
+        ? { item: S.freeze.map(f => f.line).join(', '), check: `Coldest month ${deg(S.air.winterC)}`, result: `heat tracing and insulation on ${S.freeze.length} water-bearing line${S.freeze.length > 1 ? 's' : ''} (ET): water standing in them (overnight turndown, trips, shutdowns) would freeze`, status: 'warn', detail: 'freeze protection' }
+        : { item: '—', check: `Coldest month ${deg(S.air.winterC)}`, result: 'no freeze protection needed', status: 'ok', detail: '' },
+    ];
+    out.push(UI.sortableTable([
+      { key: 'item', label: 'Item', get: r => r.item, render: r => UI.el('strong', { text: r.item }) },
+      { key: 'check', label: 'Design case', get: r => r.check, render: r => [UI.el('span', { text: r.check }), r.detail ? UI.el('span', { class: 'cell-sub', text: r.detail }) : null] },
+      { key: 'result', label: 'Result', get: r => r.result, render: r => UI.el('span', { class: r.status === 'warn' ? 'pl-warn' : '', text: r.result }) },
+    ], checks, { compact: true, csv: `${pathwayId}-seasonal-design` }));
+    return out;
   }
 
   // ------------------------------------------------------------------ TEA blocks
@@ -1080,6 +1133,7 @@
     const utilHost = el('div');
     const streamHost = el('div');
     const instHost = el('div');
+    const seasonHost = el('div');
     const capexHost = el('div');
     const accountHost = el('div');
     const wfHost = el('div');
@@ -1098,6 +1152,7 @@
         UI.card('Stream table', 'average over the year and design (nameplate) rates', streamHost),
         UI.card('Instrument index', 'typical control scheme by unit type: indicative, not a HAZOP’d design', instHost),
       ]),
+      UI.card('Seasonal design', 'the plant against its site’s hottest and coldest months (monthly means; a detailed design would use 0.4 % design extremes, a few degrees beyond)', seasonHost),
       el('h2', { class: 'pl-section', text: 'Techno-economic analysis' }),
       el('div', { class: 'grid grid-2 pl-grid' }, [
         UI.card('Capital cost', 'installed, by item', capexHost),
@@ -1252,6 +1307,7 @@
       utilHost.replaceChildren(utilitiesTable(UI, pkg, pathway.id));
       streamHost.replaceChildren(streamTable(UI, pkg, pathway.id));
       instHost.replaceChildren(instrumentTable(UI, pkg, pathway.id));
+      seasonHost.replaceChildren(...seasonalBlock(UI, ctx.Charts, pkg, pathway.id));
       capexHost.replaceChildren(...capexBlock(UI, pkg, pathway.id));
       accountHost.replaceChildren(accountBlock(UI, pkg));
       wfHost.replaceChildren(waterfall(UI, pkg));

@@ -84,3 +84,35 @@ test('a recipe redesigned at another site takes that site’s feed conditions', 
   assert.equal(gulf.streams.find(s => s.composition[0]?.[0] === 'H2').T_C, 40);
   assert.match(gulf.basis.climate.source, /Ras Laffan/);
 });
+
+test('seasonal design: hottest-month coolers, coldest-month RO, freeze protection, hottest-month gas', () => {
+  const input = companyData();
+  const at = (id, site) => PlantDesign.forPlant(Company, input, id, site, 100 * PATHWAYS.find(p => p.id === id).refOutputKgPerDay).pkg;
+  const gulf = PLACES['25.888,51.557'];
+  // Methanol at Ras Laffan: 40 °C condensers cannot be reached with ~34 °C summer seawater + 10 K approach.
+  const meoh = at('methanol', 'qatar-ras-laffan').seasonal;
+  near(meoh.sea.summerC, Math.max(...gulf.sea.monthlyC), 1e-9, 'Gulf summer sea');
+  assert.equal(meoh.medium.kind, 'seawater');
+  assert.ok(meoh.cooling.length && meoh.cooling.every(c => c.status === 'summer'), JSON.stringify(meoh.cooling));
+  // …while at Walvis Bay (cold Benguela) a 40 °C product cooler is fine all year.
+  const urea = at('urea', 'namibia-walvis-bay').seasonal;
+  assert.ok(urea.cooling.some(c => c.toC === 40 && c.status === 'ok'));
+  // An ammonia product condensed to −33 °C is refrigerated anywhere.
+  assert.ok(at('green-ammonia', 'namibia-walvis-bay').seasonal.cooling.some(c => c.toC === -33 && c.status === 'refrigeration'));
+  // RO membrane area follows the coldest feed: more margin where winter and annual mean differ more.
+  const roGulf = at('green-ammonia', 'qatar-ras-laffan').seasonal.ro[0];
+  const roWalvis = at('green-ammonia', 'namibia-walvis-bay').seasonal.ro[0];
+  assert.ok(roGulf.extraArea > roWalvis.extraArea && roWalvis.extraArea > 0);
+  // Freeze protection only where the coldest month is near freezing, and only on water-bearing liquids.
+  const cold = at('ft-liquids', 'us-great-salt-lake');
+  assert.ok(cold.seasonal.air.winterC < 0 && cold.seasonal.freeze.length > 0);
+  for (const f of cold.seasonal.freeze) {
+    const st = cold.streams.find(s => s.no === f.stream);
+    assert.ok(st.heatTrace && st.phase === 'liquid' && f.waterShare >= 0.3);
+  }
+  assert.equal(at('ft-liquids', 'chile-mejillones').seasonal.freeze.length, 0);
+  assert.equal(cold.seasonal.medium.kind, 'air', 'no sea at Great Salt Lake: air coolers');
+  // Air machines are sized for the hottest month: more volume than at the annual mean.
+  const k = at('green-ammonia', 'qatar-ras-laffan').seasonal.gas.find(g => g.margin > 0);
+  assert.ok(k && k.inletT_C > k.meanT_C && k.margin > 0.02);
+});

@@ -314,15 +314,20 @@
       st.T_C = Number.isFinite(e?.T_C) ? e.T_C : 25;
       st.P_bar = Number.isFinite(e?.P_bar) ? e.P_bar : 1;
       st.followsFeed = Boolean(e?.followsFeed);
+      st.T_summer_C = st.T_C; // seasonal range: a unit's own outlet condition holds all year
+      st.T_winter_C = st.T_C;
     }
-    // At a site other than the recipe's own, feeds take that site's climate (opts.feedConditions:
-    // resource id → { T_C, P_bar }) and outlets that pass their feed's temperature through follow it.
+    // Feeds take the site's climate (opts.feedConditions: resource id → { T_C, T_summer_C, T_winter_C,
+    // P_bar }: annual mean and hottest / coldest monthly means), and outlets that pass their feed's
+    // temperature through (pumps, blowers, RO) follow it, season by season.
     if (opts.feedConditions) {
       for (const st of streams) {
         const src = byId.get(st.from);
         if (st.kind !== 'material' || src?.kind !== 'source') continue;
         const c = opts.feedConditions(src.resource || src.id);
         st.T_C = c.T_C;
+        st.T_summer_C = c.T_summer_C ?? c.T_C;
+        st.T_winter_C = c.T_winter_C ?? c.T_C;
         st.P_bar = c.P_bar;
       }
       for (let pass = 0; pass < streams.length; pass += 1) {
@@ -332,8 +337,10 @@
           const up = st.followsFeed
             ? streams.find(x => x.kind === 'material' && x.to === st.from)
             : st.buffer && st.from === st.buffer ? streams.find(x => x.to === st.buffer) : null;
-          if (up && (up.T_C !== st.T_C || (st.buffer && up.P_bar !== st.P_bar))) {
+          if (up && (up.T_C !== st.T_C || up.T_summer_C !== st.T_summer_C || up.T_winter_C !== st.T_winter_C || (st.buffer && up.P_bar !== st.P_bar))) {
             st.T_C = up.T_C;
+            st.T_summer_C = up.T_summer_C;
+            st.T_winter_C = up.T_winter_C;
             if (st.buffer) st.P_bar = up.P_bar;
             changed = true;
           }
@@ -416,9 +423,16 @@
       if (st.kind !== 'material') continue;
       const toN = byId.get(st.to);
       st.pressureBar = st.machine ? (pressureRange(typeOf(toN?.unit).P)?.lo ?? st.P_bar) : st.P_bar;
+      // Gas lines are sized for the hottest month (least dense, largest volume); liquids barely change.
+      st.sizingT_C = st.phase === 'gas' ? Math.max(st.T_C, st.T_summer_C ?? st.T_C) : st.T_C;
       Object.assign(st, sizeLine(st, byId.get(st.from)?.kind === 'source'));
       st.lineNumber = `${st.size ? st.size + '-' : ''}${st.line}`;
     }
+
+    // ---- seasonal design (opts.climate: the site's monthly air and sea temperatures). Hottest and
+    // coldest monthly means, not 0.4 % design extremes; screening checks, not a cost change.
+    const climate = opts.climate || null;
+    const seasonal = climate?.seasonal ? seasonalDesign({ climate, streams, exchangers, machines, equipment }) : null;
 
     // ---- instruments and loops
     const instruments = [];
@@ -469,7 +483,7 @@
         flexNameplateFactor: nameplate, flexFullLoadHoursPerDay: u?.flexFullLoadHoursPerDay ?? null,
         lifeYears: ev.lifeYears, discountRate: cfg.finance.discountRate, leadTimeYears: cfg.build.leadTimeYears || 0,
       },
-      equipment, machines, exchangers, streams, instruments, buffers, captive: captive.map(({ ev: _ev, ...c }) => ({ ...c, capexUsd: _ev?.capex.total ?? null, lcopUsdPerKg: _ev?.lcopUsdPerKg ?? c.makeUsdPerKg })),
+      equipment, machines, exchangers, streams, instruments, buffers, seasonal, captive: captive.map(({ ev: _ev, ...c }) => ({ ...c, capexUsd: _ev?.capex.total ?? null, lcopUsdPerKg: _ev?.lcopUsdPerKg ?? c.makeUsdPerKg })),
       utilities, tagOf: Object.fromEntries(tagOf),
       tea: tea({ pathway, ev, cfg, capexItems, priceOf: opts.priceOf, feedFactor: opts.feedFactor }),
     };
@@ -493,7 +507,8 @@
     if (st.phase === 'gas') {
       // Ideal gas at the line's temperature and pressure: ρ = P·M / (R·T).
       const inv = st.composition.reduce((t, [sub, w]) => t + w / (MOLAR[sub] || 29), 0) || 1 / 29;
-      rho = (st.pressureBar * 1e5 * (1 / inv) / 1000) / (8.314 * ((Number.isFinite(st.T_C) ? st.T_C : 25) + 273.15));
+      const T = Number.isFinite(st.sizingT_C) ? st.sizingT_C : Number.isFinite(st.T_C) ? st.T_C : 25;
+      rho = (st.pressureBar * 1e5 * (1 / inv) / 1000) / (8.314 * (T + 273.15));
     } else {
       const top = st.composition[0]?.[0];
       const salts = st.composition.filter(([sub]) => IONS.test(sub)).reduce((t, [, w]) => t + w, 0);
@@ -508,6 +523,74 @@
     // open air path, not a pipe.
     if (st.phase === 'gas' && st.pressureBar <= 1.1 && (fromOutside || dM > 3)) return { size: null, openIntake: true, densityKgM3: rho, velocityMS: v, innerDiameterM: dM };
     return { size: st.phase === 'gas' ? `duct ⌀${dM.toFixed(1)} m` : `${Math.ceil(inch / 48)}×48"`, densityKgM3: rho, velocityMS: v, innerDiameterM: dM };
+  }
+
+  // Seasonal checks for one plant at one site.
+  //   cooling — every cooler and condenser against the hottest month's cooling medium: once-through
+  //             seawater where the site has sea (10 K minimum approach), else air coolers (15 K). 'ok' all
+  //             year, 'summer' needs chilled-water trim in the hottest months, 'refrigeration' always;
+  //   freeze  — at a site whose coldest month is ≤ 2 °C, water-bearing liquid lines are heat traced and
+  //             insulated (water standing in them through overnight turndown, trips or shutdowns would freeze);
+  //   gas     — compressors and blowers on gas lines: volume flow in the hottest month vs the annual mean;
+  //   ro      — RO membrane area is set by the coldest feed (FilmTec temperature correction factor).
+  const APPROACH_K = { seawater: 10, air: 15 };
+  const FREEZE_C = 2;
+  const tcf = T => Math.exp((T >= 25 ? 2640 : 3020) * (1 / 298.15 - 1 / (T + 273.15)));
+  function seasonalDesign({ climate, streams, exchangers, machines, equipment }) {
+    const sea = climate.seaC != null;
+    const medium = {
+      kind: sea ? 'seawater' : 'air',
+      summerC: sea ? climate.seaSummerC : climate.airSummerC,
+      winterC: sea ? climate.seaWinterC : climate.airWinterC,
+      approachK: APPROACH_K[sea ? 'seawater' : 'air'],
+    };
+    const cooling = [];
+    for (const x of exchangers) {
+      const cools = (x.side === 'product' && (x.duty === 'cooler' || x.duty === 'condenser')) || (x.side === 'feed' && x.duty === 'cooler');
+      if (!cools || x.toC < -50) continue; // a cold box is refrigerated by design
+      const summerLimit = medium.summerC + medium.approachK;
+      const winterLimit = medium.winterC + medium.approachK;
+      const status = x.toC >= summerLimit ? 'ok' : x.toC >= winterLimit ? 'summer' : 'refrigeration';
+      x.cooling = { status, medium: medium.kind, summerLimitC: summerLimit, winterLimitC: winterLimit };
+      cooling.push({ tag: x.tag, host: x.host, service: x.service, toC: x.toC, status, summerLimitC: summerLimit, winterLimitC: winterLimit });
+    }
+    const freeze = [];
+    if (climate.airWinterC <= FREEZE_C) {
+      for (const st of streams) {
+        if (st.kind !== 'material' || st.phase !== 'liquid') continue;
+        const water = st.composition.find(([sub]) => sub === 'H2O')?.[1] || 0;
+        if (water < 0.3) continue;
+        st.heatTrace = true;
+        freeze.push({ stream: st.no, line: st.lineNumber, waterShare: water });
+      }
+    }
+    const gas = [];
+    for (const m of machines) {
+      const st = streams.find(x => x.no === m.stream);
+      if (!st || st.phase !== 'gas' || !(st.densityKgM3 > 0)) continue;
+      // Inlet density of the machine (the line's density is at its discharge pressure), at the hottest
+      // month and at the annual mean.
+      const rhoSummer = st.densityKgM3 * (st.P_bar / st.pressureBar);
+      const summerT = st.sizingT_C;
+      const rhoMean = rhoSummer * (summerT + 273.15) / (st.T_C + 273.15);
+      m.designM3PerH = st.design / rhoSummer;
+      m.summerVolumeMargin = rhoMean / rhoSummer - 1;
+      gas.push({ tag: m.tag, host: m.host, inletT_C: summerT, meanT_C: st.T_C, designM3PerH: m.designM3PerH, margin: m.summerVolumeMargin });
+    }
+    const ro = [];
+    for (const e of equipment.filter(x => x.unit === 'swro')) {
+      const feed = streams.find(x => x.kind === 'material' && x.to === e.nodeId);
+      if (!feed) continue;
+      const extra = tcf(feed.T_C) / tcf(feed.T_winter_C) - 1;
+      e.seasonal = { feedWinterC: feed.T_winter_C, feedSummerC: feed.T_summer_C, extraArea: extra };
+      ro.push({ tag: e.tag, feedC: feed.T_C, feedWinterC: feed.T_winter_C, feedSummerC: feed.T_summer_C, extraArea: extra });
+    }
+    return {
+      airMonthlyC: climate.airMonthlyC, seaMonthlyC: climate.seaMonthlyC,
+      air: { meanC: climate.airC, summerC: climate.airSummerC, winterC: climate.airWinterC },
+      sea: sea ? { meanC: climate.seaC, summerC: climate.seaSummerC, winterC: climate.seaWinterC } : null,
+      medium, cooling, freeze, gas, ro,
+    };
   }
 
   // Lower end of a typical temperature: 'ambient…' → 25, '400–500 °C' → 400, '−196 to −175 °C' → −196.
@@ -744,15 +827,14 @@
     const places = climatePlaces();
     let feedConditions = null;
     let climate = null;
-    if (FeedConditions && places && site && site.id !== pathway.refSiteId) {
+    // At the recipe's own site this reproduces the solved annual means and adds their seasonal range.
+    if (FeedConditions && places && site) {
       try {
         climate = FeedConditions.siteClimate(site, places);
         feedConditions = id => FeedConditions.feedConditions(id, climate);
       } catch { climate = null; } // a site without climate data keeps the recipe's conditions
-    } else if (FeedConditions && places && site) {
-      try { climate = FeedConditions.siteClimate(site, places); } catch { climate = null; }
     }
-    const pkg = designPackage({ pathway, ev, site, cfg, evaluate, priceOf, feedFactor, feedConditions });
+    const pkg = designPackage({ pathway, ev, site, cfg, evaluate, priceOf, feedFactor, feedConditions, climate });
     pkg.basis.climate = climate;
     pkg.basis.year = year;
     pkg.basis.yearIndex = yearIndex;

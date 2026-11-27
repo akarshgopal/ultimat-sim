@@ -124,3 +124,9 @@
 .v-plant .pid-bound { fill: none; stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 9 3 2 3; }
 .v-plant .pid-bound-label { font-size: 9px; fill: var(--text-3); font-style: italic; }
 .v-plant .pid-bound-gap { fill: var(--surface); }
+/* Seasonal design */
+.v-plant .pl-warn { color: var(--warn); }
+.v-plant .pl-season-facts { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
+.v-plant .pid-et { font-size: 9px; font-weight: 700; fill: var(--warn); }
+.v-plant .pid-line.is-traced { stroke-dasharray: 10 2 2 2; }
+.v-plant .pid-exchanger.cool-summer .pid-valve-body { stroke: var(--warn); stroke-width: 1.8; }

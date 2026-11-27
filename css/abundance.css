@@ -1,0 +1,28 @@
+/* Abundance view — scoped by .v-abundance. */
+.v-abundance .card + .card { margin-top: var(--gap); }
+.v-abundance .ab-bars { display: flex; flex-direction: column; gap: 6px; margin: 14px 0 10px; }
+.v-abundance .ab-bar-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) minmax(160px, 220px); gap: 10px; align-items: center; font-size: 12px; }
+.v-abundance .ab-track { display: flex; height: 16px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+.v-abundance .ab-track span { height: 100%; }
+.v-abundance .ab-bar-value { color: var(--text-2); white-space: nowrap; }
+.v-abundance .ab-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13px; }
+.v-abundance .ab-actions p { flex: 1 1 260px; }
+.v-abundance .ab-blockers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.v-abundance .ab-blockers h3 { font-size: 13px; margin: 0 0 6px; }
+.v-abundance .ab-blocker-list { margin: 0; padding-left: 20px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.v-abundance .ab-status { font-size: 12px; font-weight: 600; }
+.v-abundance .ab-abundant { color: var(--pos); }
+.v-abundance .ab-feasible { color: var(--pos); font-weight: 500; }
+.v-abundance .ab-blocked { color: var(--neg); font-weight: 500; }
+.v-abundance .ab-coproduct, .v-abundance .ab-no-pathway { color: var(--text-3); font-weight: 400; }
+.v-abundance .ab-defs { font-size: 12px; margin: 0 0 14px; }
+.v-abundance .ab-levers { display: flex; flex-wrap: wrap; gap: 12px 28px; padding: 12px 0; border-top: 1px solid var(--border); margin-bottom: 10px; }
+.v-abundance .ab-levers .field-label { display: flex; gap: 6px; align-items: baseline; margin-bottom: 4px; }
+.v-abundance .ab-levers .segmented { flex-wrap: wrap; }
+.v-abundance .ab-blocker-list a { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
+@media (max-width: 680px) {
+  .v-abundance .ab-bar-row { grid-template-columns: 1fr; gap: 2px; }
+}
+/* While the scoreboards compute in the background, the previous numbers fade (js/views/abundance.js). */
+.v-abundance .kpis, .v-abundance .ab-bars, .v-abundance .ab-blockers, .v-abundance .table-scroll { transition: opacity 0.15s; }
+.v-abundance.is-solving .kpis, .v-abundance.is-solving .ab-bars, .v-abundance.is-solving .ab-blockers, .v-abundance.is-solving .table-scroll { opacity: 0.4; transition-delay: 0.15s; }

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Molecular Foundry</title>
+  <meta name="description" content="Simulate a company that makes the world's materials from sunlight, seawater, air and rock.">
+  <!-- Link previews (Slack, X, iMessage…). og-image.png comes from scripts/build-og-image.mjs. -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Molecular Foundry">
+  <meta property="og:title" content="Molecular Foundry: making the world's materials from sunlight">
+  <meta property="og:description" content="How much of the world's material tonnage could a solar-powered company make below today's price from sunlight, seawater, air and rock, and what blocks the rest? An interactive screening model.">
+  <meta property="og:url" content="https://akarshgopal.github.io/ultimat-sim/">
+  <meta property="og:image" content="https://akarshgopal.github.io/ultimat-sim/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The Abundance view: share of world material tonnage feasible below today's price, today and at the frontier.">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css?v=cb79c1387a4e">
+  <link rel="stylesheet" href="css/abundance.css?v=cb79c1387a4e">
+  <link rel="stylesheet" href="css/company.css?v=cb79c1387a4e">
+  <link rel="stylesheet" href="css/energy.css?v=cb79c1387a4e">
+  <link rel="stylesheet" href="css/designs.css?v=cb79c1387a4e">
+  <link rel="stylesheet" href="css/pathways.css?v=cb79c1387a4e">
+  <link rel="stylesheet" href="css/plant.css?v=cb79c1387a4e">
+  <link rel="stylesheet" href="css/sites.css?v=cb79c1387a4e">
+  <link rel="stylesheet" href="css/markets.css?v=cb79c1387a4e">
+  <meta name="foundry-default-run" content="data/default-run.json?v=cb79c1387a4e">
+  <meta name="foundry-offline" content="sw.js">
+</head>
+<body>
+  <a class="skip-link" id="skipLink" href="#view">Skip to content</a>
+  <header class="app-header">
+    <a class="brand" href="#/abundance" data-view="abundance">Molecular Foundry</a>
+    <nav class="app-nav" aria-label="Views"></nav>
+    <span class="header-spacer"></span>
+    <span class="sim-status" id="simStatus" role="status"></span>
+    <button class="icon-button" id="pinBtn" type="button" title="Keep this scenario as a baseline and compare as you change things">Pin to compare</button>
+    <button class="icon-button" id="copyLink" type="button" title="Copy a link to this page with the current scenario">Copy link</button>
+    <button class="icon-button" id="themeToggle" type="button">Dark</button>
+  </header>
+  <div class="compare-bar" id="compareBar" role="status" hidden></div>
+  <main id="view" class="app-main" tabindex="-1"></main>
+
+  <!-- data -->
+  <script src="data/pathways.js?v=cb79c1387a4e"></script>
+  <script src="data/markets.js?v=cb79c1387a4e"></script>
+  <script src="data/sites.js?v=cb79c1387a4e"></script>
+  <script src="data/bom.js?v=cb79c1387a4e"></script>
+  <!-- engine -->
+  <script src="engine/utilization.js?v=cb79c1387a4e"></script>
+  <script src="engine/feed-conditions.js?v=cb79c1387a4e"></script>
+  <script src="data/site-climate.js?v=cb79c1387a4e"></script>
+  <script src="engine/plant-design.js?v=cb79c1387a4e"></script>
+  <script src="engine/company.js?v=cb79c1387a4e"></script>
+  <script src="engine/designs/electrolyzer.js?v=cb79c1387a4e"></script>
+  <script src="engine/designs/haber-bosch.js?v=cb79c1387a4e"></script>
+  <script src="engine/designs/dri-shaft.js?v=cb79c1387a4e"></script>
+  <script src="engine/designs/pellet-plant.js?v=cb79c1387a4e"></script>
+  <script src="engine/designs/dac.js?v=cb79c1387a4e"></script>
+  <script src="engine/designs/synthesis.js?v=cb79c1387a4e"></script>
+  <script src="engine/designs/urea.js?v=cb79c1387a4e"></script>
+  <script src="engine/designs/smelter.js?v=cb79c1387a4e"></script>
+  <!-- ui -->
+  <script src="js/ui/kit.js?v=cb79c1387a4e"></script>
+  <script src="js/ui/charts.js?v=cb79c1387a4e"></script>
+  <script src="js/store.js?v=cb79c1387a4e"></script>
+  <script>globalThis.Views = {};</script>
+  <!-- views -->
+  <script src="js/views/abundance.js?v=cb79c1387a4e"></script>
+  <script src="js/views/company.js?v=cb79c1387a4e"></script>
+  <script src="js/views/energy.js?v=cb79c1387a4e"></script>
+  <script src="js/views/designs.js?v=cb79c1387a4e"></script>
+  <script src="js/views/pathways.js?v=cb79c1387a4e"></script>
+  <script src="js/views/plant.js?v=cb79c1387a4e"></script>
+  <script src="js/views/sites.js?v=cb79c1387a4e"></script>
+  <script src="js/views/markets.js?v=cb79c1387a4e"></script>
+  <!-- shell (last) -->
+  <script src="js/app.js?v=cb79c1387a4e"></script>
+</body>
+</html>

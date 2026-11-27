@@ -1,0 +1,134 @@
+/* plant design view — scoped by .v-plant. */
+.v-plant .pl-intro { color: var(--text-2); font-size: 13px; max-width: 110ch; margin: 0 0 12px; }
+.v-plant .pl-controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin-bottom: 14px; }
+.v-plant .pl-controls label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--text-3); min-width: 0; }
+.v-plant .pl-controls select { min-width: 200px; max-width: min(360px, calc(100vw - 32px)); }
+.v-plant .pl-back { font-size: 13px; margin-left: auto; padding-bottom: 6px; }
+.v-plant .pl-kpis { margin-bottom: var(--gap); }
+.v-plant .pl-grid { margin-bottom: var(--gap); }
+.v-plant .pl-grid > .card { display: flex; flex-direction: column; min-width: 0; }
+.v-plant > .card { margin-bottom: var(--gap); }
+.v-plant .pl-section { font-size: 18px; margin: 26px 0 10px; }
+.v-plant .pl-foot { font-size: 12px; margin-top: 8px; }
+.v-plant .pl-caveat { max-width: 120ch; margin: 4px 0 24px; }
+.v-plant .pl-sun { color: var(--warn); }
+.v-plant tr.is-current td { background: var(--accent-soft); }
+
+/* ---------------------------------------------------------------- P&ID */
+.v-plant .pl-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--text-2); margin-bottom: 8px; align-items: center; }
+.v-plant .pl-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.v-plant .pl-key { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--text-2); }
+.v-plant .pl-key.is-product { border-top-color: var(--accent); border-top-width: 2.5px; }
+.v-plant .pl-key.is-power { border-top: 2px dashed var(--series-4); }
+.v-plant .pl-key.is-signal { border-top: 1.5px dashed var(--text-3); }
+.v-plant .pl-key.is-diamond { width: 9px; height: 9px; border: 1.5px solid var(--text-2); transform: rotate(45deg); }
+.v-plant .pl-pid-scroll { overflow: auto; border: 1px solid var(--border); border-radius: 6px; max-height: 80vh; }
+.v-plant svg.pid { display: block; font-family: var(--font); max-width: none; }
+.v-plant .pid-bg { fill: var(--surface); }
+.v-plant .pid-shape { fill: var(--surface); stroke: var(--text); stroke-width: 1.5; }
+.v-plant .pid-shape.is-package { stroke-dasharray: 5 3; fill: var(--surface-2); }
+.v-plant .pid-detail { fill: none; stroke: var(--text-2); stroke-width: 1; }
+.v-plant .pid-pol { font-size: 9px; fill: var(--text-2); }
+.v-plant .pid-pkg-label { font-size: 10px; font-weight: 700; fill: var(--text-2); }
+.v-plant .pid-tag { font-size: 12px; font-weight: 700; fill: var(--text); font-variant-numeric: tabular-nums; }
+.v-plant .pid-name { font-size: 11px; fill: var(--text-2); }
+.v-plant .pid-note { font-size: 10px; fill: var(--text-3); font-variant-numeric: tabular-nums; }
+.v-plant .pid-note.is-sun { fill: var(--warn); }
+.v-plant .pid-link { font-size: 10.5px; fill: var(--accent); }
+.v-plant .pid-kw { font-size: 9.5px; fill: var(--warn); font-variant-numeric: tabular-nums; }
+.v-plant .pid-line { fill: none; stroke: var(--text-2); stroke-width: 1.6; stroke-linejoin: round; }
+.v-plant .pid-line.is-product { stroke: var(--accent); stroke-width: 2.4; }
+.v-plant .pid-line.is-heat { stroke: var(--neg); stroke-dasharray: 8 3; }
+.v-plant .pid-line.is-recycle { stroke-dasharray: 6 3; }
+.v-plant .pid-line:hover { stroke: var(--text); stroke-width: 2.6; }
+.v-plant .pid-arrow { fill: var(--text-2); }
+.v-plant .pid-diamond { fill: var(--surface); stroke: var(--text-2); stroke-width: 1; }
+.v-plant .pid-diamond-num { font-size: 8.5px; font-weight: 700; fill: var(--text); }
+.v-plant .pid-bus { stroke: var(--series-4); stroke-width: 2.5; }
+.v-plant .pid-power { fill: none; stroke: var(--series-4); stroke-width: 1.4; stroke-dasharray: 7 2 2 2; }
+.v-plant .pid-signal { fill: none; stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 2; }
+.v-plant .pid-inst-shape { fill: var(--surface); stroke: var(--text); stroke-width: 1.2; }
+.v-plant .pid-inst.is-interlock .pid-inst-shape { stroke: var(--neg); }
+.v-plant .pid-inst.is-safety .pid-inst-shape { stroke: var(--neg); stroke-width: 1.6; }
+.v-plant .pid-inst.is-alarm .pid-inst-shape { stroke: var(--warn); }
+.v-plant .pid-inst-line { stroke: var(--text); stroke-width: 0.8; }
+.v-plant .pid-inst-letters { font-size: 7.5px; font-weight: 700; fill: var(--text); }
+.v-plant .pid-inst-num { font-size: 7px; fill: var(--text-2); font-variant-numeric: tabular-nums; }
+.v-plant .pid-inst:hover .pid-inst-shape { fill: var(--accent-soft); }
+.v-plant .pid-valve-body { fill: var(--surface); stroke: var(--text); stroke-width: 1.2; }
+.v-plant .pid-valve-act { fill: var(--surface); stroke: var(--text); stroke-width: 1; }
+.v-plant .pid-conn { fill: var(--surface-2); stroke: var(--text-2); stroke-width: 1.2; }
+.v-plant .pid-item.is-product .pid-conn { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+.v-plant .pid-item.is-coproduct .pid-conn { stroke: var(--pos); }
+.v-plant .pid-item.is-waste .pid-conn { stroke-dasharray: 4 2; }
+.v-plant .pid-conn-label { font-size: 11px; font-weight: 600; fill: var(--text); }
+.v-plant .pid-tb { fill: var(--surface); stroke: var(--text-2); stroke-width: 1; }
+.v-plant .pid-tb-title { font-size: 12px; font-weight: 700; fill: var(--text); }
+
+/* ---------------------------------------------------------------- TEA */
+.v-plant .pl-stack { display: flex; height: 16px; border-radius: 4px; overflow: hidden; background: var(--surface-2); margin: 2px 0 8px; }
+.v-plant .pl-stack > span { display: block; height: 100%; }
+.v-plant .pl-account th[scope="row"] { font-weight: 500; }
+.v-plant .pl-account tr.is-total th, .v-plant .pl-account tr.is-total td { font-weight: 650; border-top: 1px solid var(--border-strong); }
+.v-plant .pl-account tr.is-cash td, .v-plant .pl-account tr.is-cash th { background: var(--surface-2); }
+.v-plant .pl-account tr.is-cost td { color: var(--text-2); }
+
+.v-plant .pl-waterfall { display: flex; flex-direction: column; gap: 5px; }
+.v-plant .pl-wf-row { display: grid; grid-template-columns: 140px 1fr 72px; align-items: center; gap: 10px; font-size: 12px; }
+.v-plant .pl-wf-label { color: var(--text-2); }
+.v-plant .pl-wf-track { position: relative; height: 14px; background: var(--surface-2); border-radius: 3px; }
+.v-plant .pl-wf-fill { position: absolute; top: 0; bottom: 0; background: var(--series-1); border-radius: 2px; }
+.v-plant .pl-wf-fill.is-credit { background: var(--series-3); }
+.v-plant .pl-wf-fill.is-total { background: var(--text-2); }
+.v-plant .pl-wf-fill.is-price { background: var(--series-2); }
+.v-plant .pl-wf-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+
+.v-plant .pl-tornado { display: flex; flex-direction: column; gap: 5px; }
+.v-plant .pl-tn-row { display: grid; grid-template-columns: 150px 1fr 120px; align-items: center; gap: 10px; font-size: 12px; }
+.v-plant .pl-tn-row.is-head { color: var(--text-3); font-size: 11px; }
+.v-plant .pl-tn-row.is-head .pl-tn-axis { text-align: center; }
+.v-plant .pl-tn-row .num { text-align: right; }
+.v-plant .pl-tn-label { color: var(--text-2); }
+.v-plant .pl-tn-track { position: relative; height: 14px; background: var(--surface-2); border-radius: 3px; }
+.v-plant .pl-tn-fill { position: absolute; top: 2px; bottom: 2px; }
+.v-plant .pl-tn-fill.is-low { background: var(--series-2); }
+.v-plant .pl-tn-fill.is-high { background: var(--series-1); }
+.v-plant .pl-tn-mid { position: absolute; left: 50%; top: -2px; bottom: -2px; border-left: 1px solid var(--text-2); }
+.v-plant .pl-tn-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.v-plant .pl-tn-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--text-2); margin-top: 8px; }
+.v-plant .pl-tn-key i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; vertical-align: -1px; border-radius: 2px; }
+.v-plant .pl-tn-key i.is-low { background: var(--series-2); }
+.v-plant .pl-tn-key i.is-high { background: var(--series-1); }
+
+@media (max-width: 640px) {
+  .v-plant .pl-controls label { flex: 1 1 100%; }
+  .v-plant .pl-controls select { min-width: 0; width: 100%; max-width: none; }
+  .v-plant .pl-back { margin-left: 0; }
+  .v-plant .pl-wf-row { grid-template-columns: 104px 1fr 60px; gap: 6px; }
+  .v-plant .pl-tn-row { grid-template-columns: 96px 1fr 92px; gap: 6px; }
+}
+.v-plant .pid-bus-stub { stroke: var(--series-4); stroke-width: 2.5; }
+.v-plant .data-table td:first-child strong, .v-plant .data-table td code, .v-plant .data-table td:first-child { white-space: nowrap; }
+.v-plant .pid-machine-tag { font-size: 9px; font-weight: 700; fill: var(--text-2); }
+.v-plant .pid-tb-rule { stroke: var(--text-3); stroke-width: 0.8; }
+/* A later cost year waiting for the company run: what is drawn is out of date. */
+.v-plant.pl-waiting > .card, .v-plant.pl-waiting > .grid, .v-plant.pl-waiting > .pl-intro { opacity: 0.45; transition: opacity 0.2s; }
+/* Cross-highlighting between the tables and the drawing. */
+.v-plant .pid-item.is-lit .pid-shape, .v-plant .pid-item.is-lit .pid-conn, .v-plant .pid-machine.is-lit .pid-valve-body { stroke: var(--accent); stroke-width: 2.6; fill: var(--accent-soft); }
+.v-plant .pid-line.is-lit { stroke: var(--accent); stroke-width: 3.2; }
+.v-plant .pid-stream-tag.is-lit .pid-diamond { fill: var(--accent); stroke: var(--accent); }
+.v-plant .pid-stream-tag.is-lit .pid-diamond-num { fill: var(--surface); }
+.v-plant svg.pid [data-tag], .v-plant svg.pid .pid-line, .v-plant svg.pid .pid-stream-tag { cursor: pointer; }
+@keyframes pl-flash { from { background: var(--accent-soft); } to { background: transparent; } }
+.v-plant tr.is-flash td { animation: pl-flash 1.6s ease-out; }
+.v-plant .pid-bound { fill: none; stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 9 3 2 3; }
+.v-plant .pid-bound-label { font-size: 9px; fill: var(--text-3); font-style: italic; }
+.v-plant .pid-bound-gap { fill: var(--surface); }
+/* Seasonal design */
+.v-plant .pl-warn { color: var(--warn); }
+.v-plant .pl-season-facts { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
+.v-plant .pid-et { font-size: 9px; font-weight: 700; fill: var(--warn); }
+.v-plant .pid-line.is-traced { stroke-dasharray: 10 2 2 2; }
+.v-plant .pid-exchanger.cool-summer .pid-valve-body { stroke: var(--warn); stroke-width: 1.8; }
+.v-plant .pl-season-cost { font-size: 13px; margin: 2px 0 10px; color: var(--text-2); }
+.v-plant .pid-exchanger.cool-chilled .pid-valve-body { stroke: var(--warn); stroke-width: 1.8; }

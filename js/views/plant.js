@@ -981,7 +981,8 @@
           C.roUsd > 0 ? `RO membrane margin ${UI.usd(C.roUsd)}` : null,
           C.tracingUsd > 0 ? `heat tracing ${UI.usd(C.tracingUsd)}` : null,
           C.energyUsdPerYear > 0 ? `${UI.num(C.energyKWhPerYear)} kWh/yr of electricity, ${UI.usd(C.energyUsdPerYear)}/yr` : null].filter(Boolean).join(' · '),
-        `. Net cost +${UI.usdKg(C.lcopDeltaUsdPerKg).replace('$', '$')}/kg (${UI.pct(C.lcopDeltaUsdPerKg / Math.max(1e-12, pkg.tea.lcopUsdPerKg - C.lcopDeltaUsdPerKg), 3)}), NPV ${UI.usd(C.npvDeltaUsd)}.`,
+        // Per tonne when it is under a tenth of a cent per kg, so it does not read as zero.
+        `. Net cost +${Math.abs(C.lcopDeltaUsdPerKg) < 0.001 ? UI.usd(C.lcopDeltaUsdPerKg * 1000) + '/t' : UI.usdKg(C.lcopDeltaUsdPerKg) + '/kg'} (${UI.pct(C.lcopDeltaUsdPerKg / Math.max(1e-12, pkg.tea.lcopUsdPerKg - C.lcopDeltaUsdPerKg), 3)}), NPV ${UI.usd(C.npvDeltaUsd)}.`,
       ] : [el('strong', { text: 'Nothing to price at this site: ' }), 'no cooler falls short in summer, no RO feed below its rating, no freezing month.']));
     }
     const checks = [

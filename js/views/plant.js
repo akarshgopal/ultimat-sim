@@ -951,7 +951,8 @@
 
   // ------------------------------------------------------------------ seasonal design
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const COOL_TEXT = { ok: 'OK all year', summer: 'needs chilled-water trim in summer', refrigeration: 'refrigerated (below the cooling medium all year)' };
+  const COOL_TEXT = { ok: 'OK all year', summer: 'needs chilled-water trim in summer', chilled: 'needs chilled water all year', refrigeration: 'refrigerated (part of the recipe’s own process)' };
+  const PRICED = new Set(['summer', 'chilled']);
   function seasonalBlock(UI, Charts, pkg, pathwayId) {
     const { el } = UI;
     const S = pkg.seasonal;
@@ -986,7 +987,7 @@
       ] : [el('strong', { text: 'Nothing to price at this site: ' }), 'no cooler falls short in summer, no RO feed below its rating, no freezing month.']));
     }
     const checks = [
-      ...S.cooling.map(c => ({ item: c.tag, check: `Cooler / condenser to ${deg(c.toC)}`, result: COOL_TEXT[c.status] + (c.status === 'summer' ? ' (priced)' : ''), status: c.status === 'summer' ? 'warn' : 'ok', detail: c.service })),
+      ...S.cooling.map(c => ({ item: c.tag, check: `Cooler / condenser to ${deg(c.toC)}`, result: COOL_TEXT[c.status] + (PRICED.has(c.status) ? ' (priced)' : ''), status: PRICED.has(c.status) ? 'warn' : 'ok', detail: c.service })),
       ...S.ro.map(r => ({ item: r.tag, check: `RO feed ${deg(r.feedWinterC)}–${deg(r.feedSummerC)}`, result: r.extraArea > 0 ? `membrane area for the coldest month: +${UI.pct(r.extraArea, 0)} over the 25 °C rating (priced)` : 'no margin needed (feed at or above the 25 °C rating all year)', status: r.extraArea > 0.15 ? 'warn' : 'ok', detail: 'FilmTec temperature correction factor' })),
       ...S.gas.filter(g => g.margin > 0.005).map(g => ({ item: g.tag, check: `Inlet ${deg(g.inletT_C)} in the hottest month`, result: `${UI.num(g.designM3PerH)} m³/h, +${UI.pct(g.margin, 1)} volume over the annual mean`, status: 'ok', detail: 'sized for the least dense air' })),
       S.freeze.length
@@ -1213,7 +1214,15 @@
     });
 
     let lastKey = null;
+    let lastResultKey = null;
     let current = null;
+    // Options for the cost-year select; costs: year → evaluation (empty until the run is in hand).
+    const yearOptions = (cfg, year, costs) => Array.from({ length: cfg.years }, (_, i) => {
+      const y = cfg.startYear + i;
+      const e = costs.get(y);
+      const cost = e ? ` · ${UI.usdKg(e.lcopUsdPerKg)}/kg${e.lcopUsdPerKg <= e.priceUsdPerKg ? ' ✓' : ''}` : '';
+      return el('option', { value: y, selected: y === year ? true : null, text: (i === 0 ? `${y} (today’s costs)` : String(y)) + cost });
+    });
     dlBtn.addEventListener('click', () => {
       const node = pidHost.querySelector('svg.pid');
       if (node && current) UI.downloadFile(`${current.pathway.id}-${current.siteId}-pid.svg`, exportSvg(node), 'image/svg+xml');
@@ -1228,13 +1237,26 @@
       const year = askedYear ? Math.min(lastYear, Math.max(cfg.startYear, askedYear)) : cfg.startYear;
       const yearIndex = year - cfg.startYear;
       const result = Store.result && !Store.busy && !Store.stale ? Store.result : null;
-      const key = Store.toQuery(Store.scenario) + '|' + year + '|' + (result ? result.ms + ':' + result.plants.length : '');
-      if (key === lastKey) return;
+      const resultKey = result ? result.ms + ':' + result.plants.length : '';
+      // The first year's plant does not depend on the run: when only the run changes, refresh the cost
+      // year list and leave the drawing (and its scroll position) alone.
+      const key = Store.toQuery(Store.scenario) + '|' + year + '|' + (yearIndex > 0 ? resultKey : '');
+      if (key === lastKey) {
+        if (resultKey !== lastResultKey && current?.refreshYears) { lastResultKey = resultKey; current.refreshYears(result); }
+        return;
+      }
       lastKey = key;
+      lastResultKey = resultKey;
       if (yearIndex > 0 && !result?.timeline?.[yearIndex]) {
         // Keep what is drawn but mark it out of date until the run for this scenario is in.
         root.classList.add('pl-waiting');
         kpis.replaceChildren(el('p', { class: 'empty', text: `Simulating the company run for ${year} costs…` }));
+        if (!controls.childElementCount) {
+          // Opened straight onto a later year: at least let the user pick another year meanwhile.
+          const sel = el('select', { 'aria-label': 'Cost year' }, yearOptions(cfg, year, new Map()));
+          sel.addEventListener('change', () => { location.hash = planHref(Store, pathway.id, path[2], multiple, Number(sel.value) === cfg.startYear ? null : sel.value); });
+          controls.replaceChildren(el('label', {}, [el('span', { text: 'Cost year' }), sel]));
+        }
         return;
       }
       root.classList.remove('pl-waiting');
@@ -1257,7 +1279,7 @@
       const siteId = sites.some(s => s.site.id === path[2]) ? path[2] : sites[0].site.id;
       const built = PlantDesign.forPlant(Company, input, pathway.id, siteId, size, yearIndex, yearOpts);
       const { pkg, ev } = built;
-      current = { pathway, siteId, pkg };
+      current = { pathway, siteId, pkg, refreshYears: null };
       const site = Store.siteById.get(siteId);
 
       // Controls: pathway, site, size.
@@ -1270,20 +1292,18 @@
       sizeSel.addEventListener('change', () => { location.hash = planHref(Store, pathway.id, siteId, sizeSel.value, askedYear); });
       // Cost year: net cost at this site and size each year of the run (when the run is in hand),
       // so the list shows when the plant turns feasible.
-      const yearCosts = new Map();
-      if (result) {
-        result.timeline.forEach((r, i) => {
+      const yearCostsFor = run => {
+        const costs = new Map();
+        if (!run) return costs;
+        run.timeline.forEach((r, i) => {
           const e = i === yearIndex ? ev : Company.evaluateAtYear(input, pathway.id, siteId, size, i,
             i === 0 ? {} : { costFactors: r.costFactors, rawFactors: r.rawFactors, storagePrices: r.storagePrices, pvUsdPerKWp: r.pvCapexUsdPerKWp });
-          if (e) yearCosts.set(cfg.startYear + i, e);
+          if (e) costs.set(cfg.startYear + i, e);
         });
-      }
-      const yearSel = el('select', { 'aria-label': 'Cost year' }, Array.from({ length: cfg.years }, (_, i) => {
-        const y = cfg.startYear + i;
-        const e = yearCosts.get(y);
-        const cost = e ? ` · ${UI.usdKg(e.lcopUsdPerKg)}/kg${e.lcopUsdPerKg <= e.priceUsdPerKg ? ' ✓' : ''}` : '';
-        return el('option', { value: y, selected: y === year ? true : null, text: (i === 0 ? `${y} (today’s costs)` : String(y)) + cost });
-      }));
+        return costs;
+      };
+      const yearSel = el('select', { 'aria-label': 'Cost year' }, yearOptions(cfg, year, yearCostsFor(result)));
+      current.refreshYears = run => yearSel.replaceChildren(...yearOptions(cfg, year, yearCostsFor(run)));
       yearSel.addEventListener('change', () => { location.hash = planHref(Store, pathway.id, siteId, multiple, Number(yearSel.value) === cfg.startYear ? null : yearSel.value); });
       controls.replaceChildren(
         el('label', {}, [el('span', { text: 'Recipe' }), pwSel]),

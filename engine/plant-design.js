@@ -229,7 +229,11 @@
     for (const [id, usd] of Object.entries(ev.unitCapexUsd)) {
       if (id.startsWith('balance:') && Math.abs(usd) > 1e-6) capexItems.push({ group: 'equipment', tag: '', label: `Balance of plant (${id.slice(8)})`, usd });
       // Seasonal fixes the simulator priced at this site (config.seasonal).
-      if (id === 'seasonal:chiller') capexItems.push({ group: 'seasonal', tag: '', label: `Chilled-water trim, ${fmtNum(ev.seasonal?.chillerKWth)} kW (summer)`, usd });
+      if (id.startsWith('seasonal:chiller:')) {
+        const host = id.slice(17);
+        const kw = ev.seasonal?.chillerKWthByHost?.[host];
+        capexItems.push({ group: 'seasonal', tag: tagOf.get(host) || '', label: `Chilled water for ${byId.get(host)?.label || host}'s coolers${kw ? `, ${fmtNum(kw)} kW` : ''}`, usd });
+      }
       if (id === 'seasonal:tracing') capexItems.push({ group: 'seasonal', tag: '', label: `Heat tracing, ${ev.seasonal?.tracedLines} line${ev.seasonal?.tracedLines === 1 ? '' : 's'} (winter)`, usd });
       if (id.startsWith('seasonal:ro:')) capexItems.push({ group: 'seasonal', tag: tagOf.get(id.slice(12)) || '', label: 'RO membrane margin for the coldest feed', usd });
     }
@@ -549,9 +553,15 @@
       approachK: APPROACH_K[sea ? 'seawater' : 'air'],
     };
   }
-  // 'ok' all year, 'summer' (trim in the hottest months), 'refrigeration' (below the medium all year).
+  // 'ok' all year; 'summer' (chilled-water trim in the hottest months); 'chilled' (chilled water all
+  // year: a target the medium never reaches, but at or above 0 °C); 'refrigeration' (below 0 °C: a
+  // refrigeration loop that is part of the recipe's own process, e.g. NH₃ condensed to −33 °C).
+  const CHILLED_WATER_MIN_C = 0;
+  const PRICED_COOLING = new Set(['summer', 'chilled']);
   function coolingStatus(toC, medium) {
-    return toC >= medium.summerC + medium.approachK ? 'ok' : toC >= medium.winterC + medium.approachK ? 'summer' : 'refrigeration';
+    if (toC >= medium.summerC + medium.approachK) return 'ok';
+    if (toC >= medium.winterC + medium.approachK) return 'summer';
+    return toC >= CHILLED_WATER_MIN_C ? 'chilled' : 'refrigeration';
   }
   function seasonalDesign({ climate, streams, exchangers, machines, equipment }) {
     const sea = climate.seaC != null;
@@ -608,9 +618,10 @@
   // ------------------------------------------------------------------ seasonal fixes (priced)
   // What a recipe needs at a site because of its seasons, per unit of plant size, for the simulator
   // to price (engine/company.js evaluatePlant, config.seasonal):
-  //   coolers  — product coolers and condensers whose outlet the hottest months' cooling medium cannot
-  //              reach (status 'summer'): chilled-water trim duty in each month, kJ per kg product, and its
-  //              design (hottest-month) duty; sensible cooling only (condensation happens above the limit);
+  //   coolers  — product coolers and condensers whose outlet the cooling medium cannot reach in some or all
+  //              months (status 'summer' or 'chilled'): chilled-water duty in each month, kJ per kg product,
+  //              and its design (hottest-month) duty; sensible cooling only (condensation happens above the
+  //              limit); each carries its host unit (`from`) so the chiller follows that unit's operation;
   //   ro       — RO trains: extra membrane area for the coldest feed vs the recipe's 25 °C rating basis;
   //   tracing  — water-bearing liquid lines heat traced where the coldest month is ≤ 2 °C, and the months
   //              (mean air ≤ 5 °C) the tracing runs.
@@ -654,7 +665,7 @@
       const unitT = temperatureOf(t.T);
       if (unitT == null || unitT - e.T_C <= 100) continue;
       if (e.phase === 'gas' && (t.symbol === 'kiln' || t.symbol === 'furnace')) continue; // off-gas heat recovery
-      if (coolingStatus(e.T_C, medium) !== 'summer') continue;
+      if (!PRICED_COOLING.has(coolingStatus(e.T_C, medium))) continue;
       const sub = e.substances?.[0]?.[0];
       const cp = cpOf(sub, e.phase);
       const kgPerKg = Number(e.kgPerKg) || 0;
@@ -682,12 +693,19 @@
       medium,
       coolers,
       // Chiller duty per kg/day of product (kW_th) at the hottest month, and annual trim energy per kg (kWh_th).
-      chillerKWthPerKgDay: coolers.reduce((t, c) => t + c.designKJPerKg, 0) / 86400,
+      // Chiller duty per kg/day of product (kW_th), per host unit: its coolers' combined duty in their
+      // hottest month (a chiller serves all of one unit's coolers).
+      chillerKWthPerKgDayByHost: Object.fromEntries([...new Set(coolers.map(c => c.from))].map(host => {
+        const mine = coolers.filter(c => c.from === host);
+        return [host, Math.max(...mediumMonthly.map((_, i) => mine.reduce((t, c) => t + c.monthlyKJPerKg[i], 0))) / 86400];
+      })),
+      chillerKWthPerKgDay: 0,
       chillerKWhThPerKg: coolers.reduce((t, c) => t + c.monthlyKJPerKg.reduce((u, q, i) => u + q * MONTH_DAYS[i], 0) / 365, 0) / 3600,
       ro,
       tracedLines: traced,
       tracingHoursPerYear: traced ? tracingHours : 0,
     };
+    out.chillerKWthPerKgDay = Object.values(out.chillerKWthPerKgDayByHost).reduce((t, v) => t + v, 0);
     byClimate.set(key, out);
     return out;
   }
@@ -812,7 +830,8 @@
       { key: 'land', label: 'Land', usdPerKg: perKg(capBy('land') * crf) },
       { key: 'fixedOm', label: 'Fixed O&M', usdPerKg: perKg(ev.opex.fixed) },
       { key: 'feedstock', label: 'Feedstock', usdPerKg: perKg(cp.feedCost) },
-      { key: 'other', label: 'Variable O&M', usdPerKg: perKg(cp.otherVariable) },
+      { key: 'other', label: 'Variable O&M', usdPerKg: perKg(cp.otherVariable - (ev.seasonal?.energyUsdPerYear || 0)) },
+      ev.seasonal?.energyUsdPerYear > 0 ? { key: 'seasonalEnergy', label: 'Seasonal electricity', usdPerKg: perKg(ev.seasonal.energyUsdPerYear) } : null,
       { key: 'credit', label: 'Co-product credit', usdPerKg: -ev.coproductCreditUsdPerKg },
     ].filter(Boolean);
 
@@ -947,5 +966,5 @@
     return { ev, pkg };
   }
 
-  return { forPlant, seasonalNeeds, mediumOf, coolingStatus, sourceNodeFor, pressureRange, temperatureOf, sizeLine, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };
+  return { forPlant, seasonalNeeds, mediumOf, coolingStatus, PRICED_COOLING, sourceNodeFor, pressureRange, temperatureOf, sizeLine, UNIT_TYPES, typeOf, fluidCode, annuityFactor, irr, npvAt, designPackage, evaluateParts, sensitivity, LEVERS };
 });

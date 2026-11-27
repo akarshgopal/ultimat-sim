@@ -272,6 +272,17 @@ test('plant view: P&ID, tables and TEA; site and size selectors; link from pathw
   assert.match(await page.textContent('.v-plant .pl-intro'), new RegExp(lastYear + ' costs from the company run'));
   assert.ok(await page.$('.v-plant svg.pid .pid-cond'), 'typical conditions on the drawing');
 
+  // At the first cost year the drawing does not redraw when the company run lands (scroll kept)…
+  await page.goto(`${base}#/plant/methanol`);
+  await page.waitForSelector('.v-plant svg.pid');
+  await page.evaluate(() => { globalThis.__pid = document.querySelector('.v-plant svg.pid'); });
+  await page.waitForFunction(() => /\$/.test(document.querySelector('.v-plant select[aria-label="Cost year"] option:last-child')?.textContent || ''), null, { timeout: 90000 });
+  assert.ok(await page.evaluate(() => document.querySelector('.v-plant svg.pid') === globalThis.__pid), 'same drawing after the run');
+  // …and a link straight to a later year shows a year selector while it waits.
+  await page.evaluate(() => Store.update({ kwh: 0.031 }));
+  await page.goto(`${base}#/plant/methanol/_/_/2040?${await page.evaluate(() => Store.urlQuery())}`);
+  await page.waitForSelector('.v-plant select[aria-label="Cost year"]');
+
   // '_' segments mean the default, and a fractional year is rounded rather than hanging.
   await page.goto(`${base}#/plant/_/_/_/2030.4`);
   await page.waitForSelector('.v-plant svg.pid');

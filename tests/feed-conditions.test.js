@@ -143,7 +143,7 @@ test('seasonal fixes are priced into the simulator, itemized exactly, and only w
     assert.ok(rel(sum(pkg.tea.lcop, l => l.usdPerKg), ev.lcopUsdPerKg) < 1e-9, `${id}@${site} cost per kg`);
     assert.ok(Math.abs(pkg.seasonalCost.lcopDeltaUsdPerKg - (ev.lcopUsdPerKg - base.lcopUsdPerKg)) < 1e-12);
     // The coolers priced are exactly the coolers the drawing flags for summer trim.
-    const drawn = pkg.seasonal.cooling.filter(c => c.status === 'summer').map(c => pkg.exchangers.find(x => x.tag === c.tag))
+    const drawn = pkg.seasonal.cooling.filter(c => PlantDesign.PRICED_COOLING.has(c.status)).map(c => pkg.exchangers.find(x => x.tag === c.tag))
       .map(x => { const st = pkg.streams.find(y => y.no === x.stream); return `${st.from}>${st.to}`; }).sort();
     const climate = FeedConditions.siteClimate(SITES.find(x => x.id === site), PLACES);
     const priced = PlantDesign.seasonalNeeds(PATHWAYS.find(p => p.id === id), climate).coolers.map(c => `${c.from}>${c.to}`).sort();
@@ -153,4 +153,42 @@ test('seasonal fixes are priced into the simulator, itemized exactly, and only w
   const mej = Company.evaluateAtYear(input, 'methanol', 'chile-mejillones', size('methanol'), 0).seasonal;
   assert.equal(mej.chillerUsd, 0);
   assert.equal(mej.tracingUsd, 0);
+});
+
+test('review fixes: all-year chilled water is priced; chillers follow their host; seasonal power is energy', () => {
+  const input = companyData();
+  const size = id => 100 * PATHWAYS.find(p => p.id === id).refOutputKgPerDay;
+  // Green MTO's ethylene product cooler (→ 20 °C) needs chilled water all year at every coastal site:
+  // priced, so a hotter site is never cheaper for the same cooling.
+  for (const site of ['namibia-walvis-bay', 'qatar-ras-laffan']) {
+    const { pkg } = PlantDesign.forPlant(Company, input, 'green-mto', site, size('green-mto'));
+    const c = pkg.seasonal.cooling.find(x => x.toC === 20);
+    assert.equal(c.status, 'chilled', site);
+    assert.ok(pkg.seasonalCost.chillerUsd > 0, `${site} prices it`);
+  }
+  // NH₃ condensed to −33 °C stays the recipe's own refrigeration: not priced again.
+  const nh3 = PlantDesign.forPlant(Company, input, 'green-ammonia', 'namibia-walvis-bay', size('green-ammonia')).pkg;
+  assert.ok(nh3.seasonal.cooling.some(c => c.toC === -33 && c.status === 'refrigeration'));
+  // With the synthesis design (sun-following loops), a chiller on a sun-following unit is oversized with it.
+  const syn = require('../engine/designs/synthesis.js');
+  const units = syn.simulatorOverride({ ...(Object.values(syn.PRESETS).at(-1).params || {}) });
+  const ev = Company.evaluateAtYear({ ...input, config: { designs: { units } } }, 'green-mto', 'qatar-ras-laffan', size('green-mto'), 0);
+  assert.equal(ev.utilization.strategy, 'sun-following');
+  const chillers = Object.entries(ev.unitCapexUsd).filter(([k]) => k.startsWith('seasonal:chiller:'));
+  assert.ok(chillers.length > 0);
+  const off = Company.evaluateAtYear({ ...input, config: { designs: { units }, seasonal: { enabled: false } } }, 'green-mto', 'qatar-ras-laffan', size('green-mto'), 0);
+  assert.ok(ev.seasonal.chillerUsd > 0 && Math.abs(ev.seasonal.chillerUsd - chillers.reduce((t, [, v]) => t + v, 0)) < 1e-6);
+  // Installed chiller kW = the 24 h duty × the sun-following nameplate factor (all hosts are sun-following here).
+  const climate = FeedConditions.siteClimate(SITES.find(x => x.id === 'qatar-ras-laffan'), PLACES);
+  const kW24 = PlantDesign.seasonalNeeds(PATHWAYS.find(p => p.id === 'green-mto'), climate).chillerKWthPerKgDay * size('green-mto');
+  assert.ok(Math.abs(ev.seasonal.chillerKWth / kW24 - ev.utilization.flexNameplateFactor) < 1e-9, `${ev.seasonal.chillerKWth} vs ${kW24} × ${ev.utilization.flexNameplateFactor}`);
+  assert.ok(ev.capex.total > off.capex.total);
+  // Seasonal electricity is reported as energy, and the cost breakdown still adds up.
+  const m = Company.evaluateAtYear(input, 'methanol', 'qatar-ras-laffan', size('methanol'), 0);
+  const mOff = Company.evaluateAtYear({ ...input, config: { seasonal: { enabled: false } } }, 'methanol', 'qatar-ras-laffan', size('methanol'), 0);
+  assert.ok(m.costBreakdownUsdPerKg.energy > mOff.costBreakdownUsdPerKg.energy);
+  assert.ok(Math.abs(m.costBreakdownUsdPerKg.other - mOff.costBreakdownUsdPerKg.other) < 1e-9, 'not in other O&M');
+  const b = m.costBreakdownUsdPerKg;
+  assert.ok(Math.abs(b.energy + b.equipment + b.feedstock + b.other - m.grossCostUsdPerKg) < 1e-9);
+  assert.ok(m.electricityKWhPerYear > mOff.electricityKWhPerYear);
 });

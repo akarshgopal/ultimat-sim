@@ -485,13 +485,15 @@
   const climateBySite = new Map();
   function seasonalNeedsAt(pathway, site) {
     if (!PlantDesign?.seasonalNeeds || !FeedConditions) return null;
-    if (!climateBySite.has(site.id)) {
-      let climate = null;
+    const key = `${site.latitude},${site.longitude}`;
+    if (!climateBySite.has(key)) {
       const places = climatePlaces();
-      if (places) { try { climate = FeedConditions.siteClimate(site, places); } catch { climate = null; } }
-      climateBySite.set(site.id, climate?.seasonal ? climate : null);
+      if (!places) return null; // climate data not loaded (yet): do not remember the miss
+      let climate = null;
+      try { climate = FeedConditions.siteClimate(site, places); } catch { climate = null; }
+      climateBySite.set(key, climate?.seasonal ? climate : null);
     }
-    const climate = climateBySite.get(site.id);
+    const climate = climateBySite.get(key);
     return climate ? PlantDesign.seasonalNeeds(pathway, climate) : null;
   }
 
@@ -586,33 +588,44 @@
     const needs = sc?.enabled ? seasonalNeedsAt(pathway, site) : null;
     const seasonalClass = {};
     const seasonalModes = {};
-    const seasonal = { chillerKWth: 0, chillerUsd: 0, roUsd: 0, tracingUsd: 0, tracedLines: 0, energyKWhPerYear: 0, energyUsdPerYear: 0 };
+    const seasonal = { chillerKWth: 0, chillerKWthByHost: {}, chillerUsd: 0, roUsd: 0, tracingUsd: 0, tracedLines: 0, energyKWhPerYear: 0, energyUsdPerYear: 0 };
     if (needs) {
       const f = (ctx.costFactors.process ?? 1) * siteMult;
-      const add = (id, cls, usd, mode) => {
+      // host: the flowsheet unit a fix belongs to; it is resized with that unit (sun-following → nameplate).
+      const add = (id, cls, usd, host) => {
         if (!(usd > 0)) return;
         unitCapex24[id] = (unitCapex24[id] || 0) + usd;
         processByTech[cls] += usd;
         processCapex += usd;
+        // Reference $ for the company's learning (cumulative deployment), as for recipe capex.
+        refCapexByTech[cls] += usd / Math.max(ctx.costFactors[cls] ?? 1, 1e-9) / siteMult;
         seasonalClass[id] = cls;
-        seasonalModes[id] = mode;
+        seasonalModes[id] = host;
       };
-      seasonal.chillerKWth = needs.chillerKWthPerKgDay * sizeKgPerDay;
-      seasonal.chillerUsd = seasonal.chillerKWth * sc.chillerUsdPerKWth * f;
-      add('seasonal:chiller', 'process', seasonal.chillerUsd, 'base');
+      for (const [host, kWPerKgDay] of Object.entries(needs.chillerKWthPerKgDayByHost)) {
+        const kW = kWPerKgDay * sizeKgPerDay;
+        const usd = kW * sc.chillerUsdPerKWth * f;
+        seasonal.chillerKWthByHost[host] = kW;
+        seasonal.chillerKWth += kW;
+        seasonal.chillerUsd += usd;
+        add('seasonal:chiller:' + host, 'process', usd, host);
+      }
       for (const r of needs.ro) {
         const usd = (unitCapex24[r.nodeId] || 0) * r.extraArea * sc.roAreaShareOfRoCapex;
         seasonal.roUsd += usd;
-        add('seasonal:ro:' + r.nodeId, Utilization.UNIT_TECH.swro || 'desal', usd, 'flex');
+        add('seasonal:ro:' + r.nodeId, Utilization.UNIT_TECH.swro || 'desal', usd, r.nodeId);
       }
       seasonal.tracedLines = needs.tracedLines;
       seasonal.tracingUsd = needs.tracedLines * sc.tracedRunM * sc.tracingUsdPerM * f;
-      add('seasonal:tracing', 'process', seasonal.tracingUsd, 'base');
+      add('seasonal:tracing', 'process', seasonal.tracingUsd, null);
     }
     // Solar-only utilization: resize equipment for sun hours, add storage, derate output.
     const util = utilFor(cfg);
     const profile = util.enabled ? Utilization.operatingProfile(pathway, util, cfg.designs?.units) : null;
-    const unitModes = profile ? { ...profile.modes, ...Object.fromEntries(Object.entries(seasonalModes).filter(([id]) => !id.startsWith('seasonal:ro:') || profile.modes?.[id.slice(12)] === 'flex')) } : seasonalModes;
+    // A seasonal fix runs like its host unit (a sun-following unit's chiller and RO margin are oversized
+    // with it); tracing is steady.
+    const unitModes = { ...(profile?.modes || {}) };
+    for (const [id, host] of Object.entries(seasonalModes)) unitModes[id] = host && profile?.modes?.[host] === 'flex' ? 'flex' : 'base';
     // A designed unit (e.g. electrolyzer) can change the recipe's kWh/kg (utilization.unitEnergyScale).
     const kWhPerKg = (Number(pathway.electricityKWhPerKg) || 0) + (Number(pathway.heatKWhPerKg) || 0)
       + (profile ? profile.energyDeltaKWhPerKg : 0);
@@ -764,7 +777,9 @@
       seasonal.energyKWhPerYear = needs.chillerKWhThPerKg / sc.chillerCop * annualKg
         + needs.tracedLines * sc.tracedRunM * sc.tracingWPerM * needs.tracingHoursPerYear / 1000;
       seasonal.energyUsdPerYear = seasonal.energyKWhPerYear * usdPerKWh;
+      // In opex as variable O&M (bought from the plant's own PV system), reported as energy.
       otherVariable += seasonal.energyUsdPerYear;
+      electricityKWhPerYear += seasonal.energyKWhPerYear;
     }
     const fixedOm = pvOm + storageOm + equipmentOm + storageReplacementUsdPerYear;
     const variableOm = feedCost + otherVariable;
@@ -782,14 +797,15 @@
     // Cost per kg by driver. Energy = PV + land + stores, captive buffers included (capital recovery
     // + O&M + replacements): what cheaper electricity would cut. effectiveEnergyUsdPerKWh is that
     // over the kWh used.
-    const energyAnnual = (pvCapex + landCapex + processByTech.storage) * crf + pvOm + storageOm + storageReplacementUsdPerYear;
+    const energyAnnual = (pvCapex + landCapex + processByTech.storage) * crf + pvOm + storageOm + storageReplacementUsdPerYear
+      + seasonal.energyUsdPerYear;
     const equipmentAnnual = (processCapex - processByTech.storage) * crf + equipmentOm;
     const perKg = v => (annualKg > 0 ? v / annualKg : Infinity);
     const costBreakdownUsdPerKg = {
       energy: perKg(energyAnnual),
       equipment: perKg(equipmentAnnual),
       feedstock: perKg(feedCost),
-      other: perKg(otherVariable),
+      other: perKg(otherVariable - seasonal.energyUsdPerYear),
     };
     return {
       pathwayId: pathway.id,
@@ -804,7 +820,17 @@
       // classes of this plant alone (captive suppliers and storage excluded).
       unitCapexUsd,
       // Seasonal fixes priced into this plant (also in unitCapexUsd as 'seasonal:…' and in other O&M).
-      seasonal: needs ? { ...seasonal, medium: needs.medium.kind } : null,
+      seasonal: needs ? {
+        ...seasonal,
+        // Installed amounts, after the solar resize (a sun-following host's chiller and RO margin are
+        // oversized with it), so they match unitCapexUsd and the plant's capex.
+        chillerUsd: Object.entries(unitCapexUsd).filter(([k]) => k.startsWith('seasonal:chiller:')).reduce((t, [, v]) => t + v, 0),
+        roUsd: Object.entries(unitCapexUsd).filter(([k]) => k.startsWith('seasonal:ro:')).reduce((t, [, v]) => t + v, 0),
+        tracingUsd: unitCapexUsd['seasonal:tracing'] || 0,
+        chillerKWthByHost: Object.fromEntries(Object.entries(seasonal.chillerKWthByHost).map(([h, kW]) => [h, kW * (unitModes['seasonal:chiller:' + h] === 'flex' && design?.strategy === 'sun-following' ? design.flexNameplateFactor : 1)])),
+        chillerKWth: Object.entries(seasonal.chillerKWthByHost).reduce((t, [h, kW]) => t + kW * (unitModes['seasonal:chiller:' + h] === 'flex' && design?.strategy === 'sun-following' ? design.flexNameplateFactor : 1), 0),
+        medium: needs.medium.kind,
+      } : null,
       pvKWp,
       landHa,
       electricityKWhPerYear,

@@ -236,6 +236,11 @@
       }
       if (id === 'seasonal:tracing') capexItems.push({ group: 'seasonal', tag: '', label: `Heat tracing, ${ev.seasonal?.tracedLines} line${ev.seasonal?.tracedLines === 1 ? '' : 's'} (winter)`, usd });
       if (id.startsWith('seasonal:ro:')) capexItems.push({ group: 'seasonal', tag: tagOf.get(id.slice(12)) || '', label: 'RO membrane margin for the coldest feed', usd });
+      // H₂ compression the simulator priced (config.compression): tagged once its machine is known.
+      if (id.startsWith('compression:')) {
+        const consumer = id.slice(12);
+        capexItems.push({ group: 'equipment', tag: '', compressionFor: consumer, label: `H₂ compressor to ${byId.get(consumer)?.label || consumer}, ${Number(ev.compression?.supplyBar?.toPrecision(3))} → ${Number(ev.compression?.basisBar?.toPrecision(3))} bar`, usd });
+      }
     }
     for (const e of equipment) capexItems.push({ group: 'equipment', tag: e.tag, label: e.service, usd: e.capexUsd });
     const storage = {
@@ -324,6 +329,9 @@
       st.followsFeed = Boolean(e?.followsFeed);
       st.T_summer_C = st.T_C; // seasonal range: a unit's own outlet condition holds all year
       st.T_winter_C = st.T_C;
+      // An engineered electrolyzer delivers its H₂ at its own pressure (atmospheric lean design: ~1 bar).
+      const outletBar = Number(designUnits.electrolyzer?.outletP_bar);
+      if (outletBar > 0 && byId.get(st.from)?.unit === 'electrolyzer' && st.composition[0]?.[0] === 'H2') st.P_bar = outletBar;
     }
     // Feeds take the site's climate (opts.feedConditions: resource id → { T_C, T_summer_C, T_winter_C,
     // P_bar }: annual mean and hottest / coldest monthly means), and outlets that pass their feed's
@@ -390,6 +398,12 @@
           fromBar: st.P_bar, toBar: need, designKgPerH: st.design,
         });
         st.machine = tag;
+        // Priced by the simulator when a recipe consumer takes H₂ below the recipes' basis pressure.
+        const priced = ev.unitCapexUsd?.['compression:' + toN.id];
+        if (priced > 0 && st.composition[0]?.[0] === 'H2') {
+          machines[machines.length - 1].priced = { usd: priced, fromBar: ev.compression.supplyBar, toBar: ev.compression.basisBar };
+          for (const item of capexItems) if (item.compressionFor === toN.id) item.tag = tag;
+        }
       }
       const unitT = temperatureOf(t.T);
       if (isFluid(st) && unitT != null && Math.abs(unitT - st.T_C) > 100) {
@@ -803,7 +817,8 @@
       cp.storageOm > 0 ? { group: 'fixed', label: 'Storage O&M', usd: cp.storageOm } : null,
       cp.storageReplacement > 0 ? { group: 'fixed', label: 'Battery / store replacement reserve', usd: cp.storageReplacement } : null,
       ...feedLines,
-      { group: 'variable', label: 'Variable O&M (consumables, haulage)', usd: cp.otherVariable - (ev.seasonal?.energyUsdPerYear || 0) },
+      { group: 'variable', label: 'Variable O&M (consumables, haulage)', usd: cp.otherVariable - (ev.seasonal?.energyUsdPerYear || 0) - (ev.compression?.energyUsdPerYear || 0) },
+      ev.compression?.energyUsdPerYear > 0 ? { group: 'variable', label: 'H₂ compression electricity', usd: ev.compression.energyUsdPerYear } : null,
       ev.seasonal?.energyUsdPerYear > 0 ? { group: 'variable', label: 'Seasonal electricity (chiller trim, heat tracing)', usd: ev.seasonal.energyUsdPerYear } : null,
     ].filter(Boolean);
 
@@ -830,7 +845,8 @@
       { key: 'land', label: 'Land', usdPerKg: perKg(capBy('land') * crf) },
       { key: 'fixedOm', label: 'Fixed O&M', usdPerKg: perKg(ev.opex.fixed) },
       { key: 'feedstock', label: 'Feedstock', usdPerKg: perKg(cp.feedCost) },
-      { key: 'other', label: 'Variable O&M', usdPerKg: perKg(cp.otherVariable - (ev.seasonal?.energyUsdPerYear || 0)) },
+      { key: 'other', label: 'Variable O&M', usdPerKg: perKg(cp.otherVariable - (ev.seasonal?.energyUsdPerYear || 0) - (ev.compression?.energyUsdPerYear || 0)) },
+      ev.compression?.energyUsdPerYear > 0 ? { key: 'compressionEnergy', label: 'H₂ compression electricity', usdPerKg: perKg(ev.compression.energyUsdPerYear) } : null,
       ev.seasonal?.energyUsdPerYear > 0 ? { key: 'seasonalEnergy', label: 'Seasonal electricity', usdPerKg: perKg(ev.seasonal.energyUsdPerYear) } : null,
       { key: 'credit', label: 'Co-product credit', usdPerKg: -ev.coproductCreditUsdPerKg },
     ].filter(Boolean);

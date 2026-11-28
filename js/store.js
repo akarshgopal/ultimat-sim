@@ -30,12 +30,25 @@
     if (!entry || !api) return null;
     return { ...(api.PRESETS[entry.preset]?.params || {}), ...(entry.overrides || {}) };
   }
-  // config.designs.units for a scenario's active designs.
+  // Designs that compress H₂ from its supply pressure, and the parameter that holds it.
+  const H2_SUPPLY_PARAM = Object.freeze({ synthesis: 'h2SupplyBar', 'haber-bosch': 'feedH2Bar', 'dri-shaft': 'h2SupplyBarAbs' });
+  // config.designs.units for a scenario's active designs. The H₂ consumers' designs take the pressure
+  // the H₂ actually arrives at (the electrolyzer design's outlet, else the recipe electrolyzer's), so a
+  // pressurized stack is not compressed twice; a supply pressure the user set stays.
   function designUnits(ds) {
     const units = {};
-    for (const [id, entry] of Object.entries(ds || {})) {
+    const entries = Object.entries(ds || {});
+    const elec = entries.find(([id]) => id === 'electrolyzer');
+    const elecParams = elec ? designParams(...elec) : null;
+    if (elecParams) Object.assign(units, DESIGNS.electrolyzer.simulatorOverride(elecParams));
+    const supplyBar = units.electrolyzer?.outletP_bar ?? Company.DEFAULTS.compression.h2SupplyBar;
+    for (const [id, entry] of entries) {
+      if (id === 'electrolyzer') continue;
       const params = designParams(id, entry);
-      if (params) Object.assign(units, DESIGNS[id].simulatorOverride(params));
+      if (!params) continue;
+      const key = H2_SUPPLY_PARAM[id];
+      if (key && !(key in (entry.overrides || {}))) params[key] = supplyBar;
+      Object.assign(units, DESIGNS[id].simulatorOverride(params));
     }
     return units;
   }

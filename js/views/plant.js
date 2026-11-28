@@ -382,14 +382,14 @@
   function machineSymbol(UI, m, x, y) {
     const { svg } = UI;
     const r = 10;
-    const g = svg('g', { class: 'pid-machine', 'data-tag': m.tag });
+    const g = svg('g', { class: 'pid-machine' + (m.priced ? ' is-priced' : ''), 'data-tag': m.tag });
     g.append(svg('circle', { cx: x, cy: y, r, class: 'pid-valve-body' }));
     if (m.kind === 'compressor') g.append(svg('path', { d: `M${x - r * 0.8},${y - r * 0.6} L${x + r * 0.8},${y - r * 0.25} M${x - r * 0.8},${y + r * 0.6} L${x + r * 0.8},${y + r * 0.25}`, class: 'pid-detail' }));
     else g.append(svg('path', { d: `M${x - r * 0.5},${y + r * 0.6} L${x + r},${y - r * 0.1}`, class: 'pid-detail' }));
     const t = svg('text', { x, y: y - r - 4, class: 'pid-machine-tag', 'text-anchor': 'middle' });
     t.textContent = m.tag;
     const title = svg('title');
-    title.textContent = `${m.tag}: ${m.service}, ${UI.num(m.fromBar)} → ${UI.num(m.toBar)} bar, ${UI.num(m.designKgPerH)} kg/h design · cost and power are in ${m.host}'s package`;
+    title.textContent = `${m.tag}: ${m.service}, ${UI.num(m.fromBar)} → ${UI.num(m.toBar)} bar, ${UI.num(m.designKgPerH)} kg/h design · ${m.priced ? `priced: ${UI.usd(m.priced.usd)} installed, ${UI.num(m.priced.fromBar)} → ${UI.num(m.priced.toBar)} bar (the recipe assumes ${UI.num(m.priced.toBar)} bar H₂)` : `cost and power are in ${m.host}'s package`}`;
     g.append(t, title);
     return g;
   }
@@ -876,11 +876,14 @@
       const host = hosts.get(m.host);
       return {
         tag: m.tag, service: m.service, machine: m, host,
-        type: `${m.kind === 'compressor' ? 'Compressor' : 'Pump'}, inside ${m.host}’s package`,
+        // Priced: the recipe unit assumes H₂ at the basis pressure, so the step up to it is added cost.
+        type: m.priced
+          ? `${m.kind === 'compressor' ? 'Compressor' : 'Pump'}, priced: ${m.host} assumes H₂ at ${UI.num(m.priced.toBar)} bar`
+          : `${m.kind === 'compressor' ? 'Compressor' : 'Pump'}, inside ${m.host}’s package`,
         mode: host?.mode, storeKind: host?.storeKind, minTurndown: host?.minTurndown,
         conditions: { T: `stream ${m.stream}`, P: `${UI.num(m.fromBar)} → ${UI.num(m.toBar)} bar` },
         throughputKgPerH: { design: st?.design ?? m.designKgPerH, average: st?.average ?? NaN },
-        powerKW: { design: 0 }, capexUsd: null,
+        powerKW: { design: 0 }, capexUsd: m.priced ? m.priced.usd : null, priced: Boolean(m.priced),
       };
     });
     const exchangerRows = (pkg.exchangers || []).map(x => {
@@ -902,8 +905,8 @@
       { key: 'mode', label: 'Operation', get: e => modeText(e), render: e => UI.el('span', { class: e.mode === 'sun-following' ? 'pl-sun' : '', text: modeText(e) }) },
       { key: 'cond', label: 'Typical conditions', title: 'Typical operating temperature and pressure of this equipment type (literature ranges; the plant models do not carry operating conditions)', get: e => (e.conditions ? `${e.conditions.T}, ${e.conditions.P}` : ''), render: e => (e.conditions ? [UI.el('span', { text: e.conditions.T }), UI.el('span', { class: 'cell-sub', text: e.conditions.P })] : '—') },
       { key: 'flow', label: 'Design kg/h', num: true, title: 'Nameplate throughput (largest of total inlet and outlet mass)', get: e => e.throughputKgPerH.design, render: e => [UI.num(e.throughputKgPerH.design), UI.el('span', { class: 'cell-sub', text: 'avg ' + UI.num(e.throughputKgPerH.average) })] },
-      { key: 'kw', label: 'Design kW', num: true, title: 'Electrical load at nameplate', get: e => e.powerKW.design, render: e => (e.machine ? UI.el('span', { class: 'muted', text: 'in ' + e.machine.host }) : e.powerKW.design > 0 ? [UI.num(e.powerKW.design), UI.el('span', { class: 'cell-sub', text: UI.num(e.kWhPerKg) + ' kWh/kg product' })] : '—') },
-      { key: 'capex', label: 'Installed $', num: true, get: e => e.capexUsd ?? -1, csv: e => e.capexUsd ?? '', render: e => (e.machine ? UI.el('span', { class: 'muted', text: 'in ' + e.machine.host }) : [UI.usd(e.capexUsd), UI.el('span', { class: 'cell-sub', text: UI.pct(e.capexUsd / total, 0) + ' of plant' })]) },
+      { key: 'kw', label: 'Design kW', num: true, title: 'Electrical load at nameplate', get: e => e.powerKW.design, render: e => (e.priced ? UI.el('span', { class: 'muted', text: 'priced as electricity' }) : e.machine ? UI.el('span', { class: 'muted', text: 'in ' + e.machine.host }) : e.powerKW.design > 0 ? [UI.num(e.powerKW.design), UI.el('span', { class: 'cell-sub', text: UI.num(e.kWhPerKg) + ' kWh/kg product' })] : '—') },
+      { key: 'capex', label: 'Installed $', num: true, get: e => e.capexUsd ?? -1, csv: e => e.capexUsd ?? '', render: e => (e.machine && !e.priced ? UI.el('span', { class: 'muted', text: 'in ' + e.machine.host }) : [UI.usd(e.capexUsd), UI.el('span', { class: 'cell-sub', text: UI.pct(e.capexUsd / total, 0) + ' of plant' })]) },
     ], rows, { sortKey: 'tag', sortDir: 'asc', compact: true, csv: `${pathwayId}-equipment-list` });
   }
 

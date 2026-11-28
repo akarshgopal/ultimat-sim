@@ -132,3 +132,4 @@
 .v-plant .pid-exchanger.cool-summer .pid-valve-body { stroke: var(--warn); stroke-width: 1.8; }
 .v-plant .pl-season-cost { font-size: 13px; margin: 2px 0 10px; color: var(--text-2); }
 .v-plant .pid-exchanger.cool-chilled .pid-valve-body { stroke: var(--warn); stroke-width: 1.8; }
+.v-plant .pid-machine.is-priced .pid-valve-body { stroke: var(--warn); stroke-width: 1.8; }

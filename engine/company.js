@@ -168,6 +168,23 @@
       tracingUsdPerM: 150, // self-regulating electric tracing + insulation, installed
       tracingWPerM: 30, // tracing power while running (months with mean air ≤ 5 °C)
     }),
+    // Hydrogen compression. Recipe units that take H₂ (FT, and synthesis loops without an engineered
+    // design) assume it arrives at h2BasisBar, as from a pressurized PEM stack or a pipeline; their energy
+    // covers compression from there. When the electrolyzer delivers lower (the lean atmospheric design:
+    // designs.units.electrolyzer.outletP_bar), the gap is priced here: multistage intercooled compression
+    // (isothermal basis, 40 °C) and a compressor at a flat installed $/kW of shaft power. Engineered H₂
+    // consumer designs (Haber-Bosch, synthesis, DRI shaft) price their own compression from the supply
+    // pressure, so they are not priced again.
+    compression: Object.freeze({
+      enabled: true,
+      h2SupplyBar: 30, // recipe electrolyzer (pressurized PEM) delivery pressure
+      h2BasisBar: 30, // what recipe H₂ consumers assume
+      isothermalEfficiency: 0.7, // multistage intercooled reciprocating, isothermal basis (as the designs)
+      suctionC: 40,
+      // Installed $ per kW shaft. DOE HDSAM's H₂ compressor curve gives ~$2,600/kW uninstalled at 1 MW
+      // and falls with size; flat screening value, scale economies not claimed.
+      compressorUsdPerKW: 2500,
+    }),
     // Make-vs-buy for purchased intermediates (see planIntegration). feedProducts maps a
     // recipe's purchased feed id to the product key a captive supplier pathway makes.
     // CO₂ is made by the DAC recipe (dac-co2) once it undercuts $0.05–0.13/kg purchased CO₂.
@@ -497,6 +514,46 @@
     return climate ? PlantDesign.seasonalNeeds(pathway, climate) : null;
   }
 
+  // Units whose engineered designs compress H₂ from its supply pressure themselves.
+  const H2_DESIGNED_CONSUMERS = new Set(['ammonia', 'methanol', 'sabatier', 'mto', 'hydrogen-dri']);
+  // H₂ flows into recipe consumers that arrive below the recipes' basis pressure, per kg of product:
+  // { supplyBar, basisBar, kWhPerKgH2, consumers: [{ consumer, host, kgH2PerKg }] } or null.
+  function compressionNeeds(pathway, cfg, integration) {
+    const c = cfg.compression;
+    if (!c?.enabled || !pathway.flowsheet?.nodes?.length) return null;
+    const designs = cfg.designs?.units || {};
+    const supplyBar = Number(designs.electrolyzer?.outletP_bar) || c.h2SupplyBar;
+    if (!(supplyBar < c.h2BasisBar)) return null;
+    const byId = new Map(pathway.flowsheet.nodes.map(n => [n.id, n]));
+    const recipeConsumer = n => n?.kind === 'converter' && !(H2_DESIGNED_CONSUMERS.has(n.unit) && designs[n.unit]);
+    const h2Of = e => (e.substances || []).find(([sub]) => sub === 'H2')?.[1] ?? 0;
+    const consumers = [];
+    // On-site electrolysis…
+    for (const e of pathway.flowsheet.edges) {
+      if (e.kind !== 'material') continue;
+      const from = byId.get(e.from);
+      const to = byId.get(e.to);
+      if (from?.unit !== 'electrolyzer' || !recipeConsumer(to)) continue;
+      const kg = h2Of(e);
+      if (kg > 0) consumers.push({ consumer: to.id, host: from.id, kgH2PerKg: kg });
+    }
+    // …and H₂ made in-house by a captive electrolysis supplier for a bought-H₂ feed.
+    for (const item of integration || []) {
+      if (item.product !== 'hydrogen') continue;
+      const src = PlantDesign?.sourceNodeFor ? PlantDesign.sourceNodeFor(pathway.flowsheet, item.feedId) : null;
+      for (const e of pathway.flowsheet.edges.filter(x => x.kind === 'material' && x.from === src)) {
+        const to = byId.get(e.to);
+        if (!recipeConsumer(to)) continue;
+        const kg = h2Of(e);
+        if (kg > 0) consumers.push({ consumer: to.id, host: to.id, kgH2PerKg: kg });
+      }
+    }
+    if (!consumers.length) return null;
+    const RT_OVER_M = 8.314 * (c.suctionC + 273.15) / 2.016; // kJ per kg H₂ per unit ln(P2/P1)
+    const kWhPerKgH2 = RT_OVER_M * Math.log(c.h2BasisBar / supplyBar) / c.isothermalEfficiency / 3600;
+    return { supplyBar, basisBar: c.h2BasisBar, kWhPerKgH2, consumers };
+  }
+
   // Sun-following share of each class from per-unit installed $ (unit id → $) and unit modes.
   function flexShares(pathway, unitUsd, modes, extraClass = {}) {
     const unitClassOf = new Map((pathway.flowsheet?.nodes || []).map(n => [n.id, Utilization.UNIT_TECH[n.unit] || 'process']));
@@ -618,6 +675,25 @@
       seasonal.tracedLines = needs.tracedLines;
       seasonal.tracingUsd = needs.tracedLines * sc.tracedRunM * sc.tracingUsdPerM * f;
       add('seasonal:tracing', 'process', seasonal.tracingUsd, null);
+    }
+    // Hydrogen compression a recipe consumer needs because its H₂ arrives below the recipes' basis.
+    const comp = compressionNeeds(pathway, cfg, integration);
+    const compression = comp ? { ...comp, shaftKW: 0, usd: 0, energyKWhPerYear: 0, energyUsdPerYear: 0, byConsumer: {} } : null;
+    if (comp) {
+      const f = (ctx.costFactors.process ?? 1) * siteMult;
+      for (const c of comp.consumers) {
+        // Shaft kW at the 24 h H₂ rate; a sun-following host's compressor is oversized with it below.
+        const kW = c.kgH2PerKg * sizeKgPerDay / 24 * comp.kWhPerKgH2;
+        const usd = kW * cfg.compression.compressorUsdPerKW * f;
+        const id = 'compression:' + c.consumer;
+        unitCapex24[id] = (unitCapex24[id] || 0) + usd;
+        processByTech.process += usd;
+        processCapex += usd;
+        refCapexByTech.process += usd / Math.max(ctx.costFactors.process ?? 1, 1e-9) / siteMult;
+        seasonalClass[id] = 'process';
+        seasonalModes[id] = c.host;
+        compression.byConsumer[c.consumer] = { kW24: kW, kgH2PerKg: c.kgH2PerKg, host: c.host };
+      }
     }
     // Solar-only utilization: resize equipment for sun hours, add storage, derate output.
     const util = utilFor(cfg);
@@ -781,6 +857,17 @@
       otherVariable += seasonal.energyUsdPerYear;
       electricityKWhPerYear += seasonal.energyKWhPerYear;
     }
+    // Compression electricity, priced the same way.
+    if (compression && electricityKWhPerYear > 0) {
+      const crf0 = 1 / Math.max(annuityFactor(cfg.finance.discountRate, life), 1e-12);
+      const usdPerKWh = ((pvCapex + landCapex + processByTech.storage) * crf0 + pvOm + storageOm + storageReplacementUsdPerYear) / electricityKWhPerYear;
+      const kgH2PerKg = compression.consumers.reduce((t, c) => t + c.kgH2PerKg, 0);
+      compression.energyKWhPerYear = kgH2PerKg * compression.kWhPerKgH2 * annualKg;
+      compression.energyUsdPerYear = compression.energyKWhPerYear * usdPerKWh;
+      otherVariable += compression.energyUsdPerYear;
+      electricityKWhPerYear += compression.energyKWhPerYear;
+    }
+    const addedEnergyUsd = seasonal.energyUsdPerYear + (compression?.energyUsdPerYear || 0);
     const fixedOm = pvOm + storageOm + equipmentOm + storageReplacementUsdPerYear;
     const variableOm = feedCost + otherVariable;
     const opex = fixedOm + variableOm;
@@ -798,14 +885,14 @@
     // + O&M + replacements): what cheaper electricity would cut. effectiveEnergyUsdPerKWh is that
     // over the kWh used.
     const energyAnnual = (pvCapex + landCapex + processByTech.storage) * crf + pvOm + storageOm + storageReplacementUsdPerYear
-      + seasonal.energyUsdPerYear;
+      + addedEnergyUsd;
     const equipmentAnnual = (processCapex - processByTech.storage) * crf + equipmentOm;
     const perKg = v => (annualKg > 0 ? v / annualKg : Infinity);
     const costBreakdownUsdPerKg = {
       energy: perKg(energyAnnual),
       equipment: perKg(equipmentAnnual),
       feedstock: perKg(feedCost),
-      other: perKg(otherVariable - seasonal.energyUsdPerYear),
+      other: perKg(otherVariable - addedEnergyUsd),
     };
     return {
       pathwayId: pathway.id,
@@ -830,6 +917,14 @@
         chillerKWthByHost: Object.fromEntries(Object.entries(seasonal.chillerKWthByHost).map(([h, kW]) => [h, kW * (unitModes['seasonal:chiller:' + h] === 'flex' && design?.strategy === 'sun-following' ? design.flexNameplateFactor : 1)])),
         chillerKWth: Object.entries(seasonal.chillerKWthByHost).reduce((t, [h, kW]) => t + kW * (unitModes['seasonal:chiller:' + h] === 'flex' && design?.strategy === 'sun-following' ? design.flexNameplateFactor : 1), 0),
         medium: needs.medium.kind,
+      } : null,
+      // H₂ compression priced into this plant (unitCapexUsd 'compression:<consumer>', energy in other O&M).
+      compression: compression ? {
+        supplyBar: compression.supplyBar, basisBar: compression.basisBar, kWhPerKgH2: compression.kWhPerKgH2,
+        consumers: compression.consumers,
+        usd: Object.entries(unitCapexUsd).filter(([k]) => k.startsWith('compression:')).reduce((t, [, v]) => t + v, 0),
+        shaftKW: Object.entries(compression.byConsumer).reduce((t, [c, b]) => t + b.kW24 * (unitModes['compression:' + c] === 'flex' && design?.strategy === 'sun-following' ? design.flexNameplateFactor : 1), 0),
+        energyKWhPerYear: compression.energyKWhPerYear, energyUsdPerYear: compression.energyUsdPerYear,
       } : null,
       pvKWp,
       landHa,

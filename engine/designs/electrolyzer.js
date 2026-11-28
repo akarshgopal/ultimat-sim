@@ -265,12 +265,18 @@
   // The stack and BoP are priced per kW with no plant-size term (stacks are numbered up), so the
   // design's $ per kg/day is the same at every size: scaleExponent 1. The factors are taken against
   // the unscaled recipe, i.e. at the recipe's reference output (refMultiple 1).
+  // H₂ delivery pressure of each stack type (bar abs): the lye loop runs at ~atmospheric pressure, or
+  // pressurized at ~30 bar.
+  const OUTLET_BAR = Object.freeze({ atmospheric: 1.05, pressurized: 30 });
   function simulatorOverride(params) {
     const d = design(params);
+    const pressure = { ...DEFAULTS, ...(params || {}) }.pressure;
     return { electrolyzer: {
       capexFactor: d.vsRecipe.capexFactor, energyFactor: d.vsRecipe.energyFactor,
       materialsFactor: d.materialsUsdPerKgDay / RECIPE.electrolyzer.usdPerKgDay, flexible: true,
       refMultiple: 1, scaleExponent: 1,
+      // Where its H₂ leaves: the simulator prices compressing it up to what each consumer assumes.
+      outletP_bar: OUTLET_BAR[pressure] ?? OUTLET_BAR.atmospheric,
     } };
   }
 
